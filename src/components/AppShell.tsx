@@ -105,8 +105,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <SidebarNav onNavigate={() => setMobileMenuOpen(false)} />
       </aside>
 
-      {/* Main content - offset for mobile header (includes safe area) */}
-      <main className="flex-1 min-w-0 overflow-x-hidden pt-[calc(3.5rem+env(safe-area-inset-top,0px))] md:pt-0 p-4 sm:p-6">{children}</main>
+      {/* Main content - offset for mobile header (includes safe area); normal padding on desktop */}
+      <main className="flex-1 min-w-0 pt-[calc(3.5rem+env(safe-area-inset-top,0px))] md:pt-6 p-4 sm:p-6">{children}</main>
     </div>
   );
 }
