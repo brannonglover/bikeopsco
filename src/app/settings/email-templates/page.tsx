@@ -68,9 +68,9 @@ export default function EmailTemplatesPage() {
   }
 
   return (
-    <div className="max-w-4xl">
+    <div className="w-full max-w-4xl min-w-0 overflow-x-hidden">
       <h1 className="text-2xl font-bold text-blue-900 mb-2">Email Templates</h1>
-      <p className="text-slate-600 mb-6">
+      <p className="text-slate-600 mb-6 break-words">
         Customize the emails sent to customers. Use variables:{" "}
         <code className="bg-slate-100 px-1 rounded">{`{{customerName}}`}</code>
         ,{" "}
@@ -87,8 +87,8 @@ export default function EmailTemplatesPage() {
             key={t.id}
             className="border border-slate-200 rounded-lg p-4 bg-white shadow-sm"
           >
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="font-semibold text-slate-900">{t.name}</h2>
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <h2 className="font-semibold text-slate-900 min-w-0 truncate">{t.name}</h2>
               {editing !== t.slug ? (
                 <button
                   onClick={() => startEdit(t)}
@@ -144,10 +144,10 @@ export default function EmailTemplatesPage() {
                 <p>
                   <span className="font-medium">Subject:</span> {t.subject}
                 </p>
-                <div className="mt-2">
+                <div className="mt-2 min-w-0">
                   <span className="font-medium">Body:</span>
                   <div
-                    className="mt-1 p-2 bg-slate-50 rounded text-xs overflow-auto max-h-24"
+                    className="mt-1 p-2 bg-slate-50 rounded text-xs overflow-auto max-h-24 max-w-full"
                     dangerouslySetInnerHTML={{ __html: t.bodyHtml }}
                   />
                 </div>

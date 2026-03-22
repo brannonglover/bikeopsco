@@ -28,13 +28,13 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const from = process.env.FROM_EMAIL || "BikeOps <onboarding@resend.dev>";
+  const from = process.env.FROM_EMAIL || "BBM Services <onboarding@resend.dev>";
 
   try {
     const { data, error } = await resend.emails.send({
       from,
       to,
-      subject: "BikeOps – Email test",
+      subject: "BBM Services – Email test",
       html: "<p>If you got this, Resend is working.</p>",
     });
 

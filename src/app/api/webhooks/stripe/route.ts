@@ -54,7 +54,11 @@ export async function POST(request: NextRequest) {
         });
         await tx.job.update({
           where: { id: jobId },
-          data: { paymentStatus: "PAID" },
+          data: {
+            paymentStatus: "PAID",
+            stage: "COMPLETED",
+            completedAt: new Date(),
+          },
         });
       });
 

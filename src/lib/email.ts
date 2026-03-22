@@ -1,10 +1,40 @@
 import { Resend } from "resend";
+import fs from "fs";
+import path from "path";
 
 const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
   : null;
 
-const FROM_EMAIL = process.env.FROM_EMAIL || "BikeOps <onboarding@resend.dev>";
+function getFromEmail(): string {
+  const raw = process.env.FROM_EMAIL?.trim();
+  if (!raw) return "BBM Services <onboarding@resend.dev>";
+  const match = raw.match(/<([^>]+)>/);
+  const email = match ? match[1].trim() : raw;
+  return `BBM Services <${email}>`;
+}
+
+const LOGO_CID = "receipt-logo";
+
+function getReceiptLogoAttachment(): { content: Buffer; contentId: string } | null {
+  try {
+    const logoPath = path.join(process.cwd(), "public", "bbm-logo-wo.png");
+    if (fs.existsSync(logoPath)) {
+      return { content: fs.readFileSync(logoPath), contentId: LOGO_CID };
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+function getReceiptLogoUrl(): string {
+  const explicit = process.env.SHOP_LOGO_URL?.trim();
+  if (explicit && explicit.startsWith("http")) return explicit;
+  const base = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (base && base.startsWith("http")) return `${base.replace(/\/$/, "")}/bbm-logo-wo.png`;
+  return "";
+}
 
 export function mergeTemplateVariables(
   html: string,
@@ -55,7 +85,7 @@ export async function sendJobEmail(
       : "Customer",
     bikeMake: job.bikeMake,
     bikeModel: job.bikeModel,
-    shopName: "BikeOps",
+    shopName: process.env.SHOP_NAME || "Basement Bike Mechanic",
     customerNotes: job.customerNotes ?? "",
   };
 
@@ -64,7 +94,7 @@ export async function sendJobEmail(
 
   try {
     const { error } = await resend.emails.send({
-      from: FROM_EMAIL,
+      from: getFromEmail(),
       to: recipient,
       subject,
       html: bodyHtml,
@@ -130,7 +160,8 @@ function formatPrice(amount: number): string {
 function buildInvoiceHtml(
   job: JobForInvoice,
   total: number,
-  shopName: string
+  shopName: string,
+  logoSrc: string
 ): string {
   const customerName = job.customer
     ? [job.customer.firstName, job.customer.lastName].filter(Boolean).join(" ").trim() || "Customer"
@@ -148,13 +179,19 @@ function buildInvoiceHtml(
     const lineTotal = unitPrice * (js.quantity || 1);
     return `
       <tr>
-        <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; color: #334155;">${escapeHtml(js.service?.name ?? "Service")}</td>
-        <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; color: #64748b; text-align: center;">${js.quantity}</td>
-        <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; color: #64748b; text-align: right;">${formatPrice(unitPrice)}</td>
-        <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; color: #0f172a; font-weight: 600; text-align: right;">${formatPrice(lineTotal)}</td>
+        <td style="padding: 14px 18px; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 16px;">${escapeHtml(js.service?.name ?? "Service")}</td>
+        <td style="padding: 14px 18px; border-bottom: 1px solid #e2e8f0; color: #64748b; text-align: center; font-size: 16px;">${js.quantity}</td>
+        <td style="padding: 14px 18px; border-bottom: 1px solid #e2e8f0; color: #64748b; text-align: right; font-size: 16px;">${formatPrice(unitPrice)}</td>
+        <td style="padding: 14px 18px; border-bottom: 1px solid #e2e8f0; color: #0f172a; font-weight: 600; text-align: right; font-size: 16px;">${formatPrice(lineTotal)}</td>
       </tr>
     `;
   }).join("");
+
+  const headerContent = logoSrc
+    ? `<img src="${logoSrc.startsWith("cid:") ? logoSrc : escapeHtml(logoSrc)}" alt="${escapeHtml(shopName)}" width="280" height="auto" style="max-height: 88px; width: auto; display: block; margin: 0 auto 20px; object-fit: contain;">
+              <p style="margin: 0; font-size: 13px; color: rgba(255,255,255,0.9); letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600;">Payment Receipt</p>`
+    : `<h1 style="margin: 0; font-size: 24px; font-weight: 700; color: white; letter-spacing: -0.025em;">${escapeHtml(shopName)}</h1>
+              <p style="margin: 6px 0 0; font-size: 14px; color: rgba(255,255,255,0.9);">Payment Receipt</p>`;
 
   return `
 <!DOCTYPE html>
@@ -163,16 +200,20 @@ function buildInvoiceHtml(
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Payment Receipt - ${escapeHtml(shopName)}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <style type="text/css">
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap');
+  </style>
 </head>
-<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f8fafc; color: #334155;">
+<body style="margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f8fafc; color: #0f172a;">
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f8fafc; padding: 40px 20px;">
     <tr>
       <td align="center">
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 560px; background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1); overflow: hidden;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 560px; background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -2px rgba(0,0,0,0.04); overflow: hidden;">
           <tr>
-            <td style="padding: 32px 32px 24px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);">
-              <h1 style="margin: 0; font-size: 24px; font-weight: 700; color: white; letter-spacing: -0.025em;">${escapeHtml(shopName)}</h1>
-              <p style="margin: 6px 0 0; font-size: 14px; color: #94a3b8;">Payment Receipt</p>
+            <td style="padding: 36px 32px 24px; background: linear-gradient(135deg, #b45309 0%, #d97706 100%); text-align: center;">
+              ${headerContent}
             </td>
           </tr>
           <tr>
@@ -183,10 +224,10 @@ function buildInvoiceHtml(
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 24px; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
                 <thead>
                   <tr style="background-color: #f8fafc;">
-                    <th style="padding: 12px 16px; text-align: left; font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Service</th>
-                    <th style="padding: 12px 16px; text-align: center; font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Qty</th>
-                    <th style="padding: 12px 16px; text-align: right; font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Unit Price</th>
-                    <th style="padding: 12px 16px; text-align: right; font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Total</th>
+                    <th style="padding: 14px 18px; text-align: left; font-size: 15px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Service</th>
+                    <th style="padding: 14px 18px; text-align: center; font-size: 15px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Qty</th>
+                    <th style="padding: 14px 18px; text-align: right; font-size: 15px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Unit Price</th>
+                    <th style="padding: 14px 18px; text-align: right; font-size: 15px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Total</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -194,11 +235,11 @@ function buildInvoiceHtml(
                 </tbody>
               </table>
 
-              <div style="padding: 16px; background-color: #f0fdf4; border-radius: 8px; border: 1px solid #bbf7d0;">
+              <div style="padding: 16px; background-color: #f1f5f9; border-radius: 8px; border: 1px solid #e2e8f0;">
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                   <tr>
-                    <td style="font-size: 16px; font-weight: 700; color: #166534;">Total paid</td>
-                    <td style="font-size: 20px; font-weight: 700; color: #166534; text-align: right;">${formatPrice(total)}</td>
+                    <td style="font-size: 16px; font-weight: 700; color: #475569;">Total paid</td>
+                    <td style="font-size: 20px; font-weight: 700; color: #334155; text-align: right;">${formatPrice(total)}</td>
                   </tr>
                 </table>
               </div>
@@ -235,7 +276,7 @@ function escapeHtml(str: string): string {
     .replace(/'/g, "&#39;");
 }
 
-const SHOP_NAME = process.env.SHOP_NAME || "BikeOps";
+const SHOP_NAME = process.env.SHOP_NAME || "Basement Bike Mechanic";
 
 export async function sendPaymentReceiptEmail(job: JobForInvoice): Promise<{ ok: boolean; error?: string }> {
   if (!resend) {
@@ -254,21 +295,36 @@ export async function sendPaymentReceiptEmail(job: JobForInvoice): Promise<{ ok:
   }, 0);
 
   const subject = `Payment receipt – ${job.bikeMake} ${job.bikeModel} – ${SHOP_NAME}`;
-  const html = buildInvoiceHtml(job, total, SHOP_NAME);
+
+  const logoAttachment = getReceiptLogoAttachment();
+  const logoUrl = getReceiptLogoUrl();
+  const logoSrc = logoAttachment ? `cid:${LOGO_CID}` : logoUrl;
+  const html = buildInvoiceHtml(job, total, SHOP_NAME, logoSrc);
+
+  const attachments = logoAttachment
+    ? [
+        {
+          filename: "bbm-logo-wo.png",
+          content: logoAttachment.content,
+          contentId: LOGO_CID,
+        },
+      ]
+    : undefined;
 
   try {
-    const { error } = await resend.emails.send({
-      from: FROM_EMAIL,
+    const { data, error } = await resend.emails.send({
+      from: getFromEmail(),
       to: email,
       subject,
       html,
+      ...(attachments && { attachments }),
     });
 
     if (error) {
       return { ok: false, error: error.message };
     }
 
-    console.log(`[Email] Receipt sent to ${email} for job ${job.id}`);
+    console.log(`[Email] Receipt sent to ${email} for job ${job.id}. Resend id: ${data?.id ?? "unknown"} – check resend.com/emails for delivery status`);
 
     const { prisma } = await import("./db");
     await prisma.jobEmail.create({

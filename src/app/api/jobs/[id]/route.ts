@@ -88,8 +88,8 @@ export async function PATCH(
       },
     });
 
-    // Don't send emails when cancelling
-    if (data.stage && data.stage !== "CANCELLED" && existingJob) {
+    // Don't send emails when cancelling or marking complete (internal status only)
+    if (data.stage && data.stage !== "CANCELLED" && data.stage !== "COMPLETED" && existingJob) {
       const customerEmail = job.customer?.email;
       const templateSlug = getTemplateForStage(data.stage, existingJob.deliveryType);
       if (customerEmail && templateSlug) {
