@@ -425,8 +425,8 @@ export function JobDetailModal({ job, isOpen, onClose, onJobUpdated, onJobDelete
             </dl>
           </div>
 
-          {/* Services – shown on Details tab on mobile for quick reference */}
-          <div className="md:hidden">
+          {/* Services – quick reference on Details tab */}
+          <div>
             <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">Services</h3>
             {(job.jobServices?.length ?? 0) === 0 ? (
               <p className="text-slate-500 text-sm">No services added</p>
