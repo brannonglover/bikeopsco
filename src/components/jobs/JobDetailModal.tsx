@@ -425,6 +425,42 @@ export function JobDetailModal({ job, isOpen, onClose, onJobUpdated, onJobDelete
             </dl>
           </div>
 
+          {/* Services – shown on Details tab on mobile for quick reference */}
+          <div className="md:hidden">
+            <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">Services</h3>
+            {(job.jobServices?.length ?? 0) === 0 ? (
+              <p className="text-slate-500 text-sm">No services added</p>
+            ) : (
+              <div className="space-y-2">
+                {(job.jobServices ?? []).map((js) => {
+                  const price = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);
+                  const lineTotal = price * (js.quantity || 1);
+                  return (
+                    <div key={js.id} className="flex justify-between items-center py-2 px-3 rounded-lg bg-slate-50 border border-slate-100">
+                      <span className="font-medium text-slate-900">
+                        {js.service?.name ?? "Unknown"}
+                        {js.quantity > 1 && (
+                          <span className="text-slate-500 font-normal"> × {js.quantity}</span>
+                        )}
+                      </span>
+                      <Price amount={lineTotal} variant="inline" />
+                    </div>
+                  );
+                })}
+                <div className="flex justify-between items-center pt-3 mt-2 border-t border-slate-200 font-semibold">
+                  <span className="text-slate-900">Total</span>
+                  <Price
+                    amount={(job.jobServices ?? []).reduce((sum, js) => {
+                      const p = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);
+                      return sum + p * (js.quantity || 1);
+                    }, 0)}
+                    variant="total"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
           {address && (
             <div>
               <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">Address</h3>
