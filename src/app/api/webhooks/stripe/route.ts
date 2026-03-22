@@ -79,8 +79,24 @@ export async function POST(request: NextRequest) {
       }
 
       if (job && recipientEmail) {
-        const jobWithEmail = { ...job, customer: job.customer ? { ...job.customer, email: recipientEmail } : { firstName: "", lastName: null, email: recipientEmail } };
-        const result = await sendPaymentReceiptEmail(jobWithEmail);
+        const jobForEmail = {
+          id: job.id,
+          bikeMake: job.bikeMake,
+          bikeModel: job.bikeModel,
+          customer: job.customer
+            ? {
+                firstName: job.customer.firstName,
+                lastName: job.customer.lastName,
+                email: recipientEmail,
+              }
+            : { firstName: "", lastName: null, email: recipientEmail },
+          jobServices: job.jobServices.map((js) => ({
+            service: { name: js.service.name },
+            quantity: js.quantity,
+            unitPrice: Number(js.unitPrice),
+          })),
+        };
+        const result = await sendPaymentReceiptEmail(jobForEmail);
         if (!result.ok) {
           console.error("Payment receipt email failed:", result.error);
         } else {

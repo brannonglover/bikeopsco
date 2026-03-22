@@ -36,7 +36,25 @@ export async function POST(
       );
     }
 
-    const result = await sendPaymentReceiptEmail(job);
+    const jobForEmail = {
+      id: job.id,
+      bikeMake: job.bikeMake,
+      bikeModel: job.bikeModel,
+      customer: job.customer
+        ? {
+            firstName: job.customer.firstName,
+            lastName: job.customer.lastName,
+            email: job.customer.email,
+          }
+        : null,
+      jobServices: job.jobServices.map((js) => ({
+        service: { name: js.service.name },
+        quantity: js.quantity,
+        unitPrice: Number(js.unitPrice),
+      })),
+    };
+
+    const result = await sendPaymentReceiptEmail(jobForEmail);
 
     if (!result.ok) {
       const hint =
