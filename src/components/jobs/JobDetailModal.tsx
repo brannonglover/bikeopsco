@@ -43,7 +43,7 @@ interface JobDetailModalProps {
 
 type Tab = "details" | "invoice";
 
-function PaidStatusBlock({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job) => void }) {
+function PaidStatusBlock({ job }: { job: Job }) {
   const [resending, setResending] = useState(false);
   const [resendMessage, setResendMessage] = useState<string | null>(null);
   const customerEmail = job.customer?.email?.trim();
@@ -717,7 +717,7 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
             <Price amount={total} variant="total" />
           </div>
           {job.paymentStatus === "PAID" ? (
-            <PaidStatusBlock job={job} onJobUpdated={onJobUpdated} />
+            <PaidStatusBlock job={job} />
           ) : (
             <div className="mt-4 flex flex-col gap-2">
               <div className="flex flex-wrap gap-2">
