@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { stripe, toCents } from "@/lib/stripe";
+import { getStripe, toCents } from "@/lib/stripe";
 import { z } from "zod";
 
 const bodySchema = z.object({
@@ -46,6 +46,7 @@ export async function POST(
 
     const amountInCents = toCents(total);
 
+    const stripe = getStripe();
     const paymentIntent = await stripe.paymentIntents.create({
       amount: amountInCents,
       currency: "usd",

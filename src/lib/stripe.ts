@@ -1,5 +1,7 @@
 import Stripe from "stripe";
 
+let stripeInstance: Stripe | null = null;
+
 function getStripeClient(): Stripe {
   const key = process.env.STRIPE_SECRET_KEY;
   if (!key || key.trim() === "" || key === "sk_test_xxx") {
@@ -11,7 +13,14 @@ function getStripeClient(): Stripe {
   });
 }
 
-export const stripe = getStripeClient();
+function getStripe(): Stripe {
+  if (!stripeInstance) {
+    stripeInstance = getStripeClient();
+  }
+  return stripeInstance;
+}
+
+export { getStripe };
 
 export function toCents(amount: number): number {
   return Math.round(amount * 100);
