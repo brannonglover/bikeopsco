@@ -31,7 +31,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   if (isPaymentPage) {
     return (
       <div className="min-h-screen flex flex-col">
-        <header className="flex-shrink-0 p-4 sm:p-6 border-b border-slate-200 bg-white flex justify-center">
+        <header className="flex-shrink-0 py-5 px-4 sm:py-6 sm:px-6 border-b border-slate-200 bg-white flex justify-center">
           <Link href="/" className="inline-flex items-center text-slate-600 hover:text-slate-900">
             <Image src="/bbm-logo-wo.png" alt="BikeOps" width={320} height={120} className="h-20 w-auto sm:h-24 md:h-32" priority />
           </Link>
@@ -44,7 +44,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen flex-1 min-w-0">
       {/* Mobile header bar */}
-      <header className="md:hidden flex-shrink-0 fixed top-0 left-0 right-0 z-40 h-14 bg-slate-700 border-b border-slate-600/50 flex items-center justify-between px-4 safe-area-top">
+      <header className="md:hidden flex-shrink-0 fixed top-0 left-0 right-0 z-40 min-h-[4rem] py-3 bg-slate-700 border-b border-slate-600/50 flex items-center justify-between px-4 safe-area-top">
         <button
           type="button"
           onClick={() => setMobileMenuOpen(true)}
@@ -83,7 +83,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
         `}
       >
-        <div className="p-4 border-b border-slate-600/50 flex items-center justify-between md:justify-center">
+        <div className="p-4 py-5 md:py-4 border-b border-slate-600/50 flex items-center justify-between md:justify-center">
           <Link
             href="/"
             className="flex items-center text-white hover:opacity-90 transition-opacity"
@@ -105,8 +105,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <SidebarNav onNavigate={() => setMobileMenuOpen(false)} />
       </aside>
 
-      {/* Main content - offset for mobile header (includes safe area); normal padding on desktop */}
-      <main className="flex-1 min-w-0 pt-[calc(3.5rem+env(safe-area-inset-top,0px))] md:pt-6 p-4 sm:p-6">{children}</main>
+      {/* Main content - offset for mobile header (includes safe area) + extra top space for title; normal padding on desktop */}
+      <main className="flex-1 min-w-0 pt-[calc(4rem+env(safe-area-inset-top,0px)+1.25rem)] md:pt-6 p-4 sm:p-6">{children}</main>
     </div>
   );
 }
