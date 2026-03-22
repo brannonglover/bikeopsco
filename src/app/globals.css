@@ -46,6 +46,13 @@
   .safe-area-top {
     padding-top: env(safe-area-inset-top, 0);
   }
+
+  /* Prevent datetime-local and other inputs from causing horizontal overflow on mobile */
+  .contain-overflow input,
+  .contain-overflow select,
+  .contain-overflow textarea {
+    max-width: 100%;
+  }
 }
 
 /* Subtle gradient mesh background */

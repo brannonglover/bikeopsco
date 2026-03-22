@@ -267,7 +267,7 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
   };
 
   return (
-    <div className={`w-full min-w-0 ${embedded ? "max-w-xl" : "max-w-xl"}`}>
+    <div className={`w-full min-w-0 max-w-full ${embedded ? "max-w-xl" : "max-w-xl"}`}>
       {!embedded && (
         <h1 className="text-2xl font-bold text-slate-900 mb-6">Create Job</h1>
       )}
@@ -458,7 +458,7 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
             <input
               {...register("dropOffDate")}
               type="datetime-local"
-              className="w-full min-w-0 px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 box-border"
+              className="w-full max-w-full min-w-0 px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 box-border"
             />
           </div>
           <div className="min-w-0">
@@ -468,7 +468,7 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
             <input
               {...register("pickupDate")}
               type="datetime-local"
-              className="w-full min-w-0 px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 box-border"
+              className="w-full max-w-full min-w-0 px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 box-border"
             />
           </div>
         </div>

@@ -34,11 +34,11 @@ export function NewJobModal({ isOpen, onClose, onSuccess }: NewJobModalProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/40 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/40 backdrop-blur-sm overflow-hidden touch-manipulation"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-t-2xl sm:rounded-2xl shadow-soft-lg max-w-xl w-full max-h-[95vh] sm:max-h-[90vh] flex flex-col border border-slate-200/80 sm:border-t-0 overflow-hidden"
+        className="bg-white rounded-t-2xl sm:rounded-2xl shadow-soft-lg w-full max-w-[min(36rem,100vw)] sm:max-w-xl max-h-[95vh] sm:max-h-[90vh] flex flex-col border border-slate-200/80 sm:border-t-0 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-slate-100 flex-shrink-0">
@@ -53,7 +53,10 @@ export function NewJobModal({ isOpen, onClose, onSuccess }: NewJobModalProps) {
             </svg>
           </button>
         </div>
-        <div className="overflow-y-auto overflow-x-hidden p-4 sm:p-6 flex-1 min-w-0">
+        <div
+          className="overflow-y-auto overflow-x-hidden p-4 sm:p-6 flex-1 min-w-0 overscroll-contain contain-overflow"
+          style={{ touchAction: "pan-y" }}
+        >
           <JobForm onSuccess={handleSuccess} embedded />
         </div>
       </div>
