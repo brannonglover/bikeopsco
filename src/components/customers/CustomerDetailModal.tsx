@@ -163,30 +163,30 @@ export function CustomerDetailModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50"
       onClick={handleBackdropClick}
     >
       <div
-        className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-t-lg sm:rounded-lg shadow-xl max-w-lg w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {customer ? (
           <>
-            <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-start">
-              <h2 className="text-xl font-bold text-slate-900">
+            <div className="sticky top-0 bg-white border-b border-slate-200 px-4 sm:px-6 py-4 flex justify-between items-start">
+              <h2 className="text-lg sm:text-xl font-bold text-slate-900 truncate pr-2">
                 {formatCustomerName(customer)}
               </h2>
               <button
                 type="button"
                 onClick={onClose}
-                className="text-slate-400 hover:text-slate-600 text-2xl leading-none"
+                className="p-2 -mr-2 text-slate-400 hover:text-slate-600 text-2xl leading-none min-w-[44px] min-h-[44px] flex items-center justify-center touch-manipulation"
                 aria-label="Close"
               >
                 ×
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4">
               {(customer.email || customer.phone) && (
                 <div>
                   <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">

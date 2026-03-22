@@ -13,6 +13,13 @@ export const metadata = {
   description: "Bike repair shop management – jobs, customers, payments, and automated emails",
 };
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  viewportFit: "cover",
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{

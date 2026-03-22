@@ -356,12 +356,12 @@ export default function CustomersPage() {
         </span>
       </p>
 
-      <div className="flex flex-wrap gap-3 mb-6 items-center">
+      <div className="flex flex-col sm:flex-row flex-wrap gap-3 mb-6 items-stretch sm:items-center">
         {!showAddForm ? (
           <>
             <button
               onClick={() => setShowAddForm(true)}
-              className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-semibold shadow-soft hover:bg-indigo-700 hover:shadow-soft-lg transition-all duration-200"
+              className="px-5 py-3 bg-indigo-600 text-white rounded-xl font-semibold shadow-soft hover:bg-indigo-700 hover:shadow-soft-lg transition-all duration-200 touch-manipulation min-h-[44px]"
             >
               + Add Customer
             </button>
@@ -370,13 +370,13 @@ export default function CustomersPage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by name, email, or phone..."
-              className="px-4 py-2.5 border border-slate-200 rounded-xl min-w-[220px] focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-shadow"
+              className="flex-1 min-w-0 px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-shadow"
             />
-            <div className="ml-auto relative" ref={actionsRef}>
+            <div className="sm:ml-auto relative" ref={actionsRef}>
               <button
                 type="button"
                 onClick={() => setActionsOpen((o) => !o)}
-                className="px-4 py-2.5 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 font-medium text-slate-700 shadow-sm transition-colors"
+                className="w-full sm:w-auto px-4 py-3 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 font-medium text-slate-700 shadow-sm transition-colors touch-manipulation min-h-[44px]"
               >
                 Actions ▾
               </button>

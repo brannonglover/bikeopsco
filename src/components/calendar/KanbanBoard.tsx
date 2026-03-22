@@ -158,11 +158,11 @@ export function KanbanBoard() {
           </button>
         </div>
       )}
-      <div className="flex items-center justify-between flex-shrink-0">
-        <h1 className="text-2xl font-bold text-slate-900">Job Board</h1>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 flex-shrink-0">
+        <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Job Board</h1>
         <button
           onClick={() => setNewJobModalOpen(true)}
-          className="px-5 py-2.5 bg-amber-500 text-white rounded-xl font-semibold text-sm shadow-soft hover:bg-amber-600 hover:shadow-soft-lg transition-all duration-200"
+          className="px-5 py-3 bg-amber-500 text-white rounded-xl font-semibold text-sm shadow-soft hover:bg-amber-600 hover:shadow-soft-lg transition-all duration-200 touch-manipulation min-h-[44px] w-full sm:w-auto"
         >
           New Job
         </button>
@@ -173,7 +173,7 @@ export function KanbanBoard() {
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex flex-1 gap-4 overflow-x-auto overflow-y-hidden pb-4 min-h-0 w-full">
+        <div className="flex flex-1 gap-4 overflow-x-auto overflow-y-hidden pb-4 min-h-0 w-full -mx-4 px-4 sm:mx-0 sm:px-0 overscroll-x-contain">
           {STAGES.map((stage) => (
             <StageColumn
               key={stage}

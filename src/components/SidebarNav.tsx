@@ -12,7 +12,11 @@ const NAV_LINKS = [
   { href: "/settings/email-templates", label: "Email Templates" },
 ] as const;
 
-export function SidebarNav() {
+interface SidebarNavProps {
+  onNavigate?: () => void;
+}
+
+export function SidebarNav({ onNavigate }: SidebarNavProps) {
   const pathname = usePathname();
 
   return (
@@ -28,10 +32,11 @@ export function SidebarNav() {
           <Link
             key={href}
             href={href}
-            className={`px-3 py-2.5 rounded-lg font-medium transition-colors text-base ${
+            onClick={onNavigate}
+            className={`px-3 py-3 rounded-lg font-medium transition-colors text-base touch-manipulation ${
               isActive
                 ? "text-white bg-slate-600"
-                : "text-slate-200 hover:text-white hover:bg-slate-600/50"
+                : "text-slate-200 hover:text-white hover:bg-slate-600/50 active:bg-slate-600/70"
             }`}
           >
             {label}

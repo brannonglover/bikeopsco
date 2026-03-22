@@ -78,7 +78,7 @@ export default function StatsPage() {
         {stats.topServices.length === 0 ? (
           <p className="text-slate-500 py-6">No completed services yet.</p>
         ) : (
-          <div className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+          <div className="rounded-xl border border-slate-200 bg-white overflow-x-auto shadow-sm">
             <table className="min-w-full">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">

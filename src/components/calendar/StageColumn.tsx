@@ -37,7 +37,7 @@ export function StageColumn({ stage, jobs, onJobClick }: StageColumnProps) {
   return (
     <div
       ref={setNodeRef}
-      className={`flex-1 min-w-[160px] flex flex-col rounded-xl border transition-all duration-200 min-h-[calc(100vh-14rem)] ${
+      className={`flex-1 min-w-[200px] sm:min-w-[160px] flex-shrink-0 flex flex-col rounded-xl border transition-all duration-200 min-h-[320px] sm:min-h-[calc(100vh-14rem)] ${
         isOver
           ? "border-indigo-400 bg-indigo-50/60 shadow-glow"
           : "border-slate-200/80 bg-white/60 shadow-soft"

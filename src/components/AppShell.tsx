@@ -3,42 +3,110 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState, useEffect } from "react";
 import { SidebarNav } from "@/components/SidebarNav";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isPaymentPage = pathname?.startsWith("/pay/");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Close mobile menu on route change (e.g. after clicking a link)
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
+
+  // Prevent body scroll when mobile overlay is open
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [mobileMenuOpen]);
 
   if (isPaymentPage) {
     return (
       <div className="min-h-screen flex flex-col">
-        <header className="flex-shrink-0 p-6 border-b border-slate-200 bg-white flex justify-center">
+        <header className="flex-shrink-0 p-4 sm:p-6 border-b border-slate-200 bg-white flex justify-center">
           <Link href="/" className="inline-flex items-center text-slate-600 hover:text-slate-900">
-            <Image src="/bbm-logo-wo.png" alt="BikeOps" width={320} height={120} className="h-24 w-auto md:h-32" priority />
+            <Image src="/bbm-logo-wo.png" alt="BikeOps" width={320} height={120} className="h-20 w-auto sm:h-24 md:h-32" priority />
           </Link>
         </header>
-        <main className="flex-1 flex items-center justify-center p-6">{children}</main>
+        <main className="flex-1 flex items-center justify-center p-4 sm:p-6">{children}</main>
       </div>
     );
   }
 
   return (
     <div className="flex min-h-screen flex-1 min-w-0">
-      <aside className="flex-shrink-0 w-56 min-h-screen border-r border-slate-600/40 bg-slate-700 shadow-soft flex flex-col">
-        <div className="p-4 border-b border-slate-600/50 flex justify-center">
-          <Link href="/" className="flex items-center justify-center text-white hover:opacity-90 transition-opacity">
-            <Image
-              src="/bbm-logo-wo.png"
-              alt="BBM"
-              width={240}
-              height={80}
-              className="h-20 w-auto"
-            />
+      {/* Mobile header bar */}
+      <header className="md:hidden flex-shrink-0 fixed top-0 left-0 right-0 z-40 h-14 bg-slate-700 border-b border-slate-600/50 flex items-center justify-between px-4 safe-area-top">
+        <button
+          type="button"
+          onClick={() => setMobileMenuOpen(true)}
+          className="p-2 -ml-2 rounded-lg text-white hover:bg-slate-600/50 transition-colors touch-manipulation"
+          aria-label="Open menu"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        <Link href="/" className="flex items-center" onClick={() => setMobileMenuOpen(false)}>
+          <Image src="/bbm-logo-wo.png" alt="BBM" width={160} height={53} className="h-12 w-auto" />
+        </Link>
+        <div className="w-10" aria-hidden />
+      </header>
+
+      {/* Mobile overlay when menu open */}
+      {mobileMenuOpen && (
+        <button
+          type="button"
+          className="md:hidden fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+          aria-label="Close menu"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* Sidebar - hidden on mobile, overlay when open */}
+      <aside
+        className={`
+          fixed md:relative inset-y-0 left-0 z-50
+          w-64 md:w-56 min-h-screen
+          border-r border-slate-600/40 bg-slate-700 shadow-soft flex flex-col
+          transform transition-transform duration-200 ease-out
+          md:transform-none md:flex-shrink-0
+          pt-[env(safe-area-inset-top,0px)] md:pt-0
+          ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
+        `}
+      >
+        <div className="p-4 border-b border-slate-600/50 flex items-center justify-between md:justify-center">
+          <Link
+            href="/"
+            className="flex items-center text-white hover:opacity-90 transition-opacity"
+            onClick={() => setMobileMenuOpen(false)}
+          >
+            <Image src="/bbm-logo-wo.png" alt="BBM" width={240} height={80} className="h-16 md:h-20 w-auto" />
           </Link>
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(false)}
+            className="md:hidden p-2 -mr-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-600/50"
+            aria-label="Close menu"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
-        <SidebarNav />
+        <SidebarNav onNavigate={() => setMobileMenuOpen(false)} />
       </aside>
-      <main className="flex-1 min-w-0 overflow-x-hidden p-6">{children}</main>
+
+      {/* Main content - offset for mobile header (includes safe area) */}
+      <main className="flex-1 min-w-0 overflow-x-hidden pt-[calc(3.5rem+env(safe-area-inset-top,0px))] md:pt-0 p-4 sm:p-6">{children}</main>
     </div>
   );
 }

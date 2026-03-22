@@ -29,11 +29,22 @@
     background: var(--background);
     font-family: var(--font-jakarta), system-ui, -apple-system, sans-serif;
   }
+
+  /* Improve tap responsiveness on mobile */
+  @media (hover: none) and (pointer: coarse) {
+    button, a, [role="button"] {
+      touch-action: manipulation;
+    }
+  }
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top, 0);
   }
 }
 
