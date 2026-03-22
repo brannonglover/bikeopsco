@@ -1,0 +1,64 @@
+export type Stage =
+  | "RECEIVED"
+  | "WORKING_ON"
+  | "WAITING_ON_PARTS"
+  | "BIKE_READY"
+  | "COMPLETED"
+  | "CANCELLED";
+
+export type DeliveryType = "DROP_OFF_AT_SHOP" | "COLLECTION_SERVICE";
+
+export interface Customer {
+  id: string;
+  firstName: string;
+  lastName: string | null;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Service {
+  id: string;
+  name: string;
+  description: string | null;
+  price: number | string; // Prisma Decimal can come as string
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface JobService {
+  id: string;
+  jobId: string;
+  serviceId: string;
+  service: Service;
+  quantity: number;
+  unitPrice: number | string;
+  notes: string | null;
+}
+
+export type PaymentStatus = "UNPAID" | "PENDING" | "PAID" | "REFUNDED";
+
+export interface Job {
+  id: string;
+  bikeMake: string;
+  bikeModel: string;
+  stage: Stage;
+  deliveryType: DeliveryType;
+  dropOffDate: string | null;
+  pickupDate: string | null;
+  collectionAddress: string | null;
+  customerId: string | null;
+  customer: Customer | null;
+  notes: string | null;
+  internalNotes: string | null;
+  customerNotes: string | null;
+  cancellationReason?: string | null;
+  completedAt: string | null;
+  paymentStatus?: PaymentStatus;
+  jobServices?: JobService[];
+  createdAt: string;
+  updatedAt: string;
+}

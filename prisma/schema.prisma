@@ -1,0 +1,135 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  firstName String
+  lastName  String?
+  email     String?
+  phone     String?
+  address   String?
+  notes     String?
+  jobs      Job[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Job {
+  id                String       @id @default(cuid())
+  bikeMake          String
+  bikeModel         String
+  stage             Stage        @default(RECEIVED)
+  deliveryType      DeliveryType @default(DROP_OFF_AT_SHOP)
+  dropOffDate       DateTime?
+  pickupDate        DateTime?
+  collectionAddress String?
+  customerId        String?
+  customer          Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  notes             String?
+  internalNotes     String?
+  customerNotes     String?
+  cancellationReason String?
+  completedAt       DateTime?
+  paymentStatus     PaymentStatus @default(UNPAID)
+  sentEmails        JobEmail[]
+  jobServices       JobService[]
+  payments          Payment[]
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+}
+
+model Payment {
+  id                   String   @id @default(cuid())
+  jobId                String
+  job                  Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  stripePaymentIntentId String @unique
+  amount               Decimal  @db.Decimal(10, 2)
+  currency             String   @default("usd")
+  status               String
+  paymentMethod        String?
+  createdAt            DateTime @default(now())
+}
+
+enum PaymentStatus {
+  UNPAID
+  PENDING
+  PAID
+  REFUNDED
+}
+
+model Service {
+  id          String       @id @default(cuid())
+  name        String
+  description String?
+  price       Decimal     @db.Decimal(10, 2)
+  jobServices JobService[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model JobService {
+  id        String   @id @default(cuid())
+  jobId     String
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  serviceId String
+  service   Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  quantity  Int      @default(1)
+  unitPrice Decimal @db.Decimal(10, 2)
+  notes     String?
+  createdAt DateTime @default(now())
+}
+
+enum Stage {
+  RECEIVED
+  WORKING_ON
+  WAITING_ON_PARTS
+  BIKE_READY
+  COMPLETED
+  CANCELLED
+}
+
+enum DeliveryType {
+  DROP_OFF_AT_SHOP
+  COLLECTION_SERVICE
+}
+
+model EmailTemplate {
+  id           String        @id @default(cuid())
+  slug         String        @unique
+  name         String
+  subject      String
+  bodyHtml     String
+  triggerType  String
+  stage        Stage?
+  deliveryType DeliveryType?
+  delayDays    Int?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model JobEmail {
+  id           String   @id @default(cuid())
+  jobId        String
+  job          Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  templateSlug String
+  sentAt       DateTime @default(now())
+  recipient    String
+}
+
+model Product {
+  id            String   @id @default(cuid())
+  name          String
+  description   String?
+  imageUrl      String?
+  price         Decimal  @db.Decimal(10, 2)
+  stockQuantity Int      @default(0)
+  supplier      String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
