@@ -5,6 +5,11 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    overflow-x: hidden;
+    width: 100%;
+  }
+
   :root {
     --background: #f8fafc;
     --foreground: #0f172a;
@@ -28,6 +33,9 @@
     color: var(--foreground);
     background: var(--background);
     font-family: var(--font-jakarta), system-ui, -apple-system, sans-serif;
+    overflow-x: hidden;
+    width: 100%;
+    max-width: 100%;
   }
 
   /* Improve tap responsiveness on mobile */
