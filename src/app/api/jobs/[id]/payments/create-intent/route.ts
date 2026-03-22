@@ -66,6 +66,25 @@ export async function POST(
       return NextResponse.json({ error: error.flatten() }, { status: 400 });
     }
     console.error("POST /api/jobs/[id]/payments/create-intent error:", error);
+
+    // Surface actionable errors for debugging (Stripe + env)
+    const err = error as { type?: string; message?: string; code?: string };
+    if (err.message?.includes("STRIPE_SECRET_KEY")) {
+      return NextResponse.json(
+        { error: "Stripe is not configured. Add STRIPE_SECRET_KEY in Vercel Environment Variables, then redeploy." },
+        { status: 500 }
+      );
+    }
+    if (err.type?.startsWith("Stripe") && typeof err.message === "string") {
+      return NextResponse.json(
+        { error: `Stripe: ${err.message}` },
+        { status: 500 }
+      );
+    }
+    if (err.message) {
+      return NextResponse.json({ error: String(err.message) }, { status: 500 });
+    }
+
     return NextResponse.json(
       { error: "Failed to create payment intent" },
       { status: 500 }
