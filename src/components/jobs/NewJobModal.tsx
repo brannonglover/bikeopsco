@@ -38,7 +38,7 @@ export function NewJobModal({ isOpen, onClose, onSuccess }: NewJobModalProps) {
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-t-2xl sm:rounded-2xl shadow-soft-lg max-w-xl w-full max-h-[95vh] sm:max-h-[90vh] flex flex-col border border-slate-200/80 sm:border-t-0"
+        className="bg-white rounded-t-2xl sm:rounded-2xl shadow-soft-lg max-w-xl w-full max-h-[95vh] sm:max-h-[90vh] flex flex-col border border-slate-200/80 sm:border-t-0 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-slate-100 flex-shrink-0">
@@ -53,7 +53,7 @@ export function NewJobModal({ isOpen, onClose, onSuccess }: NewJobModalProps) {
             </svg>
           </button>
         </div>
-        <div className="overflow-y-auto p-4 sm:p-6 flex-1">
+        <div className="overflow-y-auto overflow-x-hidden p-4 sm:p-6 flex-1 min-w-0">
           <JobForm onSuccess={handleSuccess} embedded />
         </div>
       </div>

@@ -267,18 +267,18 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
   };
 
   return (
-    <div className={embedded ? "max-w-xl" : "max-w-xl"}>
+    <div className={`w-full min-w-0 ${embedded ? "max-w-xl" : "max-w-xl"}`}>
       {!embedded && (
         <h1 className="text-2xl font-bold text-slate-900 mb-6">Create Job</h1>
       )}
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 min-w-0">
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">
             Bike Make
           </label>
           <input
             {...register("bikeMake")}
-            className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+            className="w-full min-w-0 px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
             placeholder="e.g. Trek, Specialized"
           />
           {errors.bikeMake && (
@@ -291,7 +291,7 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
           </label>
           <input
             {...register("bikeModel")}
-            className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+            className="w-full min-w-0 px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
             placeholder="e.g. Domane SL 6"
           />
           {errors.bikeModel && (
@@ -299,7 +299,7 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
           )}
         </div>
 
-        <div className="relative" ref={dropdownRef}>
+        <div className="relative min-w-0" ref={dropdownRef}>
           <label className="block text-sm font-medium text-slate-700 mb-1">
             Customer
           </label>
@@ -314,7 +314,7 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
               }}
               onFocus={() => setShowDropdown(true)}
               placeholder="Type name to search or create..."
-              className="w-full px-4 py-2 pr-20 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+              className="w-full min-w-0 px-4 py-2 pr-16 sm:pr-20 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
             />
             {selectedCustomer && (
               <button
@@ -328,7 +328,7 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
             )}
           </div>
           {showDropdown && (customerInput.length > 0 || customers.length > 0) && (
-            <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+            <div className="absolute z-10 mt-1 left-0 right-0 min-w-0 bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto overflow-x-hidden">
               {isSearching ? (
                 <div className="px-4 py-3 text-sm text-slate-500">Searching...</div>
               ) : customers.length === 0 && !showCreateOption ? (
@@ -388,7 +388,7 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
                 value={serviceSearch}
                 onChange={(e) => setServiceSearch(e.target.value)}
                 placeholder="Search services..."
-                className="w-full px-3 py-2 mb-2 border border-slate-200 rounded-xl text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-transparent"
+                className="w-full min-w-0 px-3 py-2 mb-2 border border-slate-200 rounded-xl text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-transparent"
               />
               <div className="border border-slate-200 rounded-lg p-3 max-h-40 overflow-y-auto space-y-2">
                 {filteredServices.map((s) => {
@@ -430,7 +430,7 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
           </label>
           <select
             {...register("deliveryType")}
-            className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20"
+            className="w-full min-w-0 px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20"
           >
             <option value="DROP_OFF_AT_SHOP">Drop-off at shop</option>
             <option value="COLLECTION_SERVICE">Collection service</option>
@@ -444,31 +444,31 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
             </label>
             <input
               {...register("collectionAddress")}
-              className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20"
+              className="w-full min-w-0 px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20"
               placeholder={selectedCustomer?.address || "Pickup/delivery address"}
             />
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="min-w-0">
             <label className="block text-sm font-medium text-slate-700 mb-1">
               Drop-off Date
             </label>
             <input
               {...register("dropOffDate")}
               type="datetime-local"
-              className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20"
+              className="w-full min-w-0 px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 box-border"
             />
           </div>
-          <div>
+          <div className="min-w-0">
             <label className="block text-sm font-medium text-slate-700 mb-1">
               Pickup Date
             </label>
             <input
               {...register("pickupDate")}
               type="datetime-local"
-              className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20"
+              className="w-full min-w-0 px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 box-border"
             />
           </div>
         </div>
@@ -482,7 +482,7 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
             <textarea
               {...register("internalNotes")}
               rows={3}
-              className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20"
+              className="w-full min-w-0 px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 resize-y"
               placeholder="Repair notes, issues found, cost estimates..."
             />
           </div>
@@ -494,7 +494,7 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
             <textarea
               {...register("customerNotes")}
               rows={3}
-              className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20"
+              className="w-full min-w-0 px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 resize-y"
               placeholder="Updates, instructions, or messages for the customer..."
             />
           </div>
