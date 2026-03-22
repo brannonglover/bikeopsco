@@ -43,22 +43,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen flex-1 min-w-0">
-      {/* Mobile header bar */}
-      <header className="md:hidden flex-shrink-0 fixed top-0 left-0 right-0 z-40 min-h-[4rem] py-3 bg-slate-700 border-b border-slate-600/50 flex items-center justify-between px-4 safe-area-top">
-        <button
-          type="button"
-          onClick={() => setMobileMenuOpen(true)}
-          className="p-2 -ml-2 rounded-lg text-white hover:bg-slate-600/50 transition-colors touch-manipulation"
-          aria-label="Open menu"
-        >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        </button>
-        <Link href="/" className="flex items-center" onClick={() => setMobileMenuOpen(false)}>
-          <Image src="/bbm-logo-wo.png" alt="BBM" width={160} height={53} className="h-12 w-auto" />
-        </Link>
-        <div className="w-10" aria-hidden />
+      {/* Mobile header bar - safe area spacer then centered content bar */}
+      <header className="md:hidden flex-shrink-0 fixed top-0 left-0 right-0 z-40 flex flex-col bg-slate-700 border-b border-slate-600/50">
+        <div className="h-[env(safe-area-inset-top,0px)]" aria-hidden />
+        <div className="min-h-[4rem] py-3 flex items-center justify-between px-4">
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(true)}
+            className="p-2 -ml-2 rounded-lg text-white hover:bg-slate-600/50 transition-colors touch-manipulation"
+            aria-label="Open menu"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+          <Link href="/" className="flex items-center justify-center flex-1 min-w-0" onClick={() => setMobileMenuOpen(false)}>
+            <Image src="/bbm-logo-wo.png" alt="BBM" width={160} height={53} className="h-12 w-auto" />
+          </Link>
+          <div className="w-10 flex-shrink-0" aria-hidden />
+        </div>
       </header>
 
       {/* Mobile overlay when menu open */}
@@ -105,8 +108,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <SidebarNav onNavigate={() => setMobileMenuOpen(false)} />
       </aside>
 
-      {/* Main content - offset for mobile header (includes safe area) + extra top space for title; normal padding on desktop */}
-      <main className="flex-1 min-w-0 pt-[calc(4rem+env(safe-area-inset-top,0px)+1.25rem)] md:pt-6 p-4 sm:p-6">{children}</main>
+      {/* Main content - offset for mobile header (safe area + bar) + extra top space for title; normal padding on desktop */}
+      <main className="flex-1 min-w-0 pt-[calc(5.5rem+env(safe-area-inset-top,0px)+1.25rem)] md:pt-6 p-4 sm:p-6">{children}</main>
     </div>
   );
 }
