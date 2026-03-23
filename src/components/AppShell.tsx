@@ -123,14 +123,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         />
       )}
 
-      {/* Sidebar - hidden on mobile, overlay when open */}
+      {/* Sidebar - fixed on desktop so it stays put when scrolling; overlay on mobile when open */}
       <aside
         className={`
-          fixed md:relative inset-y-0 left-0 z-50
+          fixed inset-y-0 left-0 z-50
           w-64 md:w-56 min-h-screen
           border-r border-slate-600/40 bg-slate-700 shadow-soft flex flex-col
           transform transition-transform duration-200 ease-out
-          md:transform-none md:flex-shrink-0
+          md:transform-none
           pt-[env(safe-area-inset-top,0px)] md:pt-0
           ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
         `}
@@ -167,8 +167,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      {/* Main content - offset for mobile header (safe area + bar) + extra top space for title; normal padding on desktop */}
-      <main className="flex-1 min-w-0 pt-[calc(5.5rem+env(safe-area-inset-top,0px)+1.25rem)] md:pt-6 p-4 sm:p-6">{children}</main>
+      {/* Main content - offset for mobile header; left margin on desktop for fixed sidebar */}
+      <main className="flex-1 min-w-0 pt-[calc(5.5rem+env(safe-area-inset-top,0px)+1.25rem)] md:pt-6 md:ml-56 p-4 sm:p-6">{children}</main>
     </div>
   );
 }

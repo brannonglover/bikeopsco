@@ -10,6 +10,14 @@ export type Stage =
 
 export type DeliveryType = "DROP_OFF_AT_SHOP" | "COLLECTION_SERVICE";
 
+export interface Bike {
+  id: string;
+  make: string;
+  model: string;
+  nickname: string | null;
+  imageUrl: string | null;
+}
+
 export interface Customer {
   id: string;
   firstName: string;
@@ -20,6 +28,7 @@ export interface Customer {
   notes: string | null;
   createdAt: string;
   updatedAt: string;
+  bikes?: Bike[];
 }
 
 export interface Service {
@@ -90,10 +99,23 @@ export interface Conversation {
   updatedAt: string;
 }
 
+export interface JobBike {
+  id: string;
+  jobId: string;
+  make: string;
+  model: string;
+  nickname: string | null;
+  imageUrl: string | null;
+  bikeId: string | null;
+  sortOrder: number;
+  bike?: { imageUrl: string | null } | null;
+}
+
 export interface Job {
   id: string;
   bikeMake: string;
   bikeModel: string;
+  jobBikes?: JobBike[];
   stage: Stage;
   deliveryType: DeliveryType;
   dropOffDate: string | null;

@@ -1,83 +1,113 @@
 "use client";
 
-import { useCallback, useEffect, useState, useRef } from "react";
-import type { Job, JobProduct, JobService, Stage } from "@/lib/types";
+import { useEffect, useState, useRef } from "react";
+import type { Job, JobBike, JobProduct, JobService, Stage } from "@/lib/types";
 import { Price } from "@/components/ui/Price";
+import { BikePlaceholderIcon } from "@/components/ui/BikePlaceholderIcon";
 
-interface Bike {
-  id: string;
-  make: string;
-  model: string;
-  nickname: string | null;
-  imageUrl: string | null;
+function BikeCard({ bike, compact }: { bike: { make: string; model: string; nickname?: string | null; imageUrl?: string | null }; compact?: boolean }) {
+  const displayName = bike.nickname?.trim() ? bike.nickname : `${bike.make} ${bike.model}`;
+  const subtitle = bike.nickname?.trim() ? `${bike.make} ${bike.model}` : null;
+  const size = compact ? "w-16 h-16" : "w-24 h-24";
+  return (
+    <div className={`flex gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm ${compact ? "" : "min-w-0 flex-1"}`}>
+      {bike.imageUrl ? (
+        <img
+          src={bike.imageUrl}
+          alt={displayName}
+          className={`${size} flex-shrink-0 object-cover rounded-lg border border-slate-100`}
+        />
+      ) : (
+        <div className={`${size} flex-shrink-0 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center`}>
+          <BikePlaceholderIcon className="w-8 h-8 text-slate-400" />
+        </div>
+      )}
+      <div className="min-w-0 flex-1">
+        <p className="font-medium text-slate-900 truncate">{displayName}</p>
+        {subtitle && <p className="text-sm text-slate-500 truncate">{subtitle}</p>}
+      </div>
+    </div>
+  );
+}
+
+function resolveBikeImageUrl(b: JobBike, customerBikes?: { make: string; model: string; imageUrl: string | null }[]): string | null {
+  const url = b.imageUrl ?? b.bike?.imageUrl ?? null;
+  if (url) return url;
+  if (!customerBikes?.length) return null;
+  const makeNorm = (b.make ?? "").trim().toLowerCase();
+  const modelNorm = (b.model ?? "").trim().toLowerCase();
+  if (!makeNorm || !modelNorm) return null;
+  const match = customerBikes.find(
+    (cb) =>
+      (cb.make ?? "").trim().toLowerCase() === makeNorm &&
+      (cb.model ?? "").trim().toLowerCase() === modelNorm
+  );
+  return match?.imageUrl ?? null;
 }
 
 function JobBikeSection({ job }: { job: Job }) {
-  const [customerBikes, setCustomerBikes] = useState<Bike[]>([]);
-
-  const fetchBikes = useCallback(async (customerId: string) => {
-    try {
-      const res = await fetch(`/api/customers/${customerId}/bikes`);
-      const data = await res.json();
-      setCustomerBikes(Array.isArray(data) ? data : []);
-    } catch {
-      setCustomerBikes([]);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (job.customer?.id) {
-      fetchBikes(job.customer.id);
-    } else {
-      setCustomerBikes([]);
-    }
-  }, [job.customer?.id, fetchBikes]);
-
-  const match = (make: string, model: string) => (b: Bike) =>
-    b.make.trim().toLowerCase() === make.trim().toLowerCase() &&
-    b.model.trim().toLowerCase() === model.trim().toLowerCase();
-
-  const matchedBike = customerBikes.find(match(job.bikeMake, job.bikeModel));
+  const jobBikes: JobBike[] = job.jobBikes ?? [];
+  const hasMultiple = jobBikes.length > 1;
+  const bikes = hasMultiple || jobBikes.length === 1
+    ? jobBikes
+    : [{ id: "legacy", make: job.bikeMake, model: job.bikeModel, nickname: null, imageUrl: null, bikeId: null, sortOrder: 0 } as JobBike];
+  const customerBikes = job.customer?.bikes;
 
   return (
     <div>
-      <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">Bike</h3>
-      <div className="flex gap-4">
-        {matchedBike?.imageUrl ? (
-          <img
-            src={matchedBike.imageUrl}
-            alt={`${job.bikeMake} ${job.bikeModel}`}
-            className="w-24 h-24 object-cover rounded-lg border border-slate-200 flex-shrink-0"
+      <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">
+        {hasMultiple ? `Bikes (${bikes.length})` : "Bike"}
+      </h3>
+      <div className={`grid gap-3 ${hasMultiple ? "grid-cols-1 sm:grid-cols-2" : ""}`}>
+        {bikes.map((b) => (
+          <BikeCard
+            key={b.id}
+            bike={{ make: b.make, model: b.model, nickname: b.nickname, imageUrl: resolveBikeImageUrl(b, customerBikes) }}
+            compact={hasMultiple}
           />
-        ) : (
-          <div className="w-24 h-24 rounded-lg bg-slate-100 border border-slate-200 flex-shrink-0 flex items-center justify-center">
-            <svg
-              className="w-10 h-10 text-slate-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14"
-              />
-            </svg>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function JobBikesInvoiceSection({ job }: { job: Job }) {
+  const jobBikes: JobBike[] = job.jobBikes ?? [];
+  const hasMultiple = jobBikes.length > 1;
+  const bikes = hasMultiple || jobBikes.length === 1
+    ? jobBikes
+    : [{ id: "legacy", make: job.bikeMake, model: job.bikeModel, nickname: null, imageUrl: null, bikeId: null, sortOrder: 0 } as JobBike];
+  const customerBikes = job.customer?.bikes;
+
+  return (
+    <div className="mb-6 pb-4 border-b border-slate-200">
+      <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">
+        Bikes in this job
+      </h3>
+      <div className={`flex flex-wrap gap-2 ${hasMultiple ? "" : ""}`}>
+        {bikes.map((b) => {
+          const imageUrl = resolveBikeImageUrl(b, customerBikes);
+          return (
+          <div
+            key={b.id}
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 text-sm"
+          >
+            {imageUrl ? (
+              <img src={imageUrl} alt="" className="w-10 h-10 object-cover rounded border border-slate-200" />
+            ) : (
+              <div className="w-10 h-10 rounded bg-slate-200 flex items-center justify-center">
+                <BikePlaceholderIcon className="w-5 h-5 text-slate-500" />
+              </div>
+            )}
+            <span className="font-medium text-slate-900">
+              {b.nickname?.trim() ? b.nickname : `${b.make} ${b.model}`}
+            </span>
+            {b.nickname?.trim() && (
+              <span className="text-slate-500">({b.make} {b.model})</span>
+            )}
           </div>
-        )}
-        <div className="min-w-0">
-          <p className="font-medium text-slate-900">
-            {matchedBike?.nickname
-              ? `${matchedBike.nickname}`
-              : `${job.bikeMake} ${job.bikeModel}`}
-          </p>
-          {matchedBike?.nickname && (
-            <p className="text-sm text-slate-500">
-              {job.bikeMake} {job.bikeModel}
-            </p>
-          )}
-        </div>
+        );
+        })}
       </div>
     </div>
   );
@@ -356,7 +386,7 @@ const CANCELLATION_REASONS = [
   "Other",
 ] as const;
 
-export function JobDetailModal({ job, isOpen, onClose, onJobUpdated, onJobDeleted }: JobDetailModalProps) {
+export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, onJobDeleted }: JobDetailModalProps) {
   const [activeTab, setActiveTab] = useState<Tab>("details");
   const [cancelling, setCancelling] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -364,6 +394,22 @@ export function JobDetailModal({ job, isOpen, onClose, onJobUpdated, onJobDelete
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelReasonOther, setCancelReasonOther] = useState("");
+  const [job, setJob] = useState<Job | null>(jobProp);
+
+  // Fetch fresh job data when modal opens so we get bike images from linked Bike records
+  useEffect(() => {
+    if (isOpen && jobProp?.id) {
+      setJob(jobProp);
+      fetch(`/api/jobs/${jobProp.id}`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((fetched) => {
+          if (fetched) setJob(fetched);
+        })
+        .catch(() => {});
+    } else {
+      setJob(jobProp);
+    }
+  }, [isOpen, jobProp?.id]);
 
   const handleCancelJobClick = () => {
     if (!job || job.stage === "CANCELLED") return;
@@ -541,7 +587,9 @@ export function JobDetailModal({ job, isOpen, onClose, onJobUpdated, onJobDelete
         )}
         <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-slate-200 flex-shrink-0">
           <h2 className="text-lg sm:text-xl font-bold text-slate-900 truncate pr-2">
-            {job.bikeMake} {job.bikeModel}
+            {job.bikeMake === "Multiple"
+              ? `${job.bikeModel}`
+              : `${job.bikeMake} ${job.bikeModel}`}
           </h2>
           <button
             onClick={onClose}
@@ -1000,6 +1048,7 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
 
   return (
     <div>
+      <JobBikesInvoiceSection job={job} />
       <div className="flex items-center justify-between gap-3 mb-3 min-w-0">
         <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide flex-shrink-0">
           Services

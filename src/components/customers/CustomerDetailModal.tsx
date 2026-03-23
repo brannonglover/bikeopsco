@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { formatCustomerName } from "@/lib/customer";
+import { BikePlaceholderIcon } from "@/components/ui/BikePlaceholderIcon";
 import type L from "leaflet";
 
 interface Bike {
@@ -774,19 +775,7 @@ export function CustomerDetailModal({
                           />
                         ) : (
                           <div className="w-12 h-12 rounded-lg bg-slate-200 flex-shrink-0 flex items-center justify-center">
-                            <svg
-                              className="w-6 h-6 text-slate-400"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14"
-                              />
-                            </svg>
+                            <BikePlaceholderIcon className="w-6 h-6 text-slate-400" />
                           </div>
                         )}
                         <span className="font-medium text-slate-900 flex-1 min-w-0">

@@ -26,23 +26,41 @@ model Customer {
 }
 
 model Bike {
-  id         String   @id @default(cuid())
-  make       String
-  model      String
-  nickname   String?
-  imageUrl   String?
-  customerId String
-  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id          String     @id @default(cuid())
+  make        String
+  model       String
+  nickname    String?
+  imageUrl    String?
+  customerId  String
+  customer    Customer   @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  jobBikes    JobBike[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 
   @@index([customerId])
 }
 
+model JobBike {
+  id        String   @id @default(cuid())
+  jobId     String
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  make      String
+  model     String
+  nickname  String?
+  imageUrl  String?
+  bikeId    String?
+  bike      Bike?    @relation(fields: [bikeId], references: [id], onDelete: SetNull)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([jobId])
+}
+
 model Job {
   id                String       @id @default(cuid())
-  bikeMake          String
-  bikeModel         String
+  bikeMake          String       // Legacy / summary – first bike or "Multiple"
+  bikeModel         String       // Legacy / summary
+  jobBikes          JobBike[]
   stage             Stage        @default(BOOKED_IN)
   deliveryType      DeliveryType @default(DROP_OFF_AT_SHOP)
   dropOffDate       DateTime?

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { useForm, useController } from "react-hook-form";
+import { useForm, useController, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
@@ -13,9 +13,16 @@ interface JobFormProps {
   embedded?: boolean;
 }
 
+const bikeSchema = z.object({
+  make: z.string(),
+  model: z.string(),
+  nickname: z.string().optional(),
+  bikeId: z.string().optional(),
+  imageUrl: z.string().optional().nullable(),
+});
+
 const schema = z.object({
-  bikeMake: z.string().min(1, "Make is required"),
-  bikeModel: z.string().min(1, "Model is required"),
+  bikes: z.array(bikeSchema).min(1, "At least one bike is required"),
   customerId: z.string().optional(),
   deliveryType: z.enum(["DROP_OFF_AT_SHOP", "COLLECTION_SERVICE"]),
   dropOffDate: z.string().optional(),
@@ -24,6 +31,9 @@ const schema = z.object({
   internalNotes: z.string().optional(),
   customerNotes: z.string().optional(),
   serviceIds: z.array(z.string()).optional(),
+}).refine((data) => data.bikes.some((b) => b.make?.trim() && b.model?.trim()), {
+  message: "At least one bike must have make and model",
+  path: ["bikes"],
 });
 
 type FormData = z.infer<typeof schema>;
@@ -50,6 +60,7 @@ interface Bike {
   make: string;
   model: string;
   nickname: string | null;
+  imageUrl?: string | null;
 }
 
 interface Service {
@@ -70,7 +81,6 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
   const [isSearching, setIsSearching] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [customerBikes, setCustomerBikes] = useState<Bike[]>([]);
-  const [selectedBikeId, setSelectedBikeId] = useState<string>("");
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -78,11 +88,11 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
     handleSubmit,
     watch,
     control,
-    setValue,
     formState: { errors, isSubmitting },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
+      bikes: [{ make: "", model: "" }],
       deliveryType: "DROP_OFF_AT_SHOP",
       dropOffDate: getDefaultDropOffDateTime(),
     },
@@ -92,6 +102,11 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
     name: "customerId",
     control,
     defaultValue: "",
+  });
+
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: "bikes",
   });
 
   const deliveryType = watch("deliveryType");
@@ -138,7 +153,6 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
     } else {
       setCustomerBikes([]);
     }
-    setSelectedBikeId("");
   }, [customerId]);
 
   useEffect(() => {
@@ -242,12 +256,23 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
       }
     }
 
+    const validBikes = data.bikes.filter((b) => b.make?.trim() && b.model?.trim());
+    const bikeMake = validBikes.length === 1 ? validBikes[0].make : "Multiple";
+    const bikeModel = validBikes.length === 1 ? validBikes[0].model : `${validBikes.length} bikes`;
+
     const res = await fetch("/api/jobs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        bikeMake: data.bikeMake,
-        bikeModel: data.bikeModel,
+        bikeMake,
+        bikeModel,
+        bikes: validBikes.map((b) => ({
+          make: b.make,
+          model: b.model,
+          nickname: b.nickname || null,
+          imageUrl: b.imageUrl || null,
+          bikeId: b.bikeId || null,
+        })),
         customerId: finalCustomerId || null,
         deliveryType: data.deliveryType,
         dropOffDate: data.dropOffDate || null,
@@ -360,59 +385,103 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
           )}
         </div>
 
-        {customerBikes.length > 0 && (
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Use saved bike
+        <div>
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <label className="block text-sm font-medium text-slate-700">
+              Bikes
             </label>
-            <select
-              value={selectedBikeId}
-              onChange={(e) => {
-                const val = e.target.value;
-                setSelectedBikeId(val);
-                if (val === "") return;
-                const bike = customerBikes.find((b) => b.id === val);
-                if (bike) {
-                  setValue("bikeMake", bike.make);
-                  setValue("bikeModel", bike.model);
-                }
-              }}
-              className="w-full min-w-0 px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none bg-white"
-            >
-              <option value="">Select a bike...</option>
-              {customerBikes.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.nickname ? `${b.nickname} (${b.make} ${b.model})` : `${b.make} ${b.model}`}
-                </option>
-              ))}
-            </select>
+            <div className="flex gap-2">
+              {customerBikes.length > 0 && (
+                <select
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    e.target.value = "";
+                    if (!val) return;
+                    const bike = customerBikes.find((b) => b.id === val);
+                    if (bike) {
+                      append({
+                        make: bike.make,
+                        model: bike.model,
+                        nickname: bike.nickname ?? undefined,
+                        bikeId: bike.id,
+                        imageUrl: bike.imageUrl ?? undefined,
+                      });
+                    }
+                  }}
+                  className="text-sm px-3 py-1.5 border border-slate-200 rounded-lg bg-white hover:bg-slate-50"
+                >
+                  <option value="">+ Add saved bike</option>
+                  {customerBikes.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.nickname ? `${b.nickname} (${b.make} ${b.model})` : `${b.make} ${b.model}`}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <button
+                type="button"
+                onClick={() => append({ make: "", model: "" })}
+                className="text-sm px-3 py-1.5 border border-slate-200 rounded-lg bg-white hover:bg-slate-50 font-medium"
+              >
+                + Add bike
+              </button>
+            </div>
           </div>
-        )}
-
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
-            Bike Make
-          </label>
-          <input
-            {...register("bikeMake")}
-            className="w-full min-w-0 px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
-            placeholder="e.g. Trek, Specialized"
-          />
-          {errors.bikeMake && (
-            <p className="text-red-600 text-sm mt-1">{errors.bikeMake.message}</p>
-          )}
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
-            Bike Model
-          </label>
-          <input
-            {...register("bikeModel")}
-            className="w-full min-w-0 px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
-            placeholder="e.g. Domane SL 6"
-          />
-          {errors.bikeModel && (
-            <p className="text-red-600 text-sm mt-1">{errors.bikeModel.message}</p>
+          <div className="space-y-4">
+            {fields.map((field, i) => (
+              <div
+                key={field.id}
+                className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 space-y-3"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-slate-600">Bike {i + 1}</span>
+                  {fields.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => remove(i)}
+                      className="text-slate-400 hover:text-red-600 text-sm"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Make</label>
+                    <input
+                      {...register(`bikes.${i}.make`)}
+                      placeholder="e.g. Trek, Specialized"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                    />
+                    {errors.bikes?.[i]?.make && (
+                      <p className="text-red-600 text-xs mt-1">{errors.bikes[i]?.make?.message}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Model</label>
+                    <input
+                      {...register(`bikes.${i}.model`)}
+                      placeholder="e.g. Domane SL 6"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                    />
+                    {errors.bikes?.[i]?.model && (
+                      <p className="text-red-600 text-xs mt-1">{errors.bikes[i]?.model?.message}</p>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Nickname (optional)</label>
+                  <input
+                    {...register(`bikes.${i}.nickname`)}
+                    placeholder="e.g. Road bike, Commuter"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+          {errors.bikes?.root && (
+            <p className="text-red-600 text-sm mt-1">{errors.bikes.root.message}</p>
           )}
         </div>
 

@@ -4,9 +4,18 @@ import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { sendJobEmail, getTemplateForStage } from "@/lib/email";
 
+const bikeSchema = z.object({
+  make: z.string().min(1),
+  model: z.string().min(1),
+  nickname: z.string().optional().nullable(),
+  imageUrl: z.string().optional().nullable(),
+  bikeId: z.string().optional().nullable(),
+});
+
 const createJobSchema = z.object({
   bikeMake: z.string().min(1),
   bikeModel: z.string().min(1),
+  bikes: z.array(bikeSchema).optional(),
   customerId: z.string().optional().nullable(),
   deliveryType: z.enum(["DROP_OFF_AT_SHOP", "COLLECTION_SERVICE"]).default("DROP_OFF_AT_SHOP"),
   dropOffDate: z.string().optional().nullable(),
@@ -64,7 +73,8 @@ export async function GET(request: NextRequest) {
     const jobs = await prisma.job.findMany({
       where,
       include: {
-        customer: true,
+        customer: { include: { bikes: true } },
+        jobBikes: { include: { bike: true }, orderBy: { sortOrder: "asc" } },
         jobServices: {
           include: { service: true },
         },
@@ -95,13 +105,14 @@ export async function POST(request: NextRequest) {
       );
     }
     const data = createJobSchema.parse(body);
+    const bikes = data.bikes && data.bikes.length > 0 ? data.bikes : [{ make: data.bikeMake, model: data.bikeModel }];
 
     const job = await prisma.$transaction(async (tx) => {
       const newJob = await tx.job.create({
         data: {
           stage: Stage.BOOKED_IN,
-          bikeMake: data.bikeMake,
-          bikeModel: data.bikeModel,
+          bikeMake: bikes.length === 1 ? bikes[0].make : "Multiple",
+          bikeModel: bikes.length === 1 ? bikes[0].model : `${bikes.length} bikes`,
           customerId: data.customerId,
           deliveryType: data.deliveryType as "DROP_OFF_AT_SHOP" | "COLLECTION_SERVICE",
           dropOffDate: data.dropOffDate ? new Date(data.dropOffDate) : null,
@@ -111,6 +122,18 @@ export async function POST(request: NextRequest) {
           internalNotes: data.internalNotes ?? null,
           customerNotes: data.customerNotes ?? null,
         },
+      });
+
+      await tx.jobBike.createMany({
+        data: bikes.map((b, i) => ({
+          jobId: newJob.id,
+          make: b.make,
+          model: b.model,
+          nickname: b.nickname ?? null,
+          imageUrl: b.imageUrl ?? null,
+          bikeId: b.bikeId ?? null,
+          sortOrder: i,
+        })),
       });
 
       if (data.serviceIds && data.serviceIds.length > 0) {
@@ -131,6 +154,7 @@ export async function POST(request: NextRequest) {
         where: { id: newJob.id },
         include: {
           customer: true,
+          jobBikes: { include: { bike: true }, orderBy: { sortOrder: "asc" } },
           jobServices: { include: { service: true } },
           jobProducts: { include: { product: true } },
         },

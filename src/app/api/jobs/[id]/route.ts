@@ -4,11 +4,20 @@ import { z } from "zod";
 import { sendJobEmail, getTemplateForStage, sendBookingDeclinedEmail } from "@/lib/email";
 import { sendJobSms, getTemplateSlugForStage } from "@/lib/sms";
 
+const bikeSchema = z.object({
+  make: z.string().min(1),
+  model: z.string().min(1),
+  nickname: z.string().optional().nullable(),
+  imageUrl: z.string().optional().nullable(),
+  bikeId: z.string().optional().nullable(),
+});
+
 const updateJobSchema = z.object({
   stage: z.enum(["BOOKED_IN", "RECEIVED", "WORKING_ON", "WAITING_ON_PARTS", "BIKE_READY", "COMPLETED", "CANCELLED"]).optional(),
   cancellationReason: z.string().min(1).optional(),
   bikeMake: z.string().min(1).optional(),
   bikeModel: z.string().min(1).optional(),
+  bikes: z.array(bikeSchema).optional(),
   customerId: z.string().optional().nullable(),
   deliveryType: z.enum(["DROP_OFF_AT_SHOP", "COLLECTION_SERVICE"]).optional(),
   dropOffDate: z.string().datetime().optional().nullable(),
@@ -26,7 +35,8 @@ export async function GET(
     const job = await prisma.job.findUnique({
       where: { id },
       include: {
-        customer: true,
+        customer: { include: { bikes: true } },
+        jobBikes: { include: { bike: true }, orderBy: { sortOrder: "asc" } },
         jobServices: { include: { service: true } },
         jobProducts: { include: { product: true } },
       },
@@ -60,6 +70,14 @@ export async function PATCH(
       );
     }
 
+    const existingJob = await prisma.job.findUnique({
+      where: { id },
+      include: { customer: true },
+    });
+    if (!existingJob) {
+      return NextResponse.json({ error: "Job not found" }, { status: 404 });
+    }
+
     const updateData: Record<string, unknown> = {};
     if (data.stage !== undefined) updateData.stage = data.stage;
     if (data.cancellationReason !== undefined) updateData.cancellationReason = data.cancellationReason;
@@ -76,19 +94,49 @@ export async function PATCH(
       updateData.completedAt = new Date();
     }
 
-    const existingJob = await prisma.job.findUnique({
-      where: { id },
-      include: { customer: true },
-    });
+    if (data.bikes !== undefined) {
+      const bikes =
+        data.bikes.length > 0
+          ? data.bikes
+          : [{ make: existingJob.bikeMake, model: existingJob.bikeModel }];
+      updateData.bikeMake = bikes.length === 1 ? bikes[0].make : "Multiple";
+      updateData.bikeModel = bikes.length === 1 ? bikes[0].model : `${bikes.length} bikes`;
+    }
 
-    const job = await prisma.job.update({
-      where: { id },
-      data: updateData,
-      include: {
-        customer: true,
-        jobServices: { include: { service: true } },
-        jobProducts: { include: { product: true } },
-      },
+    const job = await prisma.$transaction(async (tx) => {
+      await tx.job.update({
+        where: { id },
+        data: updateData,
+      });
+      if (data.bikes !== undefined) {
+        await tx.jobBike.deleteMany({ where: { jobId: id } });
+        const bikes =
+          data.bikes.length > 0
+            ? data.bikes
+            : [{ make: existingJob.bikeMake, model: existingJob.bikeModel }];
+        await tx.jobBike.createMany({
+          data: bikes.map((b, i) => ({
+            jobId: id,
+            make: b.make,
+            model: b.model,
+            nickname: b.nickname ?? null,
+            imageUrl: b.imageUrl ?? null,
+            bikeId: b.bikeId ?? null,
+            sortOrder: i,
+          })),
+        });
+      }
+      const result = await tx.job.findUnique({
+        where: { id },
+        include: {
+          customer: { include: { bikes: true } },
+          jobBikes: { include: { bike: true }, orderBy: { sortOrder: "asc" } },
+          jobServices: { include: { service: true } },
+          jobProducts: { include: { product: true } },
+        },
+      });
+      if (!result) throw new Error("Job not found");
+      return result;
     });
 
     // Send booking declined email when rejecting a pending-approval widget booking
