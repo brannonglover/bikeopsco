@@ -34,7 +34,7 @@
 
     var container = document.createElement("div");
     container.style.cssText =
-      "position:relative;width:100%;max-width:560px;max-height:90vh;background:#fff;border-radius:12px;" +
+      "position:relative;width:100%;max-width:720px;max-height:90vh;background:#fff;border-radius:12px;" +
       "box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);overflow:hidden;display:flex;flex-direction:column;";
 
     var closeBtn = document.createElement("button");
@@ -59,7 +59,7 @@
     var iframe = document.createElement("iframe");
     iframe.src = bookUrl;
     iframe.style.cssText =
-      "width:100%;flex:1;min-height:400px;border:none;border-radius:0 0 12px 12px;";
+      "width:100%;flex:1;min-height:600px;border:none;border-radius:0 0 12px 12px;";
     iframe.title = "Book a repair";
 
     container.appendChild(closeBtn);
