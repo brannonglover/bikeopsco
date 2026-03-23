@@ -2,9 +2,10 @@ import { Resend } from "resend";
 import fs from "fs";
 import path from "path";
 
-const resend = process.env.RESEND_API_KEY
-  ? new Resend(process.env.RESEND_API_KEY)
-  : null;
+function getResend(): Resend | null {
+  const key = process.env.RESEND_API_KEY?.trim();
+  return key ? new Resend(key) : null;
+}
 
 function getFromEmail(): string {
   const raw = process.env.FROM_EMAIL?.trim();
@@ -63,6 +64,7 @@ export async function sendJobEmail(
   recipient: string,
   job: JobForEmail
 ): Promise<{ ok: boolean; error?: string }> {
+  const resend = getResend();
   if (!resend) {
     console.warn("RESEND_API_KEY not set, skipping email");
     return { ok: false, error: "Email not configured" };
@@ -293,6 +295,7 @@ export async function sendChatMagicLinkEmail(
   recipient: string,
   magicLinkUrl: string
 ): Promise<{ ok: boolean; error?: string }> {
+  const resend = getResend();
   if (!resend) {
     console.warn("RESEND_API_KEY not set, skipping chat magic link email");
     return { ok: false, error: "Email not configured" };
@@ -350,6 +353,7 @@ export async function sendChatMagicLinkEmail(
 }
 
 export async function sendPaymentReceiptEmail(job: JobForInvoice): Promise<{ ok: boolean; error?: string }> {
+  const resend = getResend();
   if (!resend) {
     console.warn("RESEND_API_KEY not set, skipping payment receipt email");
     return { ok: false, error: "Email not configured" };
