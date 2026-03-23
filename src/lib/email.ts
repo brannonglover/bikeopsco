@@ -1,9 +1,10 @@
 import { Resend } from "resend";
 import fs from "fs";
 import path from "path";
+import { getAppUrl, getResendApiKey } from "./env";
 
 function getResend(): Resend | null {
-  const key = process.env.RESEND_API_KEY?.trim();
+  const key = getResendApiKey();
   return key ? new Resend(key) : null;
 }
 
@@ -32,8 +33,8 @@ function getReceiptLogoAttachment(): { content: Buffer; contentId: string } | nu
 function getReceiptLogoUrl(): string {
   const explicit = process.env.SHOP_LOGO_URL?.trim();
   if (explicit && explicit.startsWith("http")) return explicit;
-  const base = process.env.NEXT_PUBLIC_APP_URL?.trim();
-  if (base && base.startsWith("http")) return `${base.replace(/\/$/, "")}/bbm-logo-wo.png`;
+  const base = getAppUrl();
+  if (base) return `${base}/bbm-logo-wo.png`;
   return "";
 }
 
@@ -79,7 +80,7 @@ export async function sendJobEmail(
     return { ok: false, error: "Template not found" };
   }
 
-  const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/$/, "");
+  const baseUrl = getAppUrl();
   const statusUrl = baseUrl ? `${baseUrl}/status/${job.id}` : "";
   const statusButtonHtml = statusUrl
     ? `<a href="${statusUrl}" style="display: inline-block; padding: 12px 24px; background-color: #f59e0b; color: white !important; text-decoration: none; font-weight: 600; border-radius: 8px;">Track your repair status</a>`

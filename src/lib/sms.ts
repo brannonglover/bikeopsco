@@ -1,5 +1,6 @@
 import Twilio from "twilio";
 import { parsePhoneNumber, isValidPhoneNumber } from "libphonenumber-js";
+import { getAppUrl } from "./env";
 
 const twilio =
   process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN
@@ -111,7 +112,7 @@ export async function sendJobSms(
       : job.customer.firstName
     : "Customer";
 
-  const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/$/, "");
+  const baseUrl = getAppUrl();
   const statusUrl = baseUrl ? `${baseUrl}/status/${job.id}` : "";
 
   const vars: Record<string, string> = {

@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
+import { getResendApiKey } from "@/lib/env";
 
 /**
  * Test endpoint to verify Resend email config.
  * GET /api/email/test?to=your@email.com
- * Only works when RESEND_API_KEY is set.
+ * Uses RESEND_API_KEY or BIKEOPS_RESEND_API_KEY.
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -17,13 +18,12 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const resend = process.env.RESEND_API_KEY
-    ? new Resend(process.env.RESEND_API_KEY)
-    : null;
+  const apiKey = getResendApiKey();
+  const resend = apiKey ? new Resend(apiKey) : null;
 
   if (!resend) {
     return NextResponse.json(
-      { error: "RESEND_API_KEY not set in .env" },
+      { error: "RESEND_API_KEY / BIKEOPS_RESEND_API_KEY not set in Vercel" },
       { status: 500 }
     );
   }

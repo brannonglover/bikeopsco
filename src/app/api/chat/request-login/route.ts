@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
 import { prisma } from "@/lib/db";
+import { getAppUrl, getResendApiKey } from "@/lib/env";
 import { sendChatMagicLinkEmail } from "@/lib/email";
 import { z } from "zod";
 
@@ -19,7 +20,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Always return success - don't reveal if email exists
-    const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/$/, "");
+    const baseUrl = getAppUrl();
 
     if (!customer) {
       return NextResponse.json({
@@ -38,9 +39,8 @@ export async function POST(request: NextRequest) {
 
     const magicLinkUrl = `${baseUrl}/api/chat/verify?token=${token}`;
 
-    const resend = process.env.RESEND_API_KEY?.trim()
-      ? new Resend(process.env.RESEND_API_KEY!.trim())
-      : null;
+    const apiKey = getResendApiKey();
+    const resend = apiKey ? new Resend(apiKey) : null;
     const { ok, error } = await sendChatMagicLinkEmail(email.trim(), magicLinkUrl, resend);
 
     if (!ok) {

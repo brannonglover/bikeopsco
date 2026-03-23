@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
 import { prisma } from "@/lib/db";
+import { getAppUrl, getResendApiKey } from "@/lib/env";
 import { sendChatMagicLinkEmail } from "@/lib/email";
 import { z } from "zod";
 
@@ -42,16 +43,14 @@ export async function POST(request: NextRequest) {
       data: { token, customerId: customer.id, expiresAt },
     });
 
-    const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/$/, "");
+    const baseUrl = getAppUrl();
     const magicLinkUrl = `${baseUrl}/api/chat/verify?token=${token}`;
 
-    // Create Resend client inline (same pattern as /api/email/test) to ensure env var is read at request time
-    const resend = process.env.RESEND_API_KEY?.trim()
-      ? new Resend(process.env.RESEND_API_KEY!.trim())
-      : null;
+    const apiKey = getResendApiKey();
+    const resend = apiKey ? new Resend(apiKey) : null;
     if (!resend) {
       return NextResponse.json(
-        { error: "Email not configured. Add RESEND_API_KEY to Vercel environment variables." },
+        { error: "Email not configured. Add RESEND_API_KEY or BIKEOPS_RESEND_API_KEY to Vercel." },
         { status: 500 }
       );
     }
