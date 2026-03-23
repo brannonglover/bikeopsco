@@ -8,7 +8,7 @@ export function GlobalChatNotifications() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
 
   const fetchConversations = useCallback(async () => {
-    const res = await fetch("/api/conversations");
+    const res = await fetch("/api/conversations", { cache: "no-store" });
     if (res.ok) {
       const data = await res.json();
       setConversations(data);

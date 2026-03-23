@@ -55,7 +55,14 @@ export function useChatNotifications(
 
   useEffect(() => {
     const interval = setInterval(fetchConversations, NOTIFICATION_POLL_MS);
-    return () => clearInterval(interval);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") fetchConversations();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [fetchConversations]);
 
   useEffect(() => {
