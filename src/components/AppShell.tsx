@@ -50,7 +50,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     const isStatusOrChat = pathname?.startsWith("/status/") || pathname?.startsWith("/chat/c") || pathname?.startsWith("/pay/");
     return (
       <div className="min-h-screen flex flex-col w-full min-w-0">
-        <header className="flex-shrink-0 py-2 px-3 sm:py-3 sm:px-4 border-b border-slate-200 bg-white flex items-center justify-between gap-2">
+        <header className="flex-shrink-0 py-2 px-3 sm:py-3 sm:px-4 flex items-center justify-between gap-2">
           <div className="w-10 flex-shrink-0 flex items-center justify-start">
             {isStatusOrChat && (
               <Suspense fallback={<div className="w-10" />}>

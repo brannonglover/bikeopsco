@@ -119,7 +119,7 @@ function BookForm() {
 
   if (success) {
     return (
-      <div className="mx-auto max-w-md space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="mx-auto max-w-md space-y-4 rounded-xl border border-slate-100 bg-white p-6 shadow-sm">
         <div className="text-center">
           <span className="text-4xl" aria-hidden>
             ✓
@@ -133,7 +133,7 @@ function BookForm() {
           href={success.statusUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="block w-full rounded-lg bg-amber-500 px-4 py-3 text-center font-semibold text-white hover:bg-amber-600"
+          className="block w-full rounded-xl bg-amber-500 px-4 py-3 text-center font-semibold text-white hover:bg-amber-600 transition-colors"
         >
           Track your repair status
         </a>
@@ -147,12 +147,12 @@ function BookForm() {
   }
 
   return (
-    <div className={`mx-auto max-w-lg ${embed ? "p-4" : "p-6"}`}>
+    <div className={`mx-auto max-w-lg min-w-0 overflow-x-hidden ${embed ? "p-4" : "p-6"}`}>
       <h1 className={`font-bold text-slate-900 ${embed ? "text-lg" : "text-2xl mb-6"}`}>
         Book a repair
       </h1>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4 contain-overflow min-w-0">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">
@@ -163,7 +163,7 @@ function BookForm() {
               required
               value={form.firstName}
               onChange={(e) => setForm((p) => ({ ...p, firstName: e.target.value }))}
-              className="w-full rounded-lg border border-slate-200 px-4 py-2 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+              className="input-book"
               placeholder="John"
             />
           </div>
@@ -173,7 +173,7 @@ function BookForm() {
               type="text"
               value={form.lastName}
               onChange={(e) => setForm((p) => ({ ...p, lastName: e.target.value }))}
-              className="w-full rounded-lg border border-slate-200 px-4 py-2 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+              className="input-book"
               placeholder="Smith"
             />
           </div>
@@ -186,7 +186,7 @@ function BookForm() {
             required
             value={form.email}
             onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
-            className="w-full rounded-lg border border-slate-200 px-4 py-2 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+            className="input-book"
             placeholder="you@example.com"
           />
         </div>
@@ -197,7 +197,7 @@ function BookForm() {
             type="tel"
             value={form.phone}
             onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
-            className="w-full rounded-lg border border-slate-200 px-4 py-2 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+            className="input-book"
             placeholder="(555) 123-4567"
           />
         </div>
@@ -212,7 +212,7 @@ function BookForm() {
               required
               value={form.bikeMake}
               onChange={(e) => setForm((p) => ({ ...p, bikeMake: e.target.value }))}
-              className="w-full rounded-lg border border-slate-200 px-4 py-2 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+              className="input-book"
               placeholder="Trek, Specialized..."
             />
           </div>
@@ -225,7 +225,7 @@ function BookForm() {
               required
               value={form.bikeModel}
               onChange={(e) => setForm((p) => ({ ...p, bikeModel: e.target.value }))}
-              className="w-full rounded-lg border border-slate-200 px-4 py-2 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+              className="input-book"
               placeholder="Domane SL 6"
             />
           </div>
@@ -236,7 +236,7 @@ function BookForm() {
             <label className="mb-2 block text-sm font-medium text-slate-700">
               Services (optional)
             </label>
-            <div className="max-h-32 space-y-2 overflow-y-auto rounded-lg border border-slate-200 p-3">
+            <div className="max-h-32 space-y-2 overflow-y-auto rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
               {services.map((s) => (
                 <label
                   key={s.id}
@@ -268,7 +268,7 @@ function BookForm() {
                 deliveryType: e.target.value as "DROP_OFF_AT_SHOP" | "COLLECTION_SERVICE",
               }))
             }
-            className="w-full rounded-lg border border-slate-200 px-4 py-2 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+            className="input-book"
           >
             <option value="DROP_OFF_AT_SHOP">Drop-off at shop</option>
             <option value="COLLECTION_SERVICE">Collection service</option>
@@ -284,14 +284,14 @@ function BookForm() {
               type="text"
               value={form.collectionAddress}
               onChange={(e) => setForm((p) => ({ ...p, collectionAddress: e.target.value }))}
-              className="w-full rounded-lg border border-slate-200 px-4 py-2 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+              className="input-book"
               placeholder="Street, city, postal code"
             />
           </div>
         )}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
+          <div className="min-w-0">
             <label className="mb-1 block text-sm font-medium text-slate-700">
               Preferred drop-off date
             </label>
@@ -299,10 +299,10 @@ function BookForm() {
               type="datetime-local"
               value={form.dropOffDate}
               onChange={(e) => setForm((p) => ({ ...p, dropOffDate: e.target.value }))}
-              className="w-full rounded-lg border border-slate-200 px-4 py-2 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+              className="input-book"
             />
           </div>
-          <div>
+          <div className="min-w-0">
             <label className="mb-1 block text-sm font-medium text-slate-700">
               Preferred pickup date
             </label>
@@ -310,21 +310,21 @@ function BookForm() {
               type="datetime-local"
               value={form.pickupDate}
               onChange={(e) => setForm((p) => ({ ...p, pickupDate: e.target.value }))}
-              className="w-full rounded-lg border border-slate-200 px-4 py-2 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+              className="input-book"
             />
           </div>
         </div>
 
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-700">
-            What needs to be done?
+            Any additional info
           </label>
           <textarea
             rows={3}
             value={form.customerNotes}
             onChange={(e) => setForm((p) => ({ ...p, customerNotes: e.target.value }))}
-            className="w-full rounded-lg border border-slate-200 px-4 py-2 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/20 resize-y"
-            placeholder="Describe the issue, any noises, parts needed..."
+            className="input-book"
+            placeholder="Anything else we should know?"
           />
         </div>
 
@@ -337,7 +337,7 @@ function BookForm() {
         <button
           type="submit"
           disabled={submitting}
-          className="w-full rounded-lg bg-amber-500 py-3 font-semibold text-white hover:bg-amber-600 disabled:opacity-50"
+          className="w-full rounded-xl bg-amber-500 py-3 font-semibold text-white hover:bg-amber-600 disabled:opacity-50 transition-colors"
         >
           {submitting ? "Booking..." : "Book repair"}
         </button>
