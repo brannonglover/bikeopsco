@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Price } from "@/components/ui/Price";
 
@@ -31,6 +31,7 @@ function BookForm() {
   const [success, setSuccess] = useState<{ id: string; statusUrl: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const [serviceSearch, setServiceSearch] = useState("");
   const [form, setForm] = useState({
     firstName: "",
     lastName: "",
@@ -54,6 +55,16 @@ function BookForm() {
       .catch(() => setServices([]))
       .finally(() => setLoading(false));
   }, []);
+
+  const filteredServices = useMemo(() => {
+    const q = serviceSearch.trim().toLowerCase();
+    if (!q) return services;
+    return services.filter(
+      (s) =>
+        s.name.toLowerCase().includes(q) ||
+        (s.description?.toLowerCase().includes(q) ?? false)
+    );
+  }, [services, serviceSearch]);
 
   const toggleService = (id: string) => {
     setForm((p) => ({
@@ -238,8 +249,15 @@ function BookForm() {
             <label className="mb-2 block text-sm font-medium text-slate-700">
               Services (optional)
             </label>
+            <input
+              type="text"
+              value={serviceSearch}
+              onChange={(e) => setServiceSearch(e.target.value)}
+              placeholder="Search services..."
+              className="input-book mb-2"
+            />
             <div className="max-h-32 space-y-2 overflow-y-auto rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
-              {services.map((s) => (
+              {filteredServices.map((s) => (
                 <label
                   key={s.id}
                   className="flex cursor-pointer items-center gap-3 rounded p-2 hover:bg-slate-50"
@@ -254,6 +272,9 @@ function BookForm() {
                   <Price amount={s.price} variant="inline" />
                 </label>
               ))}
+              {filteredServices.length === 0 && (
+                <p className="py-2 text-sm text-slate-500">No services match your search</p>
+              )}
             </div>
           </div>
         )}
