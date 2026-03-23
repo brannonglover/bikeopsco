@@ -7,9 +7,9 @@ import { sendJobEmail, getTemplateForStage } from "@/lib/email";
 const bookSchema = z.object({
   // Customer
   firstName: z.string().min(1, "First name is required"),
-  lastName: z.string().optional().nullable(),
+  lastName: z.string().min(1, "Last name is required"),
   email: z.string().email("Valid email is required"),
-  phone: z.string().optional().nullable(),
+  phone: z.string().min(1, "Phone is required"),
   address: z.string().optional().nullable(),
   // Bike
   bikeMake: z.string().min(1, "Bike make is required"),

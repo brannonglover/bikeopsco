@@ -75,9 +75,9 @@ function BookForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           firstName: form.firstName.trim(),
-          lastName: form.lastName.trim() || null,
+          lastName: form.lastName.trim(),
           email: form.email.trim(),
-          phone: form.phone.trim() || null,
+          phone: form.phone.trim(),
           address: form.address.trim() || null,
           bikeMake: form.bikeMake.trim(),
           bikeModel: form.bikeModel.trim(),
@@ -168,9 +168,10 @@ function BookForm() {
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Last name</label>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Last name *</label>
             <input
               type="text"
+              required
               value={form.lastName}
               onChange={(e) => setForm((p) => ({ ...p, lastName: e.target.value }))}
               className="input-book"
@@ -192,9 +193,10 @@ function BookForm() {
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">Phone</label>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Phone *</label>
           <input
             type="tel"
+            required
             value={form.phone}
             onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
             className="input-book"
