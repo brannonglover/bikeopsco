@@ -109,10 +109,4 @@
       closeModal();
     }
   });
-
-  window.addEventListener("message", function (e) {
-    if (e.data && e.data.type === "bikeops-booking-complete") {
-      closeModal();
-    }
-  });
 })();

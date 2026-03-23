@@ -110,9 +110,6 @@ function BookForm() {
       }
 
       setSuccess({ id: data.id, statusUrl: data.statusUrl || `${BASE}/status/${data.id}` });
-    if (typeof window !== "undefined" && window.parent !== window) {
-      window.parent.postMessage({ type: "bikeops-booking-complete", jobId: data.id }, "*");
-    }
     } catch {
       setError("Could not submit. Please check your connection and try again.");
     } finally {
