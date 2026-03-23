@@ -44,6 +44,7 @@ export default function StatusPage() {
     dropOffDate: string | null;
     pickupDate: string | null;
     paymentStatus: string;
+    cancellationReason?: string | null;
     jobServices: { service: { name: string }; quantity: number; unitPrice: string | number }[];
   } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -98,11 +99,38 @@ export default function StatusPage() {
         </h1>
         <p className="mt-1 text-slate-500">Repair status</p>
 
-        <div className="mt-4 flex items-center gap-3 rounded-lg bg-amber-50 px-4 py-3 border border-amber-200">
-          <span className="text-2xl" aria-hidden>🔧</span>
-          <div>
-            <p className="font-semibold text-amber-900">{stageLabel}</p>
-            <p className="text-sm text-amber-800">{stageDesc}</p>
+        <div
+          className={`mt-4 flex items-center gap-3 rounded-lg px-4 py-3 border ${
+            job.stage === "CANCELLED"
+              ? "bg-red-50 border-red-200"
+              : "bg-amber-50 border-amber-200"
+          }`}
+        >
+          <span className="text-2xl" aria-hidden>
+            {job.stage === "CANCELLED" ? "✕" : "🔧"}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p
+              className={`font-semibold ${
+                job.stage === "CANCELLED" ? "text-red-900" : "text-amber-900"
+              }`}
+            >
+              {stageLabel}
+            </p>
+            <p
+              className={`text-sm ${
+                job.stage === "CANCELLED" ? "text-red-800" : "text-amber-800"
+              }`}
+            >
+              {stageDesc}
+            </p>
+            {job.stage === "CANCELLED" &&
+              job.cancellationReason &&
+              job.cancellationReason.trim() && (
+                <p className="mt-2 text-sm text-red-700">
+                  {job.cancellationReason}
+                </p>
+              )}
           </div>
         </div>
 

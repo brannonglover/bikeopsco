@@ -85,6 +85,16 @@ const DEFAULT_TEMPLATES = [
     delayDays: null,
   },
   {
+    slug: "booking_declined",
+    name: "Booking Declined",
+    subject: "Update on your repair booking request – {{shopName}}",
+    bodyHtml: `<p>Hi {{customerName}},</p><p>Thank you for your interest in our repair services. Unfortunately, we're unable to accept your booking request for your {{bikeMake}} {{bikeModel}} at this time.</p><p><strong>Reason:</strong> {{rejectionReason}}</p><p>If you have questions or would like to discuss alternatives, please don't hesitate to get in touch.</p><p>Thanks,<br/>The {{shopName}} Team</p>`,
+    triggerType: "MANUAL",
+    stage: null,
+    deliveryType: null,
+    delayDays: null,
+  },
+  {
     slug: "follow_up_review",
     name: "3-Day Follow-up Review",
     subject: "How was your Bike Ops experience?",

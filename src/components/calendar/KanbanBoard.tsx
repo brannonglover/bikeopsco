@@ -13,6 +13,7 @@ import {
 } from "@dnd-kit/core";
 import { StageColumn } from "./StageColumn";
 import { JobCardContent } from "./JobCard";
+import { RejectBookingModal } from "./RejectBookingModal";
 import { NewJobModal } from "@/components/jobs/NewJobModal";
 import { JobDetailModal } from "@/components/jobs/JobDetailModal";
 import { useJobNotifications } from "@/hooks/useJobNotifications";
@@ -40,6 +41,7 @@ export function KanbanBoard() {
   const [cancelledExpanded, setCancelledExpanded] = useState(false);
   const [newJobModalOpen, setNewJobModalOpen] = useState(false);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+  const [rejectingJob, setRejectingJob] = useState<Job | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -80,22 +82,25 @@ export function KanbanBoard() {
     []
   );
 
-  const handleReject = useCallback(
-    async (jobId: string) => {
+  const handleRejectClick = useCallback((job: Job) => {
+    setRejectingJob(job);
+  }, []);
+
+  const handleRejectConfirm = useCallback(
+    async (jobId: string, reason: string) => {
       try {
         const res = await fetch(`/api/jobs/${jobId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             stage: "CANCELLED",
-            cancellationReason: "Booking declined by shop",
+            cancellationReason: reason.trim(),
           }),
         });
         if (res.ok) {
+          const updated = await res.json();
           setJobs((prev) =>
-            prev.map((j) =>
-              j.id === jobId ? { ...j, stage: "CANCELLED" as Stage } : j
-            )
+            prev.map((j) => (j.id === jobId ? updated : j))
           );
           if (selectedJob?.id === jobId) setSelectedJob(null);
         }
@@ -182,6 +187,12 @@ export function KanbanBoard() {
         onClose={() => setNewJobModalOpen(false)}
         onSuccess={handleJobCreated}
       />
+      <RejectBookingModal
+        job={rejectingJob}
+        isOpen={!!rejectingJob}
+        onClose={() => setRejectingJob(null)}
+        onReject={handleRejectConfirm}
+      />
       <JobDetailModal
         job={selectedJob}
         isOpen={!!selectedJob}
@@ -237,7 +248,9 @@ export function KanbanBoard() {
               jobs={jobsByStage[stage] || []}
               onJobClick={(job) => setSelectedJob(job)}
               onAccept={stage === "PENDING_APPROVAL" ? handleAccept : undefined}
-              onReject={stage === "PENDING_APPROVAL" ? handleReject : undefined}
+              onReject={
+                stage === "PENDING_APPROVAL" ? handleRejectClick : undefined
+              }
             />
           ))}
         </div>

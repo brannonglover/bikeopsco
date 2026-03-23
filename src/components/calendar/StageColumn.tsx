@@ -32,7 +32,7 @@ interface StageColumnProps {
   jobs: Job[];
   onJobClick?: (job: Job) => void;
   onAccept?: (jobId: string) => void;
-  onReject?: (jobId: string) => void;
+  onReject?: (job: Job) => void;
 }
 
 export function StageColumn({ stage, jobs, onJobClick, onAccept, onReject }: StageColumnProps) {

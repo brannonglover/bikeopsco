@@ -231,6 +231,63 @@ ${job.customerNotes ? `<p><strong>Notes:</strong> ${job.customerNotes}</p>` : ""
   }
 }
 
+export async function sendBookingDeclinedEmail(
+  recipient: string,
+  job: {
+    bikeMake: string;
+    bikeModel: string;
+    cancellationReason: string;
+    customer: { firstName: string; lastName: string | null } | null;
+  }
+): Promise<{ ok: boolean; error?: string }> {
+  const resend = getResend();
+  if (!resend) {
+    return { ok: false, error: "Email not configured" };
+  }
+
+  const { prisma } = await import("./db");
+  const template = await prisma.emailTemplate.findUnique({
+    where: { slug: "booking_declined" },
+  });
+
+  if (!template) {
+    console.warn("booking_declined template not found – run db:seed");
+    return { ok: false, error: "Template not found" };
+  }
+
+  const shopName = process.env.SHOP_NAME || "Basement Bike Mechanic";
+  const customerName = job.customer
+    ? job.customer.lastName
+      ? `${job.customer.firstName} ${job.customer.lastName}`
+      : job.customer.firstName
+    : "Customer";
+
+  const vars: Record<string, string> = {
+    customerName,
+    bikeMake: job.bikeMake,
+    bikeModel: job.bikeModel,
+    shopName,
+    rejectionReason: job.cancellationReason || "We're unable to accommodate this booking at this time.",
+  };
+
+  const subject = mergeTemplateVariables(template.subject, vars);
+  const bodyHtml = mergeTemplateVariables(template.bodyHtml, vars);
+
+  try {
+    const { error } = await resend.emails.send({
+      from: getFromEmail(),
+      to: recipient,
+      subject,
+      html: bodyHtml,
+    });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (e) {
+    const err = e instanceof Error ? e.message : "Unknown error";
+    return { ok: false, error: err };
+  }
+}
+
 export function getTemplateForStage(
   stage: string,
   deliveryType: string

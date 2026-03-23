@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
-import { sendJobEmail, getTemplateForStage } from "@/lib/email";
+import { sendJobEmail, getTemplateForStage, sendBookingDeclinedEmail } from "@/lib/email";
 import { sendJobSms, getTemplateSlugForStage } from "@/lib/sms";
 
 const updateJobSchema = z.object({
@@ -88,6 +88,21 @@ export async function PATCH(
         jobServices: { include: { service: true } },
       },
     });
+
+    // Send booking declined email when rejecting a pending-approval widget booking
+    if (
+      data.stage === "CANCELLED" &&
+      existingJob?.stage === "PENDING_APPROVAL" &&
+      job.customer?.email
+    ) {
+      const reason = (data.cancellationReason ?? job.cancellationReason ?? "").trim();
+      sendBookingDeclinedEmail(job.customer.email, {
+        bikeMake: job.bikeMake,
+        bikeModel: job.bikeModel,
+        cancellationReason: reason || "We're unable to accommodate this booking at this time.",
+        customer: job.customer,
+      }).catch((e) => console.error("[Reject] Declined email failed:", e));
+    }
 
     // Don't send notifications when cancelling or marking complete (internal status only)
     if (data.stage && data.stage !== "CANCELLED" && data.stage !== "COMPLETED" && existingJob) {

@@ -30,7 +30,7 @@ export function JobCardContent({
 }: {
   job: Job;
   onAccept?: (jobId: string) => void;
-  onReject?: (jobId: string) => void;
+  onReject?: (job: Job) => void;
 }) {
   const address =
     job.deliveryType === "COLLECTION_SERVICE"
@@ -128,7 +128,7 @@ export function JobCardContent({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              onReject(job.id);
+              onReject(job);
             }}
             className="flex-1 rounded-lg bg-red-100 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-200 transition-colors"
           >
@@ -144,7 +144,7 @@ interface JobCardProps {
   job: Job;
   onJobClick?: (job: Job) => void;
   onAccept?: (jobId: string) => void;
-  onReject?: (jobId: string) => void;
+  onReject?: (job: Job) => void;
 }
 
 export function JobCard({ job, onJobClick, onAccept, onReject }: JobCardProps) {
