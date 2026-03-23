@@ -101,7 +101,8 @@ export async function POST(request: NextRequest) {
             unitPrice: Number(js.unitPrice),
           })),
         };
-        const result = await sendPaymentReceiptEmail(jobForEmail);
+        const amountPaid = paymentIntent.amount / 100;
+        const result = await sendPaymentReceiptEmail(jobForEmail, amountPaid);
         if (!result.ok) {
           console.error("Payment receipt email failed:", result.error);
         } else {

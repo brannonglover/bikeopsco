@@ -88,6 +88,10 @@ export default function PayPage() {
     paymentStatus: string;
   } | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState<{
+    subtotal: number;
+    amount: number;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -118,7 +122,7 @@ export default function PayPage() {
           return;
         }
 
-        const total = (jobData.jobServices ?? []).reduce(
+        const subtotal = (jobData.jobServices ?? []).reduce(
           (sum: number, js: { unitPrice: string | number; quantity: number }) => {
             const price = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);
             return sum + price * (js.quantity || 1);
@@ -126,7 +130,7 @@ export default function PayPage() {
           0
         );
 
-        if (total <= 0) {
+        if (subtotal <= 0) {
           setError("No services to pay for");
           return;
         }
@@ -137,8 +141,12 @@ export default function PayPage() {
           return;
         }
 
-        const { clientSecret: secret } = await intentRes.json();
+        const { clientSecret: secret, amount, subtotal: intentSubtotal } = await intentRes.json();
         setClientSecret(secret);
+        setPaymentAmount({
+          subtotal: intentSubtotal ?? subtotal,
+          amount: amount ?? subtotal,
+        });
       } catch {
         setError("Something went wrong");
       } finally {
@@ -166,13 +174,25 @@ export default function PayPage() {
     );
   }
 
-  const total = (job.jobServices ?? []).reduce(
-    (sum: number, js: { unitPrice: string | number; quantity: number }) => {
-      const price = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);
-      return sum + price * (js.quantity || 1);
-    },
-    0
-  );
+  const subtotal =
+    paymentAmount?.subtotal ??
+    (job.jobServices ?? []).reduce(
+      (sum: number, js: { unitPrice: string | number; quantity: number }) => {
+        const price = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);
+        return sum + price * (js.quantity || 1);
+      },
+      0
+    );
+  const total =
+    paymentAmount?.amount ??
+    (job.jobServices ?? []).reduce(
+      (sum: number, js: { unitPrice: string | number; quantity: number }) => {
+        const price = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);
+        return sum + price * (js.quantity || 1);
+      },
+      0
+    );
+  const hasSurcharge = total > subtotal;
 
   const customerName = job.customer
     ? [job.customer.firstName, job.customer.lastName].filter(Boolean).join(" ")
@@ -188,9 +208,30 @@ export default function PayPage() {
           {job.bikeMake} {job.bikeModel}
           {customerName && ` · ${customerName}`}
         </p>
-        <p className="mt-2">
-          <Price amount={total} variant="total" />
-        </p>
+        <div className="mt-2">
+          {hasSurcharge ? (
+            <div className="space-y-0.5 text-sm">
+              <p className="text-slate-600">
+                Subtotal <Price amount={subtotal} variant="inline" />
+              </p>
+              <p className="text-slate-500 text-xs">
+                Card processing fee{" "}
+                <span className="font-medium tabular-nums text-slate-600">
+                  {(total - subtotal).toLocaleString("en-US", {
+                    style: "currency",
+                    currency: "USD",
+                    minimumFractionDigits: 2,
+                  })}
+                </span>
+              </p>
+              <p>
+                <Price amount={total} variant="total" />
+              </p>
+            </div>
+          ) : (
+            <Price amount={total} variant="total" />
+          )}
+        </div>
         {hasReceiptEmail ? (
           <p className="mt-3 text-sm text-emerald-600">
             Receipt will be sent to {job.customer!.email}

@@ -14,6 +14,7 @@ export async function POST(
       include: {
         customer: true,
         jobServices: { include: { service: true } },
+        payments: { orderBy: { createdAt: "desc" }, take: 1 },
       },
     });
 
@@ -54,7 +55,10 @@ export async function POST(
       })),
     };
 
-    const result = await sendPaymentReceiptEmail(jobForEmail);
+    const paidAmount = job.payments?.[0]
+      ? Number(job.payments[0].amount)
+      : undefined;
+    const result = await sendPaymentReceiptEmail(jobForEmail, paidAmount);
 
     if (!result.ok) {
       const hint =

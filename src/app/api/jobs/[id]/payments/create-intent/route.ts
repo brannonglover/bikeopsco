@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getStripe, toCents } from "@/lib/stripe";
+import { computeAmountWithSurcharge, getStripe, toCents } from "@/lib/stripe";
 import { z } from "zod";
 
 const bodySchema = z.object({
@@ -32,19 +32,20 @@ export async function POST(
       );
     }
 
-    const total = job.jobServices.reduce((sum, js) => {
+    const subtotal = job.jobServices.reduce((sum, js) => {
       const price = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);
       return sum + price * (js.quantity || 1);
     }, 0);
 
-    if (total <= 0) {
+    if (subtotal <= 0) {
       return NextResponse.json(
         { error: "Job has no services or total is zero" },
         { status: 400 }
       );
     }
 
-    const amountInCents = toCents(total);
+    const amountToCharge = computeAmountWithSurcharge(subtotal, mode);
+    const amountInCents = toCents(amountToCharge);
 
     const stripe = getStripe();
     const paymentIntent = await stripe.paymentIntents.create({
@@ -60,6 +61,8 @@ export async function POST(
     return NextResponse.json({
       clientSecret: paymentIntent.client_secret,
       publishableKey: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
+      amount: amountToCharge,
+      subtotal,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {

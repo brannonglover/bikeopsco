@@ -173,10 +173,12 @@ function formatPrice(amount: number): string {
 
 function buildInvoiceHtml(
   job: JobForInvoice,
-  total: number,
+  subtotal: number,
+  totalPaid: number,
   shopName: string,
   logoSrc: string
 ): string {
+  const hasSurcharge = totalPaid > subtotal;
   const customerName = job.customer
     ? [job.customer.firstName, job.customer.lastName].filter(Boolean).join(" ").trim() || "Customer"
     : "Customer";
@@ -251,9 +253,19 @@ function buildInvoiceHtml(
 
               <div style="padding: 16px; background-color: #f1f5f9; border-radius: 8px; border: 1px solid #e2e8f0;">
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                  ${hasSurcharge ? `
                   <tr>
-                    <td style="font-size: 16px; font-weight: 700; color: #475569;">Total paid</td>
-                    <td style="font-size: 20px; font-weight: 700; color: #334155; text-align: right;">${formatPrice(total)}</td>
+                    <td style="font-size: 16px; font-weight: 600; color: #475569;">Subtotal</td>
+                    <td style="font-size: 16px; font-weight: 600; color: #334155; text-align: right;">${formatPrice(subtotal)}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-size: 16px; font-weight: 600; color: #475569; padding-top: 8px;">Card processing fee</td>
+                    <td style="font-size: 16px; font-weight: 600; color: #334155; text-align: right; padding-top: 8px;">${formatPrice(totalPaid - subtotal)}</td>
+                  </tr>
+                  ` : ""}
+                  <tr>
+                    <td style="font-size: 16px; font-weight: 700; color: #475569; padding-top: ${hasSurcharge ? "8px" : "0"};">Total paid</td>
+                    <td style="font-size: 20px; font-weight: 700; color: #334155; text-align: right; padding-top: ${hasSurcharge ? "8px" : "0"};">${formatPrice(totalPaid)}</td>
                   </tr>
                 </table>
               </div>
@@ -354,7 +366,10 @@ export async function sendChatMagicLinkEmail(
   }
 }
 
-export async function sendPaymentReceiptEmail(job: JobForInvoice): Promise<{ ok: boolean; error?: string }> {
+export async function sendPaymentReceiptEmail(
+  job: JobForInvoice,
+  totalPaid?: number
+): Promise<{ ok: boolean; error?: string }> {
   const resend = getResend();
   if (!resend) {
     console.warn("RESEND_API_KEY not set, skipping payment receipt email");
@@ -366,17 +381,19 @@ export async function sendPaymentReceiptEmail(job: JobForInvoice): Promise<{ ok:
     return { ok: false, error: "No customer email" };
   }
 
-  const total = job.jobServices.reduce((sum, js) => {
+  const subtotal = job.jobServices.reduce((sum, js) => {
     const price = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);
     return sum + price * (js.quantity || 1);
   }, 0);
+
+  const paid = totalPaid ?? subtotal;
 
   const subject = `Payment receipt – ${job.bikeMake} ${job.bikeModel} – ${SHOP_NAME}`;
 
   const logoAttachment = getReceiptLogoAttachment();
   const logoUrl = getReceiptLogoUrl();
   const logoSrc = logoAttachment ? `cid:${LOGO_CID}` : logoUrl;
-  const html = buildInvoiceHtml(job, total, SHOP_NAME, logoSrc);
+  const html = buildInvoiceHtml(job, subtotal, paid, SHOP_NAME, logoSrc);
 
   const attachments = logoAttachment
     ? [
