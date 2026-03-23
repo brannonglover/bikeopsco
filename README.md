@@ -85,6 +85,28 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+## Booking widget (website embed)
+
+Add a "Book Now" modal to your marketing site (e.g. basementbikemechanic.com) that posts directly to the Job Board.
+
+1. Add the widget script to your site, replacing `YOUR-BIKEOPS-DOMAIN.com` with your deployed Bike Ops URL:
+
+```html
+<script src="https://YOUR-BIKEOPS-DOMAIN.com/widget.js" data-base-url="https://YOUR-BIKEOPS-DOMAIN.com"></script>
+```
+
+2. Add `data-bikeops-book` to your Book Now button or link:
+
+```html
+<a href="#" data-bikeops-book>Book Now</a>
+```
+
+When clicked, a modal opens with the booking form. Customers enter their info, bike details, preferred dates, and services. On success, the job appears in the Job Board and the customer receives the booking confirmation email.
+
+**Direct booking URL:** You can also link directly to `/book` if you prefer (e.g. `https://YOUR-BIKEOPS-DOMAIN.com/book`).
+
+**Custom selector:** Use `data-bikeops-selector=".my-class"` on the script tag to target different elements.
+
 ## Cron (3-day follow-up)
 
 On Vercel, the cron runs daily at 9:00 UTC. For local or other hosts, call:
