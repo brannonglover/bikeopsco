@@ -54,7 +54,7 @@ export function StageColumn({ stage, jobs, onJobClick, onAccept, onReject }: Sta
       >
         {STAGE_LABELS[stage]} ({jobs.length})
       </div>
-      <div className="p-3 flex flex-col gap-3 overflow-y-auto flex-1 min-h-[400px]">
+      <div className="p-3 flex flex-col gap-3 overflow-y-auto overflow-x-hidden flex-1 min-h-[400px] min-w-0">
         <SortableContext items={jobs.map((j) => j.id)} strategy={verticalListSortingStrategy}>
           {jobs.map((job) => (
             <JobCard

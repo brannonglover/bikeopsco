@@ -41,7 +41,7 @@ export function JobCardContent({
     : null;
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200/80 p-4 shadow-soft min-w-[200px] sm:min-w-[240px]">
+    <div className="bg-white rounded-xl border border-slate-200/80 p-4 shadow-soft min-w-0 w-full sm:min-w-[240px]">
       <div className="flex items-start justify-between gap-2 mb-2 flex-wrap">
         <span
           className={`text-xs font-semibold px-2.5 py-1 rounded-lg ${
@@ -186,7 +186,7 @@ export function JobCard({ job, onJobClick, onAccept, onReject }: JobCardProps) {
           : undefined
       }
       className={`
-        cursor-grab active:cursor-grabbing min-w-[200px] sm:min-w-[240px]
+        cursor-grab active:cursor-grabbing min-w-0 w-full sm:min-w-[240px]
         ${isDragging ? "opacity-40" : ""}
       `}
     >
