@@ -35,7 +35,7 @@ export function useChatNotifications(
       permissionRequested.current = true;
       await Notification.requestPermission();
     }
-    return Notification.permission === "granted";
+    return (Notification.permission as NotificationPermission) === "granted";
   }, []);
 
   useEffect(() => {
