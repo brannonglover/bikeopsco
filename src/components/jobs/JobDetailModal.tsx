@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import type { Job, JobService, Stage } from "@/lib/types";
+import type { Job, JobProduct, JobService, Stage } from "@/lib/types";
 import { Price } from "@/components/ui/Price";
 
 const STAGE_LABELS: Record<Stage, string> = {
@@ -429,11 +429,11 @@ export function JobDetailModal({ job, isOpen, onClose, onJobUpdated, onJobDelete
             </dl>
           </div>
 
-          {/* Services – quick reference on Details tab */}
+          {/* Services & Products – quick reference on Details tab */}
           <div>
-            <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">Services</h3>
-            {(job.jobServices?.length ?? 0) === 0 ? (
-              <p className="text-slate-500 text-sm">No services added</p>
+            <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">Services & Products</h3>
+            {(job.jobServices?.length ?? 0) === 0 && (job.jobProducts?.length ?? 0) === 0 ? (
+              <p className="text-slate-500 text-sm">No services or products added</p>
             ) : (
               <div className="space-y-2">
                 {(job.jobServices ?? []).map((js) => {
@@ -451,13 +451,34 @@ export function JobDetailModal({ job, isOpen, onClose, onJobUpdated, onJobDelete
                     </div>
                   );
                 })}
+                {(job.jobProducts ?? []).map((jp) => {
+                  const price = typeof jp.unitPrice === "string" ? parseFloat(jp.unitPrice) : Number(jp.unitPrice);
+                  const lineTotal = price * (jp.quantity || 1);
+                  return (
+                    <div key={jp.id} className="flex justify-between items-center py-2 px-3 rounded-lg bg-slate-50 border border-slate-100">
+                      <span className="font-medium text-slate-900">
+                        {jp.product?.name ?? "Unknown"}
+                        {jp.quantity > 1 && (
+                          <span className="text-slate-500 font-normal"> × {jp.quantity}</span>
+                        )}
+                      </span>
+                      <Price amount={lineTotal} variant="inline" />
+                    </div>
+                  );
+                })}
                 <div className="flex justify-between items-center pt-3 mt-2 border-t border-slate-200 font-semibold">
                   <span className="text-slate-900">Total</span>
                   <Price
-                    amount={(job.jobServices ?? []).reduce((sum, js) => {
-                      const p = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);
-                      return sum + p * (js.quantity || 1);
-                    }, 0)}
+                    amount={
+                      (job.jobServices ?? []).reduce((sum, js) => {
+                        const p = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);
+                        return sum + p * (js.quantity || 1);
+                      }, 0) +
+                      (job.jobProducts ?? []).reduce((sum, jp) => {
+                        const p = typeof jp.unitPrice === "string" ? parseFloat(jp.unitPrice) : Number(jp.unitPrice);
+                        return sum + p * (jp.quantity || 1);
+                      }, 0)
+                    }
                     variant="total"
                   />
                 </div>
@@ -552,14 +573,29 @@ export function JobDetailModal({ job, isOpen, onClose, onJobUpdated, onJobDelete
 
 function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job) => void }) {
   const [services, setServices] = useState<{ id: string; name: string; price: number | string }[]>([]);
+  const [products, setProducts] = useState<{ id: string; name: string; price: number | string }[]>([]);
   const [adding, setAdding] = useState(false);
+  const [addingProduct, setAddingProduct] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
+  const [removingProduct, setRemovingProduct] = useState<string | null>(null);
   const [servicesDropdownOpen, setServicesDropdownOpen] = useState(false);
+  const [productsDropdownOpen, setProductsDropdownOpen] = useState(false);
   const [expandedServiceIds, setExpandedServiceIds] = useState<Set<string>>(new Set());
+  const [expandedProductIds, setExpandedProductIds] = useState<Set<string>>(new Set());
   const servicesDropdownRef = useRef<HTMLDivElement>(null);
+  const productsDropdownRef = useRef<HTMLDivElement>(null);
 
   const toggleServiceExpanded = (id: string) => {
     setExpandedServiceIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleProductExpanded = (id: string) => {
+    setExpandedProductIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -581,14 +617,34 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
       );
   }, []);
 
+  useEffect(() => {
+    fetch("/api/products")
+      .then((res) => res.json())
+      .then((data) =>
+        setProducts(
+          (Array.isArray(data) ? data : []).map((p: { id: string; name: string; price: unknown }) => ({
+            id: p.id,
+            name: p.name,
+            price: typeof p.price === "string" ? parseFloat(p.price) : Number(p.price ?? 0),
+          }))
+        )
+      );
+  }, []);
+
   const jobServices: JobService[] = job.jobServices ?? [];
-  const attachedIds = new Set(jobServices.map((js) => js.serviceId));
-  const availableServices = services.filter((s) => !attachedIds.has(s.id));
+  const jobProductsList: JobProduct[] = job.jobProducts ?? [];
+  const attachedServiceIds = new Set(jobServices.map((js) => js.serviceId));
+  const attachedProductIds = new Set(jobProductsList.map((jp) => jp.productId));
+  const availableServices = services.filter((s) => !attachedServiceIds.has(s.id));
+  const availableProducts = products.filter((p) => !attachedProductIds.has(p.id));
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (servicesDropdownRef.current && !servicesDropdownRef.current.contains(e.target as Node)) {
         setServicesDropdownOpen(false);
+      }
+      if (productsDropdownRef.current && !productsDropdownRef.current.contains(e.target as Node)) {
+        setProductsDropdownOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -629,10 +685,49 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
     }
   };
 
-  const total = jobServices.reduce((sum, js) => {
-    const price = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);
-    return sum + price * (js.quantity || 1);
-  }, 0);
+  const handleAddProduct = async (productId: string) => {
+    setAddingProduct(true);
+    setProductsDropdownOpen(false);
+    try {
+      const res = await fetch(`/api/jobs/${job.id}/products`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId }),
+      });
+      if (res.ok) {
+        const updatedJob = await fetch(`/api/jobs/${job.id}`).then((r) => r.json());
+        onJobUpdated?.(updatedJob);
+      }
+    } finally {
+      setAddingProduct(false);
+    }
+  };
+
+  const handleRemoveProduct = async (jobProductId: string) => {
+    setRemovingProduct(jobProductId);
+    try {
+      const res = await fetch(
+        `/api/jobs/${job.id}/products?jobProductId=${encodeURIComponent(jobProductId)}`,
+        { method: "DELETE" }
+      );
+      if (res.ok) {
+        const updatedJob = await fetch(`/api/jobs/${job.id}`).then((r) => r.json());
+        onJobUpdated?.(updatedJob);
+      }
+    } finally {
+      setRemovingProduct(null);
+    }
+  };
+
+  const total =
+    jobServices.reduce((sum, js) => {
+      const price = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);
+      return sum + price * (js.quantity || 1);
+    }, 0) +
+    jobProductsList.reduce((sum, jp) => {
+      const price = typeof jp.unitPrice === "string" ? parseFloat(jp.unitPrice) : Number(jp.unitPrice);
+      return sum + price * (jp.quantity || 1);
+    }, 0);
 
   return (
     <div>
@@ -671,13 +766,13 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
         )}
       </div>
       {jobServices.length === 0 ? (
-        <p className="text-slate-500">
+        <p className="text-slate-500 mb-4">
           {availableServices.length > 0
             ? "No services added yet. Use the dropdown above to add."
             : "No services added yet. Add services in Settings → Services first."}
         </p>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-2 mb-4">
           {jobServices.map((js) => {
             const price = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);
             const lineTotal = price * (js.quantity || 1);
@@ -752,6 +847,126 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
               </div>
             );
           })}
+        </div>
+      )}
+      <div className="flex items-center justify-between gap-3 mb-3 min-w-0">
+            <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide flex-shrink-0">
+              Products
+            </h3>
+            {availableProducts.length > 0 && (
+              <div ref={productsDropdownRef} className="relative flex-shrink min-w-0 w-full max-w-[260px]">
+                <button
+                  type="button"
+                  onClick={() => setProductsDropdownOpen((o) => !o)}
+                  disabled={addingProduct}
+                  className="w-full text-left text-sm px-3 py-2 border border-slate-300 rounded-lg bg-white hover:bg-slate-50 truncate disabled:opacity-50"
+                >
+                  {addingProduct ? "Adding…" : "+ Add product"}
+                </button>
+                {productsDropdownOpen && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-20 max-h-48 overflow-y-auto">
+                    {availableProducts.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => handleAddProduct(p.id)}
+                        className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50 first:rounded-t-lg last:rounded-b-lg flex flex-col items-start min-w-0"
+                      >
+                        <span className="font-medium truncate w-full">{p.name}</span>
+                        <span className="text-slate-500 text-xs">
+                          ${Number(p.price).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          {jobProductsList.length === 0 ? (
+            <p className="text-slate-500 mb-4">
+              {availableProducts.length > 0
+                ? "No products added yet. Use the dropdown above to add."
+                : "No products added yet. Add products in Settings → Products first."}
+            </p>
+          ) : (
+            <div className="space-y-2 mb-4">
+              {jobProductsList.map((jp) => {
+                const price = typeof jp.unitPrice === "string" ? parseFloat(jp.unitPrice) : Number(jp.unitPrice);
+                const lineTotal = price * (jp.quantity || 1);
+                const isExpanded = expandedProductIds.has(jp.id);
+                return (
+                  <div
+                    key={jp.id}
+                    className="border border-slate-200 rounded-lg overflow-hidden"
+                  >
+                    <div
+                      className="flex justify-between items-center py-2 px-3 group cursor-pointer hover:bg-slate-50"
+                      onClick={() => toggleProductExpanded(jp.id)}
+                    >
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <span
+                          className={`text-slate-400 transition-transform flex-shrink-0 ${isExpanded ? "rotate-90" : ""}`}
+                          aria-hidden
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </span>
+                        <p className="font-medium text-slate-900">
+                          {jp.product?.name ?? "Unknown product"}
+                          {jp.quantity > 1 && (
+                            <span className="text-slate-500 font-normal"> × {jp.quantity}</span>
+                          )}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                        <Price amount={lineTotal} variant="inline" />
+                        <button
+                          onClick={() => handleRemoveProduct(jp.id)}
+                          disabled={removingProduct === jp.id}
+                          className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                          aria-label="Remove product"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                    <div
+                      className="grid transition-[grid-template-rows] duration-300 ease-out"
+                      style={{ gridTemplateRows: isExpanded ? "1fr" : "0fr" }}
+                    >
+                      <div className="min-h-0 overflow-hidden">
+                        <div className="px-3 pb-3 pt-0 border-t border-slate-100 bg-slate-50/50">
+                          {jp.product?.description && (
+                            <p className="text-xs text-slate-600 mt-2 whitespace-pre-line">{jp.product.description}</p>
+                          )}
+                          <dl className="mt-2 text-xs text-slate-500 space-y-1">
+                            <div className="flex justify-between gap-4">
+                              <dt>Unit price</dt>
+                              <dd><Price amount={price} variant="inline" /></dd>
+                            </div>
+                            <div className="flex justify-between gap-4">
+                              <dt>Quantity</dt>
+                              <dd>{jp.quantity}</dd>
+                            </div>
+                            {jp.notes && (
+                              <div>
+                                <dt className="text-slate-500">Notes</dt>
+                                <dd className="text-slate-600 mt-0.5">{jp.notes}</dd>
+                              </div>
+                            )}
+                          </dl>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
           <div className="flex justify-between items-center pt-4 mt-4 border-t-2 border-slate-200">
             <span className="font-bold text-slate-900">Total</span>
             <Price amount={total} variant="total" />
@@ -785,8 +1000,6 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
               <CopyPaymentLinkButton jobId={job.id} />
             </div>
           )}
-        </div>
-      )}
     </div>
   );
 }

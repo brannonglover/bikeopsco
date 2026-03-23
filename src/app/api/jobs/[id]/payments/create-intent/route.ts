@@ -18,7 +18,10 @@ export async function POST(
 
     const job = await prisma.job.findUnique({
       where: { id: jobId },
-      include: { jobServices: { include: { service: true } } },
+      include: {
+        jobServices: { include: { service: true } },
+        jobProducts: { include: { product: true } },
+      },
     });
 
     if (!job) {
@@ -32,14 +35,19 @@ export async function POST(
       );
     }
 
-    const subtotal = job.jobServices.reduce((sum, js) => {
-      const price = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);
-      return sum + price * (js.quantity || 1);
-    }, 0);
+    const subtotal =
+      job.jobServices.reduce((sum, js) => {
+        const price = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);
+        return sum + price * (js.quantity || 1);
+      }, 0) +
+      (job.jobProducts ?? []).reduce((sum, jp) => {
+        const price = typeof jp.unitPrice === "string" ? parseFloat(jp.unitPrice) : Number(jp.unitPrice);
+        return sum + price * (jp.quantity || 1);
+      }, 0);
 
     if (subtotal <= 0) {
       return NextResponse.json(
-        { error: "Job has no services or total is zero" },
+        { error: "Job has no services, products, or total is zero" },
         { status: 400 }
       );
     }

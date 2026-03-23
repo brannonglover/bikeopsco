@@ -85,6 +85,7 @@ export default function PayPage() {
     bikeModel: string;
     customer?: { firstName: string; lastName?: string | null; email?: string | null } | null;
     jobServices: { service: { name: string }; quantity: number; unitPrice: string | number }[];
+    jobProducts?: { product: { name: string }; quantity: number; unitPrice: string | number }[];
     paymentStatus: string;
   } | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
@@ -122,16 +123,16 @@ export default function PayPage() {
           return;
         }
 
-        const subtotal = (jobData.jobServices ?? []).reduce(
-          (sum: number, js: { unitPrice: string | number; quantity: number }) => {
-            const price = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);
-            return sum + price * (js.quantity || 1);
-          },
-          0
-        );
+        const lineTotal = (js: { unitPrice: string | number; quantity: number }) => {
+          const price = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);
+          return price * (js.quantity || 1);
+        };
+        const subtotal =
+          (jobData.jobServices ?? []).reduce((sum: number, js: { unitPrice: string | number; quantity: number }) => sum + lineTotal(js), 0) +
+          (jobData.jobProducts ?? []).reduce((sum: number, jp: { unitPrice: string | number; quantity: number }) => sum + lineTotal(jp), 0);
 
         if (subtotal <= 0) {
-          setError("No services to pay for");
+          setError("No services or products to pay for");
           return;
         }
 
@@ -174,24 +175,18 @@ export default function PayPage() {
     );
   }
 
+  const lineTotal = (js: { unitPrice: string | number; quantity: number }) => {
+    const price = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);
+    return price * (js.quantity || 1);
+  };
   const subtotal =
     paymentAmount?.subtotal ??
-    (job.jobServices ?? []).reduce(
-      (sum: number, js: { unitPrice: string | number; quantity: number }) => {
-        const price = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);
-        return sum + price * (js.quantity || 1);
-      },
-      0
-    );
+    ((job.jobServices ?? []).reduce((sum: number, js) => sum + lineTotal(js), 0) +
+      (job.jobProducts ?? []).reduce((sum: number, jp) => sum + lineTotal(jp), 0));
   const total =
     paymentAmount?.amount ??
-    (job.jobServices ?? []).reduce(
-      (sum: number, js: { unitPrice: string | number; quantity: number }) => {
-        const price = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);
-        return sum + price * (js.quantity || 1);
-      },
-      0
-    );
+    ((job.jobServices ?? []).reduce((sum: number, js) => sum + lineTotal(js), 0) +
+      (job.jobProducts ?? []).reduce((sum: number, jp) => sum + lineTotal(jp), 0));
   const hasSurcharge = total > subtotal;
 
   const customerName = job.customer

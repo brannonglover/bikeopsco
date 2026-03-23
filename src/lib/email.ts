@@ -313,12 +313,19 @@ export interface JobServiceForInvoice {
   unitPrice: string | number;
 }
 
+export interface JobProductForInvoice {
+  product: { name: string };
+  quantity: number;
+  unitPrice: string | number;
+}
+
 export interface JobForInvoice {
   id: string;
   bikeMake: string;
   bikeModel: string;
   customer: { firstName: string; lastName: string | null; email: string | null } | null;
   jobServices: JobServiceForInvoice[];
+  jobProducts?: JobProductForInvoice[];
 }
 
 function formatPrice(amount: number): string {
@@ -348,7 +355,7 @@ function buildInvoiceHtml(
     day: "numeric",
   });
 
-  const rows = job.jobServices.map((js) => {
+  const serviceRows = (job.jobServices ?? []).map((js) => {
     const unitPrice = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);
     const lineTotal = unitPrice * (js.quantity || 1);
     return `
@@ -360,6 +367,19 @@ function buildInvoiceHtml(
       </tr>
     `;
   }).join("");
+  const productRows = (job.jobProducts ?? []).map((jp) => {
+    const unitPrice = typeof jp.unitPrice === "string" ? parseFloat(jp.unitPrice) : Number(jp.unitPrice);
+    const lineTotal = unitPrice * (jp.quantity || 1);
+    return `
+      <tr>
+        <td style="padding: 14px 18px; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 16px;">${escapeHtml(jp.product?.name ?? "Product")}</td>
+        <td style="padding: 14px 18px; border-bottom: 1px solid #e2e8f0; color: #64748b; text-align: center; font-size: 16px;">${jp.quantity}</td>
+        <td style="padding: 14px 18px; border-bottom: 1px solid #e2e8f0; color: #64748b; text-align: right; font-size: 16px;">${formatPrice(unitPrice)}</td>
+        <td style="padding: 14px 18px; border-bottom: 1px solid #e2e8f0; color: #0f172a; font-weight: 600; text-align: right; font-size: 16px;">${formatPrice(lineTotal)}</td>
+      </tr>
+    `;
+  }).join("");
+  const rows = serviceRows + productRows;
 
   const headerContent = logoSrc
     ? `<img src="${logoSrc.startsWith("cid:") ? logoSrc : escapeHtml(logoSrc)}" alt="${escapeHtml(shopName)}" width="280" height="auto" style="max-height: 88px; width: auto; display: block; margin: 0 auto 20px; object-fit: contain;">
@@ -398,7 +418,7 @@ function buildInvoiceHtml(
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 24px; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
                 <thead>
                   <tr style="background-color: #f8fafc;">
-                    <th style="padding: 14px 18px; text-align: left; font-size: 15px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Service</th>
+                    <th style="padding: 14px 18px; text-align: left; font-size: 15px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Item</th>
                     <th style="padding: 14px 18px; text-align: center; font-size: 15px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Qty</th>
                     <th style="padding: 14px 18px; text-align: right; font-size: 15px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Unit Price</th>
                     <th style="padding: 14px 18px; text-align: right; font-size: 15px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Total</th>
@@ -539,10 +559,15 @@ export async function sendPaymentReceiptEmail(
     return { ok: false, error: "No customer email" };
   }
 
-  const subtotal = job.jobServices.reduce((sum, js) => {
-    const price = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);
-    return sum + price * (js.quantity || 1);
-  }, 0);
+  const subtotal =
+    (job.jobServices ?? []).reduce((sum, js) => {
+      const price = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);
+      return sum + price * (js.quantity || 1);
+    }, 0) +
+    (job.jobProducts ?? []).reduce((sum, jp) => {
+      const price = typeof jp.unitPrice === "string" ? parseFloat(jp.unitPrice) : Number(jp.unitPrice);
+      return sum + price * (jp.quantity || 1);
+    }, 0);
 
   const paid = totalPaid ?? subtotal;
 

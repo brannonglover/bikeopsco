@@ -28,6 +28,7 @@ export async function GET(
       include: {
         customer: true,
         jobServices: { include: { service: true } },
+        jobProducts: { include: { product: true } },
       },
     });
     if (!job) {
@@ -86,6 +87,7 @@ export async function PATCH(
       include: {
         customer: true,
         jobServices: { include: { service: true } },
+        jobProducts: { include: { product: true } },
       },
     });
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Price } from "@/components/ui/Price";
 
 interface Service {
@@ -40,6 +40,18 @@ export default function ServicesPage() {
   });
   const [firstRowIsHeader, setFirstRowIsHeader] = useState(true);
   const [expandedServiceIds, setExpandedServiceIds] = useState<Set<string>>(new Set());
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const actionsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (actionsRef.current && !actionsRef.current.contains(e.target as Node)) {
+        setActionsOpen(false);
+      }
+    };
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
+  }, []);
 
   const toggleExpanded = (id: string) => {
     setExpandedServiceIds((prev) => {
@@ -136,6 +148,28 @@ export default function ServicesPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleExport = () => {
+    const headers = ["name", "description", "price"];
+    const rows = services.map((s) =>
+      [s.name, s.description ?? "", String(s.price)]
+        .map((v) =>
+          v.includes(",") || v.includes('"') || v.includes("\n")
+            ? `"${v.replace(/"/g, '""')}"`
+            : v
+        )
+        .join(",")
+    );
+    const csv = [headers.join(","), ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `services-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setActionsOpen(false);
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -251,32 +285,57 @@ export default function ServicesPage() {
             >
               + Add Service
             </button>
-            <label className="px-4 py-2 bg-slate-100 border border-slate-300 rounded-lg hover:bg-slate-200 cursor-pointer font-medium text-slate-700 transition-colors">
-              <input
-                type="file"
-                accept=".csv,.xlsx,.xls"
-                onChange={handleFileSelect}
-                disabled={importing}
-                className="sr-only"
-              />
-              {importing ? "Loading..." : "Import CSV or Excel"}
-            </label>
-            <button
-              type="button"
-              onClick={() => {
-                const csv = "name,description,price\nFull Service,Complete bike tune-up,125.00\nBrake Pad Replacement,Front and rear pads,45.00";
-                const blob = new Blob([csv], { type: "text/csv" });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = "services-template.csv";
-                a.click();
-                URL.revokeObjectURL(url);
-              }}
-              className="text-sm text-slate-500 hover:text-slate-700 underline"
-            >
-              Download sample CSV
-            </button>
+            <div className="ml-auto relative" ref={actionsRef}>
+              <button
+                type="button"
+                onClick={() => setActionsOpen((o) => !o)}
+                className="px-4 py-2 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 font-medium text-slate-700"
+              >
+                Actions ▾
+              </button>
+              {actionsOpen && (
+                <div className="absolute right-0 mt-1 py-1 w-48 bg-white border border-slate-200 rounded-lg shadow-lg z-10">
+                  <button
+                    type="button"
+                    onClick={handleExport}
+                    className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                  >
+                    Export
+                  </button>
+                  <label className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 cursor-pointer">
+                    <input
+                      type="file"
+                      accept=".csv,.xlsx,.xls"
+                      onChange={(e) => {
+                        handleFileSelect(e);
+                        setActionsOpen(false);
+                      }}
+                      disabled={importing}
+                      className="sr-only"
+                    />
+                    {importing ? "Loading..." : "Import"}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const csv =
+                        "name,description,price\nFull Service,Complete bike tune-up,125.00\nBrake Pad Replacement,Front and rear pads,45.00";
+                      const blob = new Blob([csv], { type: "text/csv" });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = "services-template.csv";
+                      a.click();
+                      URL.revokeObjectURL(url);
+                      setActionsOpen(false);
+                    }}
+                    className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                  >
+                    Download sample CSV
+                  </button>
+                </div>
+              )}
+            </div>
           </>
         ) : (
           <div className="p-4 border border-slate-200 rounded-lg bg-white shadow-sm space-y-3 w-full">

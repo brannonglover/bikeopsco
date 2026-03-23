@@ -44,6 +44,7 @@ model Job {
   sentEmails        JobEmail[]
   sentSms           JobSms[]
   jobServices       JobService[]
+  jobProducts       JobProduct[]
   payments          Payment[]
   conversations     Conversation[]
   createdAt         DateTime     @default(now())
@@ -140,15 +141,28 @@ model JobSms {
 }
 
 model Product {
-  id            String   @id @default(cuid())
+  id            String       @id @default(cuid())
   name          String
   description   String?
   imageUrl      String?
-  price         Decimal  @db.Decimal(10, 2)
-  stockQuantity Int      @default(0)
+  price         Decimal      @db.Decimal(10, 2)
+  stockQuantity Int          @default(0)
   supplier      String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  jobProducts   JobProduct[]
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+}
+
+model JobProduct {
+  id        String   @id @default(cuid())
+  jobId     String
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity  Int      @default(1)
+  unitPrice Decimal  @db.Decimal(10, 2)
+  notes     String?
+  createdAt DateTime @default(now())
 }
 
 model Conversation {

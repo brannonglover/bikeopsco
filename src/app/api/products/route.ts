@@ -11,9 +11,21 @@ const createProductSchema = z.object({
   supplier: z.string().optional().nullable().transform((v) => (v?.trim() ? v : null)),
 });
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url);
+    const q = searchParams.get("q") ?? "";
+
     const products = await prisma.product.findMany({
+      where: q
+        ? {
+            OR: [
+              { name: { contains: q, mode: "insensitive" } },
+              { description: { contains: q, mode: "insensitive" } },
+              { supplier: { contains: q, mode: "insensitive" } },
+            ],
+          }
+        : {},
       orderBy: { name: "asc" },
     });
     return NextResponse.json(products);

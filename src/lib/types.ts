@@ -41,6 +41,23 @@ export interface JobService {
   notes: string | null;
 }
 
+export interface Product {
+  id: string;
+  name: string;
+  description: string | null;
+  price: number | string;
+}
+
+export interface JobProduct {
+  id: string;
+  jobId: string;
+  productId: string;
+  product: Product;
+  quantity: number;
+  unitPrice: number | string;
+  notes: string | null;
+}
+
 export type PaymentStatus = "UNPAID" | "PENDING" | "PAID" | "REFUNDED";
 
 export type MessageSender = "STAFF" | "CUSTOMER";
@@ -91,6 +108,7 @@ export interface Job {
   completedAt: string | null;
   paymentStatus?: PaymentStatus;
   jobServices?: JobService[];
+  jobProducts?: JobProduct[];
   createdAt: string;
   updatedAt: string;
 }

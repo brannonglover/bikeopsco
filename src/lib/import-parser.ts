@@ -90,6 +90,41 @@ export type CustomerColumnMapping = {
   notesColumn: number | null;
 };
 
+export type ProductColumnMapping = {
+  nameColumn: number;
+  descriptionColumn: number | null;
+  priceColumn: number;
+  stockQuantityColumn: number | null;
+  supplierColumn: number | null;
+};
+
+export function applyProductMapping(
+  row: string[],
+  mapping: ProductColumnMapping
+): {
+  name: string;
+  description: string | null;
+  price: string;
+  stockQuantity: string;
+  supplier: string | null;
+} {
+  const name = (row[mapping.nameColumn] ?? "").trim();
+  const description =
+    mapping.descriptionColumn != null && mapping.descriptionColumn >= 0
+      ? (row[mapping.descriptionColumn] ?? "").trim() || null
+      : null;
+  const priceStr = (row[mapping.priceColumn] ?? "").trim();
+  const stockStr =
+    mapping.stockQuantityColumn != null && mapping.stockQuantityColumn >= 0
+      ? (row[mapping.stockQuantityColumn] ?? "0").trim()
+      : "0";
+  const supplier =
+    mapping.supplierColumn != null && mapping.supplierColumn >= 0
+      ? (row[mapping.supplierColumn] ?? "").trim() || null
+      : null;
+  return { name, description, price: priceStr, stockQuantity: stockStr, supplier };
+}
+
 export function applyCustomerMapping(
   row: string[],
   mapping: CustomerColumnMapping

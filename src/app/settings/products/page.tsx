@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Price } from "@/components/ui/Price";
 
 const SUPPLIER_OPTIONS = ["Amazon", "Performance Bike", "Other"];
@@ -34,9 +34,44 @@ export default function ProductsPage() {
   const [newStockQuantity, setNewStockQuantity] = useState("");
   const [newSupplier, setNewSupplier] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{
+    created: number;
+    errors?: { row: number; message: string }[];
+  } | null>(null);
+  const [importPreview, setImportPreview] = useState<{
+    file: File;
+    headers: string[];
+    sampleRows: string[][];
+    rowCount: number;
+  } | null>(null);
+  const [importMapping, setImportMapping] = useState({
+    nameColumn: 0,
+    descriptionColumn: 1 as number | null,
+    priceColumn: 2,
+    stockQuantityColumn: 3 as number | null,
+    supplierColumn: 4 as number | null,
+  });
+  const [firstRowIsHeader, setFirstRowIsHeader] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const actionsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fetch("/api/products")
+    const handleClickOutside = (e: MouseEvent) => {
+      if (actionsRef.current && !actionsRef.current.contains(e.target as Node)) {
+        setActionsOpen(false);
+      }
+    };
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    const url = searchQuery
+      ? `/api/products?q=${encodeURIComponent(searchQuery)}`
+      : "/api/products";
+    fetch(url)
       .then((res) => res.json())
       .then((data) => {
         const normalized = (Array.isArray(data) ? data : []).map(
@@ -51,7 +86,7 @@ export default function ProductsPage() {
         setProducts(normalized);
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [searchQuery]);
 
   const startEdit = (product: Product) => {
     setEditing(product.id);
@@ -200,6 +235,115 @@ export default function ProductsPage() {
     }
   };
 
+  const handleExport = () => {
+    const headers = ["name", "description", "price", "stockQuantity", "supplier"];
+    const rows = products.map((p) =>
+      [
+        p.name,
+        p.description ?? "",
+        String(p.price),
+        String(p.stockQuantity),
+        p.supplier ?? "",
+      ]
+        .map((v) =>
+          v.includes(",") || v.includes('"') || v.includes("\n")
+            ? `"${v.replace(/"/g, '""')}"`
+            : v
+        )
+        .join(",")
+    );
+    const csv = [headers.join(","), ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `products-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setActionsOpen(false);
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true);
+    setImportResult(null);
+    setImportPreview(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("firstRowIsHeader", "true");
+      const res = await fetch("/api/products/import/preview", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        const colCount = data.headers?.length ?? 0;
+        setImportPreview({
+          file,
+          headers: data.headers ?? [],
+          sampleRows: data.sampleRows ?? [],
+          rowCount: data.rowCount ?? 0,
+        });
+        setFirstRowIsHeader(true);
+        setImportMapping({
+          nameColumn: 0,
+          descriptionColumn: colCount >= 3 ? 1 : null,
+          priceColumn: colCount >= 2 ? Math.min(2, colCount - 1) : 0,
+          stockQuantityColumn: colCount >= 4 ? 3 : null,
+          supplierColumn: colCount >= 5 ? 4 : null,
+        });
+      } else {
+        alert(data.detail ? `${data.error}\n\n${data.detail}` : data.error || "Preview failed");
+      }
+    } catch {
+      alert("Preview failed");
+    } finally {
+      setImporting(false);
+      e.target.value = "";
+    }
+  };
+
+  const handleConfirmImport = async () => {
+    if (!importPreview) return;
+    setImporting(true);
+    setImportResult(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", importPreview.file);
+      formData.append("mapping", JSON.stringify(importMapping));
+      formData.append("firstRowIsHeader", String(firstRowIsHeader));
+      const res = await fetch("/api/products/import", { method: "POST", body: formData });
+      const data = await res.json();
+      if (res.ok) {
+        setImportResult({ created: data.created, errors: data.errors });
+        setImportPreview(null);
+        fetch("/api/products")
+          .then((r) => r.json())
+          .then((d) => {
+            const normalized = (Array.isArray(d) ? d : []).map(
+              (p: Product & { price?: unknown; stockQuantity?: unknown }) => ({
+                ...p,
+                price: typeof p.price === "string" ? parseFloat(p.price) : Number(p.price ?? 0),
+                stockQuantity:
+                  typeof p.stockQuantity === "string"
+                    ? parseInt(p.stockQuantity, 10)
+                    : Number(p.stockQuantity ?? 0),
+              })
+            );
+            setProducts(normalized);
+          });
+      } else {
+        alert(data.detail ? `${data.error}\n\n${data.detail}` : data.error || "Import failed");
+      }
+    } catch {
+      alert("Import failed");
+    } finally {
+      setImporting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="py-12 text-center text-slate-500">Loading products...</div>
@@ -212,17 +356,81 @@ export default function ProductsPage() {
       <p className="text-slate-600 mb-6">
         Track products you purchase for bike installations—parts, accessories,
         and supplies. Record where you buy from (e.g. Amazon, Performance Bike)
-        and keep inventory counts. Use price for your purchase cost.
+        and keep inventory counts. Use price for your purchase cost.{" "}
+        <span className="text-slate-500">
+          Import from CSV or Excel. Map columns to name, description (optional),
+          price, stock quantity, and supplier.
+        </span>
       </p>
 
       <div className="flex flex-wrap gap-3 mb-6 items-center">
         {!showAddForm ? (
-          <button
-            onClick={() => setShowAddForm(true)}
-            className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium"
-          >
-            + Add Product
-          </button>
+          <>
+            <button
+              onClick={() => setShowAddForm(true)}
+              className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium"
+            >
+              + Add Product
+            </button>
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by name, description, or supplier..."
+              className="w-48 sm:w-56 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none"
+            />
+            <div className="ml-auto relative" ref={actionsRef}>
+              <button
+                type="button"
+                onClick={() => setActionsOpen((o) => !o)}
+                className="px-4 py-2 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 font-medium text-slate-700"
+              >
+                Actions ▾
+              </button>
+              {actionsOpen && (
+                <div className="absolute right-0 mt-1 py-1 w-48 bg-white border border-slate-200 rounded-lg shadow-lg z-10">
+                  <button
+                    type="button"
+                    onClick={handleExport}
+                    className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                  >
+                    Export
+                  </button>
+                  <label className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 cursor-pointer">
+                    <input
+                      type="file"
+                      accept=".csv,.xlsx,.xls"
+                      onChange={(e) => {
+                        handleFileSelect(e);
+                        setActionsOpen(false);
+                      }}
+                      disabled={importing}
+                      className="sr-only"
+                    />
+                    {importing ? "Loading..." : "Import"}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const csv =
+                        "name,description,price,stockQuantity,supplier\nChain Lube,Wet lubricant for chains,12.99,24,Amazon\nBrake Pads,Metallic brake pads,45.00,10,Performance Bike";
+                      const blob = new Blob([csv], { type: "text/csv" });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = "products-template.csv";
+                      a.click();
+                      URL.revokeObjectURL(url);
+                      setActionsOpen(false);
+                    }}
+                    className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                  >
+                    Download sample CSV
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
         ) : (
           <div className="p-4 border border-slate-200 rounded-lg bg-white shadow-sm space-y-3 w-full">
             <h3 className="font-semibold text-slate-900">New Product</h3>
@@ -368,6 +576,237 @@ export default function ProductsPage() {
           </div>
         )}
       </div>
+
+      {importPreview && (
+        <div className="mb-6 p-4 border border-slate-200 rounded-lg bg-white shadow-sm space-y-4">
+          <div className="flex justify-between items-center">
+            <h3 className="font-semibold text-slate-900">
+              Map columns · {importPreview.rowCount} row{importPreview.rowCount !== 1 ? "s" : ""} to import
+            </h3>
+            <button
+              type="button"
+              onClick={() => setImportPreview(null)}
+              className="text-slate-500 hover:text-slate-700"
+              aria-label="Cancel import"
+            >
+              × Cancel
+            </button>
+          </div>
+
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={firstRowIsHeader}
+              onChange={async (e) => {
+                const checked = e.target.checked;
+                setFirstRowIsHeader(checked);
+                if (importPreview) {
+                  setImporting(true);
+                  try {
+                    const formData = new FormData();
+                    formData.append("file", importPreview.file);
+                    formData.append("firstRowIsHeader", String(checked));
+                    const res = await fetch("/api/products/import/preview", {
+                      method: "POST",
+                      body: formData,
+                    });
+                    const data = await res.json();
+                    if (res.ok) {
+                      const colCount = data.headers?.length ?? 0;
+                      setImportPreview((p) =>
+                        p
+                          ? {
+                              ...p,
+                              headers: data.headers ?? [],
+                              sampleRows: data.sampleRows ?? [],
+                              rowCount: data.rowCount ?? 0,
+                            }
+                          : null
+                      );
+                      setImportMapping((m) => ({
+                        ...m,
+                        descriptionColumn: colCount >= 3 ? 1 : null,
+                        priceColumn: colCount >= 2 ? Math.min(2, colCount - 1) : 0,
+                        stockQuantityColumn: colCount >= 4 ? 3 : null,
+                        supplierColumn: colCount >= 5 ? 4 : null,
+                      }));
+                    }
+                  } finally {
+                    setImporting(false);
+                  }
+                }
+              }}
+            />
+            First row contains column headers
+          </label>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Product name</label>
+              <select
+                value={importMapping.nameColumn}
+                onChange={(e) =>
+                  setImportMapping((m) => ({ ...m, nameColumn: Number(e.target.value) }))
+                }
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+              >
+                {importPreview.headers.map((h, i) => (
+                  <option key={i} value={i}>
+                    {h}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Description (optional)
+              </label>
+              <select
+                value={importMapping.descriptionColumn ?? ""}
+                onChange={(e) =>
+                  setImportMapping((m) => ({
+                    ...m,
+                    descriptionColumn: e.target.value === "" ? null : Number(e.target.value),
+                  }))
+                }
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+              >
+                <option value="">— Don&apos;t import —</option>
+                {importPreview.headers.map((h, i) => (
+                  <option key={i} value={i}>
+                    {h}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Price</label>
+              <select
+                value={importMapping.priceColumn}
+                onChange={(e) =>
+                  setImportMapping((m) => ({ ...m, priceColumn: Number(e.target.value) }))
+                }
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+              >
+                {importPreview.headers.map((h, i) => (
+                  <option key={i} value={i}>
+                    {h}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Stock quantity (optional)
+              </label>
+              <select
+                value={importMapping.stockQuantityColumn ?? ""}
+                onChange={(e) =>
+                  setImportMapping((m) => ({
+                    ...m,
+                    stockQuantityColumn: e.target.value === "" ? null : Number(e.target.value),
+                  }))
+                }
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+              >
+                <option value="">— Don&apos;t import —</option>
+                {importPreview.headers.map((h, i) => (
+                  <option key={i} value={i}>
+                    {h}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Supplier (optional)
+              </label>
+              <select
+                value={importMapping.supplierColumn ?? ""}
+                onChange={(e) =>
+                  setImportMapping((m) => ({
+                    ...m,
+                    supplierColumn: e.target.value === "" ? null : Number(e.target.value),
+                  }))
+                }
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+              >
+                <option value="">— Don&apos;t import —</option>
+                {importPreview.headers.map((h, i) => (
+                  <option key={i} value={i}>
+                    {h}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {importPreview.sampleRows.length > 0 && (
+            <div>
+              <p className="text-sm font-medium text-slate-700 mb-2">Preview</p>
+              <div className="overflow-x-auto border border-slate-200 rounded-lg">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="bg-slate-50">
+                      {importPreview.headers.map((h, i) => (
+                        <th key={i} className="px-3 py-2 text-left font-medium text-slate-700">
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {importPreview.sampleRows.map((row, ri) => (
+                      <tr key={ri} className="border-t border-slate-100">
+                        {importPreview.headers.map((_, ci) => (
+                          <td key={ci} className="px-3 py-2 text-slate-600">
+                            {row[ci] ?? "—"}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          <button
+            onClick={handleConfirmImport}
+            disabled={importing}
+            className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 font-medium"
+          >
+            {importing ? "Importing..." : "Import"}
+          </button>
+        </div>
+      )}
+
+      {importResult && (
+        <div className="mb-6 p-4 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 flex justify-between items-start gap-4">
+          <div>
+            <p className="font-medium">
+              Imported {importResult.created} product{importResult.created !== 1 ? "s" : ""}.
+            </p>
+            {importResult.errors && importResult.errors.length > 0 && (
+              <ul className="mt-2 text-sm list-disc list-inside">
+                {importResult.errors.map((e) => (
+                  <li key={e.row}>
+                    Row {e.row}: {e.message}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setImportResult(null)}
+            className="text-emerald-600 hover:text-emerald-800"
+            aria-label="Dismiss"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       <div className="space-y-4">
         {products.length === 0 && !showAddForm ? (

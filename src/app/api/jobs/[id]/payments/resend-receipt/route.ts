@@ -14,6 +14,7 @@ export async function POST(
       include: {
         customer: true,
         jobServices: { include: { service: true } },
+        jobProducts: { include: { product: true } },
         payments: { orderBy: { createdAt: "desc" }, take: 1 },
       },
     });
@@ -52,6 +53,11 @@ export async function POST(
         service: { name: js.service.name },
         quantity: js.quantity,
         unitPrice: Number(js.unitPrice),
+      })),
+      jobProducts: (job.jobProducts ?? []).map((jp) => ({
+        product: { name: jp.product.name },
+        quantity: jp.quantity,
+        unitPrice: Number(jp.unitPrice),
       })),
     };
 

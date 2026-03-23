@@ -61,6 +61,7 @@ export async function GET(request: NextRequest) {
         jobServices: {
           include: { service: true },
         },
+        jobProducts: { include: { product: true } },
       },
       orderBy: { createdAt: "desc" },
     });
@@ -124,6 +125,7 @@ export async function POST(request: NextRequest) {
         include: {
           customer: true,
           jobServices: { include: { service: true } },
+          jobProducts: { include: { product: true } },
         },
       });
     });
