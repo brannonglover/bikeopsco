@@ -56,6 +56,7 @@ interface JobForEmail {
   id: string;
   bikeMake: string;
   bikeModel: string;
+  stage?: string;
   customer: { firstName: string; lastName: string | null } | null;
   customerNotes?: string | null;
 }
@@ -69,6 +70,14 @@ export async function sendJobEmail(
   if (!resend) {
     console.warn("RESEND_API_KEY not set, skipping email");
     return { ok: false, error: "Email not configured" };
+  }
+
+  // Never send booking confirmation to customer for pending-approval jobs
+  const isBookingConfirmation =
+    templateSlug === "booking_confirmation_dropoff" ||
+    templateSlug === "booking_confirmation_collection";
+  if (isBookingConfirmation && job.stage === "PENDING_APPROVAL") {
+    return { ok: false, error: "Booking not yet approved" };
   }
 
   const { prisma } = await import("./db");
