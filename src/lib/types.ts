@@ -42,6 +42,36 @@ export interface JobService {
 
 export type PaymentStatus = "UNPAID" | "PENDING" | "PAID" | "REFUNDED";
 
+export type MessageSender = "STAFF" | "CUSTOMER";
+
+export interface MessageAttachment {
+  id: string;
+  url: string;
+  filename: string;
+  mimeType: string;
+  createdAt: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  conversationId: string;
+  sender: MessageSender;
+  body: string | null;
+  attachments: MessageAttachment[];
+  createdAt: string;
+}
+
+export interface Conversation {
+  id: string;
+  customerId: string;
+  jobId: string | null;
+  customer: Customer;
+  job?: { id: string; bikeMake: string; bikeModel: string } | null;
+  messages: ChatMessage[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Job {
   id: string;
   bikeMake: string;

@@ -9,16 +9,17 @@ datasource db {
 }
 
 model Customer {
-  id        String   @id @default(cuid())
-  firstName String
-  lastName  String?
-  email     String?
-  phone     String?
-  address   String?
-  notes     String?
-  jobs      Job[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String         @id @default(cuid())
+  firstName     String
+  lastName      String?
+  email         String?
+  phone         String?
+  address       String?
+  notes         String?
+  jobs          Job[]
+  conversations Conversation[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 }
 
 model Job {
@@ -42,6 +43,7 @@ model Job {
   sentSms           JobSms[]
   jobServices       JobService[]
   payments          Payment[]
+  conversations     Conversation[]
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
 }
@@ -144,4 +146,40 @@ model Product {
   supplier      String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+}
+
+model Conversation {
+  id         String    @id @default(cuid())
+  customerId String
+  customer   Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  jobId      String?
+  job        Job?      @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  messages   Message[]
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+model Message {
+  id             String              @id @default(cuid())
+  conversationId String
+  conversation   Conversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         MessageSender
+  body           String?
+  attachments    MessageAttachment[]
+  createdAt      DateTime            @default(now())
+}
+
+model MessageAttachment {
+  id        String    @id @default(cuid())
+  messageId String?
+  message   Message?  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  url       String
+  filename  String
+  mimeType  String
+  createdAt DateTime  @default(now())
+}
+
+enum MessageSender {
+  STAFF
+  CUSTOMER
 }
