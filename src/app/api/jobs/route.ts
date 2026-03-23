@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Stage } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { sendJobEmail, getTemplateForStage } from "@/lib/email";
@@ -90,6 +91,7 @@ export async function POST(request: NextRequest) {
     const job = await prisma.$transaction(async (tx) => {
       const newJob = await tx.job.create({
         data: {
+          stage: Stage.BOOKED_IN,
           bikeMake: data.bikeMake,
           bikeModel: data.bikeModel,
           customerId: data.customerId,
@@ -130,10 +132,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to create job" }, { status: 500 });
     }
 
-    const templateSlug = getTemplateForStage("RECEIVED", job.deliveryType);
-    const customerEmail = job.customer?.email;
-    if (customerEmail && templateSlug) {
-      sendJobEmail(templateSlug, customerEmail, job).catch(console.error);
+    const templateSlug = getTemplateForStage("BOOKED_IN", job.deliveryType);
+    const customerEmail = job.customer?.email?.trim();
+    if (!customerEmail) {
+      console.log("[Job created] No customer email – skipping booking confirmation");
+    } else if (!templateSlug) {
+      console.warn("[Job created] No template for BOOKED_IN – run `npx prisma db seed` to add templates");
+    } else {
+      const result = await sendJobEmail(templateSlug, customerEmail, job);
+      if (!result.ok) {
+        console.error("[Job created] Booking email failed:", result.error);
+      }
     }
 
     return NextResponse.json(job);

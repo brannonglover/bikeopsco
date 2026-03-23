@@ -1,4 +1,5 @@
 export type Stage =
+  | "BOOKED_IN"
   | "RECEIVED"
   | "WORKING_ON"
   | "WAITING_ON_PARTS"

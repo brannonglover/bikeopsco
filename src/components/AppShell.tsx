@@ -8,7 +8,8 @@ import { SidebarNav } from "@/components/SidebarNav";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const isPaymentPage = pathname?.startsWith("/pay/");
+  const isPublicCustomerPage =
+    pathname?.startsWith("/pay/") || pathname?.startsWith("/status/");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Close mobile menu on route change (e.g. after clicking a link)
@@ -28,7 +29,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     };
   }, [mobileMenuOpen]);
 
-  if (isPaymentPage) {
+  if (isPublicCustomerPage) {
     return (
       <div className="min-h-screen flex flex-col">
         <header className="flex-shrink-0 py-5 px-4 sm:py-6 sm:px-6 border-b border-slate-200 bg-white flex justify-center">

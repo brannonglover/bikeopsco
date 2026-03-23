@@ -77,6 +77,12 @@ export async function sendJobEmail(
     return { ok: false, error: "Template not found" };
   }
 
+  const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/$/, "");
+  const statusUrl = baseUrl ? `${baseUrl}/status/${job.id}` : "";
+  const statusButtonHtml = statusUrl
+    ? `<a href="${statusUrl}" style="display: inline-block; padding: 12px 24px; background-color: #f59e0b; color: white !important; text-decoration: none; font-weight: 600; border-radius: 8px;">Track your repair status</a>`
+    : "";
+
   const vars: Record<string, string> = {
     customerName: job.customer
       ? job.customer.lastName
@@ -87,6 +93,8 @@ export async function sendJobEmail(
     bikeModel: job.bikeModel,
     shopName: process.env.SHOP_NAME || "Basement Bike Mechanic",
     customerNotes: job.customerNotes ?? "",
+    statusUrl,
+    statusButtonHtml,
   };
 
   const subject = mergeTemplateVariables(template.subject, vars);
@@ -123,6 +131,9 @@ export function getTemplateForStage(
   stage: string,
   deliveryType: string
 ): string | null {
+  if (stage === "BOOKED_IN") {
+    return deliveryType === "COLLECTION_SERVICE" ? "booking_confirmation_collection" : "booking_confirmation_dropoff";
+  }
   if (stage === "RECEIVED") {
     return deliveryType === "COLLECTION_SERVICE" ? "bike_collected" : "bike_arrived";
   }

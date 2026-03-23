@@ -79,6 +79,10 @@ export default function EmailTemplatesPage() {
         <code className="bg-slate-100 px-1 rounded">{`{{bikeModel}}`}</code>
         ,{" "}
         <code className="bg-slate-100 px-1 rounded">{`{{shopName}}`}</code>
+        ,{" "}
+        <code className="bg-slate-100 px-1 rounded">{`{{statusButtonHtml}}`}</code>
+        {" "}(orange “Track status” button),{" "}
+        <code className="bg-slate-100 px-1 rounded">{`{{statusUrl}}`}</code>
       </p>
 
       <div className="space-y-6">

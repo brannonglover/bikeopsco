@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model Customer {
@@ -24,7 +25,7 @@ model Job {
   id                String       @id @default(cuid())
   bikeMake          String
   bikeModel         String
-  stage             Stage        @default(RECEIVED)
+  stage             Stage        @default(BOOKED_IN)
   deliveryType      DeliveryType @default(DROP_OFF_AT_SHOP)
   dropOffDate       DateTime?
   pickupDate        DateTime?
@@ -38,6 +39,7 @@ model Job {
   completedAt       DateTime?
   paymentStatus     PaymentStatus @default(UNPAID)
   sentEmails        JobEmail[]
+  sentSms           JobSms[]
   jobServices       JobService[]
   payments          Payment[]
   createdAt         DateTime     @default(now())
@@ -86,6 +88,7 @@ model JobService {
 }
 
 enum Stage {
+  BOOKED_IN
   RECEIVED
   WORKING_ON
   WAITING_ON_PARTS
@@ -114,6 +117,15 @@ model EmailTemplate {
 }
 
 model JobEmail {
+  id           String   @id @default(cuid())
+  jobId        String
+  job          Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  templateSlug String
+  sentAt       DateTime @default(now())
+  recipient    String
+}
+
+model JobSms {
   id           String   @id @default(cuid())
   jobId        String
   job          Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)

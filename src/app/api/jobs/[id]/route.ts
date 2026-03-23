@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { sendJobEmail, getTemplateForStage } from "@/lib/email";
+import { sendJobSms, getTemplateSlugForStage } from "@/lib/sms";
 
 const updateJobSchema = z.object({
-  stage: z.enum(["RECEIVED", "WORKING_ON", "WAITING_ON_PARTS", "BIKE_READY", "COMPLETED", "CANCELLED"]).optional(),
+  stage: z.enum(["BOOKED_IN", "RECEIVED", "WORKING_ON", "WAITING_ON_PARTS", "BIKE_READY", "COMPLETED", "CANCELLED"]).optional(),
   cancellationReason: z.string().min(1).optional(),
   bikeMake: z.string().min(1).optional(),
   bikeModel: z.string().min(1).optional(),
@@ -88,16 +89,30 @@ export async function PATCH(
       },
     });
 
-    // Don't send emails when cancelling or marking complete (internal status only)
+    // Don't send notifications when cancelling or marking complete (internal status only)
     if (data.stage && data.stage !== "CANCELLED" && data.stage !== "COMPLETED" && existingJob) {
-      const customerEmail = job.customer?.email;
       const templateSlug = getTemplateForStage(data.stage, existingJob.deliveryType);
+      const smsTemplateSlug = getTemplateSlugForStage(data.stage, existingJob.deliveryType);
+
+      // Email
+      const customerEmail = job.customer?.email;
       if (customerEmail && templateSlug) {
-        const alreadySent = await prisma.jobEmail.findFirst({
+        const emailAlreadySent = await prisma.jobEmail.findFirst({
           where: { jobId: id, templateSlug },
         });
-        if (!alreadySent) {
+        if (!emailAlreadySent) {
           sendJobEmail(templateSlug, customerEmail, job).catch(console.error);
+        }
+      }
+
+      // SMS
+      const customerPhone = job.customer?.phone;
+      if (customerPhone && smsTemplateSlug) {
+        const smsAlreadySent = await prisma.jobSms.findFirst({
+          where: { jobId: id, templateSlug: smsTemplateSlug },
+        });
+        if (!smsAlreadySent) {
+          sendJobSms(smsTemplateSlug, customerPhone, job).catch(console.error);
         }
       }
     }

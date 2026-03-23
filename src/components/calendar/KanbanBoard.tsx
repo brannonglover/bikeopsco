@@ -18,6 +18,7 @@ import { JobDetailModal } from "@/components/jobs/JobDetailModal";
 import type { Job, Stage } from "@/lib/types";
 
 const STAGES: Stage[] = [
+  "BOOKED_IN",
   "RECEIVED",
   "WORKING_ON",
   "WAITING_ON_PARTS",
@@ -26,11 +27,15 @@ const STAGES: Stage[] = [
   "CANCELLED",
 ];
 
+/** Main board columns - Cancelled is shown in a collapsible section below */
+const DISPLAY_STAGES: Stage[] = STAGES.filter((s) => s !== "CANCELLED");
+
 export function KanbanBoard() {
   const searchParams = useSearchParams();
   const paidJobId = searchParams.get("paid");
   const [showPaidBanner, setShowPaidBanner] = useState(!!paidJobId);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [cancelledExpanded, setCancelledExpanded] = useState(false);
   const [newJobModalOpen, setNewJobModalOpen] = useState(false);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -174,7 +179,7 @@ export function KanbanBoard() {
         onDragEnd={handleDragEnd}
       >
         <div className="flex flex-1 gap-4 overflow-x-auto overflow-y-hidden pb-4 min-h-0 w-full -mx-4 px-4 sm:mx-0 sm:px-0 overscroll-x-contain">
-          {STAGES.map((stage) => (
+          {DISPLAY_STAGES.map((stage) => (
             <StageColumn
               key={stage}
               stage={stage}
@@ -183,6 +188,49 @@ export function KanbanBoard() {
             />
           ))}
         </div>
+
+        {jobsByStage.CANCELLED?.length ? (
+          <div className="flex-shrink-0 border-t border-slate-200 pt-4 mt-2">
+            <button
+              type="button"
+              onClick={() => setCancelledExpanded((e) => !e)}
+              className="flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors"
+            >
+              <span className="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-red-100 text-red-800">
+                Cancelled ({jobsByStage.CANCELLED.length})
+              </span>
+              <svg
+                className={`w-4 h-4 transition-transform ${cancelledExpanded ? "rotate-180" : ""}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {cancelledExpanded && (
+              <div className="mt-3 flex flex-wrap gap-3">
+                {jobsByStage.CANCELLED.map((job) => (
+                  <div
+                    key={job.id}
+                    onClick={() => setSelectedJob(job)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setSelectedJob(job);
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    className="cursor-pointer hover:ring-2 hover:ring-red-200 rounded-xl transition-shadow"
+                  >
+                    <JobCardContent job={job} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : null}
 
         <DragOverlay dropAnimation={{ duration: 200, easing: "cubic-bezier(0.18, 0.67, 0.6, 1.22)" }}>
           {(() => {

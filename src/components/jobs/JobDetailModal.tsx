@@ -5,6 +5,7 @@ import type { Job, JobService, Stage } from "@/lib/types";
 import { Price } from "@/components/ui/Price";
 
 const STAGE_LABELS: Record<Stage, string> = {
+  BOOKED_IN: "Booked In",
   RECEIVED: "Received",
   WORKING_ON: "Working On",
   WAITING_ON_PARTS: "Waiting on Parts",
@@ -14,6 +15,7 @@ const STAGE_LABELS: Record<Stage, string> = {
 };
 
 const STAGE_COLORS: Record<Stage, string> = {
+  BOOKED_IN: "bg-slate-500",
   RECEIVED: "bg-slate-600",
   WORKING_ON: "bg-amber-600",
   WAITING_ON_PARTS: "bg-yellow-600",

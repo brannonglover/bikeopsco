@@ -6,6 +6,7 @@ import { JobCard } from "./JobCard";
 import type { Job, Stage } from "@/lib/types";
 
 const STAGE_COLORS: Record<Stage, string> = {
+  BOOKED_IN: "bg-slate-500",
   RECEIVED: "bg-slate-600",
   WORKING_ON: "bg-amber-500",
   WAITING_ON_PARTS: "bg-amber-400",
@@ -15,6 +16,7 @@ const STAGE_COLORS: Record<Stage, string> = {
 };
 
 const STAGE_LABELS: Record<Stage, string> = {
+  BOOKED_IN: "Booked In",
   RECEIVED: "Received",
   WORKING_ON: "Working On",
   WAITING_ON_PARTS: "Waiting on Parts",
