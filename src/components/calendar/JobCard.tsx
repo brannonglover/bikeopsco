@@ -23,7 +23,15 @@ function formatDateFull(d: Date | string | null) {
   });
 }
 
-export function JobCardContent({ job }: { job: Job }) {
+export function JobCardContent({
+  job,
+  onAccept,
+  onReject,
+}: {
+  job: Job;
+  onAccept?: (jobId: string) => void;
+  onReject?: (jobId: string) => void;
+}) {
   const address =
     job.deliveryType === "COLLECTION_SERVICE"
       ? job.collectionAddress || job.customer?.address
@@ -104,6 +112,30 @@ export function JobCardContent({ job }: { job: Job }) {
           )}
         </div>
       )}
+      {onAccept && onReject && job.stage === "PENDING_APPROVAL" && (
+        <div className="mt-3 pt-3 border-t border-slate-100 flex gap-2">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onAccept(job.id);
+            }}
+            className="flex-1 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 transition-colors"
+          >
+            Accept
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onReject(job.id);
+            }}
+            className="flex-1 rounded-lg bg-red-100 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-200 transition-colors"
+          >
+            Reject
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -111,9 +143,11 @@ export function JobCardContent({ job }: { job: Job }) {
 interface JobCardProps {
   job: Job;
   onJobClick?: (job: Job) => void;
+  onAccept?: (jobId: string) => void;
+  onReject?: (jobId: string) => void;
 }
 
-export function JobCard({ job, onJobClick }: JobCardProps) {
+export function JobCard({ job, onJobClick, onAccept, onReject }: JobCardProps) {
   const {
     attributes,
     listeners,
@@ -159,7 +193,11 @@ export function JobCard({ job, onJobClick }: JobCardProps) {
       {isDragging ? (
         <div className="rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 p-4 min-h-[120px]" />
       ) : (
-        <JobCardContent job={job} />
+        <JobCardContent
+          job={job}
+          onAccept={onAccept}
+          onReject={onReject}
+        />
       )}
     </div>
   );

@@ -6,6 +6,7 @@ import { JobCard } from "./JobCard";
 import type { Job, Stage } from "@/lib/types";
 
 const STAGE_COLORS: Record<Stage, string> = {
+  PENDING_APPROVAL: "bg-amber-600",
   BOOKED_IN: "bg-slate-500",
   RECEIVED: "bg-slate-600",
   WORKING_ON: "bg-amber-500",
@@ -16,6 +17,7 @@ const STAGE_COLORS: Record<Stage, string> = {
 };
 
 const STAGE_LABELS: Record<Stage, string> = {
+  PENDING_APPROVAL: "Pending approval",
   BOOKED_IN: "Booked In",
   RECEIVED: "Received",
   WORKING_ON: "Working On",
@@ -29,9 +31,11 @@ interface StageColumnProps {
   stage: Stage;
   jobs: Job[];
   onJobClick?: (job: Job) => void;
+  onAccept?: (jobId: string) => void;
+  onReject?: (jobId: string) => void;
 }
 
-export function StageColumn({ stage, jobs, onJobClick }: StageColumnProps) {
+export function StageColumn({ stage, jobs, onJobClick, onAccept, onReject }: StageColumnProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: stage,
   });
@@ -53,7 +57,13 @@ export function StageColumn({ stage, jobs, onJobClick }: StageColumnProps) {
       <div className="p-3 flex flex-col gap-3 overflow-y-auto flex-1 min-h-[400px]">
         <SortableContext items={jobs.map((j) => j.id)} strategy={verticalListSortingStrategy}>
           {jobs.map((job) => (
-            <JobCard key={job.id} job={job} onJobClick={onJobClick} />
+            <JobCard
+              key={job.id}
+              job={job}
+              onJobClick={onJobClick}
+              onAccept={onAccept}
+              onReject={onReject}
+            />
           ))}
         </SortableContext>
       </div>

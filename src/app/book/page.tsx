@@ -135,9 +135,9 @@ function BookForm() {
           <span className="text-4xl" aria-hidden>
             ✓
           </span>
-          <h2 className="mt-2 text-xl font-bold text-slate-900">Booking confirmed!</h2>
+          <h2 className="mt-2 text-xl font-bold text-slate-900">Request submitted!</h2>
           <p className="mt-1 text-slate-600">
-            Check your email for confirmation. You can track your repair status below.
+            We&apos;ll review your booking and email you once it&apos;s confirmed.
           </p>
         </div>
         <a
@@ -148,6 +148,9 @@ function BookForm() {
         >
           Track your repair status
         </a>
+        <p className="text-center text-xs text-slate-500">
+          You&apos;ll get an email when your booking is confirmed.
+        </p>
         {embed && (
           <p className="text-center text-xs text-slate-500">
             You can close this window.

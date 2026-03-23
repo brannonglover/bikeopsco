@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Price } from "@/components/ui/Price";
 
 const STAGE_LABELS: Record<string, string> = {
+  PENDING_APPROVAL: "Awaiting confirmation",
   BOOKED_IN: "Booked In",
   RECEIVED: "Received",
   WORKING_ON: "Working On",
@@ -16,6 +17,7 @@ const STAGE_LABELS: Record<string, string> = {
 };
 
 const STAGE_DESCRIPTIONS: Record<string, string> = {
+  PENDING_APPROVAL: "We're reviewing your booking and will confirm shortly.",
   BOOKED_IN: "Your repair is scheduled.",
   RECEIVED: "Your bike has arrived at the shop.",
   WORKING_ON: "We're working on your bike.",

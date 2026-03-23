@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Stage } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
-import { sendJobEmail, getTemplateForStage } from "@/lib/email";
+import { sendBookingRequestNotification } from "@/lib/email";
 
 const bookSchema = z.object({
   // Customer
@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
 
       const newJob = await tx.job.create({
         data: {
-          stage: Stage.BOOKED_IN,
+          stage: Stage.PENDING_APPROVAL,
           bikeMake: data.bikeMake,
           bikeModel: data.bikeModel,
           customerId: customer.id,
@@ -136,11 +136,10 @@ export async function POST(request: NextRequest) {
       return addCorsHeaders(res, origin);
     }
 
-    const templateSlug = getTemplateForStage("BOOKED_IN", job.deliveryType);
-    const customerEmail = job.customer?.email?.trim();
-    if (customerEmail && templateSlug) {
-      sendJobEmail(templateSlug, customerEmail, job).catch(console.error);
-    }
+    // Notify shop owner of new booking request
+    sendBookingRequestNotification(job).catch((e) =>
+      console.error("[Widget book] Staff notification failed:", e)
+    );
 
     const res = NextResponse.json({
       id: job.id,

@@ -130,6 +130,98 @@ export async function sendJobEmail(
   }
 }
 
+export async function sendBookingRequestNotification(
+  job: {
+    id: string;
+    bikeMake: string;
+    bikeModel: string;
+    deliveryType: string;
+    dropOffDate: Date | string | null;
+    pickupDate: Date | string | null;
+    customerNotes?: string | null;
+    customer: { firstName: string; lastName: string | null; email: string | null; phone: string | null } | null;
+    jobServices?: { service: { name: string }; quantity: number }[];
+  }
+): Promise<{ ok: boolean; error?: string }> {
+  const resend = getResend();
+  if (!resend) {
+    return { ok: false, error: "Email not configured" };
+  }
+
+  const notifyEmail =
+    process.env.SHOP_NOTIFY_EMAIL?.trim() || process.env.ADMIN_EMAIL?.trim();
+  if (!notifyEmail) {
+    console.warn("SHOP_NOTIFY_EMAIL and ADMIN_EMAIL not set, skipping booking notification");
+    return { ok: false, error: "No notification email configured" };
+  }
+
+  const baseUrl = getAppUrl();
+  const calendarUrl = baseUrl ? `${baseUrl}/calendar` : "";
+  const shopName = process.env.SHOP_NAME || "Basement Bike Mechanic";
+  const customerName = job.customer
+    ? job.customer.lastName
+      ? `${job.customer.firstName} ${job.customer.lastName}`
+      : job.customer.firstName
+    : "Unknown";
+  const servicesList =
+    job.jobServices
+      ?.map((js) => `${js.service.name}${js.quantity > 1 ? ` × ${js.quantity}` : ""}`)
+      .join(", ") || "None specified";
+  const dropOff = job.dropOffDate
+    ? new Date(job.dropOffDate).toLocaleDateString("en-US", {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+    : "Not set";
+  const pickup = job.pickupDate
+    ? new Date(job.pickupDate).toLocaleDateString("en-US", {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+    : "Not set";
+
+  const subject = `New booking request: ${job.bikeMake} ${job.bikeModel}`;
+  const bodyHtml = `
+<p>A new booking request has been submitted and is awaiting your approval.</p>
+
+<p><strong>Customer:</strong> ${customerName}<br/>
+<strong>Email:</strong> ${job.customer?.email ?? "—"}<br/>
+<strong>Phone:</strong> ${job.customer?.phone ?? "—"}</p>
+
+<p><strong>Bike:</strong> ${job.bikeMake} ${job.bikeModel}<br/>
+<strong>Delivery:</strong> ${job.deliveryType === "COLLECTION_SERVICE" ? "Collection" : "Drop-off at shop"}</p>
+
+<p><strong>Preferred drop-off:</strong> ${dropOff}<br/>
+<strong>Preferred pickup:</strong> ${pickup}</p>
+
+<p><strong>Services:</strong> ${servicesList}</p>
+
+${job.customerNotes ? `<p><strong>Notes:</strong> ${job.customerNotes}</p>` : ""}
+
+<p><a href="${calendarUrl}" style="display: inline-block; padding: 12px 24px; background-color: #f59e0b; color: white !important; text-decoration: none; font-weight: 600; border-radius: 8px;">Review & accept or reject</a></p>
+
+<p style="color: #64748b; font-size: 12px;">— ${shopName}</p>
+`;
+
+  try {
+    const { error } = await resend.emails.send({
+      from: getFromEmail(),
+      to: notifyEmail,
+      subject,
+      html: bodyHtml,
+    });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (e) {
+    const err = e instanceof Error ? e.message : "Unknown error";
+    return { ok: false, error: err };
+  }
+}
+
 export function getTemplateForStage(
   stage: string,
   deliveryType: string

@@ -19,6 +19,7 @@ import { useJobNotifications } from "@/hooks/useJobNotifications";
 import type { Job, Stage } from "@/lib/types";
 
 const STAGES: Stage[] = [
+  "PENDING_APPROVAL",
   "BOOKED_IN",
   "RECEIVED",
   "WORKING_ON",
@@ -56,6 +57,54 @@ export function KanbanBoard() {
   const handleJobCreated = (job: Job) => {
     setJobs((prev) => [job, ...prev]);
   };
+
+  const handleAccept = useCallback(
+    async (jobId: string) => {
+      try {
+        const res = await fetch(`/api/jobs/${jobId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ stage: "BOOKED_IN" }),
+        });
+        if (res.ok) {
+          setJobs((prev) =>
+            prev.map((j) =>
+              j.id === jobId ? { ...j, stage: "BOOKED_IN" as Stage } : j
+            )
+          );
+        }
+      } catch (e) {
+        console.error("Failed to accept job", e);
+      }
+    },
+    []
+  );
+
+  const handleReject = useCallback(
+    async (jobId: string) => {
+      try {
+        const res = await fetch(`/api/jobs/${jobId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            stage: "CANCELLED",
+            cancellationReason: "Booking declined by shop",
+          }),
+        });
+        if (res.ok) {
+          setJobs((prev) =>
+            prev.map((j) =>
+              j.id === jobId ? { ...j, stage: "CANCELLED" as Stage } : j
+            )
+          );
+          if (selectedJob?.id === jobId) setSelectedJob(null);
+        }
+      } catch (e) {
+        console.error("Failed to reject job", e);
+      }
+    },
+    [selectedJob?.id]
+  );
 
   useEffect(() => {
     fetchJobs();
@@ -187,6 +236,8 @@ export function KanbanBoard() {
               stage={stage}
               jobs={jobsByStage[stage] || []}
               onJobClick={(job) => setSelectedJob(job)}
+              onAccept={stage === "PENDING_APPROVAL" ? handleAccept : undefined}
+              onReject={stage === "PENDING_APPROVAL" ? handleReject : undefined}
             />
           ))}
         </div>

@@ -92,6 +92,7 @@ model JobService {
 }
 
 enum Stage {
+  PENDING_APPROVAL
   BOOKED_IN
   RECEIVED
   WORKING_ON
