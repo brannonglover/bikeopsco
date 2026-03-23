@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { Conversation, ChatMessage, Customer } from "@/lib/types";
+import { useChatNotifications } from "@/hooks/useChatNotifications";
 
 const POLL_INTERVAL_MS = 3000;
 
@@ -138,6 +139,8 @@ export default function ChatPage() {
     const id = setInterval(() => fetchMessages(selectedId), POLL_INTERVAL_MS);
     return () => clearInterval(id);
   }, [selectedId, fetchMessages]);
+
+  useChatNotifications(conversations, fetchConversations, selectedId);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
