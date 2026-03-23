@@ -1,8 +1,87 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import type { Job, JobProduct, JobService, Stage } from "@/lib/types";
 import { Price } from "@/components/ui/Price";
+
+interface Bike {
+  id: string;
+  make: string;
+  model: string;
+  nickname: string | null;
+  imageUrl: string | null;
+}
+
+function JobBikeSection({ job }: { job: Job }) {
+  const [customerBikes, setCustomerBikes] = useState<Bike[]>([]);
+
+  const fetchBikes = useCallback(async (customerId: string) => {
+    try {
+      const res = await fetch(`/api/customers/${customerId}/bikes`);
+      const data = await res.json();
+      setCustomerBikes(Array.isArray(data) ? data : []);
+    } catch {
+      setCustomerBikes([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (job.customer?.id) {
+      fetchBikes(job.customer.id);
+    } else {
+      setCustomerBikes([]);
+    }
+  }, [job.customer?.id, fetchBikes]);
+
+  const match = (make: string, model: string) => (b: Bike) =>
+    b.make.trim().toLowerCase() === make.trim().toLowerCase() &&
+    b.model.trim().toLowerCase() === model.trim().toLowerCase();
+
+  const matchedBike = customerBikes.find(match(job.bikeMake, job.bikeModel));
+
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">Bike</h3>
+      <div className="flex gap-4">
+        {matchedBike?.imageUrl ? (
+          <img
+            src={matchedBike.imageUrl}
+            alt={`${job.bikeMake} ${job.bikeModel}`}
+            className="w-24 h-24 object-cover rounded-lg border border-slate-200 flex-shrink-0"
+          />
+        ) : (
+          <div className="w-24 h-24 rounded-lg bg-slate-100 border border-slate-200 flex-shrink-0 flex items-center justify-center">
+            <svg
+              className="w-10 h-10 text-slate-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14"
+              />
+            </svg>
+          </div>
+        )}
+        <div className="min-w-0">
+          <p className="font-medium text-slate-900">
+            {matchedBike?.nickname
+              ? `${matchedBike.nickname}`
+              : `${job.bikeMake} ${job.bikeModel}`}
+          </p>
+          {matchedBike?.nickname && (
+            <p className="text-sm text-slate-500">
+              {job.bikeMake} {job.bikeModel}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const STAGE_LABELS: Record<Stage, string> = {
   PENDING_APPROVAL: "Pending approval",
@@ -553,6 +632,8 @@ export function JobDetailModal({ job, isOpen, onClose, onJobUpdated, onJobDelete
               )}
             </div>
           )}
+
+          <JobBikeSection job={job} />
 
           <div>
             <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">Dates</h3>

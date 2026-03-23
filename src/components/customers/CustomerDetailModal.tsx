@@ -1,8 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { formatCustomerName } from "@/lib/customer";
 import type L from "leaflet";
+
+interface Bike {
+  id: string;
+  make: string;
+  model: string;
+  nickname: string | null;
+  imageUrl: string | null;
+  customerId: string;
+}
 
 interface Customer {
   id: string;
@@ -20,6 +29,459 @@ interface CustomerDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   onEdit?: (customer: Customer) => void;
+}
+
+function BikeImageSearch({
+  make,
+  model,
+  onSelect,
+  disabled,
+}: {
+  make: string;
+  model: string;
+  onSelect: (url: string) => void;
+  disabled?: boolean;
+}) {
+  const [searching, setSearching] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [results, setResults] = useState<
+    Array<{ id: string; thumbUrl: string; fullUrl: string; source?: string }>
+  >([]);
+  const [provider, setProvider] = useState<"serper" | "unsplash" | null>(null);
+  const [showResults, setShowResults] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const hasQuery = make.trim() || model.trim();
+
+  useEffect(() => {
+    if (!showResults) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setShowResults(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showResults]);
+
+  const handleSearch = async () => {
+    if (!hasQuery) return;
+    setSearching(true);
+    setError(null);
+    setResults([]);
+    setProvider(null);
+    setShowResults(true);
+    try {
+      const res = await fetch(
+        `/api/bikes/search-image?make=${encodeURIComponent(make.trim())}&model=${encodeURIComponent(model.trim())}`
+      );
+      const data = await res.json();
+      if (res.ok && Array.isArray(data.results)) {
+        setResults(data.results);
+        setProvider(data.provider ?? null);
+        if (data.results.length === 0) setError("No images found. Try different make/model or add a photo manually.");
+      } else {
+        setError(data.error || "Search failed. Add a photo manually.");
+      }
+    } catch {
+      setError("Search failed. Add a photo manually.");
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handlePick = async (fullUrl: string) => {
+    setImporting(true);
+    try {
+      const res = await fetch("/api/bikes/import-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: fullUrl }),
+      });
+      const data = await res.json();
+      if (res.ok && data.url) {
+        onSelect(data.url);
+        setShowResults(false);
+      } else {
+        alert(data.error || "Could not save image");
+      }
+    } catch {
+      alert("Could not save image");
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <button
+        type="button"
+        onClick={handleSearch}
+        disabled={disabled || !hasQuery || searching}
+        className="text-xs text-indigo-600 hover:text-indigo-700 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {searching ? "Searching..." : "Search for image online"}
+      </button>
+      {showResults && (
+        <div className="absolute left-0 top-full mt-2 z-20 w-72 p-3 bg-white border border-slate-200 rounded-lg shadow-lg">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-xs font-medium text-slate-600">Search results</span>
+            <button
+              type="button"
+              onClick={() => setShowResults(false)}
+              className="text-slate-400 hover:text-slate-600 text-lg leading-none"
+              aria-label="Close"
+            >
+              ×
+            </button>
+          </div>
+          {searching ? (
+            <p className="text-sm text-slate-500 py-4">Searching Unsplash...</p>
+          ) : error ? (
+            <p className="text-sm text-slate-600 py-2">{error}</p>
+          ) : (
+            <div className="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto">
+              {results.map((r) => (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => handlePick(r.fullUrl)}
+                  disabled={importing}
+                  className="aspect-square rounded overflow-hidden border-2 border-transparent hover:border-indigo-500 focus:border-indigo-500 transition-colors"
+                >
+                  <img
+                    src={r.thumbUrl}
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
+                </button>
+              ))}
+            </div>
+          )}
+          {results.length > 0 && provider && (
+            <p className="text-[10px] text-slate-400 mt-2">
+              {provider === "serper" ? (
+                "Images from web search"
+              ) : (
+                <>
+                  Photos from{" "}
+                  <a href="https://unsplash.com" target="_blank" rel="noopener noreferrer" className="underline">
+                    Unsplash
+                  </a>
+                </>
+              )}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AddBikeForm({
+  customerId,
+  onAdded,
+  onCancel,
+}: {
+  customerId: string;
+  onAdded: (bike: Bike) => void;
+  onCancel: () => void;
+}) {
+  const [make, setMake] = useState("");
+  const [model, setModel] = useState("");
+  const [nickname, setNickname] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/bikes/upload", { method: "POST", body: formData });
+      const data = await res.json();
+      if (res.ok && data.url) setImageUrl(data.url);
+      else alert(data.error || "Upload failed");
+    } catch {
+      alert("Upload failed");
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!make.trim() || !model.trim()) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/customers/${customerId}/bikes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          make: make.trim(),
+          model: model.trim(),
+          nickname: nickname.trim() || null,
+          imageUrl: imageUrl.trim() || null,
+        }),
+      });
+      if (res.ok) {
+        const bike = await res.json();
+        onAdded(bike);
+      } else {
+        const err = await res.json();
+        alert(err.error || "Failed to add bike");
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-2 p-3 bg-slate-50 rounded-lg">
+      <div className="flex gap-3">
+        <div className="flex-shrink-0">
+          {imageUrl ? (
+            <div className="relative">
+              <img
+                src={imageUrl}
+                alt="Bike"
+                className="w-20 h-20 object-cover rounded-lg border border-slate-200"
+              />
+              <button
+                type="button"
+                onClick={() => setImageUrl("")}
+                className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full"
+                aria-label="Remove image"
+              >
+                ×
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-1">
+              <label className="flex items-center justify-center w-20 h-20 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors">
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/gif,image/webp"
+                  className="hidden"
+                  disabled={uploading}
+                  onChange={handleImageUpload}
+                />
+                <span className="text-xs text-slate-500 text-center px-1">
+                  {uploading ? "..." : "Add photo"}
+                </span>
+              </label>
+              <BikeImageSearch
+                make={make}
+                model={model}
+                onSelect={setImageUrl}
+                disabled={uploading}
+              />
+            </div>
+          )}
+        </div>
+        <div className="flex-1 min-w-0 space-y-2">
+          <input
+            type="text"
+            value={make}
+            onChange={(e) => setMake(e.target.value)}
+            placeholder="Make (e.g. Trek)"
+            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+            required
+          />
+          <input
+            type="text"
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            placeholder="Model (e.g. Domane SL 6)"
+            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+            required
+          />
+          <input
+            type="text"
+            value={nickname}
+            onChange={(e) => setNickname(e.target.value)}
+            placeholder="Nickname (optional)"
+            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+          />
+        </div>
+      </div>
+      <div className="flex gap-2 pt-2">
+        <button
+          type="submit"
+          disabled={saving || !make.trim() || !model.trim()}
+          className="px-3 py-1.5 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+        >
+          {saving ? "Adding..." : "Add"}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-3 py-1.5 text-slate-600 text-sm hover:text-slate-800"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function EditBikeForm({
+  bike,
+  onSaved,
+  onCancel,
+}: {
+  bike: Bike;
+  onSaved: (bike: Bike) => void;
+  onCancel: () => void;
+}) {
+  const [make, setMake] = useState(bike.make);
+  const [model, setModel] = useState(bike.model);
+  const [nickname, setNickname] = useState(bike.nickname ?? "");
+  const [imageUrl, setImageUrl] = useState(bike.imageUrl ?? "");
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/bikes/upload", { method: "POST", body: formData });
+      const data = await res.json();
+      if (res.ok && data.url) setImageUrl(data.url);
+      else alert(data.error || "Upload failed");
+    } catch {
+      alert("Upload failed");
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!make.trim() || !model.trim()) return;
+    setSaving(true);
+    try {
+      const res = await fetch(
+        `/api/customers/${bike.customerId}/bikes/${bike.id}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            make: make.trim(),
+            model: model.trim(),
+            nickname: nickname.trim() || null,
+            imageUrl: imageUrl.trim() || null,
+          }),
+        }
+      );
+      if (res.ok) {
+        const updated = await res.json();
+        onSaved(updated);
+      } else {
+        const err = await res.json();
+        alert(err.error || "Failed to update bike");
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-2 p-3 bg-slate-50 rounded-lg">
+      <div className="flex gap-3">
+        <div className="flex-shrink-0">
+          {imageUrl ? (
+            <div className="relative">
+              <img
+                src={imageUrl}
+                alt="Bike"
+                className="w-20 h-20 object-cover rounded-lg border border-slate-200"
+              />
+              <button
+                type="button"
+                onClick={() => setImageUrl("")}
+                className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full"
+                aria-label="Remove image"
+              >
+                ×
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-1">
+              <label className="flex items-center justify-center w-20 h-20 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors">
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/gif,image/webp"
+                  className="hidden"
+                  disabled={uploading}
+                  onChange={handleImageUpload}
+                />
+                <span className="text-xs text-slate-500 text-center px-1">
+                  {uploading ? "..." : "Add photo"}
+                </span>
+              </label>
+              <BikeImageSearch
+                make={make}
+                model={model}
+                onSelect={setImageUrl}
+                disabled={uploading}
+              />
+            </div>
+          )}
+        </div>
+        <div className="flex-1 min-w-0 space-y-2">
+          <input
+            type="text"
+            value={make}
+            onChange={(e) => setMake(e.target.value)}
+            placeholder="Make"
+            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+            required
+          />
+          <input
+            type="text"
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            placeholder="Model"
+            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+            required
+          />
+          <input
+            type="text"
+            value={nickname}
+            onChange={(e) => setNickname(e.target.value)}
+            placeholder="Nickname (optional)"
+            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+          />
+        </div>
+      </div>
+      <div className="flex gap-2 pt-2">
+        <button
+          type="submit"
+          disabled={saving || !make.trim() || !model.trim()}
+          className="px-3 py-1.5 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+        >
+          {saving ? "Saving..." : "Save"}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-3 py-1.5 text-slate-600 text-sm hover:text-slate-800"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
 }
 
 function CustomerMap({ address }: { address: string }) {
@@ -155,6 +617,34 @@ export function CustomerDetailModal({
   onClose,
   onEdit,
 }: CustomerDetailModalProps) {
+  const [bikes, setBikes] = useState<Bike[]>([]);
+  const [bikesLoading, setBikesLoading] = useState(false);
+  const [showAddBike, setShowAddBike] = useState(false);
+  const [editingBike, setEditingBike] = useState<Bike | null>(null);
+
+  const fetchBikes = useCallback(async (customerId: string) => {
+    setBikesLoading(true);
+    try {
+      const res = await fetch(`/api/customers/${customerId}/bikes`);
+      const data = await res.json();
+      setBikes(Array.isArray(data) ? data : []);
+    } catch {
+      setBikes([]);
+    } finally {
+      setBikesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (customer?.id) {
+      fetchBikes(customer.id);
+      setShowAddBike(false);
+      setEditingBike(null);
+    } else {
+      setBikes([]);
+    }
+  }, [customer?.id, fetchBikes]);
+
   const handleBackdropClick = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget) onClose();
   };
@@ -227,6 +717,127 @@ export function CustomerDetailModal({
                 </div>
               )}
 
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide">
+                    Bikes
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAddBike(true);
+                      setEditingBike(null);
+                    }}
+                    className="text-sm font-medium text-indigo-600 hover:text-indigo-700"
+                  >
+                    + Add bike
+                  </button>
+                </div>
+                {bikesLoading ? (
+                  <p className="text-slate-500 text-sm py-2">Loading bikes...</p>
+                ) : showAddBike ? (
+                  <AddBikeForm
+                    customerId={customer.id}
+                    onAdded={(bike) => {
+                      setBikes((prev) => [...prev, bike]);
+                      setShowAddBike(false);
+                    }}
+                    onCancel={() => setShowAddBike(false)}
+                  />
+                ) : editingBike ? (
+                  <EditBikeForm
+                    bike={editingBike}
+                    onSaved={(bike) => {
+                      setBikes((prev) =>
+                        prev.map((b) => (b.id === bike.id ? bike : b))
+                      );
+                      setEditingBike(null);
+                    }}
+                    onCancel={() => setEditingBike(null)}
+                  />
+                ) : bikes.length === 0 ? (
+                  <p className="text-slate-500 text-sm py-2">
+                    No bikes added yet. Click &quot;Add bike&quot; to add one.
+                  </p>
+                ) : (
+                  <ul className="space-y-2">
+                    {bikes.map((bike) => (
+                      <li
+                        key={bike.id}
+                        className="flex items-center gap-3 py-2 px-3 bg-slate-50 rounded-lg"
+                      >
+                        {bike.imageUrl ? (
+                          <img
+                            src={bike.imageUrl}
+                            alt={`${bike.make} ${bike.model}`}
+                            className="w-12 h-12 object-cover rounded-lg flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 rounded-lg bg-slate-200 flex-shrink-0 flex items-center justify-center">
+                            <svg
+                              className="w-6 h-6 text-slate-400"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14"
+                              />
+                            </svg>
+                          </div>
+                        )}
+                        <span className="font-medium text-slate-900 flex-1 min-w-0">
+                          {bike.nickname
+                            ? `${bike.nickname}`
+                            : `${bike.make} ${bike.model}`}
+                          {bike.nickname && (
+                            <span className="text-slate-500 font-normal ml-1">
+                              ({bike.make} {bike.model})
+                            </span>
+                          )}
+                        </span>
+                        <div className="flex gap-1 flex-shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingBike(bike);
+                              setShowAddBike(false);
+                            }}
+                            className="text-slate-500 hover:text-indigo-600 text-sm px-2 py-1"
+                            aria-label="Edit bike"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (!confirm("Remove this bike from the profile?"))
+                                return;
+                              const res = await fetch(
+                                `/api/customers/${customer.id}/bikes/${bike.id}`,
+                                { method: "DELETE" }
+                              );
+                              if (res.ok) {
+                                setBikes((prev) =>
+                                  prev.filter((b) => b.id !== bike.id)
+                                );
+                              }
+                            }}
+                            className="text-slate-500 hover:text-red-600 text-sm px-2 py-1"
+                            aria-label="Delete bike"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
               {customer.notes && (
                 <div>
                   <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">
@@ -241,7 +852,10 @@ export function CustomerDetailModal({
               {!customer.email &&
                 !customer.phone &&
                 !customer.address &&
-                !customer.notes && (
+                !customer.notes &&
+                bikes.length === 0 &&
+                !showAddBike &&
+                !editingBike && (
                   <p className="text-slate-500 py-4">
                     No additional details for this customer.
                   </p>

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { put } from "@vercel/blob";
 import { BLOB_ACCESS, blobDisplayUrl } from "@/lib/blob";
-import { prisma } from "@/lib/db";
 
 const MAX_SIZE_MB = 5;
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
@@ -11,7 +10,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error:
-          "Image upload is not configured. Add BLOB_READ_WRITE_TOKEN to your .env.",
+          "Image upload is not configured. Add BLOB_READ_WRITE_TOKEN to your .env (Vercel Dashboard → Storage → Blob).",
       },
       { status: 503 }
     );
@@ -48,22 +47,16 @@ export async function POST(request: NextRequest) {
       .replace(/-+/g, "-")
       .replace(/^-|-$/g, "");
     const ext = file.name.split(".").pop() || "jpg";
-    const path = `chat/${slug}-${Date.now()}.${ext}`;
+    const path = `bikes/${slug}-${Date.now()}.${ext}`;
 
-    const blob = await put(path, file, { access: BLOB_ACCESS });
-    const url = blobDisplayUrl(blob.url, blob.pathname);
-
-    const attachment = await prisma.messageAttachment.create({
-      data: {
-        url,
-        filename: file.name,
-        mimeType: file.type,
-      },
+    const blob = await put(path, file, {
+      access: BLOB_ACCESS,
     });
 
-    return NextResponse.json(attachment);
+    const url = blobDisplayUrl(blob.url, blob.pathname);
+    return NextResponse.json({ url });
   } catch (error) {
-    console.error("Chat upload error:", error);
+    console.error("Bike image upload error:", error);
     return NextResponse.json(
       { error: "Failed to upload image" },
       { status: 500 }

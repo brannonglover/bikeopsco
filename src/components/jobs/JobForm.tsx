@@ -45,6 +45,13 @@ interface Customer {
   address: string | null;
 }
 
+interface Bike {
+  id: string;
+  make: string;
+  model: string;
+  nickname: string | null;
+}
+
 interface Service {
   id: string;
   name: string;
@@ -62,6 +69,8 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
   const [showDropdown, setShowDropdown] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [customerBikes, setCustomerBikes] = useState<Bike[]>([]);
+  const [selectedBikeId, setSelectedBikeId] = useState<string>("");
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -69,6 +78,7 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
     handleSubmit,
     watch,
     control,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -119,6 +129,17 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
     const timer = setTimeout(() => searchCustomers(customerInput), 200);
     return () => clearTimeout(timer);
   }, [customerInput, searchCustomers]);
+
+  useEffect(() => {
+    if (customerId) {
+      fetch(`/api/customers/${customerId}/bikes`)
+        .then((res) => res.json())
+        .then((data) => setCustomerBikes(Array.isArray(data) ? data : []));
+    } else {
+      setCustomerBikes([]);
+    }
+    setSelectedBikeId("");
+  }, [customerId]);
 
   useEffect(() => {
     fetch("/api/services")
@@ -272,33 +293,6 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
         <h1 className="text-2xl font-bold text-slate-900 mb-6">Create Job</h1>
       )}
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 min-w-0">
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
-            Bike Make
-          </label>
-          <input
-            {...register("bikeMake")}
-            className="w-full min-w-0 px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
-            placeholder="e.g. Trek, Specialized"
-          />
-          {errors.bikeMake && (
-            <p className="text-red-600 text-sm mt-1">{errors.bikeMake.message}</p>
-          )}
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
-            Bike Model
-          </label>
-          <input
-            {...register("bikeModel")}
-            className="w-full min-w-0 px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
-            placeholder="e.g. Domane SL 6"
-          />
-          {errors.bikeModel && (
-            <p className="text-red-600 text-sm mt-1">{errors.bikeModel.message}</p>
-          )}
-        </div>
-
         <div className="relative min-w-0" ref={dropdownRef}>
           <label className="block text-sm font-medium text-slate-700 mb-1">
             Customer
@@ -363,6 +357,62 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
                 </>
               )}
             </div>
+          )}
+        </div>
+
+        {customerBikes.length > 0 && (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Use saved bike
+            </label>
+            <select
+              value={selectedBikeId}
+              onChange={(e) => {
+                const val = e.target.value;
+                setSelectedBikeId(val);
+                if (val === "") return;
+                const bike = customerBikes.find((b) => b.id === val);
+                if (bike) {
+                  setValue("bikeMake", bike.make);
+                  setValue("bikeModel", bike.model);
+                }
+              }}
+              className="w-full min-w-0 px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none bg-white"
+            >
+              <option value="">Select a bike...</option>
+              {customerBikes.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.nickname ? `${b.nickname} (${b.make} ${b.model})` : `${b.make} ${b.model}`}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">
+            Bike Make
+          </label>
+          <input
+            {...register("bikeMake")}
+            className="w-full min-w-0 px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+            placeholder="e.g. Trek, Specialized"
+          />
+          {errors.bikeMake && (
+            <p className="text-red-600 text-sm mt-1">{errors.bikeMake.message}</p>
+          )}
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">
+            Bike Model
+          </label>
+          <input
+            {...register("bikeModel")}
+            className="w-full min-w-0 px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+            placeholder="e.g. Domane SL 6"
+          />
+          {errors.bikeModel && (
+            <p className="text-red-600 text-sm mt-1">{errors.bikeModel.message}</p>
           )}
         </div>
 

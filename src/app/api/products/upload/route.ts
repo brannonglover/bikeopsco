@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { put } from "@vercel/blob";
+import { BLOB_ACCESS, blobDisplayUrl } from "@/lib/blob";
 
 const MAX_SIZE_MB = 5;
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
@@ -49,10 +50,11 @@ export async function POST(request: NextRequest) {
     const path = `products/${slug}-${Date.now()}.${ext}`;
 
     const blob = await put(path, file, {
-      access: "public",
+      access: BLOB_ACCESS,
     });
 
-    return NextResponse.json({ url: blob.url });
+    const url = blobDisplayUrl(blob.url, blob.pathname);
+    return NextResponse.json({ url });
   } catch (error) {
     console.error("Product image upload error:", error);
     return NextResponse.json(
