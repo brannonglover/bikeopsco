@@ -36,7 +36,7 @@ function LoginForm() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-mesh p-4">
+    <div className="fixed inset-0 flex flex-col items-center justify-center bg-mesh p-4">
       <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-8 shadow-lg">
         <div className="mb-6 flex justify-center">
           <Image src="/bbm-logo-wo.png" alt="Bike Ops" width={200} height={67} />
@@ -93,7 +93,7 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="flex min-h-screen items-center justify-center">Loading…</div>}>
+    <Suspense fallback={<div className="fixed inset-0 flex items-center justify-center bg-mesh">Loading…</div>}>
       <LoginForm />
     </Suspense>
   );
