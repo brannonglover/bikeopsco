@@ -9,7 +9,9 @@ import { SidebarNav } from "@/components/SidebarNav";
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isPublicCustomerPage =
-    pathname?.startsWith("/pay/") || pathname?.startsWith("/status/");
+    pathname?.startsWith("/pay/") ||
+    pathname?.startsWith("/status/") ||
+    pathname?.startsWith("/chat/c");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Close mobile menu on route change (e.g. after clicking a link)
@@ -30,6 +32,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [mobileMenuOpen]);
 
   if (isPublicCustomerPage) {
+    const isChatPage = pathname?.startsWith("/chat/c");
     return (
       <div className="min-h-screen flex flex-col">
         <header className="flex-shrink-0 py-5 px-4 sm:py-6 sm:px-6 border-b border-slate-200 bg-white flex justify-center">
@@ -37,7 +40,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Image src="/bbm-logo-wo.png" alt="Bike Ops" width={320} height={120} className="h-20 w-auto sm:h-24 md:h-32" priority />
           </Link>
         </header>
-        <main className="flex-1 flex items-center justify-center p-4 sm:p-6">{children}</main>
+        <main
+          className={
+            isChatPage
+              ? "flex-1 flex flex-col min-h-0"
+              : "flex-1 flex items-center justify-center p-4 sm:p-6"
+          }
+        >
+          {children}
+        </main>
       </div>
     );
   }

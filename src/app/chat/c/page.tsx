@@ -1,0 +1,341 @@
+"use client";
+
+import Image from "next/image";
+import { useState, useEffect, useRef, useCallback } from "react";
+import type { ChatMessage } from "@/lib/types";
+
+const POLL_INTERVAL_MS = 3000;
+
+function formatTime(dateStr: string) {
+  const d = new Date(dateStr);
+  const now = new Date();
+  const isToday = d.toDateString() === now.toDateString();
+  if (isToday) {
+    return d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  }
+  return d.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+export default function CustomerChatPage() {
+  const [status, setStatus] = useState<"loading" | "login" | "chat">("loading");
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginSending, setLoginSending] = useState(false);
+  const [loginMessage, setLoginMessage] = useState<string | null>(null);
+  const [customerName, setCustomerName] = useState("");
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [inputText, setInputText] = useState("");
+  const [pendingImages, setPendingImages] = useState<{ id: string; url: string; filename: string }[]>([]);
+  const [sending, setSending] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const fetchMessages = useCallback(async () => {
+    const res = await fetch("/api/chat/conversation/messages", { credentials: "include" });
+    if (res.ok) {
+      const data = await res.json();
+      setMessages(data);
+    }
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+    const error = params.get("error");
+    if (error === "expired") {
+      setLoginMessage("That sign-in link has expired. Please request a new one below.");
+    } else if (error === "invalid") {
+      setLoginMessage("Invalid sign-in link. Please request a new one below.");
+    }
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/chat/me", { credentials: "include" })
+      .then((res) => {
+        if (res.ok) {
+          return res.json().then((data) => {
+            setCustomerName(data.lastName ? `${data.firstName} ${data.lastName}` : data.firstName);
+            setStatus("chat");
+          });
+        }
+        setStatus("login");
+      })
+      .catch(() => setStatus("login"));
+  }, []);
+
+  useEffect(() => {
+    if (status === "chat") {
+      fetchMessages();
+    }
+  }, [status, fetchMessages]);
+
+  useEffect(() => {
+    if (status !== "chat") return;
+    const id = setInterval(fetchMessages, POLL_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [status, fetchMessages]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!loginEmail.trim()) return;
+    setLoginSending(true);
+    setLoginMessage(null);
+    try {
+      const res = await fetch("/api/chat/request-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: loginEmail.trim() }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setLoginMessage(data.message ?? "Check your inbox for a sign-in link.");
+      } else {
+        setLoginMessage(data.error ?? "Something went wrong. Please try again.");
+      }
+    } catch {
+      setLoginMessage("Something went wrong. Please try again.");
+    } finally {
+      setLoginSending(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    await fetch("/api/chat/logout", { method: "POST", credentials: "include" });
+    setStatus("login");
+    setMessages([]);
+    setLoginMessage(null);
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const res = await fetch("/api/chat/upload", { method: "POST", body: formData, credentials: "include" });
+      if (res.ok) {
+        const att = await res.json();
+        setPendingImages((prev) => [...prev, { id: att.id, url: att.url, filename: att.filename }]);
+      }
+    } catch {
+      // ignore
+    }
+    e.target.value = "";
+  };
+
+  const handleSend = async () => {
+    const hasText = inputText.trim().length > 0;
+    const hasImages = pendingImages.length > 0;
+    if (!hasText && !hasImages) return;
+
+    setSending(true);
+    try {
+      const res = await fetch("/api/chat/conversation/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          body: inputText.trim() || null,
+          attachmentIds: pendingImages.map((p) => p.id),
+        }),
+      });
+      if (res.ok) {
+        const newMsg = await res.json();
+        setMessages((prev) => [...prev, newMsg]);
+        setInputText("");
+        setPendingImages([]);
+      }
+    } finally {
+      setSending(false);
+    }
+  };
+
+  if (status === "loading") {
+    return (
+      <div className="flex-1 flex items-center justify-center p-8">
+        <p className="text-slate-500">Loading…</p>
+      </div>
+    );
+  }
+
+  if (status === "login") {
+    return (
+      <div className="flex-1 flex items-center justify-center p-6">
+        <div className="w-full max-w-md">
+          <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h1 className="text-xl font-semibold text-slate-900 mb-2">Chat with us</h1>
+            <p className="text-slate-600 text-sm mb-6">
+              Enter the email address we have on file and we&apos;ll send you a sign-in link. No password needed.
+            </p>
+            <form onSubmit={handleLogin} className="space-y-4">
+              <input
+                type="email"
+                value={loginEmail}
+                onChange={(e) => setLoginEmail(e.target.value)}
+                placeholder="your@email.com"
+                required
+                className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+              />
+              <button
+                type="submit"
+                disabled={loginSending}
+                className="w-full rounded-lg bg-emerald-600 px-4 py-3 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loginSending ? "Sending…" : "Send sign-in link"}
+              </button>
+            </form>
+            {loginMessage && (
+              <p className="mt-4 text-sm text-slate-600" role="alert">
+                {loginMessage}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Chat UI
+  return (
+    <div className="flex-1 flex flex-col min-h-0 p-4 sm:p-6">
+      <div className="max-w-2xl w-full mx-auto flex flex-col flex-1 min-h-0 rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <header className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50 flex-shrink-0">
+          <h2 className="font-semibold text-slate-900">
+            Chat with us
+            {customerName && (
+              <span className="font-normal text-slate-500 ml-2">· Hi {customerName}</span>
+            )}
+          </h2>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="text-sm text-slate-500 hover:text-slate-700"
+          >
+            Sign out
+          </button>
+        </header>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {messages.map((msg) => (
+            <div
+              key={msg.id}
+              className={`flex ${msg.sender === "CUSTOMER" ? "justify-end" : "justify-start"}`}
+            >
+              <div
+                className={`max-w-[85%] rounded-2xl px-4 py-2 ${
+                  msg.sender === "CUSTOMER"
+                    ? "bg-emerald-600 text-white rounded-br-md"
+                    : "bg-slate-100 text-slate-900 rounded-bl-md"
+                }`}
+              >
+                {msg.attachments?.length ? (
+                  <div className="space-y-2 mb-2">
+                    {msg.attachments.map((att) => (
+                      <a
+                        key={att.id}
+                        href={att.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block"
+                      >
+                        <Image
+                          src={att.url}
+                          alt={att.filename}
+                          width={320}
+                          height={192}
+                          className="rounded-lg max-h-48 object-cover w-full"
+                        />
+                      </a>
+                    ))}
+                  </div>
+                ) : null}
+                {msg.body ? <p className="whitespace-pre-wrap break-words">{msg.body}</p> : null}
+                <p
+                  className={`text-xs mt-1 ${
+                    msg.sender === "CUSTOMER" ? "text-emerald-200" : "text-slate-500"
+                  }`}
+                >
+                  {formatTime(msg.createdAt)}
+                </p>
+              </div>
+            </div>
+          ))}
+          <div ref={messagesEndRef} />
+        </div>
+
+        <div className="flex-shrink-0 p-4 border-t border-slate-200 bg-slate-50">
+          {pendingImages.length > 0 && (
+            <div className="flex gap-2 mb-2 flex-wrap">
+              {pendingImages.map((p) => (
+                <div key={p.id} className="relative group">
+                  <Image
+                    src={p.url}
+                    alt={p.filename}
+                    width={80}
+                    height={80}
+                    className="h-20 w-20 object-cover rounded-lg border border-slate-200"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setPendingImages((prev) => prev.filter((x) => x.id !== p.id))}
+                    className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center hover:bg-red-600"
+                    aria-label="Remove"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex gap-2">
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept="image/jpeg,image/png,image/gif,image/webp"
+              className="hidden"
+              onChange={handleFileChange}
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="p-2 rounded-lg text-slate-500 hover:bg-slate-200 hover:text-slate-700"
+              aria-label="Add image"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14"
+                />
+              </svg>
+            </button>
+            <input
+              type="text"
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), handleSend())}
+              placeholder="Type a message…"
+              className="flex-1 px-4 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+            />
+            <button
+              type="button"
+              onClick={handleSend}
+              disabled={sending || (!inputText.trim() && pendingImages.length === 0)}
+              className="px-4 py-2.5 rounded-lg bg-emerald-600 text-white font-medium hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {sending ? "Sending…" : "Send"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

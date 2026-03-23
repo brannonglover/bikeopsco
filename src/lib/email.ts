@@ -289,6 +289,66 @@ function escapeHtml(str: string): string {
 
 const SHOP_NAME = process.env.SHOP_NAME || "Basement Bike Mechanic";
 
+export async function sendChatMagicLinkEmail(
+  recipient: string,
+  magicLinkUrl: string
+): Promise<{ ok: boolean; error?: string }> {
+  if (!resend) {
+    console.warn("RESEND_API_KEY not set, skipping chat magic link email");
+    return { ok: false, error: "Email not configured" };
+  }
+
+  const shopName = SHOP_NAME;
+  const subject = `Sign in to chat with ${shopName}`;
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background: #f8fafc; color: #0f172a; }
+    .container { max-width: 480px; margin: 0 auto; padding: 40px 20px; }
+    .card { background: white; border-radius: 12px; padding: 32px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.07); }
+    .btn { display: inline-block; padding: 14px 28px; background: #059669; color: white !important; text-decoration: none; font-weight: 600; border-radius: 8px; }
+    .muted { color: #64748b; font-size: 14px; margin-top: 24px; }
+    .link { color: #059669; word-break: break-all; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h1 style="margin: 0 0 16px; font-size: 22px;">Chat with ${escapeHtml(shopName)}</h1>
+      <p style="margin: 0 0 24px; font-size: 16px; color: #475569;">
+        Click the button below to sign in and start chatting with us. This link expires in 15 minutes.
+      </p>
+      <a href="${magicLinkUrl}" class="btn">Sign in to chat</a>
+      <p class="muted">
+        If you didn't request this email, you can safely ignore it.
+      </p>
+      <p class="muted">
+        Or copy this link: <a href="${magicLinkUrl}" class="link">${magicLinkUrl}</a>
+      </p>
+    </div>
+  </div>
+</body>
+</html>
+  `.trim();
+
+  try {
+    const { error } = await resend.emails.send({
+      from: getFromEmail(),
+      to: recipient,
+      subject,
+      html,
+    });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Unknown error" };
+  }
+}
+
 export async function sendPaymentReceiptEmail(job: JobForInvoice): Promise<{ ok: boolean; error?: string }> {
   if (!resend) {
     console.warn("RESEND_API_KEY not set, skipping payment receipt email");

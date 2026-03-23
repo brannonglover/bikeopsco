@@ -9,17 +9,19 @@ datasource db {
 }
 
 model Customer {
-  id            String         @id @default(cuid())
-  firstName     String
-  lastName      String?
-  email         String?
-  phone         String?
-  address       String?
-  notes         String?
-  jobs          Job[]
-  conversations Conversation[]
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  id               String           @id @default(cuid())
+  firstName        String
+  lastName         String?
+  email            String?
+  phone            String?
+  address          String?
+  notes            String?
+  jobs             Job[]
+  conversations    Conversation[]
+  magicLinkTokens  MagicLinkToken[]
+  chatSessions     ChatSession[]
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 }
 
 model Job {
@@ -182,4 +184,22 @@ model MessageAttachment {
 enum MessageSender {
   STAFF
   CUSTOMER
+}
+
+model MagicLinkToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  customerId String
+  customer  Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model ChatSession {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  customerId String
+  customer  Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
 }

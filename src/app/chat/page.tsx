@@ -36,6 +36,47 @@ function CustomerName({ conv }: { conv: Conversation }) {
   );
 }
 
+function InviteButton({ customerId }: { customerId: string }) {
+  const [sending, setSending] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const handleClick = async () => {
+    setSending(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/chat/send-invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customerId }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMessage(data.message ?? "Invite sent!");
+      } else {
+        setMessage(data.error ?? "Failed to send");
+      }
+    } catch {
+      setMessage("Failed to send");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2 flex-shrink-0">
+      {message && <span className="text-xs text-slate-500">{message}</span>}
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={sending}
+        className="px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100 disabled:opacity-50"
+      >
+        {sending ? "Sending…" : "Invite to chat"}
+      </button>
+    </div>
+  );
+}
+
 function LastMessagePreview({ conv }: { conv: Conversation }) {
   const last = conv.messages?.[0];
   if (!last) return <span className="text-slate-400 text-sm">No messages yet</span>;
@@ -282,6 +323,9 @@ export default function ChatPage() {
                     <p className="text-xs text-slate-500 truncate">{selectedConv.customer.email}</p>
                   )}
                 </div>
+                {selectedConv.customer.email && (
+                  <InviteButton customerId={selectedConv.customerId} />
+                )}
               </header>
 
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
