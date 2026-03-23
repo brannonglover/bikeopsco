@@ -60,16 +60,36 @@ export async function POST(request: NextRequest) {
 
     const data = bookSchema.parse(body);
 
+    const emailNormalized = data.email.trim().toLowerCase();
+
     const job = await prisma.$transaction(async (tx) => {
-      const customer = await tx.customer.create({
-        data: {
-          firstName: data.firstName,
-          lastName: data.lastName ?? null,
-          email: data.email,
-          phone: data.phone ?? null,
-          address: data.address ?? null,
+      let customer = await tx.customer.findFirst({
+        where: {
+          email: { equals: emailNormalized, mode: "insensitive" },
         },
       });
+
+      if (!customer) {
+        customer = await tx.customer.create({
+          data: {
+            firstName: data.firstName,
+            lastName: data.lastName ?? null,
+            email: data.email.trim(),
+            phone: data.phone ?? null,
+            address: data.address ?? null,
+          },
+        });
+      } else {
+        await tx.customer.update({
+          where: { id: customer.id },
+          data: {
+            firstName: data.firstName,
+            lastName: data.lastName ?? null,
+            phone: data.phone ?? null,
+            address: data.address ?? customer.address,
+          },
+        });
+      }
 
       const newJob = await tx.job.create({
         data: {
