@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Resend } from "resend";
 import { prisma } from "@/lib/db";
 import { sendChatMagicLinkEmail } from "@/lib/email";
 import { z } from "zod";
 
+export const runtime = "nodejs";
 const EXPIRY_MINUTES = 15;
 
 const schema = z.object({ email: z.string().email() });
@@ -35,7 +37,11 @@ export async function POST(request: NextRequest) {
     });
 
     const magicLinkUrl = `${baseUrl}/api/chat/verify?token=${token}`;
-    const { ok, error } = await sendChatMagicLinkEmail(email.trim(), magicLinkUrl);
+
+    const resend = process.env.RESEND_API_KEY?.trim()
+      ? new Resend(process.env.RESEND_API_KEY!.trim())
+      : null;
+    const { ok, error } = await sendChatMagicLinkEmail(email.trim(), magicLinkUrl, resend);
 
     if (!ok) {
       console.error("Chat magic link email failed:", error);

@@ -293,9 +293,10 @@ const SHOP_NAME = process.env.SHOP_NAME || "Basement Bike Mechanic";
 
 export async function sendChatMagicLinkEmail(
   recipient: string,
-  magicLinkUrl: string
+  magicLinkUrl: string,
+  resendClient?: InstanceType<typeof Resend> | null
 ): Promise<{ ok: boolean; error?: string }> {
-  const resend = getResend();
+  const resend = resendClient ?? getResend();
   if (!resend) {
     console.warn("RESEND_API_KEY not set, skipping chat magic link email");
     return { ok: false, error: "Email not configured" };
