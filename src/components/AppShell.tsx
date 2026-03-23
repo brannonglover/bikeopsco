@@ -7,6 +7,7 @@ import { Suspense, useState, useEffect } from "react";
 import { SidebarNav } from "@/components/SidebarNav";
 import { CustomerMobileNav } from "@/components/CustomerMobileNav";
 import { GlobalChatNotifications } from "@/components/GlobalChatNotifications";
+import { initNotificationSound } from "@/lib/notificationSound";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -15,6 +16,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     pathname?.startsWith("/status/") ||
     pathname?.startsWith("/chat/c");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    initNotificationSound();
+  }, []);
 
   // Close mobile menu on route change (e.g. after clicking a link)
   useEffect(() => {
