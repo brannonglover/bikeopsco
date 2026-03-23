@@ -1,4 +1,4 @@
-# BikeOps – Bike Repair Shop Software
+# Bike Ops – Bike Repair Shop Software
 
 A Next.js app for managing bike repair jobs, customers, and automated customer emails.
 
@@ -55,7 +55,7 @@ Get an API key from [resend.com](https://resend.com) and add to `.env`:
 
 ```
 RESEND_API_KEY="re_xxx"
-FROM_EMAIL="BikeOps <notifications@yourdomain.com>"
+FROM_EMAIL="Bike Ops <notifications@yourdomain.com>"
 ```
 
 ### 4. Payments (Stripe)

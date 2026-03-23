@@ -34,7 +34,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="min-h-screen flex flex-col">
         <header className="flex-shrink-0 py-5 px-4 sm:py-6 sm:px-6 border-b border-slate-200 bg-white flex justify-center">
           <Link href="/" className="inline-flex items-center text-slate-600 hover:text-slate-900">
-            <Image src="/bbm-logo-wo.png" alt="BikeOps" width={320} height={120} className="h-20 w-auto sm:h-24 md:h-32" priority />
+            <Image src="/bbm-logo-wo.png" alt="Bike Ops" width={320} height={120} className="h-20 w-auto sm:h-24 md:h-32" priority />
           </Link>
         </header>
         <main className="flex-1 flex items-center justify-center p-4 sm:p-6">{children}</main>

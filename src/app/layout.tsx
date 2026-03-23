@@ -9,7 +9,7 @@ const jakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata = {
-  title: "BikeOps | Bike Repair Shop Management",
+  title: "Bike Ops | Bike Repair Shop Management",
   description: "Bike repair shop management – jobs, customers, payments, and automated emails",
 };
 

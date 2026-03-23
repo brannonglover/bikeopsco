@@ -45,7 +45,7 @@ function CustomerMap({ address }: { address: string }) {
           {
             headers: {
               Accept: "application/json",
-              "User-Agent": "BikeOps/1.0 (bike repair shop management)",
+              "User-Agent": "Bike Ops/1.0 (bike repair shop management)",
             },
           }
         );
