@@ -61,7 +61,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <Link href="/" className="flex-1 flex justify-center min-w-0">
             <Image src="/bbm-logo-wo.png" alt="Bike Ops" width={320} height={120} className="h-14 w-auto sm:h-16 md:h-24" priority />
           </Link>
-          <div className="w-10 flex-shrink-0" aria-hidden />
+          <div className="w-10 flex-shrink-0 flex items-center justify-end">
+            {pathname?.startsWith("/pay/") && (
+              <Link
+                href="/calendar"
+                className="p-2 -mr-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                aria-label="Close and return to Job Board"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </Link>
+            )}
+          </div>
         </header>
         <main
           className={
