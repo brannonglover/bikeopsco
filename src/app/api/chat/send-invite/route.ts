@@ -3,6 +3,8 @@ import { prisma } from "@/lib/db";
 import { sendChatMagicLinkEmail } from "@/lib/email";
 import { z } from "zod";
 
+export const runtime = "nodejs";
+
 const EXPIRY_MINUTES = 15;
 const schema = z.object({ customerId: z.string().min(1) });
 
