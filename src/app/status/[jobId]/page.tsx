@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image";
 import { Price } from "@/components/ui/Price";
 
 const STAGE_LABELS: Record<string, string> = {
