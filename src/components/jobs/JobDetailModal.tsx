@@ -401,6 +401,7 @@ export function JobDetailModal({ job, isOpen, onClose, onJobUpdated, onJobDelete
     : null;
 
   return (
+    <>
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/40 backdrop-blur-sm"
       onClick={onClose}
@@ -456,54 +457,6 @@ export function JobDetailModal({ job, isOpen, onClose, onJobUpdated, onJobDelete
                 >
                   {cancelling ? "Cancelling…" : "Confirm cancellation"}
                 </button>
-            </div>
-          </div>
-        )}
-        {showDeleteConfirm && (
-          <div
-            className="absolute inset-0 z-10 flex items-center justify-center p-6 bg-slate-900/40 backdrop-blur-sm rounded-xl"
-            onClick={(e) => e.target === e.currentTarget && !deleting && setShowDeleteConfirm(false)}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="delete-job-modal-title"
-          >
-            <div
-              className="w-full max-w-sm rounded-xl border border-slate-200/80 bg-white p-6 shadow-soft-lg"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center gap-3 mb-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100 flex-shrink-0">
-                  <svg className="h-5 w-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </div>
-                <div>
-                  <h2 id="delete-job-modal-title" className="text-lg font-semibold text-slate-900">
-                    Delete job?
-                  </h2>
-                  <p className="text-sm text-slate-600 mt-0.5">
-                    Permanently delete this job? This cannot be undone.
-                  </p>
-                </div>
-              </div>
-              <div className="flex gap-3 justify-end">
-                <button
-                  type="button"
-                  onClick={() => !deleting && setShowDeleteConfirm(false)}
-                  disabled={deleting}
-                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDeleteJobConfirm}
-                  disabled={deleting}
-                  className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50 transition-colors shadow-soft"
-                >
-                  {deleting ? "Deleting…" : "Delete Job"}
-                </button>
-              </div>
             </div>
           </div>
         )}
@@ -754,6 +707,55 @@ export function JobDetailModal({ job, isOpen, onClose, onJobUpdated, onJobDelete
         </div>
       </div>
     </div>
+    {showDeleteConfirm && (
+      <div
+        className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm"
+        onClick={(e) => e.target === e.currentTarget && !deleting && setShowDeleteConfirm(false)}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="delete-job-modal-title"
+      >
+        <div
+          className="w-full max-w-sm rounded-xl border border-slate-200/80 bg-white p-6 shadow-soft-lg"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center gap-3 mb-4">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100 flex-shrink-0">
+              <svg className="h-5 w-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </div>
+            <div>
+              <h2 id="delete-job-modal-title" className="text-lg font-semibold text-slate-900">
+                Delete job?
+              </h2>
+              <p className="text-sm text-slate-600 mt-0.5">
+                Permanently delete this job? This cannot be undone.
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-3 justify-end">
+            <button
+              type="button"
+              onClick={() => !deleting && setShowDeleteConfirm(false)}
+              disabled={deleting}
+              className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleDeleteJobConfirm}
+              disabled={deleting}
+              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50 transition-colors shadow-soft"
+            >
+              {deleting ? "Deleting…" : "Delete Job"}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 
