@@ -40,6 +40,7 @@ model Job {
   customerNotes     String?
   cancellationReason String?
   completedAt       DateTime?
+  archivedAt        DateTime?
   paymentStatus     PaymentStatus @default(UNPAID)
   sentEmails        JobEmail[]
   sentSms           JobSms[]
@@ -52,15 +53,15 @@ model Job {
 }
 
 model Payment {
-  id                   String   @id @default(cuid())
-  jobId                String
-  job                  Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  stripePaymentIntentId String @unique
-  amount               Decimal  @db.Decimal(10, 2)
-  currency             String   @default("usd")
-  status               String
-  paymentMethod        String?
-  createdAt            DateTime @default(now())
+  id                    String   @id @default(cuid())
+  jobId                 String
+  job                   Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  stripePaymentIntentId String?  @unique
+  amount                Decimal  @db.Decimal(10, 2)
+  currency              String   @default("usd")
+  status                String
+  paymentMethod         String?
+  createdAt             DateTime @default(now())
 }
 
 enum PaymentStatus {

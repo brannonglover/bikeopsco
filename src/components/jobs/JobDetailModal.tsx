@@ -103,6 +103,121 @@ function PaidStatusBlock({ job }: { job: Job }) {
   );
 }
 
+function RecordCashButton({
+  jobId,
+  total,
+  onRecorded,
+}: {
+  jobId: string;
+  total: number;
+  onRecorded?: (job: Job) => void;
+}) {
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const formatted = total.toLocaleString("en-US", { style: "currency", currency: "USD" });
+
+  useEffect(() => {
+    if (!showConfirm) return;
+    const fn = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !recording) {
+        e.stopImmediatePropagation();
+        setShowConfirm(false);
+      }
+    };
+    document.addEventListener("keydown", fn, true);
+    return () => document.removeEventListener("keydown", fn, true);
+  }, [showConfirm, recording]);
+
+  const handleRecord = async () => {
+    setRecording(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/payments/record-cash`, { method: "POST" });
+      if (res.ok) {
+        const updatedJob = await fetch(`/api/jobs/${jobId}`).then((r) => r.json());
+        onRecorded?.(updatedJob);
+        setShowConfirm(false);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error ?? "Failed to record cash payment");
+      }
+    } finally {
+      setRecording(false);
+    }
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setShowConfirm(true)}
+        disabled={recording}
+        className="inline-flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
+      >
+        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+        </svg>
+        {recording ? "Recording…" : "Record cash"}
+      </button>
+
+      {showConfirm && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm"
+          onClick={(e) => e.target === e.currentTarget && !recording && setShowConfirm(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="record-cash-modal-title"
+        >
+          <div
+            className="w-full max-w-sm rounded-xl border border-slate-200/80 bg-white p-6 shadow-soft-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100">
+                <svg className="h-5 w-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+              </div>
+              <div>
+                <h2 id="record-cash-modal-title" className="text-lg font-semibold text-slate-900">
+                  Record cash payment
+                </h2>
+                <p className="text-sm text-slate-600">
+                  {formatted} will be marked as paid. The job will be completed.
+                </p>
+              </div>
+            </div>
+            {error && (
+              <p className="mb-4 text-sm text-red-600" role="alert">
+                {error}
+              </p>
+            )}
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => !recording && setShowConfirm(false)}
+                disabled={recording}
+                className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleRecord}
+                disabled={recording}
+                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors shadow-soft"
+              >
+                {recording ? "Recording…" : `Record ${formatted}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 function CopyPaymentLinkButton({ jobId }: { jobId: string }) {
   const [copied, setCopied] = useState(false);
   const url = typeof window !== "undefined" ? `${window.location.origin}/pay/${jobId}` : "";
@@ -386,6 +501,11 @@ export function JobDetailModal({ job, isOpen, onClose, onJobUpdated, onJobDelete
             >
               {job.deliveryType === "COLLECTION_SERVICE" ? "Collection" : "Drop-off"}
             </span>
+            {job.paymentStatus === "PAID" && (
+              <span className="text-xs font-medium px-2 py-1 rounded bg-emerald-100 text-emerald-800">
+                Paid
+              </span>
+            )}
           </div>
 
           {job.customer && (
@@ -996,6 +1116,7 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                   </svg>
                   Collect in person
                 </a>
+                <RecordCashButton jobId={job.id} onRecorded={onJobUpdated} total={total} />
               </div>
               <CopyPaymentLinkButton jobId={job.id} />
             </div>

@@ -106,6 +106,7 @@ export interface Job {
   customerNotes: string | null;
   cancellationReason?: string | null;
   completedAt: string | null;
+  archivedAt?: string | null;
   paymentStatus?: PaymentStatus;
   jobServices?: JobService[];
   jobProducts?: JobProduct[];

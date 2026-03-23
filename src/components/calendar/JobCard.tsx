@@ -43,15 +43,22 @@ export function JobCardContent({
   return (
     <div className="bg-white rounded-xl border border-slate-200/80 p-4 shadow-soft min-w-0 w-full">
       <div className="flex items-start justify-between gap-2 mb-2 flex-wrap">
-        <span
-          className={`text-xs font-semibold px-2.5 py-1 rounded-lg ${
-            job.deliveryType === "COLLECTION_SERVICE"
-              ? "bg-amber-100 text-amber-800"
-              : "bg-slate-100 text-slate-700"
-          }`}
-        >
-          {job.deliveryType === "COLLECTION_SERVICE" ? "Collection" : "Drop-off"}
-        </span>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span
+            className={`text-xs font-semibold px-2.5 py-1 rounded-lg ${
+              job.deliveryType === "COLLECTION_SERVICE"
+                ? "bg-amber-100 text-amber-800"
+                : "bg-slate-100 text-slate-700"
+            }`}
+          >
+            {job.deliveryType === "COLLECTION_SERVICE" ? "Collection" : "Drop-off"}
+          </span>
+          {job.paymentStatus === "PAID" && (
+            <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800">
+              Paid
+            </span>
+          )}
+        </div>
         {job.dropOffDate && (
           <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-indigo-100 text-indigo-800" title="Drop-off date">
             {formatDateFull(job.dropOffDate)}

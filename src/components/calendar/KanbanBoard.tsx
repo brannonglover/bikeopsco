@@ -44,6 +44,7 @@ export function KanbanBoard() {
   const [rejectingJob, setRejectingJob] = useState<Job | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
+  const [archiving, setArchiving] = useState(false);
 
   const fetchJobs = useCallback((opts?: { silent?: boolean }) => {
     if (!opts?.silent) setLoading(true);
@@ -110,6 +111,21 @@ export function KanbanBoard() {
     },
     [selectedJob?.id]
   );
+
+  const handleArchiveCompleted = useCallback(async () => {
+    const count = jobs.filter((j) => j.stage === "COMPLETED").length;
+    if (count === 0) return;
+    setArchiving(true);
+    try {
+      const res = await fetch("/api/jobs/archive-completed", { method: "POST" });
+      if (res.ok) {
+        setJobs((prev) => prev.filter((j) => j.stage !== "COMPLETED"));
+        if (selectedJob?.stage === "COMPLETED") setSelectedJob(null);
+      }
+    } finally {
+      setArchiving(false);
+    }
+  }, [jobs, selectedJob?.stage]);
 
   useEffect(() => {
     fetchJobs();
@@ -227,12 +243,21 @@ export function KanbanBoard() {
       )}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 flex-shrink-0">
         <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Job Board</h1>
-        <button
-          onClick={() => setNewJobModalOpen(true)}
-          className="px-5 py-3 bg-amber-500 text-white rounded-xl font-semibold text-sm shadow-soft hover:bg-amber-600 hover:shadow-soft-lg transition-all duration-200 touch-manipulation min-h-[44px] w-full sm:w-auto"
-        >
-          New Job
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={handleArchiveCompleted}
+            disabled={archiving || jobs.filter((j) => j.stage === "COMPLETED").length === 0}
+            className="px-4 py-3 border border-slate-300 bg-white text-slate-700 rounded-xl font-semibold text-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 touch-manipulation min-h-[44px]"
+          >
+            {archiving ? "Archiving…" : "Archive completed"}
+          </button>
+          <button
+            onClick={() => setNewJobModalOpen(true)}
+            className="px-5 py-3 bg-amber-500 text-white rounded-xl font-semibold text-sm shadow-soft hover:bg-amber-600 hover:shadow-soft-lg transition-all duration-200 touch-manipulation min-h-[44px] w-full sm:w-auto"
+          >
+            New Job
+          </button>
+        </div>
       </div>
 
       <DndContext

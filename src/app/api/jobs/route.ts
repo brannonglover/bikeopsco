@@ -23,8 +23,15 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const weekStart = searchParams.get("weekStart");
     const weekEnd = searchParams.get("weekEnd");
+    const archived = searchParams.get("archived") === "true";
 
     const where: Record<string, unknown> = {};
+
+    if (archived) {
+      where.archivedAt = { not: null };
+    } else {
+      where.archivedAt = null;
+    }
 
     if (weekStart && weekEnd) {
       const start = new Date(weekStart);
@@ -63,7 +70,7 @@ export async function GET(request: NextRequest) {
         },
         jobProducts: { include: { product: true } },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: archived ? { archivedAt: "desc" } : { createdAt: "desc" },
     });
 
     return NextResponse.json(jobs);

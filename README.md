@@ -5,7 +5,7 @@ A Next.js app for managing bike repair jobs, customers, and automated customer e
 ## Features
 
 - **Kanban calendar** – 5 stages: Received, Working On, Waiting on Parts, Bike Ready, Completed
-- **Payments** – Stripe integration for card, Apple Pay, and Google Pay (online and in-person)
+- **Payments** – Stripe for card, Apple Pay, and Google Pay (online and in-person), plus cash recording
 - **Drag-and-drop** – Move jobs between stages
 - **Job creation** – Bike make/model, customer, drop-off vs collection service, dates
 - **Address & directions** – Customer address on job cards with Google Maps link
@@ -58,9 +58,9 @@ RESEND_API_KEY="re_xxx"
 FROM_EMAIL="Bike Ops <notifications@yourdomain.com>"
 ```
 
-### 4. Payments (Stripe)
+### 4. Payments (Stripe and cash)
 
-Accept card, Apple Pay, and Google Pay payments:
+Accept card, Apple Pay, and Google Pay via Stripe, or record cash payments from the job Invoice tab:
 
 1. Create an account at [stripe.com](https://stripe.com)
 2. Get your API keys from [dashboard.stripe.com/apikeys](https://dashboard.stripe.com/apikeys)

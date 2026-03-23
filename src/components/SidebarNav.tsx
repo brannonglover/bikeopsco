@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 const NAV_LINKS = [
   { href: "/calendar", label: "Job Board" },
+  { href: "/archive", label: "Archive" },
   { href: "/chat", label: "Chat" },
   { href: "/stats", label: "Stats" },
   { href: "/settings/customers", label: "Customers" },
@@ -28,7 +29,9 @@ export function SidebarNav({ onNavigate }: SidebarNavProps) {
             ? pathname === "/calendar"
             : href === "/stats"
               ? pathname === "/stats"
-              : pathname.startsWith(href);
+              : href === "/archive"
+                ? pathname === "/archive"
+                : pathname.startsWith(href);
         return (
           <Link
             key={href}
