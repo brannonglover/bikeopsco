@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
 /** Archives all completed jobs that aren't already archived (e.g. at end of day). */
-export async function POST(_request: NextRequest) {
+export async function POST() {
   try {
     const result = await prisma.job.updateMany({
       where: {
