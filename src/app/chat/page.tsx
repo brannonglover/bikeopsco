@@ -40,6 +40,30 @@ function CustomerName({ conv }: { conv: Conversation }) {
 function InviteButton({ customerId }: { customerId: string }) {
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [daysLeft, setDaysLeft] = useState<number | null>(null);
+
+  const refetchSession = useCallback(() => {
+    fetch(`/api/chat/session-status?customerId=${encodeURIComponent(customerId)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.expiresAt) {
+          const expires = new Date(data.expiresAt);
+          const now = new Date();
+          const ms = expires.getTime() - now.getTime();
+          const days = Math.max(0, Math.ceil(ms / (24 * 60 * 60 * 1000)));
+          setDaysLeft(days);
+        } else {
+          setDaysLeft(null);
+        }
+      })
+      .catch(() => setDaysLeft(null));
+  }, [customerId]);
+
+  useEffect(() => {
+    refetchSession();
+    const id = setInterval(refetchSession, 10000);
+    return () => clearInterval(id);
+  }, [refetchSession]);
 
   const handleClick = async () => {
     setSending(true);
@@ -63,6 +87,13 @@ function InviteButton({ customerId }: { customerId: string }) {
     }
   };
 
+  const buttonLabel =
+    sending
+      ? "Sending…"
+      : daysLeft !== null && daysLeft > 0
+        ? `${daysLeft} day${daysLeft === 1 ? "" : "s"} left`
+        : "Invite to chat";
+
   return (
     <div className="flex items-center gap-2 flex-shrink-0">
       {message && <span className="text-xs text-slate-500">{message}</span>}
@@ -72,7 +103,7 @@ function InviteButton({ customerId }: { customerId: string }) {
         disabled={sending}
         className="px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100 disabled:opacity-50"
       >
-        {sending ? "Sending…" : "Invite to chat"}
+        {buttonLabel}
       </button>
     </div>
   );
