@@ -204,8 +204,8 @@ export default function CustomerChatPage() {
 
   // Chat UI
   return (
-    <div className="flex-1 flex flex-col min-h-0 p-4 sm:p-6">
-      <div className="max-w-2xl w-full mx-auto flex flex-col flex-1 min-h-0 rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+    <div className="flex-1 flex flex-col min-h-0 w-full min-w-0 p-4 sm:p-6 overflow-x-hidden">
+      <div className="max-w-2xl w-full max-w-[100%] mx-auto self-center flex flex-col flex-1 min-h-0 min-w-0 rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
         <header className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50 flex-shrink-0">
           <h2 className="font-semibold text-slate-900">
             Chat with us
@@ -294,7 +294,7 @@ export default function CustomerChatPage() {
               ))}
             </div>
           )}
-          <div className="flex gap-2">
+          <div className="flex gap-2 min-w-0">
             <input
               type="file"
               ref={fileInputRef}
@@ -305,16 +305,13 @@ export default function CustomerChatPage() {
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="p-2 rounded-lg text-slate-500 hover:bg-slate-200 hover:text-slate-700"
+              className="p-2 rounded-lg text-slate-500 hover:bg-slate-200 hover:text-slate-700 flex-shrink-0"
               aria-label="Add image"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14"
-                />
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}>
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <polyline points="21 15 16 10 5 21" />
               </svg>
             </button>
             <input
@@ -323,7 +320,7 @@ export default function CustomerChatPage() {
               onChange={(e) => setInputText(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), handleSend())}
               placeholder="Type a message…"
-              className="flex-1 px-4 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+              className="flex-1 min-w-0 px-4 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
             />
             <button
               type="button"

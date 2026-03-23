@@ -41,11 +41,11 @@ export async function GET() {
     },
     resolvedResendKey: !!resolvedKey,
     resolvedAppUrl: resolvedUrl || "(empty)",
+    platform: process.env.NETLIFY ? "Netlify" : process.env.VERCEL ? "Vercel" : "unknown",
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || "(not set)",
-    VERCEL: process.env.VERCEL,
-    VERCEL_ENV: process.env.VERCEL_ENV,
+    URL: process.env.URL || "(not set)",
+    DEPLOY_PRIME_URL: process.env.DEPLOY_PRIME_URL || "(not set)",
     VERCEL_URL: process.env.VERCEL_URL || "(not set)",
-    VERCEL_PROJECT_PRODUCTION_URL: process.env.VERCEL_PROJECT_PRODUCTION_URL || "(not set)",
     envKeysAvailable: customKeys,
   });
 }

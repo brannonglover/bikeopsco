@@ -15,14 +15,20 @@ export function getResendApiKey(): string | null {
 /**
  * App base URL for links. Tries:
  * 1. NEXT_PUBLIC_APP_URL
- * 2. https://VERCEL_PROJECT_PRODUCTION_URL (Vercel automatic)
- * 3. https://VERCEL_URL (Vercel automatic)
+ * 2. URL (Netlify - main site URL)
+ * 3. DEPLOY_PRIME_URL (Netlify - current deploy URL)
+ * 4. https://VERCEL_PROJECT_PRODUCTION_URL (Vercel)
+ * 5. https://VERCEL_URL (Vercel)
  */
 export function getAppUrl(): string {
   const explicit = process.env.NEXT_PUBLIC_APP_URL?.trim();
   if (explicit && (explicit.startsWith("http://") || explicit.startsWith("https://"))) {
     return explicit.replace(/\/$/, "");
   }
+  const netlifyUrl = process.env.URL?.trim();
+  if (netlifyUrl && netlifyUrl.startsWith("http")) return netlifyUrl.replace(/\/$/, "");
+  const netlifyDeploy = process.env.DEPLOY_PRIME_URL?.trim();
+  if (netlifyDeploy && netlifyDeploy.startsWith("http")) return netlifyDeploy.replace(/\/$/, "");
   const prod = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim();
   if (prod) return `https://${prod.replace(/^https?:\/\//, "")}`;
   const url = process.env.VERCEL_URL?.trim();
