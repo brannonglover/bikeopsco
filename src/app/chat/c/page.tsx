@@ -204,8 +204,8 @@ export default function CustomerChatPage() {
 
   // Chat UI
   return (
-    <div className="flex-1 flex flex-col min-h-0 w-full min-w-0 p-4 sm:p-6 overflow-x-hidden">
-      <div className="max-w-2xl w-full max-w-[100%] mx-auto self-center flex flex-col flex-1 min-h-0 min-w-0 rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+    <div className="flex-1 flex flex-col min-h-0 w-full min-w-0 flex items-center justify-center px-2 sm:px-3 overflow-x-hidden">
+      <div className="w-full max-w-2xl flex flex-col flex-1 min-h-0 min-w-0 rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
         <header className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50 flex-shrink-0">
           <h2 className="font-semibold text-slate-900">
             Chat with us

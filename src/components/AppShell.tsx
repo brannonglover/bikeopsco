@@ -3,8 +3,9 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { SidebarNav } from "@/components/SidebarNav";
+import { CustomerMobileNav } from "@/components/CustomerMobileNav";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -33,17 +34,26 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   if (isPublicCustomerPage) {
     const isChatPage = pathname?.startsWith("/chat/c");
+    const isStatusOrChat = pathname?.startsWith("/status/") || pathname?.startsWith("/chat/c") || pathname?.startsWith("/pay/");
     return (
-      <div className="min-h-screen flex flex-col">
-        <header className="flex-shrink-0 py-5 px-4 sm:py-6 sm:px-6 border-b border-slate-200 bg-white flex justify-center">
-          <Link href="/" className="inline-flex items-center text-slate-600 hover:text-slate-900">
-            <Image src="/bbm-logo-wo.png" alt="Bike Ops" width={320} height={120} className="h-20 w-auto sm:h-24 md:h-32" priority />
+      <div className="min-h-screen flex flex-col w-full min-w-0">
+        <header className="flex-shrink-0 py-2 px-3 sm:py-3 sm:px-4 border-b border-slate-200 bg-white flex items-center justify-between gap-2">
+          <div className="w-10 flex-shrink-0 flex items-center justify-start">
+            {isStatusOrChat && (
+              <Suspense fallback={<div className="w-10" />}>
+                <CustomerMobileNav />
+              </Suspense>
+            )}
+          </div>
+          <Link href="/" className="flex-1 flex justify-center min-w-0">
+            <Image src="/bbm-logo-wo.png" alt="Bike Ops" width={320} height={120} className="h-14 w-auto sm:h-16 md:h-24" priority />
           </Link>
+          <div className="w-10 flex-shrink-0" aria-hidden />
         </header>
         <main
           className={
             isChatPage
-              ? "flex-1 flex flex-col min-h-0"
+              ? "flex-1 flex flex-col min-h-0 w-full min-w-0"
               : "flex-1 flex items-center justify-center p-4 sm:p-6"
           }
         >
