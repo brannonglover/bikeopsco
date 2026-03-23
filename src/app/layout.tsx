@@ -1,5 +1,6 @@
 import { Plus_Jakarta_Sans } from "next/font/google";
 import { AppShell } from "@/components/AppShell";
+import { AuthProvider } from "@/components/AuthProvider";
 import "./globals.css";
 
 const jakarta = Plus_Jakarta_Sans({
@@ -26,7 +27,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={jakarta.variable}>
       <body className="antialiased bg-mesh text-slate-800 min-h-screen font-sans flex">
-        <AppShell>{children}</AppShell>
+        <AuthProvider>
+          <AppShell>{children}</AppShell>
+        </AuthProvider>
       </body>
     </html>
   );

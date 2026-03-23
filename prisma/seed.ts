@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import * as bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
@@ -96,6 +97,21 @@ const DEFAULT_TEMPLATES = [
 ];
 
 async function main() {
+  // Create initial staff user if ADMIN_EMAIL is set
+  const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+  const adminPassword = process.env.ADMIN_PASSWORD;
+  if (adminEmail && adminPassword) {
+    const passwordHash = await bcrypt.hash(adminPassword, 12);
+    await prisma.user.upsert({
+      where: { email: adminEmail },
+      update: { passwordHash },
+      create: { email: adminEmail, passwordHash, name: "Admin" },
+    });
+    console.log("Seeded admin user:", adminEmail);
+  } else {
+    console.log("Skipping admin user seed (set ADMIN_EMAIL and ADMIN_PASSWORD to create one)");
+  }
+
   for (const template of DEFAULT_TEMPLATES) {
     await prisma.emailTemplate.upsert({
       where: { slug: template.slug },

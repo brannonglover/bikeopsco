@@ -186,6 +186,15 @@ enum MessageSender {
   CUSTOMER
 }
 
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
 model MagicLinkToken {
   id        String   @id @default(cuid())
   token     String   @unique

@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Suspense, useState, useEffect } from "react";
+import { signOut } from "next-auth/react";
 import { SidebarNav } from "@/components/SidebarNav";
 import { CustomerMobileNav } from "@/components/CustomerMobileNav";
 import { GlobalChatNotifications } from "@/components/GlobalChatNotifications";
@@ -11,6 +12,7 @@ import { initNotificationSound } from "@/lib/notificationSound";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const isLoginPage = pathname === "/login";
   const isPublicCustomerPage =
     pathname?.startsWith("/pay/") ||
     pathname?.startsWith("/status/") ||
@@ -37,6 +39,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       document.body.style.overflow = "";
     };
   }, [mobileMenuOpen]);
+
+  if (isLoginPage) {
+    return <>{children}</>;
+  }
 
   if (isPublicCustomerPage) {
     const isChatPage = pathname?.startsWith("/chat/c");
@@ -136,6 +142,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </button>
         </div>
         <SidebarNav onNavigate={() => setMobileMenuOpen(false)} />
+        <div className="flex-1" />
+        <div className="p-2 border-t border-slate-600/50">
+          <button
+            type="button"
+            onClick={() => signOut({ callbackUrl: "/login" })}
+            className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-300 hover:text-white hover:bg-slate-600/50 transition-colors"
+          >
+            Sign out
+          </button>
+        </div>
       </aside>
 
       {/* Main content - offset for mobile header (safe area + bar) + extra top space for title; normal padding on desktop */}
