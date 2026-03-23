@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { Suspense, useState, useEffect } from "react";
 import { SidebarNav } from "@/components/SidebarNav";
 import { CustomerMobileNav } from "@/components/CustomerMobileNav";
+import { GlobalChatNotifications } from "@/components/GlobalChatNotifications";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -63,8 +64,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
+  const isStaffChatPage = pathname === "/chat";
   return (
     <div className="flex min-h-screen flex-1 min-w-0">
+      {!isStaffChatPage && <GlobalChatNotifications />}
       {/* Mobile header bar - safe area spacer then centered content bar */}
       <header className="md:hidden flex-shrink-0 fixed top-0 left-0 right-0 z-40 flex flex-col bg-slate-700 border-b border-slate-600/50">
         <div className="h-[env(safe-area-inset-top,0px)]" aria-hidden />

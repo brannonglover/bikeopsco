@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useCallback } from "react";
 import type { Conversation } from "@/lib/types";
+import { playNotificationSound } from "@/lib/notificationSound";
 
 const NOTIFICATION_POLL_MS = 4000;
 
@@ -81,6 +82,7 @@ export function useChatNotifications(
           icon: "/favicon.ico",
           tag: `chat-${conv.id}-${last.id}`,
         });
+        playNotificationSound();
         n.onclick = () => {
           window.focus();
           n.close();

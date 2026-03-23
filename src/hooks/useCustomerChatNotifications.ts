@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { playNotificationSound } from "@/lib/notificationSound";
 import type { ChatMessage } from "@/lib/types";
 
 const SHOP_NAME = process.env.NEXT_PUBLIC_SHOP_NAME || "Bike Shop";
@@ -50,6 +51,7 @@ export function useCustomerChatNotifications(messages: ChatMessage[], isActive: 
             icon: "/favicon.ico",
             tag: `customer-chat-${msg.id}`,
           });
+          playNotificationSound();
           n.onclick = () => {
             window.focus();
             n.close();

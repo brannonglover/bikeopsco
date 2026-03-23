@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   DndContext,
@@ -15,6 +15,7 @@ import { StageColumn } from "./StageColumn";
 import { JobCardContent } from "./JobCard";
 import { NewJobModal } from "@/components/jobs/NewJobModal";
 import { JobDetailModal } from "@/components/jobs/JobDetailModal";
+import { useJobNotifications } from "@/hooks/useJobNotifications";
 import type { Job, Stage } from "@/lib/types";
 
 const STAGES: Stage[] = [
@@ -41,14 +42,16 @@ export function KanbanBoard() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchJobs = () => {
-    setLoading(true);
+  const fetchJobs = useCallback((opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(true);
     fetch("/api/jobs")
       .then((res) => res.json())
       .then((data) => setJobs(Array.isArray(data) ? data : []))
       .catch(() => setJobs([]))
       .finally(() => setLoading(false));
-  };
+  }, []);
+
+  useJobNotifications(jobs, () => fetchJobs({ silent: true }));
 
   const handleJobCreated = (job: Job) => {
     setJobs((prev) => [job, ...prev]);
@@ -56,14 +59,13 @@ export function KanbanBoard() {
 
   useEffect(() => {
     fetchJobs();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [fetchJobs]);
 
   useEffect(() => {
     if (paidJobId) {
       fetchJobs();
     }
-  }, [paidJobId]);
+  }, [paidJobId, fetchJobs]);
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveJobId(event.active.id as string);
