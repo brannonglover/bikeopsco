@@ -19,6 +19,7 @@ const bikeSchema = z.object({
   nickname: z.string().optional(),
   bikeId: z.string().optional(),
   imageUrl: z.string().optional().nullable(),
+  bikeType: z.enum(["AUTO", "REGULAR", "E_BIKE"]),
 });
 
 const schema = z.object({
@@ -61,6 +62,7 @@ interface Bike {
   model: string;
   nickname: string | null;
   imageUrl?: string | null;
+  bikeType?: "REGULAR" | "E_BIKE" | null;
 }
 
 interface Service {
@@ -68,6 +70,7 @@ interface Service {
   name: string;
   description: string | null;
   price: number | string;
+  isSystem?: boolean;
 }
 
 export function JobForm({ onSuccess, embedded }: JobFormProps) {
@@ -82,17 +85,20 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
   const [isCreating, setIsCreating] = useState(false);
   const [customerBikes, setCustomerBikes] = useState<Bike[]>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  /** Prevents double submit before RHF sets isSubmitting (e.g. double tap / rapid clicks). */
+  const jobCreateLockRef = useRef(false);
 
   const {
     register,
     handleSubmit,
     watch,
     control,
+    getValues,
     formState: { errors, isSubmitting },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
-      bikes: [{ make: "", model: "" }],
+      bikes: [{ make: "", model: "", bikeType: "AUTO" }],
       deliveryType: "DROP_OFF_AT_SHOP",
       dropOffDate: getDefaultDropOffDateTime(),
     },
@@ -104,7 +110,7 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
     defaultValue: "",
   });
 
-  const { fields, append, remove } = useFieldArray({
+  const { fields, append, remove, update } = useFieldArray({
     control,
     name: "bikes",
   });
@@ -122,15 +128,26 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
   const showCreateOption =
     customerInput.trim().length > 0 && !exactMatch && !selectedCustomer;
 
+  /** Load saved bikes when a customer is selected or when the typed name exactly matches a search result (dropdown click not required). */
+  const resolvedCustomerIdForBikes = useMemo(
+    () => exactMatch?.id ?? customerId ?? null,
+    [exactMatch, customerId]
+  );
+
+  const staffSelectableServices = useMemo(
+    () => services.filter((s) => !s.isSystem),
+    [services]
+  );
+
   const filteredServices = useMemo(() => {
     const q = serviceSearch.trim().toLowerCase();
-    if (!q) return services;
-    return services.filter(
+    if (!q) return staffSelectableServices;
+    return staffSelectableServices.filter(
       (s) =>
         s.name.toLowerCase().includes(q) ||
         (s.description && s.description.toLowerCase().includes(q))
     );
-  }, [services, serviceSearch]);
+  }, [staffSelectableServices, serviceSearch]);
 
   const searchCustomers = useCallback((q: string) => {
     setIsSearching(true);
@@ -146,14 +163,14 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
   }, [customerInput, searchCustomers]);
 
   useEffect(() => {
-    if (customerId) {
-      fetch(`/api/customers/${customerId}/bikes`)
+    if (resolvedCustomerIdForBikes) {
+      fetch(`/api/customers/${resolvedCustomerIdForBikes}/bikes`)
         .then((res) => res.json())
         .then((data) => setCustomerBikes(Array.isArray(data) ? data : []));
     } else {
       setCustomerBikes([]);
     }
-  }, [customerId]);
+  }, [resolvedCustomerIdForBikes]);
 
   useEffect(() => {
     fetch("/api/services")
@@ -219,6 +236,9 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
   };
 
   const onSubmit = async (data: FormData) => {
+    if (jobCreateLockRef.current) return;
+    jobCreateLockRef.current = true;
+    try {
     let finalCustomerId = data.customerId;
 
     if (!finalCustomerId && customerInput.trim()) {
@@ -272,6 +292,7 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
           nickname: b.nickname || null,
           imageUrl: b.imageUrl || null,
           bikeId: b.bikeId || null,
+          bikeType: b.bikeType === "AUTO" ? undefined : b.bikeType,
         })),
         customerId: finalCustomerId || null,
         deliveryType: data.deliveryType,
@@ -309,6 +330,9 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
         // Response wasn't valid JSON, use default message
       }
       alert(message);
+    }
+    } finally {
+      jobCreateLockRef.current = false;
     }
   };
 
@@ -399,13 +423,22 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
                     if (!val) return;
                     const bike = customerBikes.find((b) => b.id === val);
                     if (bike) {
-                      append({
+                      const payload = {
                         make: bike.make,
                         model: bike.model,
                         nickname: bike.nickname ?? undefined,
                         bikeId: bike.id,
                         imageUrl: bike.imageUrl ?? undefined,
-                      });
+                        bikeType: bike.bikeType ?? "AUTO",
+                      };
+                      const first = getValues("bikes.0");
+                      const firstEmpty =
+                        !first?.make?.trim() && !first?.model?.trim();
+                      if (firstEmpty) {
+                        update(0, payload);
+                      } else {
+                        append(payload);
+                      }
                     }
                   }}
                   className="text-sm px-3 py-1.5 border border-slate-200 rounded-lg bg-white hover:bg-slate-50"
@@ -420,7 +453,7 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
               )}
               <button
                 type="button"
-                onClick={() => append({ make: "", model: "" })}
+                onClick={() => append({ make: "", model: "", bikeType: "AUTO" })}
                 className="text-sm px-3 py-1.5 border border-slate-200 rounded-lg bg-white hover:bg-slate-50 font-medium"
               >
                 + Add bike
@@ -468,6 +501,17 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
                       <p className="text-red-600 text-xs mt-1">{errors.bikes[i]?.model?.message}</p>
                     )}
                   </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Bike type</label>
+                  <select
+                    {...register(`bikes.${i}.bikeType`)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none bg-white"
+                  >
+                    <option value="AUTO">Auto (from make/model)</option>
+                    <option value="REGULAR">Standard bike</option>
+                    <option value="E_BIKE">E-bike</option>
+                  </select>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Nickname (optional)</label>
@@ -566,6 +610,9 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
               className="w-full min-w-0 px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20"
               placeholder={selectedCustomer?.address || "Pickup/delivery address"}
             />
+            <p className="text-xs text-slate-500 mt-2">
+              Pickup/dropoff within 5 miles: $20 standard bike, $30 e-bike. The matching line is added to the job automatically (use bike type above or leave Auto to detect from make/model).
+            </p>
           </div>
         )}
 

@@ -10,10 +10,13 @@ export type Stage =
 
 export type DeliveryType = "DROP_OFF_AT_SHOP" | "COLLECTION_SERVICE";
 
+export type BikeType = "REGULAR" | "E_BIKE";
+
 export interface Bike {
   id: string;
   make: string;
   model: string;
+  bikeType: BikeType | null;
   nickname: string | null;
   imageUrl: string | null;
 }
@@ -36,6 +39,8 @@ export interface Service {
   name: string;
   description: string | null;
   price: number | string; // Prisma Decimal can come as string
+  slug?: string | null;
+  isSystem?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -104,11 +109,12 @@ export interface JobBike {
   jobId: string;
   make: string;
   model: string;
+  bikeType: BikeType | null;
   nickname: string | null;
   imageUrl: string | null;
   bikeId: string | null;
   sortOrder: number;
-  bike?: { imageUrl: string | null } | null;
+  bike?: { imageUrl: string | null; bikeType: BikeType | null; make: string; model: string } | null;
 }
 
 export interface Job {

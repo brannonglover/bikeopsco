@@ -27,6 +27,13 @@ export async function POST(
       );
     }
 
+    if (service.isSystem) {
+      return NextResponse.json(
+        { error: "This service is added automatically (e.g. collection fee)." },
+        { status: 400 }
+      );
+    }
+
     const jobService = await prisma.jobService.create({
       data: {
         jobId,
@@ -64,6 +71,20 @@ export async function DELETE(
     if (!jobServiceId) {
       return NextResponse.json(
         { error: "jobServiceId query param required" },
+        { status: 400 }
+      );
+    }
+
+    const existing = await prisma.jobService.findFirst({
+      where: { id: jobServiceId, jobId },
+      include: { service: true },
+    });
+    if (existing?.service.isSystem) {
+      return NextResponse.json(
+        {
+          error:
+            "Cannot remove this line. Change delivery type to drop-off at the shop, or edit the job.",
+        },
         { status: 400 }
       );
     }

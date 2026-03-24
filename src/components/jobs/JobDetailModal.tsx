@@ -4,31 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import type { Job, JobBike, JobProduct, JobService, Stage } from "@/lib/types";
 import { Price } from "@/components/ui/Price";
 import { BikePlaceholderIcon } from "@/components/ui/BikePlaceholderIcon";
-
-function BikeCard({ bike, compact }: { bike: { make: string; model: string; nickname?: string | null; imageUrl?: string | null }; compact?: boolean }) {
-  const displayName = bike.nickname?.trim() ? bike.nickname : `${bike.make} ${bike.model}`;
-  const subtitle = bike.nickname?.trim() ? `${bike.make} ${bike.model}` : null;
-  const size = compact ? "w-16 h-16" : "w-24 h-24";
-  return (
-    <div className={`flex gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm ${compact ? "" : "min-w-0 flex-1"}`}>
-      {bike.imageUrl ? (
-        <img
-          src={bike.imageUrl}
-          alt={displayName}
-          className={`${size} flex-shrink-0 object-cover rounded-lg border border-slate-100`}
-        />
-      ) : (
-        <div className={`${size} flex-shrink-0 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center`}>
-          <BikePlaceholderIcon className="w-8 h-8 text-slate-400" />
-        </div>
-      )}
-      <div className="min-w-0 flex-1">
-        <p className="font-medium text-slate-900 truncate">{displayName}</p>
-        {subtitle && <p className="text-sm text-slate-500 truncate">{subtitle}</p>}
-      </div>
-    </div>
-  );
-}
+import { resolveEffectiveBikeType } from "@/lib/bike-type";
 
 function resolveBikeImageUrl(b: JobBike, customerBikes?: { make: string; model: string; imageUrl: string | null }[]): string | null {
   const url = b.imageUrl ?? b.bike?.imageUrl ?? null;
@@ -45,13 +21,126 @@ function resolveBikeImageUrl(b: JobBike, customerBikes?: { make: string; model: 
   return match?.imageUrl ?? null;
 }
 
-function JobBikeSection({ job }: { job: Job }) {
+type BikeTypeForm = "AUTO" | "REGULAR" | "E_BIKE";
+
+function jobBikeToFormValue(b: JobBike): BikeTypeForm {
+  if (b.bikeType === "REGULAR") return "REGULAR";
+  if (b.bikeType === "E_BIKE") return "E_BIKE";
+  return "AUTO";
+}
+
+function toPatchBikeRow(
+  b: Pick<JobBike, "make" | "model" | "nickname" | "imageUrl" | "bikeId">,
+  bikeType: BikeTypeForm
+): {
+  make: string;
+  model: string;
+  nickname: string | null;
+  imageUrl: string | null;
+  bikeId: string | null;
+  bikeType?: "REGULAR" | "E_BIKE";
+} {
+  const base = {
+    make: b.make,
+    model: b.model,
+    nickname: b.nickname ?? null,
+    imageUrl: b.imageUrl ?? null,
+    bikeId: b.bikeId ?? null,
+  };
+  if (bikeType === "AUTO") return base;
+  return { ...base, bikeType };
+}
+
+function buildBikesPayloadForPatch(
+  job: Job,
+  changedIndex: number,
+  newType: BikeTypeForm
+) {
+  const jobBikes = [...(job.jobBikes ?? [])].sort((a, b) => a.sortOrder - b.sortOrder);
+  if (jobBikes.length > 0) {
+    return jobBikes.map((b, i) =>
+      toPatchBikeRow(b, i === changedIndex ? newType : jobBikeToFormValue(b))
+    );
+  }
+  return [
+    toPatchBikeRow(
+      {
+        make: job.bikeMake,
+        model: job.bikeModel,
+        nickname: null,
+        imageUrl: null,
+        bikeId: null,
+      },
+      newType
+    ),
+  ];
+}
+
+function formatBikeTypeDisplayLine(b: JobBike): string {
+  if (b.bikeType === "REGULAR") return "Standard bike";
+  if (b.bikeType === "E_BIKE") return "E-bike";
+  const eff =
+    resolveEffectiveBikeType({
+      bikeType: b.bikeType,
+      make: b.make,
+      model: b.model,
+      bikeId: b.bikeId,
+      bike: b.bike,
+    }) === "E_BIKE"
+      ? "E-bike"
+      : "Standard bike";
+  return `${eff} · auto`;
+}
+
+function PencilIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="16" height="16" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+      <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+    </svg>
+  );
+}
+
+function JobBikeSection({
+  job,
+  onJobUpdated,
+}: {
+  job: Job;
+  onJobUpdated?: (job: Job) => void;
+}) {
   const jobBikes: JobBike[] = job.jobBikes ?? [];
   const hasMultiple = jobBikes.length > 1;
   const bikes = hasMultiple || jobBikes.length === 1
     ? jobBikes
-    : [{ id: "legacy", make: job.bikeMake, model: job.bikeModel, nickname: null, imageUrl: null, bikeId: null, sortOrder: 0 } as JobBike];
+    : [{ id: "legacy", make: job.bikeMake, model: job.bikeModel, nickname: null, imageUrl: null, bikeId: null, sortOrder: 0, bikeType: null } as JobBike];
   const customerBikes = job.customer?.bikes;
+  const [savingIndex, setSavingIndex] = useState<number | null>(null);
+  const [editingBikeIndex, setEditingBikeIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    setEditingBikeIndex(null);
+  }, [job.id]);
+
+  const handleBikeTypeChange = async (bikeIndex: number, value: string) => {
+    if (!onJobUpdated) return;
+    const newType = value as BikeTypeForm;
+    setSavingIndex(bikeIndex);
+    try {
+      const res = await fetch(`/api/jobs/${job.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bikes: buildBikesPayloadForPatch(job, bikeIndex, newType),
+        }),
+      });
+      if (res.ok) {
+        const updatedJob = (await res.json()) as Job;
+        onJobUpdated(updatedJob);
+        setEditingBikeIndex(null);
+      }
+    } finally {
+      setSavingIndex(null);
+    }
+  };
 
   return (
     <div>
@@ -59,13 +148,90 @@ function JobBikeSection({ job }: { job: Job }) {
         {hasMultiple ? `Bikes (${bikes.length})` : "Bike"}
       </h3>
       <div className={`grid gap-3 ${hasMultiple ? "grid-cols-1 sm:grid-cols-2" : ""}`}>
-        {bikes.map((b) => (
-          <BikeCard
-            key={b.id}
-            bike={{ make: b.make, model: b.model, nickname: b.nickname, imageUrl: resolveBikeImageUrl(b, customerBikes) }}
-            compact={hasMultiple}
-          />
-        ))}
+        {bikes.map((b, i) => {
+          const displayName = b.nickname?.trim() ? b.nickname : `${b.make} ${b.model}`;
+          const subtitle = b.nickname?.trim() ? `${b.make} ${b.model}` : null;
+          const imageUrl = resolveBikeImageUrl(b, customerBikes);
+          const size = hasMultiple ? "w-16 h-16" : "w-24 h-24";
+          const isEditing = onJobUpdated && editingBikeIndex === i;
+
+          return (
+            <div
+              key={b.id}
+              className={`flex gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm min-w-0 ${hasMultiple ? "" : "flex-1"}`}
+            >
+              {imageUrl ? (
+                <img
+                  src={imageUrl}
+                  alt={displayName}
+                  className={`${size} flex-shrink-0 object-cover rounded-lg border border-slate-100`}
+                />
+              ) : (
+                <div className={`${size} flex-shrink-0 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center`}>
+                  <BikePlaceholderIcon className="w-8 h-8 text-slate-400" />
+                </div>
+              )}
+              <div className="min-w-0 flex-1 flex flex-col">
+                <p className="font-medium text-slate-900 truncate">{displayName}</p>
+                {subtitle && <p className="text-sm text-slate-500 truncate">{subtitle}</p>}
+
+                {!onJobUpdated && (
+                  <p className="text-xs text-slate-500 mt-1.5">
+                    {resolveEffectiveBikeType({
+                      bikeType: b.bikeType,
+                      make: b.make,
+                      model: b.model,
+                      bikeId: b.bikeId,
+                      bike: b.bike,
+                    }) === "E_BIKE"
+                      ? "E-bike"
+                      : "Standard bike"}
+                  </p>
+                )}
+
+                {onJobUpdated && !isEditing && (
+                  <div className="flex items-start justify-between gap-2 mt-1.5">
+                    <p className="text-xs text-slate-600 min-w-0 leading-snug">
+                      <span className="text-slate-400">Type:</span> {formatBikeTypeDisplayLine(b)}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setEditingBikeIndex(i)}
+                      className="flex-shrink-0 p-1 -mr-1 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-slate-50 transition-colors"
+                      aria-label="Edit bike type"
+                      title="Edit bike type"
+                    >
+                      <PencilIcon />
+                    </button>
+                  </div>
+                )}
+
+                {onJobUpdated && isEditing && (
+                  <div className="mt-2 space-y-2">
+                    <select
+                      value={jobBikeToFormValue(b)}
+                      onChange={(e) => handleBikeTypeChange(i, e.target.value)}
+                      disabled={savingIndex !== null}
+                      className="w-full text-sm px-3 py-1.5 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none disabled:opacity-60"
+                    >
+                      <option value="AUTO">Auto (from make/model)</option>
+                      <option value="REGULAR">Standard bike</option>
+                      <option value="E_BIKE">E-bike</option>
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setEditingBikeIndex(null)}
+                      disabled={savingIndex !== null}
+                      className="text-xs text-slate-500 hover:text-slate-800 underline disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -76,7 +242,7 @@ function JobBikesInvoiceSection({ job }: { job: Job }) {
   const hasMultiple = jobBikes.length > 1;
   const bikes = hasMultiple || jobBikes.length === 1
     ? jobBikes
-    : [{ id: "legacy", make: job.bikeMake, model: job.bikeModel, nickname: null, imageUrl: null, bikeId: null, sortOrder: 0 } as JobBike];
+    : [{ id: "legacy", make: job.bikeMake, model: job.bikeModel, nickname: null, imageUrl: null, bikeId: null, sortOrder: 0, bikeType: null } as JobBike];
   const customerBikes = job.customer?.bikes;
 
   return (
@@ -87,6 +253,13 @@ function JobBikesInvoiceSection({ job }: { job: Job }) {
       <div className={`flex flex-wrap gap-2 ${hasMultiple ? "" : ""}`}>
         {bikes.map((b) => {
           const imageUrl = resolveBikeImageUrl(b, customerBikes);
+          const eff = resolveEffectiveBikeType({
+            bikeType: b.bikeType,
+            make: b.make,
+            model: b.model,
+            bikeId: b.bikeId,
+            bike: b.bike,
+          });
           return (
           <div
             key={b.id}
@@ -105,6 +278,9 @@ function JobBikesInvoiceSection({ job }: { job: Job }) {
             {b.nickname?.trim() && (
               <span className="text-slate-500">({b.make} {b.model})</span>
             )}
+            <span className="text-xs text-slate-500 border-l border-slate-200 pl-2 ml-1">
+              {eff === "E_BIKE" ? "E-bike" : "Standard"}
+            </span>
           </div>
         );
         })}
@@ -681,7 +857,13 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
             </div>
           )}
 
-          <JobBikeSection job={job} />
+          <JobBikeSection
+            job={job}
+            onJobUpdated={(updated) => {
+              setJob(updated);
+              onJobUpdated?.(updated);
+            }}
+          />
 
           <div>
             <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">Dates</h3>

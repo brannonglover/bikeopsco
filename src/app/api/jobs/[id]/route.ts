@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { sendJobEmail, getTemplateForStage, sendBookingDeclinedEmail } from "@/lib/email";
 import { sendJobSms, getTemplateSlugForStage } from "@/lib/sms";
+import { syncCollectionJobService } from "@/lib/collection-fee";
 
 const bikeSchema = z.object({
   make: z.string().min(1),
@@ -10,6 +11,7 @@ const bikeSchema = z.object({
   nickname: z.string().optional().nullable(),
   imageUrl: z.string().optional().nullable(),
   bikeId: z.string().optional().nullable(),
+  bikeType: z.enum(["REGULAR", "E_BIKE"]).optional(),
 });
 
 const updateJobSchema = z.object({
@@ -122,10 +124,12 @@ export async function PATCH(
             nickname: b.nickname ?? null,
             imageUrl: b.imageUrl ?? null,
             bikeId: b.bikeId ?? null,
+            bikeType: b.bikeType ?? null,
             sortOrder: i,
           })),
         });
       }
+      await syncCollectionJobService(tx, id);
       const result = await tx.job.findUnique({
         where: { id },
         include: {

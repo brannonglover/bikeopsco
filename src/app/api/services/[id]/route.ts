@@ -45,6 +45,13 @@ export async function DELETE(
 ) {
   try {
     const { id } = params;
+    const existing = await prisma.service.findUnique({ where: { id } });
+    if (existing?.isSystem) {
+      return NextResponse.json(
+        { error: "System services cannot be deleted." },
+        { status: 400 }
+      );
+    }
     await prisma.service.delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch (error) {

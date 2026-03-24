@@ -9,6 +9,7 @@ interface Bike {
   id: string;
   make: string;
   model: string;
+  bikeType: "REGULAR" | "E_BIKE" | null;
   nickname: string | null;
   imageUrl: string | null;
   customerId: string;
@@ -193,6 +194,7 @@ function AddBikeForm({
   const [model, setModel] = useState("");
   const [nickname, setNickname] = useState("");
   const [imageUrl, setImageUrl] = useState("");
+  const [bikeType, setBikeType] = useState<"AUTO" | "REGULAR" | "E_BIKE">("AUTO");
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
@@ -226,6 +228,7 @@ function AddBikeForm({
         body: JSON.stringify({
           make: make.trim(),
           model: model.trim(),
+          bikeType: bikeType === "AUTO" ? null : bikeType,
           nickname: nickname.trim() || null,
           imageUrl: imageUrl.trim() || null,
         }),
@@ -309,6 +312,18 @@ function AddBikeForm({
             placeholder="Nickname (optional)"
             className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
           />
+          <label className="block text-xs font-medium text-slate-500 mt-2 mb-1">Bike type</label>
+          <select
+            value={bikeType}
+            onChange={(e) =>
+              setBikeType(e.target.value as "AUTO" | "REGULAR" | "E_BIKE")
+            }
+            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white"
+          >
+            <option value="AUTO">Auto (from make/model)</option>
+            <option value="REGULAR">Standard bike</option>
+            <option value="E_BIKE">E-bike</option>
+          </select>
         </div>
       </div>
       <div className="flex gap-2 pt-2">
@@ -344,6 +359,9 @@ function EditBikeForm({
   const [model, setModel] = useState(bike.model);
   const [nickname, setNickname] = useState(bike.nickname ?? "");
   const [imageUrl, setImageUrl] = useState(bike.imageUrl ?? "");
+  const [bikeType, setBikeType] = useState<"AUTO" | "REGULAR" | "E_BIKE">(
+    bike.bikeType ?? "AUTO"
+  );
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
@@ -379,6 +397,7 @@ function EditBikeForm({
           body: JSON.stringify({
             make: make.trim(),
             model: model.trim(),
+            bikeType: bikeType === "AUTO" ? null : bikeType,
             nickname: nickname.trim() || null,
             imageUrl: imageUrl.trim() || null,
           }),
@@ -463,6 +482,18 @@ function EditBikeForm({
             placeholder="Nickname (optional)"
             className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
           />
+          <label className="block text-xs font-medium text-slate-500">Bike type</label>
+          <select
+            value={bikeType}
+            onChange={(e) =>
+              setBikeType(e.target.value as "AUTO" | "REGULAR" | "E_BIKE")
+            }
+            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white"
+          >
+            <option value="AUTO">Auto (from make/model)</option>
+            <option value="REGULAR">Standard bike</option>
+            <option value="E_BIKE">E-bike</option>
+          </select>
         </div>
       </div>
       <div className="flex gap-2 pt-2">

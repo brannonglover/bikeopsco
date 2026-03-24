@@ -3,6 +3,7 @@ import { Stage } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { sendBookingRequestNotification } from "@/lib/email";
+import { syncCollectionJobService } from "@/lib/collection-fee";
 
 const bookSchema = z.object({
   // Customer
@@ -14,6 +15,7 @@ const bookSchema = z.object({
   // Bike
   bikeMake: z.string().min(1, "Bike make is required"),
   bikeModel: z.string().min(1, "Bike model is required"),
+  bikeType: z.enum(["REGULAR", "E_BIKE"]).optional(),
   // Job
   deliveryType: z.enum(["DROP_OFF_AT_SHOP", "COLLECTION_SERVICE"]).default("DROP_OFF_AT_SHOP"),
   dropOffDate: z.string().optional().nullable(),
@@ -94,8 +96,8 @@ export async function POST(request: NextRequest) {
       const newJob = await tx.job.create({
         data: {
           stage: Stage.PENDING_APPROVAL,
-          bikeMake: data.bikeMake,
-          bikeModel: data.bikeModel,
+          bikeMake: data.bikeMake.trim(),
+          bikeModel: data.bikeModel.trim(),
           customerId: customer.id,
           deliveryType: data.deliveryType as "DROP_OFF_AT_SHOP" | "COLLECTION_SERVICE",
           dropOffDate: data.dropOffDate ? new Date(data.dropOffDate) : null,
@@ -105,9 +107,19 @@ export async function POST(request: NextRequest) {
         },
       });
 
+      await tx.jobBike.create({
+        data: {
+          jobId: newJob.id,
+          make: data.bikeMake.trim(),
+          model: data.bikeModel.trim(),
+          sortOrder: 0,
+          bikeType: data.bikeType ?? null,
+        },
+      });
+
       if (data.serviceIds && data.serviceIds.length > 0) {
         const services = await tx.service.findMany({
-          where: { id: { in: data.serviceIds } },
+          where: { id: { in: data.serviceIds }, isSystem: false },
         });
         await tx.jobService.createMany({
           data: services.map((s) => ({
@@ -119,10 +131,13 @@ export async function POST(request: NextRequest) {
         });
       }
 
+      await syncCollectionJobService(tx, newJob.id);
+
       return tx.job.findUnique({
         where: { id: newJob.id },
         include: {
           customer: true,
+          jobBikes: { orderBy: { sortOrder: "asc" } },
           jobServices: { include: { service: true } },
         },
       });

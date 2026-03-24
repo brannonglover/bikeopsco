@@ -8,6 +8,7 @@ interface Service {
   name: string;
   description: string | null;
   price: number;
+  isSystem?: boolean;
 }
 
 export default function ServicesPage() {
@@ -591,7 +592,14 @@ export default function ServicesPage() {
                 {editing !== s.id ? (
                   <>
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-slate-900">{s.name}</h3>
+                      <h3 className="font-semibold text-slate-900 flex flex-wrap items-center gap-2">
+                        {s.name}
+                        {s.isSystem && (
+                          <span className="text-xs font-medium px-2 py-0.5 rounded bg-slate-100 text-slate-600">
+                            Auto
+                          </span>
+                        )}
+                      </h3>
                       <div className="mt-2">
                         <Price amount={Number(s.price)} />
                       </div>
@@ -637,12 +645,14 @@ export default function ServicesPage() {
                       >
                         Edit
                       </button>
-                      <button
-                        onClick={() => handleDelete(s.id, s.name)}
-                        className="text-sm text-red-600 hover:underline"
-                      >
-                        Delete
-                      </button>
+                      {!s.isSystem && (
+                        <button
+                          onClick={() => handleDelete(s.id, s.name)}
+                          className="text-sm text-red-600 hover:underline"
+                        >
+                          Delete
+                        </button>
+                      )}
                     </div>
                   </>
                 ) : (

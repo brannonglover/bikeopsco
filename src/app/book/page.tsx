@@ -40,6 +40,7 @@ function BookForm() {
     address: "",
     bikeMake: "",
     bikeModel: "",
+    bikeType: "AUTO" as "AUTO" | "REGULAR" | "E_BIKE",
     deliveryType: "DROP_OFF_AT_SHOP" as "DROP_OFF_AT_SHOP" | "COLLECTION_SERVICE",
     dropOffDate: getDefaultDropOffDateTime(),
     pickupDate: "",
@@ -92,6 +93,7 @@ function BookForm() {
           address: form.address.trim() || null,
           bikeMake: form.bikeMake.trim(),
           bikeModel: form.bikeModel.trim(),
+          bikeType: form.bikeType === "AUTO" ? undefined : form.bikeType,
           deliveryType: form.deliveryType,
           dropOffDate: form.dropOffDate || null,
           pickupDate: form.pickupDate || null,
@@ -244,6 +246,27 @@ function BookForm() {
           </div>
         </div>
 
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Bike type</label>
+          <select
+            value={form.bikeType}
+            onChange={(e) =>
+              setForm((p) => ({
+                ...p,
+                bikeType: e.target.value as "AUTO" | "REGULAR" | "E_BIKE",
+              }))
+            }
+            className="input-book"
+          >
+            <option value="AUTO">Auto (from make/model)</option>
+            <option value="REGULAR">Standard bike</option>
+            <option value="E_BIKE">E-bike</option>
+          </select>
+          <p className="mt-1 text-xs text-slate-500">
+            For collection service, we charge $20 pickup/dropoff within 5 mi for a standard bike and $30 for an e-bike. Auto uses your make/model to guess.
+          </p>
+        </div>
+
         {services.length > 0 && (
           <div>
             <label className="mb-2 block text-sm font-medium text-slate-700">
@@ -310,6 +333,9 @@ function BookForm() {
               className="input-book"
               placeholder="Street, city, postal code"
             />
+            <p className="mt-2 text-xs text-slate-500">
+              Pickup/dropoff within 5 miles of the shop; fee is added automatically when your booking is accepted.
+            </p>
           </div>
         )}
 

@@ -57,9 +57,12 @@ export function KanbanBoard() {
 
   useJobNotifications(jobs, () => fetchJobs({ silent: true }));
 
-  const handleJobCreated = (job: Job) => {
-    setJobs((prev) => [job, ...prev]);
-  };
+  const handleJobCreated = useCallback((job: Job) => {
+    setJobs((prev) => {
+      const without = prev.filter((j) => j.id !== job.id);
+      return [job, ...without];
+    });
+  }, []);
 
   const handleAccept = useCallback(
     async (jobId: string) => {

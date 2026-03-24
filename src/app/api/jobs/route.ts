@@ -3,6 +3,7 @@ import { Stage } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { sendJobEmail, getTemplateForStage } from "@/lib/email";
+import { syncCollectionJobService } from "@/lib/collection-fee";
 
 const bikeSchema = z.object({
   make: z.string().min(1),
@@ -10,6 +11,7 @@ const bikeSchema = z.object({
   nickname: z.string().optional().nullable(),
   imageUrl: z.string().optional().nullable(),
   bikeId: z.string().optional().nullable(),
+  bikeType: z.enum(["REGULAR", "E_BIKE"]).optional(),
 });
 
 const createJobSchema = z.object({
@@ -132,13 +134,14 @@ export async function POST(request: NextRequest) {
           nickname: b.nickname ?? null,
           imageUrl: b.imageUrl ?? null,
           bikeId: b.bikeId ?? null,
+          bikeType: b.bikeType ?? null,
           sortOrder: i,
         })),
       });
 
       if (data.serviceIds && data.serviceIds.length > 0) {
         const services = await tx.service.findMany({
-          where: { id: { in: data.serviceIds } },
+          where: { id: { in: data.serviceIds }, isSystem: false },
         });
         await tx.jobService.createMany({
           data: services.map((s) => ({
@@ -149,6 +152,8 @@ export async function POST(request: NextRequest) {
           })),
         });
       }
+
+      await syncCollectionJobService(tx, newJob.id);
 
       return tx.job.findUnique({
         where: { id: newJob.id },

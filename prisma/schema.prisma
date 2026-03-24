@@ -29,6 +29,8 @@ model Bike {
   id          String     @id @default(cuid())
   make        String
   model       String
+  /// null = infer regular vs e-bike from make/model when needed
+  bikeType    BikeType?
   nickname    String?
   imageUrl    String?
   customerId  String
@@ -46,6 +48,8 @@ model JobBike {
   job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
   make      String
   model     String
+  /// null = use linked customer bike or infer from make/model
+  bikeType  BikeType?
   nickname  String?
   imageUrl  String?
   bikeId    String?
@@ -104,11 +108,19 @@ enum PaymentStatus {
   REFUNDED
 }
 
+enum BikeType {
+  REGULAR
+  E_BIKE
+}
+
 model Service {
   id          String       @id @default(cuid())
   name        String
   description String?
   price       Decimal     @db.Decimal(10, 2)
+  /// Stable id for system-managed line items (e.g. collection fee)
+  slug        String?      @unique
+  isSystem    Boolean      @default(false)
   jobServices JobService[]
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt

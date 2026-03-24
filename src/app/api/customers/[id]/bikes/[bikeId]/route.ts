@@ -5,6 +5,7 @@ import { z } from "zod";
 const updateBikeSchema = z.object({
   make: z.string().min(1).optional(),
   model: z.string().min(1).optional(),
+  bikeType: z.enum(["REGULAR", "E_BIKE"]).optional().nullable(),
   nickname: z.string().optional().nullable(),
   imageUrl: z.string().optional().nullable(),
 });
@@ -30,6 +31,7 @@ export async function PATCH(
       data: {
         ...(data.make !== undefined && { make: data.make.trim() }),
         ...(data.model !== undefined && { model: data.model.trim() }),
+        ...(data.bikeType !== undefined && { bikeType: data.bikeType }),
         ...(data.nickname !== undefined && {
           nickname: data.nickname?.trim() || null,
         }),

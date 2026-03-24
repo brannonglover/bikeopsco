@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import * as bcrypt from "bcryptjs";
+import { COLLECTION_SERVICE_SLUGS } from "../src/lib/collection-fee";
 
 const prisma = new PrismaClient();
 
@@ -147,6 +148,44 @@ async function main() {
     });
   }
   console.log("Seeded email templates");
+
+  await prisma.service.upsert({
+    where: { slug: COLLECTION_SERVICE_SLUGS.regular },
+    create: {
+      name: "Pickup/dropoff (within 5 mi) – standard bike",
+      description:
+        "Pickup and return within 5 miles of the shop. Added automatically for collection jobs.",
+      price: 20,
+      slug: COLLECTION_SERVICE_SLUGS.regular,
+      isSystem: true,
+    },
+    update: {
+      name: "Pickup/dropoff (within 5 mi) – standard bike",
+      description:
+        "Pickup and return within 5 miles of the shop. Added automatically for collection jobs.",
+      price: 20,
+      isSystem: true,
+    },
+  });
+  await prisma.service.upsert({
+    where: { slug: COLLECTION_SERVICE_SLUGS.ebike },
+    create: {
+      name: "Pickup/dropoff (within 5 mi) – e-bike",
+      description:
+        "Pickup and return within 5 miles for e-bikes. Added automatically for collection jobs.",
+      price: 30,
+      slug: COLLECTION_SERVICE_SLUGS.ebike,
+      isSystem: true,
+    },
+    update: {
+      name: "Pickup/dropoff (within 5 mi) – e-bike",
+      description:
+        "Pickup and return within 5 miles for e-bikes. Added automatically for collection jobs.",
+      price: 30,
+      isSystem: true,
+    },
+  });
+  console.log("Seeded collection pickup services");
 }
 
 main()
