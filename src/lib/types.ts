@@ -91,6 +91,7 @@ export interface ChatMessage {
   body: string | null;
   attachments: MessageAttachment[];
   createdAt: string;
+  editedAt?: string | null;
 }
 
 export interface Conversation {

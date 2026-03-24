@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { Conversation, ChatMessage, Customer } from "@/lib/types";
 import { useChatNotifications } from "@/hooks/useChatNotifications";
+import { ChatMessageBubble } from "@/components/chat/ChatMessageBubble";
 
 const POLL_INTERVAL_MS = 3000;
 
@@ -247,6 +248,45 @@ export default function ChatPage() {
     setPendingImages((prev) => prev.filter((p) => p.id !== id));
   };
 
+  const patchStaffMessage = useCallback(
+    async (messageId: string, body: string | null) => {
+      if (!selectedId) return false;
+      const res = await fetch(`/api/conversations/${selectedId}/messages/${messageId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setMessages((prev) => prev.map((m) => (m.id === messageId ? updated : m)));
+        fetchConversations();
+        return true;
+      }
+      const err = await res.json().catch(() => ({}));
+      alert(typeof err.error === "string" ? err.error : "Failed to update message");
+      return false;
+    },
+    [selectedId, fetchConversations]
+  );
+
+  const deleteStaffMessage = useCallback(
+    async (messageId: string) => {
+      if (!selectedId) return false;
+      const res = await fetch(`/api/conversations/${selectedId}/messages/${messageId}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        setMessages((prev) => prev.filter((m) => m.id !== messageId));
+        fetchConversations();
+        return true;
+      }
+      const err = await res.json().catch(() => ({}));
+      alert(typeof err.error === "string" ? err.error : "Failed to delete message");
+      return false;
+    },
+    [selectedId, fetchConversations]
+  );
+
   const handleSend = async () => {
     if (!selectedId) return;
     const hasText = inputText.trim().length > 0;
@@ -364,48 +404,32 @@ export default function ChatPage() {
 
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
                 {messages.map((msg) => (
-                  <div
+                  <ChatMessageBubble
                     key={msg.id}
-                    className={`flex ${msg.sender === "STAFF" ? "justify-end" : "justify-start"}`}
-                  >
-                    <div
-                      className={`max-w-[85%] md:max-w-[70%] rounded-2xl px-4 py-2 ${
-                        msg.sender === "STAFF"
-                          ? "bg-emerald-600 text-white rounded-br-md"
-                          : "bg-slate-100 text-slate-900 rounded-bl-md"
-                      }`}
-                    >
-                      {msg.attachments?.length ? (
-                        <div className="space-y-2 mb-2">
-                          {msg.attachments.map((att) => (
-                            <a
-                              key={att.id}
-                              href={att.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="block"
-                            >
-                              <Image
-                                src={att.url}
-                                alt={att.filename}
-                                width={320}
-                                height={192}
-                                className="rounded-lg max-h-48 object-cover w-full"
-                              />
-                            </a>
-                          ))}
-                        </div>
-                      ) : null}
-                      {msg.body ? <p className="whitespace-pre-wrap break-words">{msg.body}</p> : null}
-                      <p
-                        className={`text-xs mt-1 ${
-                          msg.sender === "STAFF" ? "text-emerald-200" : "text-slate-500"
-                        }`}
-                      >
-                        {formatTime(msg.createdAt)}
-                      </p>
-                    </div>
-                  </div>
+                    msg={msg}
+                    isOwn={msg.sender === "STAFF"}
+                    align={msg.sender === "STAFF" ? "end" : "start"}
+                    bubbleClassName={
+                      msg.sender === "STAFF"
+                        ? "bg-emerald-600 text-white rounded-br-md"
+                        : "bg-slate-100 text-slate-900 rounded-bl-md"
+                    }
+                    metaClassName={msg.sender === "STAFF" ? "text-emerald-200" : "text-slate-500"}
+                    linkClassName={msg.sender === "STAFF" ? "text-emerald-100" : "text-emerald-700"}
+                    actionMutedClassName={
+                      msg.sender === "STAFF"
+                        ? "text-emerald-200/90 hover:text-white"
+                        : "text-slate-500 hover:text-slate-700"
+                    }
+                    saveEditButtonClassName={
+                      msg.sender === "STAFF"
+                        ? "text-xs font-medium text-white hover:text-emerald-100"
+                        : undefined
+                    }
+                    formatTime={formatTime}
+                    onPatch={msg.sender === "STAFF" ? patchStaffMessage : undefined}
+                    onDelete={msg.sender === "STAFF" ? deleteStaffMessage : undefined}
+                  />
                 ))}
                 <div ref={messagesEndRef} />
               </div>

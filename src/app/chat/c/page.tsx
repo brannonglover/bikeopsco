@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { ChatMessage } from "@/lib/types";
 import { useCustomerChatNotifications } from "@/hooks/useCustomerChatNotifications";
+import { ChatMessageBubble } from "@/components/chat/ChatMessageBubble";
 
 const POLL_INTERVAL_MS = 3000;
 
@@ -133,6 +134,37 @@ export default function CustomerChatPage() {
     e.target.value = "";
   };
 
+  const patchCustomerMessage = useCallback(async (messageId: string, body: string | null) => {
+    const res = await fetch(`/api/chat/conversation/messages/${messageId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ body }),
+    });
+    if (res.ok) {
+      const updated = await res.json();
+      setMessages((prev) => prev.map((m) => (m.id === messageId ? updated : m)));
+      return true;
+    }
+    const err = await res.json().catch(() => ({}));
+    alert(typeof err.error === "string" ? err.error : "Failed to update message");
+    return false;
+  }, []);
+
+  const deleteCustomerMessage = useCallback(async (messageId: string) => {
+    const res = await fetch(`/api/chat/conversation/messages/${messageId}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    if (res.ok) {
+      setMessages((prev) => prev.filter((m) => m.id !== messageId));
+      return true;
+    }
+    const err = await res.json().catch(() => ({}));
+    alert(typeof err.error === "string" ? err.error : "Failed to delete message");
+    return false;
+  }, []);
+
   const handleSend = async () => {
     const hasText = inputText.trim().length > 0;
     const hasImages = pendingImages.length > 0;
@@ -227,48 +259,32 @@ export default function CustomerChatPage() {
 
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {messages.map((msg) => (
-            <div
+            <ChatMessageBubble
               key={msg.id}
-              className={`flex ${msg.sender === "CUSTOMER" ? "justify-end" : "justify-start"}`}
-            >
-              <div
-                className={`max-w-[85%] rounded-2xl px-4 py-2 ${
-                  msg.sender === "CUSTOMER"
-                    ? "bg-emerald-600 text-white rounded-br-md"
-                    : "bg-slate-100 text-slate-900 rounded-bl-md"
-                }`}
-              >
-                {msg.attachments?.length ? (
-                  <div className="space-y-2 mb-2">
-                    {msg.attachments.map((att) => (
-                      <a
-                        key={att.id}
-                        href={att.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block"
-                      >
-                        <Image
-                          src={att.url}
-                          alt={att.filename}
-                          width={320}
-                          height={192}
-                          className="rounded-lg max-h-48 object-cover w-full"
-                        />
-                      </a>
-                    ))}
-                  </div>
-                ) : null}
-                {msg.body ? <p className="whitespace-pre-wrap break-words">{msg.body}</p> : null}
-                <p
-                  className={`text-xs mt-1 ${
-                    msg.sender === "CUSTOMER" ? "text-emerald-200" : "text-slate-500"
-                  }`}
-                >
-                  {formatTime(msg.createdAt)}
-                </p>
-              </div>
-            </div>
+              msg={msg}
+              isOwn={msg.sender === "CUSTOMER"}
+              align={msg.sender === "CUSTOMER" ? "end" : "start"}
+              bubbleClassName={
+                msg.sender === "CUSTOMER"
+                  ? "bg-emerald-600 text-white rounded-br-md"
+                  : "bg-slate-100 text-slate-900 rounded-bl-md"
+              }
+              metaClassName={msg.sender === "CUSTOMER" ? "text-emerald-200" : "text-slate-500"}
+              linkClassName={msg.sender === "CUSTOMER" ? "text-emerald-100" : "text-emerald-700"}
+              actionMutedClassName={
+                msg.sender === "CUSTOMER"
+                  ? "text-emerald-200/90 hover:text-white"
+                  : "text-slate-500 hover:text-slate-700"
+              }
+              saveEditButtonClassName={
+                msg.sender === "CUSTOMER"
+                  ? "text-xs font-medium text-white hover:text-emerald-100"
+                  : undefined
+              }
+              formatTime={formatTime}
+              onPatch={msg.sender === "CUSTOMER" ? patchCustomerMessage : undefined}
+              onDelete={msg.sender === "CUSTOMER" ? deleteCustomerMessage : undefined}
+            />
           ))}
           <div ref={messagesEndRef} />
         </div>

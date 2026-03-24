@@ -230,6 +230,7 @@ model Message {
   body           String?
   attachments    MessageAttachment[]
   createdAt      DateTime            @default(now())
+  editedAt       DateTime?
 }
 
 model MessageAttachment {
