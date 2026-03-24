@@ -38,6 +38,7 @@ const schema = z.object({
 });
 
 type FormData = z.infer<typeof schema>;
+type BikeFormRow = z.infer<typeof bikeSchema>;
 
 function getDefaultDropOffDateTime(): string {
   const d = new Date();
@@ -423,7 +424,7 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
                     if (!val) return;
                     const bike = customerBikes.find((b) => b.id === val);
                     if (bike) {
-                      const payload = {
+                      const payload: BikeFormRow = {
                         make: bike.make,
                         model: bike.model,
                         nickname: bike.nickname ?? undefined,
