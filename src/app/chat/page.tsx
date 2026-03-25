@@ -395,7 +395,7 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)] md:h-[calc(100vh-5rem)] -mx-4 -mb-6 sm:-mx-6 sm:-mb-6 md:mx-0 md:mb-0 md:rounded-xl md:border md:border-slate-200 md:shadow-soft bg-white overflow-hidden">
+    <div className="flex flex-col h-[calc(100vh-8rem)] min-h-0 md:h-[calc(100vh-5rem)] -mx-4 -mb-6 sm:-mx-6 sm:-mb-6 md:mx-0 md:mb-0 md:rounded-xl md:border md:border-slate-200 md:shadow-soft bg-white overflow-hidden">
       <div className="flex flex-1 min-h-0">
         {/* Conversation list */}
         <aside
@@ -444,85 +444,88 @@ export default function ChatPage() {
 
         {/* Message thread */}
         <section
-          className={`flex flex-col flex-1 min-w-0 bg-white ${
+          className={`flex flex-col flex-1 min-h-0 min-w-0 bg-white ${
             selectedId ? "flex" : "hidden md:flex"
           }`}
         >
           {selectedId ? (
             <>
-              <header className="flex items-center gap-3 px-4 py-3 border-b border-slate-200 flex-shrink-0 bg-white">
-                <button
-                  type="button"
-                  onClick={() => setSelectedId(null)}
-                  className="md:hidden p-2 -ml-2 rounded-lg text-slate-500 hover:bg-slate-100"
-                  aria-label="Back to conversations"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                  </svg>
-                </button>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-slate-900 truncate">
-                    {selectedConv ? (
-                      <CustomerName conv={selectedConv} />
-                    ) : (
-                      "Loading…"
-                    )}
-                  </h3>
-                  {selectedConv?.customer.email && (
-                    <p className="text-xs text-slate-500 truncate">{selectedConv.customer.email}</p>
-                  )}
-                </div>
-                {selectedConv?.customer.email && (
-                  <InviteButton customerId={selectedConv.customerId} />
-                )}
-              </header>
-
+              {/* Single scroll region: sticky header stays at top while messages scroll */}
               <div
                 ref={messagesScrollRef}
-                className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0"
+                className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain flex flex-col"
               >
-                {messagesLoading && messages.length === 0 ? (
-                  <div className="flex items-center gap-2 text-sm text-slate-500" aria-live="polite">
-                    <span
-                      className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-emerald-600"
-                      aria-hidden
-                    />
-                    Loading messages…
+                <header className="sticky top-0 z-10 flex items-center gap-3 px-4 py-3 border-b border-slate-200 shrink-0 bg-white">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedId(null)}
+                    className="md:hidden p-2 -ml-2 rounded-lg text-slate-500 hover:bg-slate-100"
+                    aria-label="Back to conversations"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-slate-900 truncate">
+                      {selectedConv ? (
+                        <CustomerName conv={selectedConv} />
+                      ) : (
+                        "Loading…"
+                      )}
+                    </h3>
+                    {selectedConv?.customer.email && (
+                      <p className="text-xs text-slate-500 truncate">{selectedConv.customer.email}</p>
+                    )}
                   </div>
-                ) : null}
-                {messages.map((msg) => (
-                  <ChatMessageBubble
-                    key={msg.id}
-                    msg={msg}
-                    isOwn={msg.sender === "STAFF"}
-                    align={msg.sender === "STAFF" ? "end" : "start"}
-                    bubbleClassName={
-                      msg.sender === "STAFF"
-                        ? "bg-emerald-600 text-white rounded-br-md"
-                        : "bg-slate-100 text-slate-900 rounded-bl-md"
-                    }
-                    metaClassName={msg.sender === "STAFF" ? "text-emerald-200" : "text-slate-500"}
-                    linkClassName={msg.sender === "STAFF" ? "text-emerald-100" : "text-emerald-700"}
-                    actionMutedClassName={
-                      msg.sender === "STAFF"
-                        ? "text-emerald-200/90 hover:text-white"
-                        : "text-slate-500 hover:text-slate-700"
-                    }
-                    saveEditButtonClassName={
-                      msg.sender === "STAFF"
-                        ? "text-xs font-medium text-white hover:text-emerald-100"
-                        : undefined
-                    }
-                    onPatch={msg.sender === "STAFF" ? patchStaffMessage : undefined}
-                    onDelete={msg.sender === "STAFF" ? deleteStaffMessage : undefined}
-                  />
-                ))}
-                {showCustomerTyping && (
-                  <p className="text-sm text-slate-500 italic" aria-live="polite">
-                    Customer is typing…
-                  </p>
-                )}
+                  {selectedConv?.customer.email && (
+                    <InviteButton customerId={selectedConv.customerId} />
+                  )}
+                </header>
+
+                <div className="p-4 space-y-3">
+                  {messagesLoading && messages.length === 0 ? (
+                    <div className="flex items-center gap-2 text-sm text-slate-500" aria-live="polite">
+                      <span
+                        className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-emerald-600"
+                        aria-hidden
+                      />
+                      Loading messages…
+                    </div>
+                  ) : null}
+                  {messages.map((msg) => (
+                    <ChatMessageBubble
+                      key={msg.id}
+                      msg={msg}
+                      isOwn={msg.sender === "STAFF"}
+                      align={msg.sender === "STAFF" ? "end" : "start"}
+                      bubbleClassName={
+                        msg.sender === "STAFF"
+                          ? "bg-emerald-600 text-white rounded-br-md"
+                          : "bg-slate-100 text-slate-900 rounded-bl-md"
+                      }
+                      metaClassName={msg.sender === "STAFF" ? "text-emerald-200" : "text-slate-500"}
+                      linkClassName={msg.sender === "STAFF" ? "text-emerald-100" : "text-emerald-700"}
+                      actionMutedClassName={
+                        msg.sender === "STAFF"
+                          ? "text-emerald-200/90 hover:text-white"
+                          : "text-slate-500 hover:text-slate-700"
+                      }
+                      saveEditButtonClassName={
+                        msg.sender === "STAFF"
+                          ? "text-xs font-medium text-white hover:text-emerald-100"
+                          : undefined
+                      }
+                      onPatch={msg.sender === "STAFF" ? patchStaffMessage : undefined}
+                      onDelete={msg.sender === "STAFF" ? deleteStaffMessage : undefined}
+                    />
+                  ))}
+                  {showCustomerTyping && (
+                    <p className="text-sm text-slate-500 italic" aria-live="polite">
+                      Customer is typing…
+                    </p>
+                  )}
+                </div>
               </div>
 
               <div className="flex-shrink-0 p-4 border-t border-slate-200 bg-slate-50">
