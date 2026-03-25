@@ -138,11 +138,14 @@ export default function ChatPage() {
         setMessages(data.messages ?? []);
         setCustomerTypingAt(data.customerTypingAt ?? null);
         if (typeof data.staffLastReadAt === "string") {
-          setConversations((prev) =>
-            prev.map((c) =>
-              c.id === convId ? { ...c, staffLastReadAt: data.staffLastReadAt } : c
-            )
-          );
+          setConversations((prev) => {
+            if (prev.length === 0) return prev;
+            const idx = prev.findIndex((c) => c.id === convId);
+            if (idx === -1) return prev;
+            const next = [...prev];
+            next[idx] = { ...next[idx], staffLastReadAt: data.staffLastReadAt };
+            return next;
+          });
         }
       }
     }

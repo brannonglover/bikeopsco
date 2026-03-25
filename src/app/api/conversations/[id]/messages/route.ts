@@ -15,27 +15,34 @@ export async function GET(
   try {
     const { id: conversationId } = await params;
 
-    const [messages, conversation] = await Promise.all([
-      prisma.message.findMany({
-        where: { conversationId },
-        orderBy: { createdAt: "asc" },
-        include: { attachments: true },
-      }),
-      prisma.conversation.findUnique({
-        where: { id: conversationId },
-        select: { customerTypingAt: true },
-      }),
-    ]);
+    const conversation = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { customerTypingAt: true, updatedAt: true },
+    });
 
+    if (!conversation) {
+      return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
+    }
+
+    const messages = await prisma.message.findMany({
+      where: { conversationId },
+      orderBy: { createdAt: "asc" },
+      include: { attachments: true },
+    });
+
+    // Preserve updatedAt so marking read does not reorder the inbox (list is sorted by updatedAt).
     const readUpdate = await prisma.conversation.update({
       where: { id: conversationId },
-      data: { staffLastReadAt: new Date() },
+      data: {
+        staffLastReadAt: new Date(),
+        updatedAt: conversation.updatedAt,
+      },
       select: { staffLastReadAt: true },
     });
 
     return NextResponse.json({
       messages,
-      customerTypingAt: conversation?.customerTypingAt?.toISOString() ?? null,
+      customerTypingAt: conversation.customerTypingAt?.toISOString() ?? null,
       staffLastReadAt: (readUpdate.staffLastReadAt ?? new Date()).toISOString(),
     });
   } catch (error) {
