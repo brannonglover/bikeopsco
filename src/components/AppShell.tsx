@@ -7,7 +7,7 @@ import { Suspense, useState, useEffect } from "react";
 import { signOut } from "next-auth/react";
 import { SidebarNav } from "@/components/SidebarNav";
 import { CustomerMobileNav } from "@/components/CustomerMobileNav";
-import { GlobalChatNotifications } from "@/components/GlobalChatNotifications";
+import { StaffChatAttentionProvider } from "@/contexts/StaffChatAttentionContext";
 import { initNotificationSound } from "@/lib/notificationSound";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -90,8 +90,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const isStaffChatPage = pathname === "/chat";
   return (
+    <StaffChatAttentionProvider syncEnabled={!isStaffChatPage}>
     <div className="flex min-h-screen flex-1 min-w-0">
-      {!isStaffChatPage && <GlobalChatNotifications />}
       {/* Mobile header bar - safe area spacer then centered content bar */}
       <header className="md:hidden flex-shrink-0 fixed top-0 left-0 right-0 z-40 flex flex-col bg-slate-700 border-b border-slate-600/50">
         <div className="h-[env(safe-area-inset-top,0px)]" aria-hidden />
@@ -170,5 +170,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Main content - offset for mobile header; left margin on desktop for fixed sidebar */}
       <main className="flex-1 min-w-0 pt-[calc(5.5rem+env(safe-area-inset-top,0px)+1.25rem)] md:pt-6 md:ml-56 p-4 sm:p-6">{children}</main>
     </div>
+    </StaffChatAttentionProvider>
   );
 }

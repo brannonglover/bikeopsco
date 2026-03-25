@@ -22,7 +22,8 @@ function getMessagePreview(conv: Conversation): string {
 export function useChatNotifications(
   conversations: Conversation[],
   fetchConversations: () => void,
-  selectedId: string | null
+  selectedId: string | null,
+  poll = true
 ) {
   const seenMessageIds = useRef<Set<string>>(new Set());
   const permissionRequested = useRef(false);
@@ -54,6 +55,7 @@ export function useChatNotifications(
   }, [requestPermission]);
 
   useEffect(() => {
+    if (!poll) return;
     const interval = setInterval(fetchConversations, NOTIFICATION_POLL_MS);
     const onVisible = () => {
       if (document.visibilityState === "visible") fetchConversations();
@@ -63,7 +65,7 @@ export function useChatNotifications(
       clearInterval(interval);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [fetchConversations]);
+  }, [fetchConversations, poll]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !("Notification" in window)) return;
