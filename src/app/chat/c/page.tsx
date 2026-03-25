@@ -8,21 +8,6 @@ import { ChatMessageBubble } from "@/components/chat/ChatMessageBubble";
 
 const POLL_INTERVAL_MS = 3000;
 
-function formatTime(dateStr: string) {
-  const d = new Date(dateStr);
-  const now = new Date();
-  const isToday = d.toDateString() === now.toDateString();
-  if (isToday) {
-    return d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-  }
-  return d.toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 export default function CustomerChatPage() {
   const [status, setStatus] = useState<"loading" | "login" | "chat">("loading");
   const [loginEmail, setLoginEmail] = useState("");
@@ -281,7 +266,6 @@ export default function CustomerChatPage() {
                   ? "text-xs font-medium text-white hover:text-emerald-100"
                   : undefined
               }
-              formatTime={formatTime}
               onPatch={msg.sender === "CUSTOMER" ? patchCustomerMessage : undefined}
               onDelete={msg.sender === "CUSTOMER" ? deleteCustomerMessage : undefined}
             />
