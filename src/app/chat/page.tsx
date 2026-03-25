@@ -5,6 +5,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import type { Conversation, ChatMessage, Customer } from "@/lib/types";
 import { useChatNotifications } from "@/hooks/useChatNotifications";
 import { ChatMessageBubble } from "@/components/chat/ChatMessageBubble";
+import { ConversationListRow } from "@/components/chat/ConversationListRow";
+import { isCustomerTypingRecently } from "@/lib/chat-typing";
 
 const POLL_INTERVAL_MS = 3000;
 
@@ -95,19 +97,6 @@ function InviteButton({ customerId }: { customerId: string }) {
   );
 }
 
-function LastMessagePreview({ conv }: { conv: Conversation }) {
-  const last = conv.messages?.[0];
-  if (!last) return <span className="text-slate-400 text-sm">No messages yet</span>;
-  const text = last.body?.trim();
-  const hasAttachment = last.attachments?.length ? last.attachments.length > 0 : false;
-  const preview = text || (hasAttachment ? "📎 Image" : "");
-  return (
-    <span className="text-slate-500 text-sm truncate block">
-      {preview || "—"}
-    </span>
-  );
-}
-
 export default function ChatPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -121,6 +110,14 @@ export default function ChatPage() {
   const [customerSearch, setCustomerSearch] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    convId: string;
+    x: number;
+    y: number;
+  } | null>(null);
+  const [swipeOpenId, setSwipeOpenId] = useState<string | null>(null);
+  const [customerTypingAt, setCustomerTypingAt] = useState<string | null>(null);
+  const [, setTypingTick] = useState(0);
 
   const fetchConversations = useCallback(async () => {
     const res = await fetch("/api/conversations");
@@ -134,7 +131,13 @@ export default function ChatPage() {
     const res = await fetch(`/api/conversations/${convId}/messages`);
     if (res.ok) {
       const data = await res.json();
-      setMessages(data);
+      if (Array.isArray(data)) {
+        setMessages(data);
+        setCustomerTypingAt(null);
+      } else {
+        setMessages(data.messages ?? []);
+        setCustomerTypingAt(data.customerTypingAt ?? null);
+      }
     }
   }, []);
 
@@ -148,6 +151,7 @@ export default function ChatPage() {
       fetchMessages(selectedId);
     } else {
       setMessages([]);
+      setCustomerTypingAt(null);
     }
   }, [selectedId, fetchMessages]);
 
@@ -160,10 +164,52 @@ export default function ChatPage() {
   useChatNotifications(conversations, fetchConversations, selectedId);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    if (!contextMenu) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setContextMenu(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [contextMenu]);
+
+  const archiveConversation = useCallback(
+    async (id: string) => {
+      try {
+        const res = await fetch(`/api/conversations/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ archived: true }),
+        });
+        if (res.ok) {
+          setConversations((prev) => prev.filter((c) => c.id !== id));
+          setSelectedId((cur) => (cur === id ? null : cur));
+          setSwipeOpenId(null);
+        } else {
+          const err = await res.json().catch(() => ({}));
+          alert(typeof err.error === "string" ? err.error : "Failed to archive");
+        }
+      } catch {
+        alert("Failed to archive");
+      }
+    },
+    []
+  );
 
   const selectedConv = conversations.find((c) => c.id === selectedId);
+  const typingSignal =
+    customerTypingAt ?? selectedConv?.customerTypingAt ?? null;
+  const showCustomerTyping =
+    Boolean(selectedId) && isCustomerTypingRecently(typingSignal);
+
+  useEffect(() => {
+    if (!typingSignal) return;
+    const id = setInterval(() => setTypingTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [typingSignal]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, showCustomerTyping]);
 
   const openNewConvModal = () => {
     setShowNewConvModal(true);
@@ -337,18 +383,23 @@ export default function ChatPage() {
             ) : (
               <ul className="divide-y divide-slate-200">
                 {conversations.map((conv) => (
-                  <li key={conv.id}>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedId(conv.id)}
-                      className={`w-full text-left p-3 hover:bg-slate-100 transition-colors ${
-                        selectedId === conv.id ? "bg-slate-200" : ""
-                      }`}
-                    >
-                      <CustomerName conv={conv} />
-                      <LastMessagePreview conv={conv} />
-                    </button>
-                  </li>
+                  <ConversationListRow
+                    key={conv.id}
+                    conv={conv}
+                    selected={selectedId === conv.id}
+                    onSelect={() => {
+                      setSwipeOpenId(null);
+                      setSelectedId(conv.id);
+                    }}
+                    onArchive={() => archiveConversation(conv.id)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setSwipeOpenId(null);
+                      setContextMenu({ convId: conv.id, x: e.clientX, y: e.clientY });
+                    }}
+                    swipeOpenId={swipeOpenId}
+                    onSwipeOpenChange={setSwipeOpenId}
+                  />
                 ))}
               </ul>
             )}
@@ -415,6 +466,11 @@ export default function ChatPage() {
                     onDelete={msg.sender === "STAFF" ? deleteStaffMessage : undefined}
                   />
                 ))}
+                {showCustomerTyping && (
+                  <p className="text-sm text-slate-500 italic" aria-live="polite">
+                    Customer is typing…
+                  </p>
+                )}
                 <div ref={messagesEndRef} />
               </div>
 
@@ -488,6 +544,44 @@ export default function ChatPage() {
           )}
         </section>
       </div>
+
+      {contextMenu && (
+        <>
+          <button
+            type="button"
+            className="fixed inset-0 z-[60] cursor-default bg-transparent border-0 p-0"
+            aria-label="Close menu"
+            onClick={() => setContextMenu(null)}
+          />
+          <div
+            role="menu"
+            className="fixed z-[70] min-w-[160px] rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+            style={{
+              left: Math.max(
+                8,
+                Math.min(contextMenu.x, (typeof window !== "undefined" ? window.innerWidth : 400) - 172)
+              ),
+              top: Math.max(
+                8,
+                Math.min(contextMenu.y, (typeof window !== "undefined" ? window.innerHeight : 400) - 48)
+              ),
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              role="menuitem"
+              className="w-full px-4 py-2.5 text-left text-sm text-slate-800 hover:bg-slate-100"
+              onClick={() => {
+                archiveConversation(contextMenu.convId);
+                setContextMenu(null);
+              }}
+            >
+              Archive
+            </button>
+          </div>
+        </>
+      )}
 
       {/* New conversation modal */}
       {showNewConvModal && (

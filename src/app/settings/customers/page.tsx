@@ -2,6 +2,12 @@
 
 import { useState, useEffect, useRef } from "react";
 import { formatCustomerName } from "@/lib/customer";
+import {
+  formatPhoneInputUS,
+  formatPhoneDisplay,
+  phoneTelHref,
+  phoneToInputValue,
+} from "@/lib/phone";
 import { CustomerDetailModal } from "@/components/customers/CustomerDetailModal";
 import { CustomerEditModal } from "@/components/customers/CustomerEditModal";
 
@@ -102,7 +108,7 @@ export default function CustomersPage() {
     setEditFirstName(c.firstName);
     setEditLastName(c.lastName ?? "");
     setEditEmail(c.email ?? "");
-    setEditPhone(c.phone ?? "");
+    setEditPhone(phoneToInputValue(c.phone));
     setEditAddress(c.address ?? "");
     setEditNotes(c.notes ?? "");
   };
@@ -116,7 +122,7 @@ export default function CustomersPage() {
       case "firstName": setEditFirstName(value); break;
       case "lastName": setEditLastName(value); break;
       case "email": setEditEmail(value); break;
-      case "phone": setEditPhone(value); break;
+      case "phone": setEditPhone(formatPhoneInputUS(value)); break;
       case "address": setEditAddress(value); break;
       case "notes": setEditNotes(value); break;
     }
@@ -274,7 +280,7 @@ export default function CustomersPage() {
         c.firstName,
         c.lastName ?? "",
         c.email ?? "",
-        c.phone ?? "",
+        c.phone ? formatPhoneDisplay(c.phone) : "",
         c.address ?? "",
         c.notes ?? "",
       ]
@@ -467,10 +473,12 @@ export default function CustomersPage() {
                   Phone
                 </label>
                 <input
+                  type="tel"
+                  autoComplete="tel"
                   value={newPhone}
-                  onChange={(e) => setNewPhone(e.target.value)}
+                  onChange={(e) => setNewPhone(formatPhoneInputUS(e.target.value))}
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg"
-                  placeholder="555-123-4567"
+                  placeholder="(555) 123-4567"
                 />
               </div>
               <div className="sm:col-span-2">
@@ -914,11 +922,11 @@ export default function CustomersPage() {
                     {c.phone && (
                       <span>
                         <a
-                          href={`tel:${c.phone}`}
+                          href={phoneTelHref(c.phone)}
                           onClick={(e) => e.stopPropagation()}
                           className="text-indigo-600 hover:underline"
                         >
-                          {c.phone}
+                          {formatPhoneDisplay(c.phone)}
                         </a>
                       </span>
                     )}

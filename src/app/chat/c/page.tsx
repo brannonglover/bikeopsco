@@ -20,6 +20,34 @@ export default function CustomerChatPage() {
   const [sending, setSending] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const typingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const sendTyping = useCallback((active: boolean) => {
+    fetch("/api/chat/conversation/typing", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ active }),
+    }).catch(() => {});
+  }, []);
+
+  const stopTypingPing = useCallback(() => {
+    if (typingIntervalRef.current) {
+      clearInterval(typingIntervalRef.current);
+      typingIntervalRef.current = null;
+    }
+    sendTyping(false);
+  }, [sendTyping]);
+
+  const startTypingPing = useCallback(() => {
+    if (typingIntervalRef.current) return;
+    sendTyping(true);
+    typingIntervalRef.current = setInterval(() => sendTyping(true), 2000);
+  }, [sendTyping]);
+
+  useEffect(() => {
+    return () => stopTypingPing();
+  }, [stopTypingPing]);
 
   const fetchMessages = useCallback(async () => {
     const res = await fetch("/api/chat/conversation/messages", { credentials: "include" });
@@ -30,27 +58,81 @@ export default function CustomerChatPage() {
   }, []);
 
   useEffect(() => {
-    const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
-    const error = params.get("error");
-    if (error === "expired") {
-      setLoginMessage("That sign-in link has expired. Please request a new one below.");
-    } else if (error === "invalid") {
-      setLoginMessage("Invalid sign-in link. Please request a new one below.");
-    }
-  }, []);
+    let cancelled = false;
 
-  useEffect(() => {
-    fetch("/api/chat/me", { credentials: "include" })
-      .then((res) => {
-        if (res.ok) {
-          return res.json().then((data) => {
+    async function init() {
+      const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+      const error = params.get("error");
+      if (error === "expired") {
+        setLoginMessage("That sign-in link has expired. Please request a new one below.");
+      } else if (error === "invalid") {
+        setLoginMessage("Invalid sign-in link. Please request a new one below.");
+      }
+
+      const hash = typeof window !== "undefined" ? window.location.hash : "";
+      if (hash.startsWith("#token=")) {
+        const token = decodeURIComponent(hash.slice("#token=".length));
+        try {
+          const res = await fetch("/api/chat/verify", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token }),
+          });
+          if (!cancelled) {
+            window.history.replaceState(null, "", window.location.pathname + window.location.search);
+          }
+          if (res.ok) {
+            const me = await fetch("/api/chat/me", { credentials: "include" });
+            if (me.ok && !cancelled) {
+              const data = await me.json();
+              setCustomerName(data.lastName ? `${data.firstName} ${data.lastName}` : data.firstName);
+              setStatus("chat");
+              return;
+            }
+          }
+          if (!cancelled) {
+            const err = await res.json().catch(() => ({}));
+            const code = typeof err.error === "string" ? err.error : "invalid";
+            if (code === "expired") {
+              setLoginMessage("That sign-in link has expired. Please request a new one below.");
+            } else {
+              setLoginMessage(
+                "That sign-in link is invalid or was already used. Please request a new one below."
+              );
+            }
+            setStatus("login");
+          }
+          return;
+        } catch {
+          if (!cancelled) {
+            setLoginMessage("Something went wrong. Please try again.");
+            setStatus("login");
+          }
+          return;
+        }
+      }
+
+      try {
+        const res = await fetch("/api/chat/me", { credentials: "include" });
+        if (!cancelled) {
+          if (res.ok) {
+            const data = await res.json();
             setCustomerName(data.lastName ? `${data.firstName} ${data.lastName}` : data.firstName);
             setStatus("chat");
-          });
+          } else {
+            setStatus("login");
+          }
         }
-        setStatus("login");
-      })
-      .catch(() => setStatus("login"));
+      } catch {
+        if (!cancelled) setStatus("login");
+      }
+    }
+
+    void init();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -155,6 +237,7 @@ export default function CustomerChatPage() {
     const hasImages = pendingImages.length > 0;
     if (!hasText && !hasImages) return;
 
+    stopTypingPing();
     setSending(true);
     try {
       const res = await fetch("/api/chat/conversation/messages", {
@@ -320,7 +403,19 @@ export default function CustomerChatPage() {
             <input
               type="text"
               value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
+              onChange={(e) => {
+                const v = e.target.value;
+                setInputText(v);
+                if (v.trim().length > 0) {
+                  startTypingPing();
+                } else {
+                  stopTypingPing();
+                }
+              }}
+              onBlur={() => stopTypingPing()}
+              onFocus={() => {
+                if (inputText.trim().length > 0) startTypingPing();
+              }}
               onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), handleSend())}
               placeholder="Type a message…"
               className="flex-1 min-w-0 px-4 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"

@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Price } from "@/components/ui/Price";
+import { formatPhoneInputUS } from "@/lib/phone";
 
 interface Service {
   id: string;
@@ -211,7 +212,9 @@ function BookForm() {
             type="tel"
             required
             value={form.phone}
-            onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
+            onChange={(e) =>
+              setForm((p) => ({ ...p, phone: formatPhoneInputUS(e.target.value) }))
+            }
             className="input-book"
             placeholder="(555) 123-4567"
           />

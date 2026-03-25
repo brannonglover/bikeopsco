@@ -212,14 +212,17 @@ model JobProduct {
 }
 
 model Conversation {
-  id         String    @id @default(cuid())
-  customerId String
-  customer   Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  jobId      String?
-  job        Job?      @relation(fields: [jobId], references: [id], onDelete: SetNull)
-  messages   Message[]
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  id                 String    @id @default(cuid())
+  customerId         String
+  customer           Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  jobId              String?
+  job                Job?      @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  messages           Message[]
+  archived           Boolean   @default(false)
+  /// Last time the customer sent a typing heartbeat (staff UI treats as “typing” if recent).
+  customerTypingAt   DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 }
 
 model Message {

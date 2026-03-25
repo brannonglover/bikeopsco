@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { sendBookingRequestNotification } from "@/lib/email";
 import { syncCollectionJobService } from "@/lib/collection-fee";
+import { coerceCustomerPhone } from "@/lib/phone";
 
 const bookSchema = z.object({
   // Customer
@@ -63,6 +64,7 @@ export async function POST(request: NextRequest) {
     const data = bookSchema.parse(body);
 
     const emailNormalized = data.email.trim().toLowerCase();
+    const phoneStored = coerceCustomerPhone(data.phone);
 
     const job = await prisma.$transaction(async (tx) => {
       let customer = await tx.customer.findFirst({
@@ -77,7 +79,7 @@ export async function POST(request: NextRequest) {
             firstName: data.firstName,
             lastName: data.lastName ?? null,
             email: data.email.trim(),
-            phone: data.phone ?? null,
+            phone: phoneStored,
             address: data.address ?? null,
           },
         });
@@ -87,7 +89,7 @@ export async function POST(request: NextRequest) {
           data: {
             firstName: data.firstName,
             lastName: data.lastName ?? null,
-            phone: data.phone ?? null,
+            phone: phoneStored,
             address: data.address ?? customer.address,
           },
         });

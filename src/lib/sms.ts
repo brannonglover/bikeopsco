@@ -1,6 +1,6 @@
 import Twilio from "twilio";
-import { parsePhoneNumber, isValidPhoneNumber } from "libphonenumber-js";
 import { getAppUrl } from "./env";
+import { normalizePhone } from "./phone";
 
 const twilio =
   process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN
@@ -59,23 +59,6 @@ function mergeTemplateVariables(
     );
   }
   return result;
-}
-
-/**
- * Normalize a phone number to E.164 format.
- * Returns null if the number is invalid or cannot be parsed.
- */
-export function normalizePhone(phone: string): string | null {
-  const trimmed = phone.trim();
-  if (!trimmed) return null;
-  try {
-    // Try with default region (US) if number doesn't start with +
-    const parsed = parsePhoneNumber(trimmed, "US");
-    if (!parsed || !isValidPhoneNumber(parsed.number)) return null;
-    return parsed.format("E.164");
-  } catch {
-    return null;
-  }
 }
 
 export interface JobForSms {

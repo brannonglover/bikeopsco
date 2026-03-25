@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { coerceCustomerPhone } from "@/lib/phone";
 import { z } from "zod";
 
 const updateCustomerSchema = z.object({
@@ -26,7 +27,9 @@ export async function PATCH(
         ...(data.firstName !== undefined && { firstName: data.firstName }),
         ...(data.lastName !== undefined && { lastName: data.lastName }),
         ...(data.email !== undefined && { email: data.email }),
-        ...(data.phone !== undefined && { phone: data.phone }),
+        ...(data.phone !== undefined && {
+          phone: coerceCustomerPhone(data.phone),
+        }),
         ...(data.address !== undefined && { address: data.address }),
         ...(data.notes !== undefined && { notes: data.notes }),
       },

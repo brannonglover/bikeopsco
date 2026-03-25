@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { coerceCustomerPhone } from "@/lib/phone";
 import { z } from "zod";
 
 const createCustomerSchema = z.object({
@@ -50,7 +51,7 @@ export async function POST(request: NextRequest) {
         firstName: data.firstName,
         lastName: data.lastName ?? null,
         email: data.email ?? null,
-        phone: data.phone ?? null,
+        phone: coerceCustomerPhone(data.phone),
         address: data.address ?? null,
         notes: data.notes ?? null,
       },

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { formatCustomerName } from "@/lib/customer";
+import { formatPhoneDisplay, phoneTelHref } from "@/lib/phone";
 import { BikePlaceholderIcon } from "@/components/ui/BikePlaceholderIcon";
 import type L from "leaflet";
 
@@ -728,10 +729,10 @@ export function CustomerDetailModal({
                     {customer.phone && (
                       <p>
                         <a
-                          href={`tel:${customer.phone}`}
+                          href={phoneTelHref(customer.phone)}
                           className="text-blue-600 hover:underline"
                         >
-                          {customer.phone}
+                          {formatPhoneDisplay(customer.phone)}
                         </a>
                       </p>
                     )}

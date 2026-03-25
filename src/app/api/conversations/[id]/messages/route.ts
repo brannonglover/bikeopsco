@@ -15,13 +15,22 @@ export async function GET(
   try {
     const { id: conversationId } = await params;
 
-    const messages = await prisma.message.findMany({
-      where: { conversationId },
-      orderBy: { createdAt: "asc" },
-      include: { attachments: true },
-    });
+    const [messages, conversation] = await Promise.all([
+      prisma.message.findMany({
+        where: { conversationId },
+        orderBy: { createdAt: "asc" },
+        include: { attachments: true },
+      }),
+      prisma.conversation.findUnique({
+        where: { id: conversationId },
+        select: { customerTypingAt: true },
+      }),
+    ]);
 
-    return NextResponse.json(messages);
+    return NextResponse.json({
+      messages,
+      customerTypingAt: conversation?.customerTypingAt?.toISOString() ?? null,
+    });
   } catch (error) {
     console.error("GET /api/conversations/[id]/messages error:", error);
     return NextResponse.json(

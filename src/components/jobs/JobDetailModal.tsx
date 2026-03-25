@@ -5,6 +5,7 @@ import type { Job, JobBike, JobProduct, JobService, Stage } from "@/lib/types";
 import { Price } from "@/components/ui/Price";
 import { BikePlaceholderIcon } from "@/components/ui/BikePlaceholderIcon";
 import { resolveEffectiveBikeType } from "@/lib/bike-type";
+import { formatPhoneDisplay, phoneTelHref } from "@/lib/phone";
 
 function resolveBikeImageUrl(b: JobBike, customerBikes?: { make: string; model: string; imageUrl: string | null }[]): string | null {
   const url = b.imageUrl ?? b.bike?.imageUrl ?? null;
@@ -848,10 +849,10 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
               )}
               {job.customer.phone && (
                 <a
-                  href={`tel:${job.customer.phone}`}
+                  href={phoneTelHref(job.customer.phone)}
                   className="block text-sm text-slate-600 hover:text-slate-800"
                 >
-                  {job.customer.phone}
+                  {formatPhoneDisplay(job.customer.phone)}
                 </a>
               )}
             </div>

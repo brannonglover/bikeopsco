@@ -44,7 +44,8 @@ export async function POST(request: NextRequest) {
     });
 
     const baseUrl = getAppUrl();
-    const magicLinkUrl = `${baseUrl}/api/chat/verify?token=${token}`;
+    // Fragment so link scanners don't prefetch and burn the one-time token (GET never sees #…).
+    const magicLinkUrl = `${baseUrl}/chat/c#token=${encodeURIComponent(token)}`;
 
     const apiKey = getResendApiKey();
     const resend = apiKey ? new Resend(apiKey) : null;

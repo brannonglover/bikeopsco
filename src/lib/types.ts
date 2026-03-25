@@ -101,6 +101,8 @@ export interface Conversation {
   customer: Customer;
   job?: { id: string; bikeMake: string; bikeModel: string } | null;
   messages: ChatMessage[];
+  archived?: boolean;
+  customerTypingAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }

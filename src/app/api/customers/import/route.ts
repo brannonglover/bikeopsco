@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { prisma } from "@/lib/db";
+import { coerceCustomerPhone } from "@/lib/phone";
 import {
   parseCSV,
   applyCustomerMapping,
@@ -150,7 +151,14 @@ export async function POST(request: NextRequest) {
 
       try {
         const customer = await prisma.customer.create({
-          data: { firstName, lastName, email, phone, address, notes },
+          data: {
+            firstName,
+            lastName,
+            email,
+            phone: coerceCustomerPhone(phone),
+            address,
+            notes,
+          },
         });
         created.push({
           firstName: customer.firstName,

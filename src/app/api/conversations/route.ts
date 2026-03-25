@@ -10,6 +10,7 @@ const createSchema = z.object({
 export async function GET() {
   try {
     const conversations = await prisma.conversation.findMany({
+      where: { archived: false },
       orderBy: { updatedAt: "desc" },
       include: {
         customer: true,

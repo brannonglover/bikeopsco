@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
       data: { token, customerId: customer.id, expiresAt },
     });
 
-    const magicLinkUrl = `${baseUrl}/api/chat/verify?token=${token}`;
+    const magicLinkUrl = `${baseUrl}/chat/c#token=${encodeURIComponent(token)}`;
 
     const apiKey = getResendApiKey();
     const resend = apiKey ? new Resend(apiKey) : null;

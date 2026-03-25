@@ -112,9 +112,12 @@ export function CustomerEditModal({
                 Phone
               </label>
               <input
+                type="tel"
+                autoComplete="tel"
                 value={formState.phone}
                 onChange={(e) => onFormChange("phone", e.target.value)}
                 className="w-full px-4 py-2 border border-slate-300 rounded-lg"
+                placeholder="(555) 123-4567"
               />
             </div>
             <div className="sm:col-span-2">
