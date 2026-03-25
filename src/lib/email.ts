@@ -544,6 +544,125 @@ export async function sendChatMagicLinkEmail(
   }
 }
 
+export async function sendChatCustomerReplyReminder(
+  customerEmail: string,
+  customerFirstName: string,
+  chatUrl: string,
+  reminderMinutes: number
+): Promise<{ ok: boolean; error?: string }> {
+  const resend = getResend();
+  if (!resend) {
+    console.warn("RESEND_API_KEY not set, skipping chat reminder email");
+    return { ok: false, error: "Email not configured" };
+  }
+
+  const shopName = SHOP_NAME;
+  const name = customerFirstName.trim() || "there";
+  const subject = `${shopName} is waiting for your reply`;
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background: #f8fafc; color: #0f172a; }
+    .container { max-width: 480px; margin: 0 auto; padding: 40px 20px; }
+    .card { background: white; border-radius: 12px; padding: 32px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.07); }
+    .btn { display: inline-block; padding: 14px 28px; background: #059669; color: white !important; text-decoration: none; font-weight: 600; border-radius: 8px; }
+    .muted { color: #64748b; font-size: 14px; margin-top: 24px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h1 style="margin: 0 0 16px; font-size: 22px;">Hi ${escapeHtml(name)},</h1>
+      <p style="margin: 0 0 24px; font-size: 16px; color: #475569;">
+        We sent you a message in chat at least ${reminderMinutes} minute${reminderMinutes === 1 ? "" : "s"} ago. When you have a moment, please open the conversation and reply.
+      </p>
+      <a href="${chatUrl}" class="btn">Open chat</a>
+      <p class="muted">
+        If you already replied, you can ignore this email.
+      </p>
+    </div>
+  </div>
+</body>
+</html>
+  `.trim();
+
+  try {
+    const { error } = await resend.emails.send({
+      from: getFromEmail(),
+      to: customerEmail,
+      subject,
+      html,
+    });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Unknown error" };
+  }
+}
+
+export async function sendChatStaffReplyReminder(
+  staffEmail: string,
+  customerDisplayName: string,
+  chatUrl: string,
+  reminderMinutes: number
+): Promise<{ ok: boolean; error?: string }> {
+  const resend = getResend();
+  if (!resend) {
+    console.warn("RESEND_API_KEY not set, skipping chat reminder email");
+    return { ok: false, error: "Email not configured" };
+  }
+
+  const shopName = SHOP_NAME;
+  const subject = `Chat: ${customerDisplayName} is waiting for a reply`;
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background: #f8fafc; color: #0f172a; }
+    .container { max-width: 480px; margin: 0 auto; padding: 40px 20px; }
+    .card { background: white; border-radius: 12px; padding: 32px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.07); }
+    .btn { display: inline-block; padding: 14px 28px; background: #0f766e; color: white !important; text-decoration: none; font-weight: 600; border-radius: 8px; }
+    .muted { color: #64748b; font-size: 14px; margin-top: 24px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h1 style="margin: 0 0 16px; font-size: 22px;">${escapeHtml(customerDisplayName)} messaged you</h1>
+      <p style="margin: 0 0 24px; font-size: 16px; color: #475569;">
+        It has been at least ${reminderMinutes} minute${reminderMinutes === 1 ? "" : "s"} since their last message. Open ${escapeHtml(shopName)} chat to reply when you can.
+      </p>
+      <a href="${chatUrl}" class="btn">Open staff chat</a>
+      <p class="muted">
+        If you already replied, you can ignore this email.
+      </p>
+    </div>
+  </div>
+</body>
+</html>
+  `.trim();
+
+  try {
+    const { error } = await resend.emails.send({
+      from: getFromEmail(),
+      to: staffEmail,
+      subject,
+      html,
+    });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Unknown error" };
+  }
+}
+
 export async function sendPaymentReceiptEmail(
   job: JobForInvoice,
   totalPaid?: number

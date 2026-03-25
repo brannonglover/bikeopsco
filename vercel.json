@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/send-follow-ups",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/chat-reminders",
+      "schedule": "*/5 * * * *"
+    }
+  ]
+}
