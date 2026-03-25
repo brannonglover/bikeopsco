@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Conversation } from "@/lib/types";
 import { isCustomerTypingRecently } from "@/lib/chat-typing";
+import { hasUnreadCustomerMessage } from "@/lib/chat-unread";
 
 const ACTION_WIDTH = 72;
 
@@ -137,6 +138,8 @@ export function ConversationListRow({
     onSelect();
   };
 
+  const showUnread = hasUnreadCustomerMessage(conv);
+
   return (
     <li className="relative md:static">
       <div
@@ -179,10 +182,19 @@ export function ConversationListRow({
           type="button"
           onClick={handleRowClick}
           onContextMenu={onContextMenu}
-          className={`w-full text-left p-3 hover:bg-slate-100 transition-colors ${
+          className={`relative w-full text-left p-3 hover:bg-slate-100 transition-colors ${
             selected ? "bg-slate-200" : ""
           }`}
         >
+          {showUnread && (
+            <span
+              className={`pointer-events-none absolute top-2 right-2 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ${
+                selected ? "ring-slate-200" : "ring-slate-50"
+              }`}
+              aria-hidden
+            />
+          )}
+          <span className="sr-only">{showUnread ? "Unread message. " : ""}</span>
           <CustomerName conv={conv} />
           <LastMessagePreview conv={conv} />
         </button>

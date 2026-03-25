@@ -27,9 +27,16 @@ export async function GET(
       }),
     ]);
 
+    const readUpdate = await prisma.conversation.update({
+      where: { id: conversationId },
+      data: { staffLastReadAt: new Date() },
+      select: { staffLastReadAt: true },
+    });
+
     return NextResponse.json({
       messages,
       customerTypingAt: conversation?.customerTypingAt?.toISOString() ?? null,
+      staffLastReadAt: (readUpdate.staffLastReadAt ?? new Date()).toISOString(),
     });
   } catch (error) {
     console.error("GET /api/conversations/[id]/messages error:", error);

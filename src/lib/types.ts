@@ -103,6 +103,8 @@ export interface Conversation {
   messages: ChatMessage[];
   archived?: boolean;
   customerTypingAt?: string | null;
+  /** ISO time when staff last loaded this thread; unread badge if last message is newer from customer. */
+  staffLastReadAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }

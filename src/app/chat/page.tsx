@@ -137,6 +137,13 @@ export default function ChatPage() {
       } else {
         setMessages(data.messages ?? []);
         setCustomerTypingAt(data.customerTypingAt ?? null);
+        if (typeof data.staffLastReadAt === "string") {
+          setConversations((prev) =>
+            prev.map((c) =>
+              c.id === convId ? { ...c, staffLastReadAt: data.staffLastReadAt } : c
+            )
+          );
+        }
       }
     }
   }, []);

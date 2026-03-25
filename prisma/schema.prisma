@@ -221,6 +221,8 @@ model Conversation {
   archived           Boolean   @default(false)
   /// Last time the customer sent a typing heartbeat (staff UI treats as “typing” if recent).
   customerTypingAt   DateTime?
+  /// When staff last opened this thread (GET messages). Used for unread badge vs customer messages.
+  staffLastReadAt    DateTime?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 }
