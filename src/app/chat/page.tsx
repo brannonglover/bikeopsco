@@ -450,85 +450,88 @@ export default function ChatPage() {
         >
           {selectedId ? (
             <>
-              {/* Single scroll region: sticky header stays at top while messages scroll */}
-              <div
-                ref={messagesScrollRef}
-                className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain flex flex-col"
-              >
-                <header className="sticky top-0 z-10 flex items-center gap-3 px-4 py-3 border-b border-slate-200 shrink-0 bg-white">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedId(null)}
-                    className="md:hidden p-2 -ml-2 rounded-lg text-slate-500 hover:bg-slate-100"
-                    aria-label="Back to conversations"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </button>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-slate-900 truncate">
-                      {selectedConv ? (
-                        <CustomerName conv={selectedConv} />
-                      ) : (
-                        "Loading…"
-                      )}
-                    </h3>
-                    {selectedConv?.customer.email && (
-                      <p className="text-xs text-slate-500 truncate">{selectedConv.customer.email}</p>
+              {/* Header sits outside the scroll view so iOS rubber-band overscroll doesn’t stretch it */}
+              <header className="flex shrink-0 items-center gap-3 px-4 py-3 border-b border-slate-200 bg-white">
+                <button
+                  type="button"
+                  onClick={() => setSelectedId(null)}
+                  className="md:hidden p-2 -ml-2 rounded-lg text-slate-500 hover:bg-slate-100"
+                  aria-label="Back to conversations"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-semibold text-slate-900 truncate">
+                    {selectedConv ? (
+                      <CustomerName conv={selectedConv} />
+                    ) : (
+                      "Loading…"
+                    )}
+                  </h3>
+                  {selectedConv?.customer.email && (
+                    <p className="text-xs text-slate-500 truncate">{selectedConv.customer.email}</p>
+                  )}
+                </div>
+                {selectedConv?.customer.email && (
+                  <InviteButton customerId={selectedConv.customerId} />
+                )}
+              </header>
+
+              {/* Clip scroll overscroll so elastic bounce doesn’t distort the composer below */}
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                <div
+                  ref={messagesScrollRef}
+                  className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain touch-pan-y"
+                >
+                  <div className="p-4 space-y-3">
+                    {messagesLoading && messages.length === 0 ? (
+                      <div className="flex items-center gap-2 text-sm text-slate-500" aria-live="polite">
+                        <span
+                          className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-emerald-600"
+                          aria-hidden
+                        />
+                        Loading messages…
+                      </div>
+                    ) : null}
+                    {messages.map((msg) => (
+                      <ChatMessageBubble
+                        key={msg.id}
+                        msg={msg}
+                        isOwn={msg.sender === "STAFF"}
+                        align={msg.sender === "STAFF" ? "end" : "start"}
+                        bubbleClassName={
+                          msg.sender === "STAFF"
+                            ? "bg-emerald-600 text-white rounded-br-md"
+                            : "bg-slate-100 text-slate-900 rounded-bl-md"
+                        }
+                        metaClassName={msg.sender === "STAFF" ? "text-emerald-200" : "text-slate-500"}
+                        linkClassName={msg.sender === "STAFF" ? "text-emerald-100" : "text-emerald-700"}
+                        actionMutedClassName={
+                          msg.sender === "STAFF"
+                            ? "text-emerald-200/90 hover:text-white"
+                            : "text-slate-500 hover:text-slate-700"
+                        }
+                        saveEditButtonClassName={
+                          msg.sender === "STAFF"
+                            ? "text-xs font-medium text-white hover:text-emerald-100"
+                            : undefined
+                        }
+                        onPatch={msg.sender === "STAFF" ? patchStaffMessage : undefined}
+                        onDelete={msg.sender === "STAFF" ? deleteStaffMessage : undefined}
+                      />
+                    ))}
+                    {showCustomerTyping && (
+                      <p className="text-sm text-slate-500 italic" aria-live="polite">
+                        Customer is typing…
+                      </p>
                     )}
                   </div>
-                  {selectedConv?.customer.email && (
-                    <InviteButton customerId={selectedConv.customerId} />
-                  )}
-                </header>
-
-                <div className="p-4 space-y-3">
-                  {messagesLoading && messages.length === 0 ? (
-                    <div className="flex items-center gap-2 text-sm text-slate-500" aria-live="polite">
-                      <span
-                        className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-emerald-600"
-                        aria-hidden
-                      />
-                      Loading messages…
-                    </div>
-                  ) : null}
-                  {messages.map((msg) => (
-                    <ChatMessageBubble
-                      key={msg.id}
-                      msg={msg}
-                      isOwn={msg.sender === "STAFF"}
-                      align={msg.sender === "STAFF" ? "end" : "start"}
-                      bubbleClassName={
-                        msg.sender === "STAFF"
-                          ? "bg-emerald-600 text-white rounded-br-md"
-                          : "bg-slate-100 text-slate-900 rounded-bl-md"
-                      }
-                      metaClassName={msg.sender === "STAFF" ? "text-emerald-200" : "text-slate-500"}
-                      linkClassName={msg.sender === "STAFF" ? "text-emerald-100" : "text-emerald-700"}
-                      actionMutedClassName={
-                        msg.sender === "STAFF"
-                          ? "text-emerald-200/90 hover:text-white"
-                          : "text-slate-500 hover:text-slate-700"
-                      }
-                      saveEditButtonClassName={
-                        msg.sender === "STAFF"
-                          ? "text-xs font-medium text-white hover:text-emerald-100"
-                          : undefined
-                      }
-                      onPatch={msg.sender === "STAFF" ? patchStaffMessage : undefined}
-                      onDelete={msg.sender === "STAFF" ? deleteStaffMessage : undefined}
-                    />
-                  ))}
-                  {showCustomerTyping && (
-                    <p className="text-sm text-slate-500 italic" aria-live="polite">
-                      Customer is typing…
-                    </p>
-                  )}
                 </div>
               </div>
 
-              <div className="flex-shrink-0 p-4 border-t border-slate-200 bg-slate-50">
+              <footer className="shrink-0 border-t border-slate-200 bg-slate-50 p-4 isolate">
                 {pendingImages.length > 0 && (
                   <div className="flex gap-2 mb-2 flex-wrap">
                     {pendingImages.map((p) => (
@@ -589,7 +592,7 @@ export default function ChatPage() {
                     {sending ? "Sending…" : "Send"}
                   </button>
                 </div>
-              </div>
+              </footer>
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center text-slate-500">
