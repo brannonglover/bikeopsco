@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useLayoutEffect } from "react";
 import type { Conversation, ChatMessage, Customer } from "@/lib/types";
 import { useChatNotifications } from "@/hooks/useChatNotifications";
 import { ChatMessageBubble } from "@/components/chat/ChatMessageBubble";
@@ -118,6 +118,12 @@ export default function ChatPage() {
   const [swipeOpenId, setSwipeOpenId] = useState<string | null>(null);
   const [customerTypingAt, setCustomerTypingAt] = useState<string | null>(null);
   const [, setTypingTick] = useState(0);
+  const [messagesLoading, setMessagesLoading] = useState(false);
+  const selectedIdRef = useRef<string | null>(null);
+
+  useLayoutEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
 
   const fetchConversations = useCallback(async () => {
     const res = await fetch("/api/conversations");
@@ -127,26 +133,36 @@ export default function ChatPage() {
     }
   }, []);
 
-  const fetchMessages = useCallback(async (convId: string) => {
-    const res = await fetch(`/api/conversations/${convId}/messages`);
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        setMessages(data);
-        setCustomerTypingAt(null);
-      } else {
-        setMessages(data.messages ?? []);
-        setCustomerTypingAt(data.customerTypingAt ?? null);
-        if (typeof data.staffLastReadAt === "string") {
-          setConversations((prev) => {
-            if (prev.length === 0) return prev;
-            const idx = prev.findIndex((c) => c.id === convId);
-            if (idx === -1) return prev;
-            const next = [...prev];
-            next[idx] = { ...next[idx], staffLastReadAt: data.staffLastReadAt };
-            return next;
-          });
-        }
+  const fetchMessages = useCallback(async (convId: string, options?: { signal?: AbortSignal }) => {
+    let res: Response;
+    try {
+      res = await fetch(`/api/conversations/${convId}/messages`, {
+        signal: options?.signal,
+      });
+    } catch (e: unknown) {
+      if (e && typeof e === "object" && "name" in e && (e as { name: string }).name === "AbortError") {
+        return;
+      }
+      throw e;
+    }
+    if (!res.ok) return;
+    const data = await res.json();
+    if (selectedIdRef.current !== convId) return;
+    if (Array.isArray(data)) {
+      setMessages(data);
+      setCustomerTypingAt(null);
+    } else {
+      setMessages(data.messages ?? []);
+      setCustomerTypingAt(data.customerTypingAt ?? null);
+      if (typeof data.staffLastReadAt === "string") {
+        setConversations((prev) => {
+          if (prev.length === 0) return prev;
+          const idx = prev.findIndex((c) => c.id === convId);
+          if (idx === -1) return prev;
+          const next = [...prev];
+          next[idx] = { ...next[idx], staffLastReadAt: data.staffLastReadAt };
+          return next;
+        });
       }
     }
   }, []);
@@ -157,12 +173,20 @@ export default function ChatPage() {
   }, [fetchConversations]);
 
   useEffect(() => {
-    if (selectedId) {
-      fetchMessages(selectedId);
-    } else {
+    if (!selectedId) {
       setMessages([]);
       setCustomerTypingAt(null);
+      setMessagesLoading(false);
+      return;
     }
+    const ac = new AbortController();
+    setMessagesLoading(true);
+    setMessages([]);
+    setCustomerTypingAt(null);
+    fetchMessages(selectedId, { signal: ac.signal }).finally(() => {
+      setMessagesLoading(false);
+    });
+    return () => ac.abort();
   }, [selectedId, fetchMessages]);
 
   useEffect(() => {
@@ -449,6 +473,15 @@ export default function ChatPage() {
               </header>
 
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                {messagesLoading && messages.length === 0 ? (
+                  <div className="flex items-center gap-2 text-sm text-slate-500" aria-live="polite">
+                    <span
+                      className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-emerald-600"
+                      aria-hidden
+                    />
+                    Loading messages…
+                  </div>
+                ) : null}
                 {messages.map((msg) => (
                   <ChatMessageBubble
                     key={msg.id}

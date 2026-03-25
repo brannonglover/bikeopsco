@@ -15,20 +15,21 @@ export async function GET(
   try {
     const { id: conversationId } = await params;
 
-    const conversation = await prisma.conversation.findUnique({
-      where: { id: conversationId },
-      select: { customerTypingAt: true, updatedAt: true },
-    });
+    const [conversation, messages] = await Promise.all([
+      prisma.conversation.findUnique({
+        where: { id: conversationId },
+        select: { customerTypingAt: true, updatedAt: true },
+      }),
+      prisma.message.findMany({
+        where: { conversationId },
+        orderBy: { createdAt: "asc" },
+        include: { attachments: true },
+      }),
+    ]);
 
     if (!conversation) {
       return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
     }
-
-    const messages = await prisma.message.findMany({
-      where: { conversationId },
-      orderBy: { createdAt: "asc" },
-      include: { attachments: true },
-    });
 
     // Preserve updatedAt so marking read does not reorder the inbox (list is sorted by updatedAt).
     const readUpdate = await prisma.conversation.update({
