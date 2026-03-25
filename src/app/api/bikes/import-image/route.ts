@@ -14,7 +14,10 @@ function isValidImageUrl(url: string): boolean {
 export async function POST(request: NextRequest) {
   if (!process.env.BLOB_READ_WRITE_TOKEN) {
     return NextResponse.json(
-      { error: "Image storage is not configured." },
+      {
+        error:
+          "Image storage is not configured. Add BLOB_READ_WRITE_TOKEN to your environment (Vercel Dashboard → Storage → Blob). Online image search still needs Blob to save the chosen image.",
+      },
       { status: 503 }
     );
   }

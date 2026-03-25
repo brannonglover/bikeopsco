@@ -19,7 +19,7 @@ export default function CustomerChatPage() {
   const [pendingImages, setPendingImages] = useState<{ id: string; url: string; filename: string }[]>([]);
   const [sending, setSending] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
   const typingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const sendTyping = useCallback((active: boolean) => {
@@ -150,7 +150,9 @@ export default function CustomerChatPage() {
   useCustomerChatNotifications(messages, status === "chat");
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -325,7 +327,7 @@ export default function CustomerChatPage() {
           </button>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        <div ref={messagesScrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
           {messages.map((msg) => (
             <ChatMessageBubble
               key={msg.id}
@@ -353,7 +355,6 @@ export default function CustomerChatPage() {
               onDelete={msg.sender === "CUSTOMER" ? deleteCustomerMessage : undefined}
             />
           ))}
-          <div ref={messagesEndRef} />
         </div>
 
         <div className="flex-shrink-0 p-4 border-t border-slate-200 bg-slate-50">

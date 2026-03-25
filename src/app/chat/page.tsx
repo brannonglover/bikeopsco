@@ -109,7 +109,7 @@ export default function ChatPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customerSearch, setCustomerSearch] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
   const [contextMenu, setContextMenu] = useState<{
     convId: string;
     x: number;
@@ -242,7 +242,9 @@ export default function ChatPage() {
   }, [typingSignal]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [messages, showCustomerTyping]);
 
   const openNewConvModal = () => {
@@ -446,7 +448,7 @@ export default function ChatPage() {
             selectedId ? "flex" : "hidden md:flex"
           }`}
         >
-          {selectedId && selectedConv ? (
+          {selectedId ? (
             <>
               <header className="flex items-center gap-3 px-4 py-3 border-b border-slate-200 flex-shrink-0 bg-white">
                 <button
@@ -461,18 +463,25 @@ export default function ChatPage() {
                 </button>
                 <div className="flex-1 min-w-0">
                   <h3 className="font-semibold text-slate-900 truncate">
-                    <CustomerName conv={selectedConv} />
+                    {selectedConv ? (
+                      <CustomerName conv={selectedConv} />
+                    ) : (
+                      "Loading…"
+                    )}
                   </h3>
-                  {selectedConv.customer.email && (
+                  {selectedConv?.customer.email && (
                     <p className="text-xs text-slate-500 truncate">{selectedConv.customer.email}</p>
                   )}
                 </div>
-                {selectedConv.customer.email && (
+                {selectedConv?.customer.email && (
                   <InviteButton customerId={selectedConv.customerId} />
                 )}
               </header>
 
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              <div
+                ref={messagesScrollRef}
+                className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0"
+              >
                 {messagesLoading && messages.length === 0 ? (
                   <div className="flex items-center gap-2 text-sm text-slate-500" aria-live="polite">
                     <span
@@ -514,7 +523,6 @@ export default function ChatPage() {
                     Customer is typing…
                   </p>
                 )}
-                <div ref={messagesEndRef} />
               </div>
 
               <div className="flex-shrink-0 p-4 border-t border-slate-200 bg-slate-50">
