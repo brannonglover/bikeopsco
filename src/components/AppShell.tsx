@@ -168,7 +168,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Main content - offset for mobile header; left margin on desktop for fixed sidebar */}
-      <main className="flex-1 min-w-0 pt-[calc(5.5rem+env(safe-area-inset-top,0px)+1.25rem)] md:pt-6 md:ml-56 p-4 sm:p-6">{children}</main>
+      <main className="flex-1 min-w-0 pt-[calc(5.5rem+env(safe-area-inset-top,0px))] md:pt-6 md:ml-56 p-4 sm:p-6">{children}</main>
     </div>
     </StaffChatAttentionProvider>
   );

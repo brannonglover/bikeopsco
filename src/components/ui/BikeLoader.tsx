@@ -4,10 +4,11 @@
 export function BikeLoader({ label = "Loading" }: { label?: string }) {
   return (
     <div className="flex flex-col items-center justify-center gap-3" role="status" aria-live="polite">
-      <div className="animate-bike-ride">
+      {/* Padding + overflow so round stroke caps, spinning spokes, and bike-ride sway are not clipped */}
+      <div className="animate-bike-ride overflow-visible px-4 py-3">
         <svg
-          viewBox="0 0 88 52"
-          className="h-14 w-[5.5rem] text-amber-500"
+          viewBox="-10 -8 108 72"
+          className="h-16 w-[6.75rem] overflow-visible text-amber-500"
           fill="none"
           stroke="currentColor"
           strokeLinecap="round"
