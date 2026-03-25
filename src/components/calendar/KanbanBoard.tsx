@@ -12,6 +12,7 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import { StageColumn } from "./StageColumn";
+import { MobileJobQueue } from "./MobileJobQueue";
 import { JobCardContent } from "./JobCard";
 import { RejectBookingModal } from "./RejectBookingModal";
 import { NewJobModal } from "@/components/jobs/NewJobModal";
@@ -268,6 +269,17 @@ export function KanbanBoard() {
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
+        <MobileJobQueue
+          pendingJobs={jobsByStage.PENDING_APPROVAL || []}
+          bookedInJobs={jobsByStage.BOOKED_IN || []}
+          onJobClick={(job) => setSelectedJob(job)}
+          onAccept={handleAccept}
+          onReject={handleRejectClick}
+        />
+
+        <p className="md:hidden text-xs font-medium text-slate-400 -mb-1 flex-shrink-0">
+          All stages — swipe sideways
+        </p>
         <div className="flex flex-1 gap-4 overflow-x-auto overflow-y-hidden pb-4 min-h-0 w-full -mx-4 px-4 sm:mx-0 sm:px-0 overscroll-x-contain">
           {DISPLAY_STAGES.map((stage) => (
             <StageColumn
