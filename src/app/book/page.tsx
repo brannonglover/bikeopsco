@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import { BikeLoader } from "@/components/ui/BikeLoader";
 import { Price } from "@/components/ui/Price";
 import { formatPhoneInputUS } from "@/lib/phone";
 
@@ -123,7 +124,7 @@ function BookForm() {
   if (loading) {
     return (
       <div className="flex min-h-[320px] items-center justify-center p-6">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-amber-500" />
+        <BikeLoader label="Loading booking options…" />
       </div>
     );
   }
@@ -400,11 +401,13 @@ function BookForm() {
 
 export default function BookPage() {
   return (
-    <Suspense fallback={
-      <div className="flex min-h-[320px] items-center justify-center p-6">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-amber-500" />
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="flex min-h-[320px] items-center justify-center p-6">
+          <BikeLoader label="Loading booking…" />
+        </div>
+      }
+    >
       <BookForm />
     </Suspense>
   );

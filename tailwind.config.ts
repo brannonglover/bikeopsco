@@ -36,6 +36,15 @@ const config: Config = {
         "soft-lg": "0 10px 40px -10px rgba(0, 0, 0, 0.1), 0 2px 10px -2px rgba(0, 0, 0, 0.04)",
         glow: "0 0 0 3px rgba(99, 102, 241, 0.2)",
       },
+      keyframes: {
+        "bike-ride": {
+          "0%, 100%": { transform: "translateX(-3px) rotate(-1deg)" },
+          "50%": { transform: "translateX(3px) rotate(1deg)" },
+        },
+      },
+      animation: {
+        "bike-ride": "bike-ride 1.15s ease-in-out infinite",
+      },
     },
   },
   plugins: [],
