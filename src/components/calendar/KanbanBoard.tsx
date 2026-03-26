@@ -18,6 +18,7 @@ import { RejectBookingModal } from "./RejectBookingModal";
 import { NewJobModal } from "@/components/jobs/NewJobModal";
 import { JobDetailModal } from "@/components/jobs/JobDetailModal";
 import { useJobNotifications } from "@/hooks/useJobNotifications";
+import { useIsMobileBoard } from "@/hooks/useIsMobileBoard";
 import type { Job, Stage } from "@/lib/types";
 
 const STAGES: Stage[] = [
@@ -46,6 +47,7 @@ export function KanbanBoard() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [archiving, setArchiving] = useState(false);
+  const isMobileBoard = useIsMobileBoard();
 
   const fetchJobs = useCallback((opts?: { silent?: boolean }) => {
     if (!opts?.silent) setLoading(true);
@@ -145,6 +147,31 @@ export function KanbanBoard() {
     setActiveJobId(event.active.id as string);
   };
 
+  const patchJobStage = useCallback(
+    async (jobId: string, newStage: Stage) => {
+      const job = jobs.find((j) => j.id === jobId);
+      if (!job || job.stage === newStage) return;
+
+      try {
+        const res = await fetch(`/api/jobs/${jobId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ stage: newStage }),
+        });
+        if (res.ok) {
+          setJobs((prev) =>
+            prev.map((j) =>
+              j.id === jobId ? { ...j, stage: newStage } : j
+            )
+          );
+        }
+      } catch (e) {
+        console.error("Failed to update job", e);
+      }
+    },
+    [jobs]
+  );
+
   const handleDragEnd = async (event: DragEndEvent) => {
     setActiveJobId(null);
     const { active, over } = event;
@@ -158,25 +185,7 @@ export function KanbanBoard() {
       const targetJob = jobs.find((j) => j.id === over.id);
       newStage = targetJob ? targetJob.stage : (over.id as Stage);
     }
-    const job = jobs.find((j) => j.id === jobId);
-    if (!job || job.stage === newStage) return;
-
-    try {
-      const res = await fetch(`/api/jobs/${jobId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ stage: newStage }),
-      });
-      if (res.ok) {
-        setJobs((prev) =>
-          prev.map((j) =>
-            j.id === jobId ? { ...j, stage: newStage } : j
-          )
-        );
-      }
-    } catch (e) {
-      console.error("Failed to update job", e);
-    }
+    await patchJobStage(jobId, newStage);
   };
 
   const sensors = useSensors(
@@ -278,7 +287,7 @@ export function KanbanBoard() {
         />
 
         <p className="md:hidden text-xs font-medium text-slate-400 -mb-1 flex-shrink-0">
-          All stages — swipe sideways
+          Swipe columns to browse — on mobile, use Status on a card to move it
         </p>
         <div className="flex flex-1 gap-4 overflow-x-auto overflow-y-hidden pb-4 min-h-0 w-full -mx-4 px-4 sm:mx-0 sm:px-0 overscroll-x-contain">
           {DISPLAY_STAGES.map((stage) => (
@@ -291,6 +300,9 @@ export function KanbanBoard() {
               onReject={
                 stage === "PENDING_APPROVAL" ? handleRejectClick : undefined
               }
+              dragDisabled={isMobileBoard}
+              showMobileStageSelect={isMobileBoard}
+              onStageChange={patchJobStage}
             />
           ))}
         </div>

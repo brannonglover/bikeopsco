@@ -2,7 +2,35 @@
 
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type { Job } from "@/lib/types";
+import type { Job, Stage } from "@/lib/types";
+
+const STAGE_LABELS: Record<Stage, string> = {
+  PENDING_APPROVAL: "Pending approval",
+  BOOKED_IN: "Booked in",
+  RECEIVED: "Received",
+  WORKING_ON: "Working on",
+  WAITING_ON_PARTS: "Waiting on parts",
+  BIKE_READY: "Bike ready",
+  COMPLETED: "Completed",
+  CANCELLED: "Cancelled",
+};
+
+/** Stages the PATCH API accepts (excludes CANCELLED — needs reason via reject flow). */
+const PATCHABLE_STAGES: Stage[] = [
+  "BOOKED_IN",
+  "RECEIVED",
+  "WORKING_ON",
+  "WAITING_ON_PARTS",
+  "BIKE_READY",
+  "COMPLETED",
+];
+
+function stageOptionsForJob(job: Job): Stage[] {
+  if (job.stage === "PENDING_APPROVAL") {
+    return ["PENDING_APPROVAL", ...PATCHABLE_STAGES];
+  }
+  return PATCHABLE_STAGES;
+}
 
 function formatDate(d: Date | string | null) {
   if (!d) return null;
@@ -27,10 +55,15 @@ export function JobCardContent({
   job,
   onAccept,
   onReject,
+  showMobileStageSelect,
+  onStageChange,
 }: {
   job: Job;
   onAccept?: (jobId: string) => void;
   onReject?: (job: Job) => void;
+  /** On narrow viewports, show a status control instead of relying on drag between columns. */
+  showMobileStageSelect?: boolean;
+  onStageChange?: (stage: Stage) => void;
 }) {
   const address =
     job.deliveryType === "COLLECTION_SERVICE"
@@ -143,6 +176,33 @@ export function JobCardContent({
           </button>
         </div>
       )}
+      {showMobileStageSelect && onStageChange && (
+        <div
+          className="mt-3 pt-3 border-t border-slate-100 md:hidden"
+          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <label
+            htmlFor={`job-stage-${job.id}`}
+            className="block text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-1.5"
+          >
+            Status
+          </label>
+          <select
+            id={`job-stage-${job.id}`}
+            value={job.stage}
+            onChange={(e) => onStageChange(e.target.value as Stage)}
+            aria-label="Change job status"
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-900 shadow-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 touch-manipulation min-h-[44px]"
+          >
+            {stageOptionsForJob(job).map((s) => (
+              <option key={s} value={s}>
+                {STAGE_LABELS[s]}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
     </div>
   );
 }
@@ -152,9 +212,21 @@ interface JobCardProps {
   onJobClick?: (job: Job) => void;
   onAccept?: (jobId: string) => void;
   onReject?: (job: Job) => void;
+  /** When true, card is not draggable (e.g. mobile — use in-card status instead). */
+  dragDisabled?: boolean;
+  showMobileStageSelect?: boolean;
+  onStageChange?: (stage: Stage) => void;
 }
 
-export function JobCard({ job, onJobClick, onAccept, onReject }: JobCardProps) {
+export function JobCard({
+  job,
+  onJobClick,
+  onAccept,
+  onReject,
+  dragDisabled,
+  showMobileStageSelect,
+  onStageChange,
+}: JobCardProps) {
   const {
     attributes,
     listeners,
@@ -164,6 +236,7 @@ export function JobCard({ job, onJobClick, onAccept, onReject }: JobCardProps) {
     isDragging,
   } = useSortable({
     id: job.id,
+    disabled: dragDisabled,
   });
 
   return (
@@ -178,7 +251,7 @@ export function JobCard({ job, onJobClick, onAccept, onReject }: JobCardProps) {
             }
       }
       {...attributes}
-      {...listeners}
+      {...(dragDisabled ? {} : listeners)}
       onClick={() => onJobClick?.(job)}
       role={onJobClick ? "button" : undefined}
       tabIndex={onJobClick ? 0 : undefined}
@@ -193,7 +266,8 @@ export function JobCard({ job, onJobClick, onAccept, onReject }: JobCardProps) {
           : undefined
       }
       className={`
-        cursor-grab active:cursor-grabbing min-w-0 w-full
+        min-w-0 w-full
+        ${dragDisabled ? "cursor-default" : "cursor-grab active:cursor-grabbing"}
         ${isDragging ? "opacity-40" : ""}
       `}
     >
@@ -204,6 +278,8 @@ export function JobCard({ job, onJobClick, onAccept, onReject }: JobCardProps) {
           job={job}
           onAccept={onAccept}
           onReject={onReject}
+          showMobileStageSelect={showMobileStageSelect}
+          onStageChange={onStageChange}
         />
       )}
     </div>

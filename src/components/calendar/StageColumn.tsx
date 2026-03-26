@@ -5,6 +5,8 @@ import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { JobCard } from "./JobCard";
 import type { Job, Stage } from "@/lib/types";
 
+type JobStageChangeHandler = (jobId: string, stage: Stage) => void;
+
 const STAGE_COLORS: Record<Stage, string> = {
   PENDING_APPROVAL: "bg-amber-600",
   BOOKED_IN: "bg-slate-500",
@@ -33,9 +35,21 @@ interface StageColumnProps {
   onJobClick?: (job: Job) => void;
   onAccept?: (jobId: string) => void;
   onReject?: (job: Job) => void;
+  dragDisabled?: boolean;
+  showMobileStageSelect?: boolean;
+  onStageChange?: JobStageChangeHandler;
 }
 
-export function StageColumn({ stage, jobs, onJobClick, onAccept, onReject }: StageColumnProps) {
+export function StageColumn({
+  stage,
+  jobs,
+  onJobClick,
+  onAccept,
+  onReject,
+  dragDisabled,
+  showMobileStageSelect,
+  onStageChange,
+}: StageColumnProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: stage,
   });
@@ -63,6 +77,11 @@ export function StageColumn({ stage, jobs, onJobClick, onAccept, onReject }: Sta
               onJobClick={onJobClick}
               onAccept={onAccept}
               onReject={onReject}
+              dragDisabled={dragDisabled}
+              showMobileStageSelect={showMobileStageSelect}
+              onStageChange={
+                onStageChange ? (s) => onStageChange(job.id, s) : undefined
+              }
             />
           ))}
         </SortableContext>
