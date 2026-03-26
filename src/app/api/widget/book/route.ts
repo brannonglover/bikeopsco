@@ -12,6 +12,10 @@ const bookSchema = z.object({
   lastName: z.string().min(1, "Last name is required"),
   email: z.string().email("Valid email is required"),
   phone: z.string().min(1, "Phone is required"),
+  smsConsent: z.literal(true, {
+    message:
+      "SMS consent is required to receive repair updates and service messages by text",
+  }),
   address: z.string().optional().nullable(),
   // Bike
   bikeMake: z.string().min(1, "Bike make is required"),

@@ -15,6 +15,9 @@ interface Service {
 
 const BASE = typeof window !== "undefined" ? "" : process.env.NEXT_PUBLIC_APP_URL || "";
 
+const SHOP_DISPLAY_NAME =
+  process.env.NEXT_PUBLIC_SHOP_NAME ?? "Basement Bike Mechanic";
+
 function getDefaultDropOffDateTime(): string {
   const d = new Date();
   const year = d.getFullYear();
@@ -49,6 +52,7 @@ function BookForm() {
     collectionAddress: "",
     customerNotes: "",
     serviceIds: [] as string[],
+    smsConsent: false,
   });
 
   useEffect(() => {
@@ -81,6 +85,10 @@ function BookForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    if (!form.smsConsent) {
+      setError("Please agree to SMS notifications to continue.");
+      return;
+    }
     setSubmitting(true);
 
     try {
@@ -92,6 +100,7 @@ function BookForm() {
           lastName: form.lastName.trim(),
           email: form.email.trim(),
           phone: form.phone.trim(),
+          smsConsent: true,
           address: form.address.trim() || null,
           bikeMake: form.bikeMake.trim(),
           bikeModel: form.bikeModel.trim(),
@@ -218,7 +227,28 @@ function BookForm() {
             }
             className="input-book"
             placeholder="(555) 123-4567"
+            autoComplete="tel"
           />
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3">
+          <label className="flex cursor-pointer gap-3">
+            <input
+              type="checkbox"
+              checked={form.smsConsent}
+              onChange={(e) =>
+                setForm((p) => ({ ...p, smsConsent: e.target.checked }))
+              }
+              className="mt-1 h-4 w-4 shrink-0 rounded border-slate-300 text-amber-600 focus:ring-amber-500/20"
+              required
+            />
+            <span className="text-sm leading-snug text-slate-700">
+              I agree to receive SMS from <strong>{SHOP_DISPLAY_NAME}</strong> about my
+              repair, including status updates and service-related messages. No marketing.
+              Message frequency varies. Message &amp; data rates may apply. Reply{" "}
+              <strong>STOP</strong> to opt out, <strong>HELP</strong> for help.
+            </span>
+          </label>
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -389,7 +419,7 @@ function BookForm() {
 
         <button
           type="submit"
-          disabled={submitting}
+          disabled={submitting || !form.smsConsent}
           className="w-full rounded-xl bg-amber-500 py-3 font-semibold text-white hover:bg-amber-600 disabled:opacity-50 transition-colors"
         >
           {submitting ? "Booking..." : "Book repair"}
