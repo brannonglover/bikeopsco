@@ -131,3 +131,73 @@ export async function sendJobSms(
     return { ok: false, error: err };
   }
 }
+
+const CHAT_SMS_MAX_LEN = 1500;
+
+/** Staff chat → customer phone. Plain text + shop footer; truncates if needed. */
+export async function sendChatStaffSms(
+  phoneNumber: string,
+  messageText: string,
+  opts?: { attachmentOnly?: boolean }
+): Promise<{ ok: boolean; error?: string }> {
+  if (!twilio || !FROM_NUMBER) {
+    return { ok: false, error: "SMS not configured" };
+  }
+  const normalized = normalizePhone(phoneNumber);
+  if (!normalized) {
+    return { ok: false, error: "Invalid phone number" };
+  }
+  const shopName = process.env.SHOP_NAME || "Basement Bike Mechanic";
+  let body: string;
+  if (opts?.attachmentOnly) {
+    body = `${shopName}: We sent you a photo in chat. Reply to this text to message us.`;
+  } else {
+    const trimmed = messageText.trim();
+    if (!trimmed) {
+      return { ok: false, error: "Empty message" };
+    }
+    body = `${trimmed}\n\n— ${shopName}\nReply to this text to continue.`;
+  }
+  if (body.length > CHAT_SMS_MAX_LEN) {
+    body = body.slice(0, CHAT_SMS_MAX_LEN - 3) + "...";
+  }
+  try {
+    await twilio.messages.create({
+      body,
+      from: FROM_NUMBER,
+      to: normalized,
+    });
+    return { ok: true };
+  } catch (e) {
+    const err = e instanceof Error ? e.message : "Unknown error";
+    console.error("Chat SMS send error:", err);
+    return { ok: false, error: err };
+  }
+}
+
+/** One-off test send (no JobSms row). Uses TWILIO_PHONE_NUMBER as from. */
+export async function sendSmsTest(
+  phoneNumber: string
+): Promise<{ ok: boolean; error?: string }> {
+  if (!twilio || !FROM_NUMBER) {
+    return { ok: false, error: "SMS not configured" };
+  }
+  const normalized = normalizePhone(phoneNumber);
+  if (!normalized) {
+    return { ok: false, error: "Invalid phone number" };
+  }
+  const shopName = process.env.SHOP_NAME || "Basement Bike Mechanic";
+  const body = `${shopName}: SMS test — if you received this, Twilio is working.`;
+  try {
+    await twilio.messages.create({
+      body,
+      from: FROM_NUMBER,
+      to: normalized,
+    });
+    return { ok: true };
+  } catch (e) {
+    const err = e instanceof Error ? e.message : "Unknown error";
+    console.error("SMS test send error:", err);
+    return { ok: false, error: err };
+  }
+}

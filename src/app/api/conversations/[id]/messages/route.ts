@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { sendChatStaffSms } from "@/lib/sms";
 import { z } from "zod";
 
 const createSchema = z.object({
@@ -66,6 +67,7 @@ export async function POST(
 
     const conversation = await prisma.conversation.findUnique({
       where: { id: conversationId },
+      include: { customer: true },
     });
 
     if (!conversation) {
@@ -100,6 +102,23 @@ export async function POST(
       where: { id: conversationId },
       data: { updatedAt: new Date() },
     });
+
+    if (sender === "STAFF" && conversation.customer.phone) {
+      const hasText = Boolean(bodyText?.trim());
+      const hasAtt = Boolean(attachmentIds?.length);
+      if (hasText) {
+        const smsText = hasAtt
+          ? `${bodyText!.trim()} (see chat for photos)`
+          : bodyText!.trim();
+        sendChatStaffSms(conversation.customer.phone, smsText).catch((err) =>
+          console.error("Chat SMS notify:", err)
+        );
+      } else if (hasAtt) {
+        sendChatStaffSms(conversation.customer.phone, "", {
+          attachmentOnly: true,
+        }).catch((err) => console.error("Chat SMS notify:", err));
+      }
+    }
 
     return NextResponse.json(message);
   } catch (error) {
