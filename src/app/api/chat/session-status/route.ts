@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
+/** Query params + DB — must run per request, not at build/static time. */
+export const dynamic = "force-dynamic";
+
 /**
  * Staff: Get a customer's active chat session expiry (for showing "X days left").
  */
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const customerId = searchParams.get("customerId");
+    const customerId = request.nextUrl.searchParams.get("customerId");
     if (!customerId) {
       return NextResponse.json({ error: "customerId required" }, { status: 400 });
     }
