@@ -10,6 +10,55 @@ import { isCustomerTypingRecently } from "@/lib/chat-typing";
 
 const POLL_INTERVAL_MS = 3000;
 
+const CHAT_DRAFT_STORAGE_PREFIX = "bikeops:chat-draft:";
+
+type ChatComposerDraft = {
+  text: string;
+  pendingImages: { id: string; url: string; filename: string }[];
+};
+
+function chatDraftKey(convId: string) {
+  return `${CHAT_DRAFT_STORAGE_PREFIX}${convId}`;
+}
+
+function loadChatDraft(convId: string): ChatComposerDraft | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(chatDraftKey(convId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as unknown;
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      typeof (parsed as { text?: unknown }).text !== "string" ||
+      !Array.isArray((parsed as { pendingImages?: unknown }).pendingImages)
+    ) {
+      return null;
+    }
+    const pendingImages = (parsed as ChatComposerDraft).pendingImages.filter(
+      (p): p is ChatComposerDraft["pendingImages"][number] =>
+        typeof p === "object" &&
+        p !== null &&
+        typeof (p as { id?: unknown }).id === "string" &&
+        typeof (p as { url?: unknown }).url === "string" &&
+        typeof (p as { filename?: unknown }).filename === "string"
+    );
+    return { text: (parsed as ChatComposerDraft).text, pendingImages };
+  } catch {
+    return null;
+  }
+}
+
+function saveChatDraft(convId: string, draft: ChatComposerDraft) {
+  if (typeof window === "undefined") return;
+  const empty = !draft.text.trim() && draft.pendingImages.length === 0;
+  if (empty) {
+    sessionStorage.removeItem(chatDraftKey(convId));
+  } else {
+    sessionStorage.setItem(chatDraftKey(convId), JSON.stringify(draft));
+  }
+}
+
 function CustomerName({ conv }: { conv: Conversation }) {
   const name = conv.customer.lastName
     ? `${conv.customer.firstName} ${conv.customer.lastName}`
@@ -124,6 +173,39 @@ export default function ChatPage() {
   useLayoutEffect(() => {
     selectedIdRef.current = selectedId;
   }, [selectedId]);
+
+  const prevSelectedIdForDraftRef = useRef<string | null>(null);
+  const composerDraftRef = useRef<ChatComposerDraft>({ text: "", pendingImages: [] });
+  composerDraftRef.current = { text: inputText, pendingImages };
+
+  useEffect(() => {
+    const prev = prevSelectedIdForDraftRef.current;
+    if (selectedId === prev) return;
+
+    if (prev != null) {
+      saveChatDraft(prev, { text: inputText, pendingImages });
+    }
+    if (selectedId) {
+      const d = loadChatDraft(selectedId);
+      setInputText(d?.text ?? "");
+      setPendingImages(d?.pendingImages ?? []);
+    } else {
+      setInputText("");
+      setPendingImages([]);
+    }
+    prevSelectedIdForDraftRef.current = selectedId;
+    // Intentionally only when `selectedId` changes — text/images here are the draft for the thread being left.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
+
+  useEffect(() => {
+    return () => {
+      const id = selectedIdRef.current;
+      if (id) {
+        saveChatDraft(id, composerDraftRef.current);
+      }
+    };
+  }, []);
 
   const fetchConversations = useCallback(async () => {
     const res = await fetch("/api/conversations");
@@ -374,6 +456,7 @@ export default function ChatPage() {
       if (res.ok) {
         const newMsg = await res.json();
         setMessages((prev) => [...prev, newMsg]);
+        saveChatDraft(selectedId, { text: "", pendingImages: [] });
         setInputText("");
         setPendingImages([]);
         fetchConversations();

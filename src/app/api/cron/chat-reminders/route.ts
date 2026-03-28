@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
         messages: {
           orderBy: { createdAt: "desc" },
           take: 1,
+          include: { attachments: true },
         },
       },
     });
@@ -66,7 +67,9 @@ export async function GET(request: NextRequest) {
           email,
           conv.customer.firstName,
           customerChatUrl,
-          reminderMinutes
+          reminderMinutes,
+          last.body,
+          last.attachments?.map((a) => a.filename) ?? []
         );
         if (result.ok) {
           await prisma.chatReminderEmail.create({

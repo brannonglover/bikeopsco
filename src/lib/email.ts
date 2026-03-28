@@ -548,7 +548,9 @@ export async function sendChatCustomerReplyReminder(
   customerEmail: string,
   customerFirstName: string,
   chatUrl: string,
-  reminderMinutes: number
+  reminderMinutes: number,
+  staffMessageBody: string | null,
+  attachmentFilenames: string[] = []
 ): Promise<{ ok: boolean; error?: string }> {
   const resend = getResend();
   if (!resend) {
@@ -559,6 +561,32 @@ export async function sendChatCustomerReplyReminder(
   const shopName = SHOP_NAME;
   const name = customerFirstName.trim() || "there";
   const subject = `${shopName} is waiting for your reply`;
+  const trimmedBody = staffMessageBody?.trim() ?? "";
+  const files = attachmentFilenames.map((f) => f.trim()).filter(Boolean);
+  const hasLatestInBody = trimmedBody.length > 0 || files.length > 0;
+
+  const latestMessageHtml = hasLatestInBody
+    ? `<div style="margin: 0 0 24px; padding: 16px; background: #f1f5f9; border-radius: 8px; border-left: 4px solid #059669; font-size: 15px; color: #334155;">
+        ${trimmedBody.length > 0 ? `<div style="white-space: pre-wrap; word-break: break-word;">${escapeHtml(trimmedBody)}</div>` : ""}
+        ${files.length > 0 ? `<p style="margin: ${trimmedBody.length > 0 ? "12px" : "0"} 0 0; font-size: 14px; color: #475569;"><span style="color: #64748b;">Included:</span> ${files.map((f) => escapeHtml(f)).join(", ")}</p>` : ""}
+      </div>`
+    : `<p style="margin: 0 0 24px; font-size: 16px; color: #475569;">We sent you a message in chat at least ${reminderMinutes} minute${reminderMinutes === 1 ? "" : "s"} ago. When you have a moment, please open the conversation and reply.</p>`;
+
+  const intro = hasLatestInBody
+    ? `<p style="margin: 0 0 16px; font-size: 16px; color: #475569;">We sent you a message in chat at least ${reminderMinutes} minute${reminderMinutes === 1 ? "" : "s"} ago. Here is the latest message:</p>`
+    : "";
+
+  const plainLatest =
+    trimmedBody.length > 0
+      ? trimmedBody + (files.length > 0 ? `\n\nIncluded: ${files.join(", ")}` : "")
+      : files.length > 0
+        ? `Included: ${files.join(", ")}`
+        : "";
+
+  const textBody = hasLatestInBody
+    ? `Hi ${name},\n\nWe sent you a message in chat at least ${reminderMinutes} minute${reminderMinutes === 1 ? "" : "s"} ago. Here is the latest message:\n\n${plainLatest}\n\nOpen chat: ${chatUrl}\n\nIf you already replied, you can ignore this email.`
+    : `Hi ${name},\n\nWe sent you a message in chat at least ${reminderMinutes} minute${reminderMinutes === 1 ? "" : "s"} ago. When you have a moment, please open the conversation and reply.\n\n${chatUrl}\n\nIf you already replied, you can ignore this email.`;
+
   const html = `
 <!DOCTYPE html>
 <html>
@@ -577,9 +605,8 @@ export async function sendChatCustomerReplyReminder(
   <div class="container">
     <div class="card">
       <h1 style="margin: 0 0 16px; font-size: 22px;">Hi ${escapeHtml(name)},</h1>
-      <p style="margin: 0 0 24px; font-size: 16px; color: #475569;">
-        We sent you a message in chat at least ${reminderMinutes} minute${reminderMinutes === 1 ? "" : "s"} ago. When you have a moment, please open the conversation and reply.
-      </p>
+      ${intro}
+      ${latestMessageHtml}
       <a href="${chatUrl}" class="btn">Open chat</a>
       <p class="muted">
         If you already replied, you can ignore this email.
@@ -595,6 +622,7 @@ export async function sendChatCustomerReplyReminder(
       from: getFromEmail(),
       to: customerEmail,
       subject,
+      text: textBody,
       html,
     });
     if (error) return { ok: false, error: error.message };
