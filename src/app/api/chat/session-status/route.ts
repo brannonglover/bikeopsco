@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { unstable_noStore as noStore } from "next/cache";
 import { prisma } from "@/lib/db";
 
 /** Query params + DB — must run per request, not at build/static time. */
@@ -8,6 +9,7 @@ export const dynamic = "force-dynamic";
  * Staff: Get a customer's active chat session expiry (for showing "X days left").
  */
 export async function GET(request: NextRequest) {
+  noStore();
   try {
     const customerId = request.nextUrl.searchParams.get("customerId");
     if (!customerId) {

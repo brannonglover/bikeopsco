@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { unstable_noStore as noStore } from "next/cache";
 
 const SERPER_API_KEY = process.env.SERPER_API_KEY;
 const UNSPLASH_ACCESS_KEY = process.env.UNSPLASH_ACCESS_KEY;
@@ -86,7 +87,11 @@ async function searchUnsplash(make: string, model: string) {
   }));
 }
 
+/** Uses search params — must not be statically analyzed as a static route. */
+export const dynamic = "force-dynamic";
+
 export async function GET(request: NextRequest) {
+  noStore();
   const hasSerper = SERPER_API_KEY?.trim();
   const hasUnsplash = UNSPLASH_ACCESS_KEY?.trim();
 
@@ -101,9 +106,8 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const { searchParams } = new URL(request.url);
-    const make = searchParams.get("make")?.trim() ?? "";
-    const model = searchParams.get("model")?.trim() ?? "";
+    const make = request.nextUrl.searchParams.get("make")?.trim() ?? "";
+    const model = request.nextUrl.searchParams.get("model")?.trim() ?? "";
 
     if (!make && !model) {
       return NextResponse.json(

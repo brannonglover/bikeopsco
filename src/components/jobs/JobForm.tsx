@@ -40,6 +40,15 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>;
 type BikeFormRow = z.infer<typeof bikeSchema>;
 
+function normalizeJobFormBikeType(
+  value: string | null | undefined
+): BikeFormRow["bikeType"] {
+  if (value === "REGULAR" || value === "E_BIKE" || value === "AUTO") {
+    return value;
+  }
+  return "AUTO";
+}
+
 function getDefaultDropOffDateTime(): string {
   const d = new Date();
   const year = d.getFullYear();
@@ -430,7 +439,7 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
                         nickname: bike.nickname ?? undefined,
                         bikeId: bike.id,
                         imageUrl: bike.imageUrl ?? undefined,
-                        bikeType: bike.bikeType ?? "AUTO",
+                        bikeType: normalizeJobFormBikeType(bike.bikeType),
                       };
                       const first = getValues("bikes.0");
                       const firstEmpty =
