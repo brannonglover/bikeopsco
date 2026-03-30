@@ -664,7 +664,8 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
       setCancelReason("");
       setCancelReasonOther("");
     }
-  }, [job]);
+    // Only when switching jobs — same-id refreshes (invoice lines, refetch) must not reset tab or overlays.
+  }, [job?.id]);
 
   useEffect(() => {
     if (!showDeleteConfirm) return;
@@ -804,7 +805,13 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
 
         <div className="overflow-y-auto p-4 sm:p-6 flex-1 space-y-6">
           {activeTab === "invoice" ? (
-            <InvoiceTab job={job} onJobUpdated={onJobUpdated} />
+            <InvoiceTab
+              job={job}
+              onJobUpdated={(updated) => {
+                setJob(updated);
+                onJobUpdated?.(updated);
+              }}
+            />
           ) : (
             <>
           <div className="flex flex-wrap gap-2">
