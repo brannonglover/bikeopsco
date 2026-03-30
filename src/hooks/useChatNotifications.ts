@@ -88,7 +88,7 @@ export function useChatNotifications(
       try {
         const n = new Notification(title, {
           body,
-          icon: "/favicon.png",
+          icon: "/favicon.ico",
           tag: `chat-${conv.id}-${last.id}`,
         });
         playNotificationSound();

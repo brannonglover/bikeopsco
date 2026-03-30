@@ -51,7 +51,7 @@ export function useJobNotifications(jobs: Job[], fetchJobs: () => void): void {
       try {
         const n = new Notification("New Job", {
           body: `${customerName} · ${job.bikeMake} ${job.bikeModel}`,
-          icon: "/favicon.png",
+          icon: "/favicon.ico",
           tag: `job-${job.id}`,
         });
         playNotificationSound();
