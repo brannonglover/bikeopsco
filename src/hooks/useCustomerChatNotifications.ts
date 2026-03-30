@@ -48,7 +48,7 @@ export function useCustomerChatNotifications(messages: ChatMessage[], isActive: 
         try {
           const n = new Notification(SHOP_NAME, {
             body: getMessagePreview(msg),
-            icon: "/favicon.ico",
+            icon: "/favicon.png",
             tag: `customer-chat-${msg.id}`,
           });
           playNotificationSound();
