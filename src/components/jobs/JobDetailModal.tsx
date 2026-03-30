@@ -323,6 +323,123 @@ function formatDate(d: Date | string | null) {
   });
 }
 
+function toDateTimeLocalValue(iso: string | Date | null | undefined): string {
+  if (!iso) return "";
+  const d = typeof iso === "string" ? new Date(iso) : iso;
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function localDateTimeToMillis(local: string): number | null {
+  const t = local.trim();
+  if (!t) return null;
+  const ms = new Date(t).getTime();
+  return Number.isNaN(ms) ? null : ms;
+}
+
+function jobDateToMillis(iso: string | null | undefined): number | null {
+  if (!iso) return null;
+  const ms = new Date(iso).getTime();
+  return Number.isNaN(ms) ? null : ms;
+}
+
+function JobDetailsDateFields({
+  job,
+  onJobUpdated,
+}: {
+  job: Job;
+  onJobUpdated?: (job: Job) => void;
+}) {
+  const [dropOff, setDropOff] = useState(() => toDateTimeLocalValue(job.dropOffDate));
+  const [pickup, setPickup] = useState(() => toDateTimeLocalValue(job.pickupDate));
+  const [savingField, setSavingField] = useState<"dropOffDate" | "pickupDate" | null>(null);
+
+  useEffect(() => {
+    setDropOff(toDateTimeLocalValue(job.dropOffDate));
+    setPickup(toDateTimeLocalValue(job.pickupDate));
+  }, [job.id, job.dropOffDate, job.pickupDate]);
+
+  const isCollection = job.deliveryType === "COLLECTION_SERVICE";
+  const firstLabel = isCollection ? "Collection date" : "Drop-off";
+  const secondLabel = isCollection ? "Pickup / return" : "Pickup";
+
+  const persist = async (field: "dropOffDate" | "pickupDate", localVal: string) => {
+    if (!onJobUpdated) return;
+    const nextMs = localDateTimeToMillis(localVal);
+    const currentIso = field === "dropOffDate" ? job.dropOffDate : job.pickupDate;
+    const currentMs = jobDateToMillis(currentIso ?? undefined);
+    if (nextMs === currentMs) return;
+
+    setSavingField(field);
+    try {
+      const body =
+        nextMs === null
+          ? { [field]: null }
+          : { [field]: new Date(localVal.trim()).toISOString() };
+      const res = await fetch(`/api/jobs/${job.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        const updated = (await res.json()) as Job;
+        onJobUpdated(updated);
+      }
+    } finally {
+      setSavingField(null);
+    }
+  };
+
+  if (!onJobUpdated) {
+    return (
+      <div>
+        <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">Dates</h3>
+        <dl className="space-y-1 text-sm">
+          <div>
+            <dt className="text-slate-500 inline">{firstLabel}:</dt>{" "}
+            <dd className="inline text-slate-900">{formatDate(job.dropOffDate)}</dd>
+          </div>
+          <div>
+            <dt className="text-slate-500 inline">{secondLabel}:</dt>{" "}
+            <dd className="inline text-slate-900">{formatDate(job.pickupDate)}</dd>
+          </div>
+        </dl>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">Dates</h3>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="min-w-0">
+          <label className="block text-xs font-medium text-slate-600 mb-1">{firstLabel}</label>
+          <input
+            type="datetime-local"
+            value={dropOff}
+            onChange={(e) => setDropOff(e.target.value)}
+            onBlur={() => persist("dropOffDate", dropOff)}
+            disabled={savingField !== null}
+            className="w-full max-w-full min-w-0 px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none disabled:opacity-60 box-border"
+          />
+        </div>
+        <div className="min-w-0">
+          <label className="block text-xs font-medium text-slate-600 mb-1">{secondLabel}</label>
+          <input
+            type="datetime-local"
+            value={pickup}
+            onChange={(e) => setPickup(e.target.value)}
+            onBlur={() => persist("pickupDate", pickup)}
+            disabled={savingField !== null}
+            className="w-full max-w-full min-w-0 px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none disabled:opacity-60 box-border"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface JobDetailModalProps {
   job: Job | null;
   isOpen: boolean;
@@ -873,73 +990,47 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
             }}
           />
 
-          <div>
-            <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">Dates</h3>
-            <dl className="space-y-1 text-sm">
-              <div>
-                <dt className="text-slate-500 inline">Drop-off:</dt>{" "}
-                <dd className="inline text-slate-900">{formatDate(job.dropOffDate)}</dd>
-              </div>
-              <div>
-                <dt className="text-slate-500 inline">Pickup:</dt>{" "}
-                <dd className="inline text-slate-900">{formatDate(job.pickupDate)}</dd>
-              </div>
-            </dl>
-          </div>
+          <JobDetailsDateFields
+            job={job}
+            onJobUpdated={(updated) => {
+              setJob(updated);
+              onJobUpdated?.(updated);
+            }}
+          />
 
-          {/* Services & Products – quick reference on Details tab */}
+          {/* Services & Products – quick reference on Details tab (no pricing; see Invoice tab) */}
           <div>
             <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">Services & Products</h3>
             {(job.jobServices?.length ?? 0) === 0 && (job.jobProducts?.length ?? 0) === 0 ? (
               <p className="text-slate-500 text-sm">No services or products added</p>
             ) : (
               <div className="space-y-2">
-                {(job.jobServices ?? []).map((js) => {
-                  const price = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);
-                  const lineTotal = price * (js.quantity || 1);
-                  return (
-                    <div key={js.id} className="flex justify-between items-center py-2 px-3 rounded-lg bg-slate-50 border border-slate-100">
-                      <span className="font-medium text-slate-900">
-                        {js.service?.name ?? "Unknown"}
-                        {js.quantity > 1 && (
-                          <span className="text-slate-500 font-normal"> × {js.quantity}</span>
-                        )}
-                      </span>
-                      <Price amount={lineTotal} variant="inline" />
-                    </div>
-                  );
-                })}
-                {(job.jobProducts ?? []).map((jp) => {
-                  const price = typeof jp.unitPrice === "string" ? parseFloat(jp.unitPrice) : Number(jp.unitPrice);
-                  const lineTotal = price * (jp.quantity || 1);
-                  return (
-                    <div key={jp.id} className="flex justify-between items-center py-2 px-3 rounded-lg bg-slate-50 border border-slate-100">
-                      <span className="font-medium text-slate-900">
-                        {jp.product?.name ?? "Unknown"}
-                        {jp.quantity > 1 && (
-                          <span className="text-slate-500 font-normal"> × {jp.quantity}</span>
-                        )}
-                      </span>
-                      <Price amount={lineTotal} variant="inline" />
-                    </div>
-                  );
-                })}
-                <div className="flex justify-between items-center pt-3 mt-2 border-t border-slate-200 font-semibold">
-                  <span className="text-slate-900">Total</span>
-                  <Price
-                    amount={
-                      (job.jobServices ?? []).reduce((sum, js) => {
-                        const p = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);
-                        return sum + p * (js.quantity || 1);
-                      }, 0) +
-                      (job.jobProducts ?? []).reduce((sum, jp) => {
-                        const p = typeof jp.unitPrice === "string" ? parseFloat(jp.unitPrice) : Number(jp.unitPrice);
-                        return sum + p * (jp.quantity || 1);
-                      }, 0)
-                    }
-                    variant="total"
-                  />
-                </div>
+                {(job.jobServices ?? []).map((js) => (
+                  <div
+                    key={js.id}
+                    className="py-2 px-3 rounded-lg bg-slate-50 border border-slate-100 text-sm"
+                  >
+                    <span className="font-medium text-slate-900">
+                      {js.service?.name ?? "Unknown"}
+                      {js.quantity > 1 && (
+                        <span className="text-slate-500 font-normal"> × {js.quantity}</span>
+                      )}
+                    </span>
+                  </div>
+                ))}
+                {(job.jobProducts ?? []).map((jp) => (
+                  <div
+                    key={jp.id}
+                    className="py-2 px-3 rounded-lg bg-slate-50 border border-slate-100 text-sm"
+                  >
+                    <span className="font-medium text-slate-900">
+                      {jp.product?.name ?? "Unknown"}
+                      {jp.quantity > 1 && (
+                        <span className="text-slate-500 font-normal"> × {jp.quantity}</span>
+                      )}
+                    </span>
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -1236,58 +1327,30 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
       return sum + price * (jp.quantity || 1);
     }, 0);
 
+  const hasLineItems = jobServices.length > 0 || jobProductsList.length > 0;
+  const canAddAnything = availableServices.length > 0 || availableProducts.length > 0;
+
   return (
     <div>
       <JobBikesInvoiceSection job={job} />
-      <div className="flex items-center justify-between gap-3 mb-3 min-w-0">
-        <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide flex-shrink-0">
-          Services
-        </h3>
-        {availableServices.length > 0 && (
-          <div ref={servicesDropdownRef} className="relative flex-shrink min-w-0 w-full max-w-[260px]">
-            <button
-              type="button"
-              onClick={() => setServicesDropdownOpen((o) => !o)}
-              disabled={adding}
-              className="w-full text-left text-sm px-3 py-2 border border-slate-300 rounded-lg bg-white hover:bg-slate-50 truncate disabled:opacity-50"
-            >
-              {adding ? "Adding…" : "+ Add service"}
-            </button>
-            {servicesDropdownOpen && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-20 max-h-48 overflow-y-auto">
-                {availableServices.map((s) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => handleAddService(s.id)}
-                    className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50 first:rounded-t-lg last:rounded-b-lg flex flex-col items-start min-w-0"
-                  >
-                    <span className="font-medium truncate w-full">{s.name}</span>
-                    <span className="text-slate-500 text-xs">
-                      ${Number(s.price).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-      {jobServices.length === 0 ? (
-        <p className="text-slate-500 mb-4">
-          {availableServices.length > 0
-            ? "No services added yet. Use the dropdown above to add."
-            : "No services added yet. Add services in Settings → Services first."}
+      <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">
+        Line items
+      </h3>
+      {!hasLineItems ? (
+        <p className="text-slate-500 mb-3">
+          {canAddAnything
+            ? "No services or products on this job yet. Add line items below."
+            : "No line items yet. Add services in Settings → Services and products in Settings → Products, then use the buttons below."}
         </p>
       ) : (
-        <div className="space-y-2 mb-4">
+        <div className="space-y-2 mb-3">
           {jobServices.map((js) => {
             const price = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);
             const lineTotal = price * (js.quantity || 1);
             const isExpanded = expandedServiceIds.has(js.id);
             return (
               <div
-                key={js.id}
+                key={`service-${js.id}`}
                 className="border border-slate-200 rounded-lg overflow-hidden"
               >
                 <div
@@ -1303,7 +1366,10 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                       </svg>
                     </span>
-                    <p className="font-medium text-slate-900">
+                    <span className="shrink-0 rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-800">
+                      Service
+                    </span>
+                    <p className="font-medium text-slate-900 min-w-0">
                       {js.service?.name ?? "Unknown service"}
                       {js.quantity > 1 && (
                         <span className="text-slate-500 font-normal"> × {js.quantity}</span>
@@ -1355,160 +1421,187 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
               </div>
             );
           })}
+          {jobProductsList.map((jp) => {
+            const price = typeof jp.unitPrice === "string" ? parseFloat(jp.unitPrice) : Number(jp.unitPrice);
+            const lineTotal = price * (jp.quantity || 1);
+            const isExpanded = expandedProductIds.has(jp.id);
+            return (
+              <div
+                key={`product-${jp.id}`}
+                className="border border-slate-200 rounded-lg overflow-hidden"
+              >
+                <div
+                  className="flex justify-between items-center py-2 px-3 group cursor-pointer hover:bg-slate-50"
+                  onClick={() => toggleProductExpanded(jp.id)}
+                >
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <span
+                      className={`text-slate-400 transition-transform flex-shrink-0 ${isExpanded ? "rotate-90" : ""}`}
+                      aria-hidden
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </span>
+                    <span className="shrink-0 rounded bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-800">
+                      Product
+                    </span>
+                    <p className="font-medium text-slate-900 min-w-0">
+                      {jp.product?.name ?? "Unknown product"}
+                      {jp.quantity > 1 && (
+                        <span className="text-slate-500 font-normal"> × {jp.quantity}</span>
+                      )}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <Price amount={lineTotal} variant="inline" />
+                    <button
+                      onClick={() => handleRemoveProduct(jp.id)}
+                      disabled={removingProduct === jp.id}
+                      className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                      aria-label="Remove product"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <div
+                  className="grid transition-[grid-template-rows] duration-300 ease-out"
+                  style={{ gridTemplateRows: isExpanded ? "1fr" : "0fr" }}
+                >
+                  <div className="min-h-0 overflow-hidden">
+                    <div className="px-3 pb-3 pt-0 border-t border-slate-100 bg-slate-50/50">
+                      {jp.product?.description && (
+                        <p className="text-xs text-slate-600 mt-2 whitespace-pre-line">{jp.product.description}</p>
+                      )}
+                      <dl className="mt-2 text-xs text-slate-500 space-y-1">
+                        <div className="flex justify-between gap-4">
+                          <dt>Unit price</dt>
+                          <dd><Price amount={price} variant="inline" /></dd>
+                        </div>
+                        <div className="flex justify-between gap-4">
+                          <dt>Quantity</dt>
+                          <dd>{jp.quantity}</dd>
+                        </div>
+                        {jp.notes && (
+                          <div>
+                            <dt className="text-slate-500">Notes</dt>
+                            <dd className="text-slate-600 mt-0.5">{jp.notes}</dd>
+                          </div>
+                        )}
+                      </dl>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
-      <div className="flex items-center justify-between gap-3 mb-3 min-w-0">
-            <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide flex-shrink-0">
-              Products
-            </h3>
-            {availableProducts.length > 0 && (
-              <div ref={productsDropdownRef} className="relative flex-shrink min-w-0 w-full max-w-[260px]">
-                <button
-                  type="button"
-                  onClick={() => setProductsDropdownOpen((o) => !o)}
-                  disabled={addingProduct}
-                  className="w-full text-left text-sm px-3 py-2 border border-slate-300 rounded-lg bg-white hover:bg-slate-50 truncate disabled:opacity-50"
-                >
-                  {addingProduct ? "Adding…" : "+ Add product"}
-                </button>
-                {productsDropdownOpen && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-20 max-h-48 overflow-y-auto">
-                    {availableProducts.map((p) => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => handleAddProduct(p.id)}
-                        className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50 first:rounded-t-lg last:rounded-b-lg flex flex-col items-start min-w-0"
-                      >
-                        <span className="font-medium truncate w-full">{p.name}</span>
-                        <span className="text-slate-500 text-xs">
-                          ${Number(p.price).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-          {jobProductsList.length === 0 ? (
-            <p className="text-slate-500 mb-4">
-              {availableProducts.length > 0
-                ? "No products added yet. Use the dropdown above to add."
-                : "No products added yet. Add products in Settings → Products first."}
-            </p>
-          ) : (
-            <div className="space-y-2 mb-4">
-              {jobProductsList.map((jp) => {
-                const price = typeof jp.unitPrice === "string" ? parseFloat(jp.unitPrice) : Number(jp.unitPrice);
-                const lineTotal = price * (jp.quantity || 1);
-                const isExpanded = expandedProductIds.has(jp.id);
-                return (
-                  <div
-                    key={jp.id}
-                    className="border border-slate-200 rounded-lg overflow-hidden"
-                  >
-                    <div
-                      className="flex justify-between items-center py-2 px-3 group cursor-pointer hover:bg-slate-50"
-                      onClick={() => toggleProductExpanded(jp.id)}
+      {(availableServices.length > 0 || availableProducts.length > 0) && (
+        <div className="flex flex-col sm:flex-row flex-wrap gap-2 pt-1 pb-1 border-t border-slate-100">
+          {availableServices.length > 0 && (
+            <div ref={servicesDropdownRef} className="relative flex-1 min-w-[140px] max-w-sm">
+              <button
+                type="button"
+                onClick={() => {
+                  setProductsDropdownOpen(false);
+                  setServicesDropdownOpen((o) => !o);
+                }}
+                disabled={adding}
+                className="w-full text-left text-sm px-3 py-2 border border-slate-300 rounded-lg bg-white hover:bg-slate-50 truncate disabled:opacity-50"
+              >
+                {adding ? "Adding…" : "+ Add service"}
+              </button>
+              {servicesDropdownOpen && (
+                <div className="absolute bottom-full left-0 right-0 mb-1 bg-white border border-slate-200 rounded-lg shadow-lg z-20 max-h-48 overflow-y-auto">
+                  {availableServices.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => handleAddService(s.id)}
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50 first:rounded-t-lg last:rounded-b-lg flex flex-col items-start min-w-0"
                     >
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <span
-                          className={`text-slate-400 transition-transform flex-shrink-0 ${isExpanded ? "rotate-90" : ""}`}
-                          aria-hidden
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        </span>
-                        <p className="font-medium text-slate-900">
-                          {jp.product?.name ?? "Unknown product"}
-                          {jp.quantity > 1 && (
-                            <span className="text-slate-500 font-normal"> × {jp.quantity}</span>
-                          )}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                        <Price amount={lineTotal} variant="inline" />
-                        <button
-                          onClick={() => handleRemoveProduct(jp.id)}
-                          disabled={removingProduct === jp.id}
-                          className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity"
-                          aria-label="Remove product"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                    <div
-                      className="grid transition-[grid-template-rows] duration-300 ease-out"
-                      style={{ gridTemplateRows: isExpanded ? "1fr" : "0fr" }}
-                    >
-                      <div className="min-h-0 overflow-hidden">
-                        <div className="px-3 pb-3 pt-0 border-t border-slate-100 bg-slate-50/50">
-                          {jp.product?.description && (
-                            <p className="text-xs text-slate-600 mt-2 whitespace-pre-line">{jp.product.description}</p>
-                          )}
-                          <dl className="mt-2 text-xs text-slate-500 space-y-1">
-                            <div className="flex justify-between gap-4">
-                              <dt>Unit price</dt>
-                              <dd><Price amount={price} variant="inline" /></dd>
-                            </div>
-                            <div className="flex justify-between gap-4">
-                              <dt>Quantity</dt>
-                              <dd>{jp.quantity}</dd>
-                            </div>
-                            {jp.notes && (
-                              <div>
-                                <dt className="text-slate-500">Notes</dt>
-                                <dd className="text-slate-600 mt-0.5">{jp.notes}</dd>
-                              </div>
-                            )}
-                          </dl>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+                      <span className="font-medium truncate w-full">{s.name}</span>
+                      <span className="text-slate-500 text-xs">
+                        ${Number(s.price).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
-          <div className="flex justify-between items-center pt-4 mt-4 border-t-2 border-slate-200">
-            <span className="font-bold text-slate-900">Total</span>
-            <Price amount={total} variant="total" />
-          </div>
-          {job.paymentStatus === "PAID" ? (
-            <PaidStatusBlock job={job} />
-          ) : (
-            <div className="mt-4 flex flex-col gap-2">
-              <div className="flex flex-wrap gap-2">
-                <a
-                  href={`/pay/${job.id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700"
-                >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                  </svg>
-                  Pay online
-                </a>
-                <a
-                  href={`/pay/${job.id}`}
-                  className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                  </svg>
-                  Collect in person
-                </a>
-                <RecordCashButton jobId={job.id} onRecorded={onJobUpdated} total={total} />
-              </div>
-              <CopyPaymentLinkButton jobId={job.id} />
+          {availableProducts.length > 0 && (
+            <div ref={productsDropdownRef} className="relative flex-1 min-w-[140px] max-w-sm">
+              <button
+                type="button"
+                onClick={() => {
+                  setServicesDropdownOpen(false);
+                  setProductsDropdownOpen((o) => !o);
+                }}
+                disabled={addingProduct}
+                className="w-full text-left text-sm px-3 py-2 border border-slate-300 rounded-lg bg-white hover:bg-slate-50 truncate disabled:opacity-50"
+              >
+                {addingProduct ? "Adding…" : "+ Add product"}
+              </button>
+              {productsDropdownOpen && (
+                <div className="absolute bottom-full left-0 right-0 mb-1 bg-white border border-slate-200 rounded-lg shadow-lg z-20 max-h-48 overflow-y-auto">
+                  {availableProducts.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => handleAddProduct(p.id)}
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50 first:rounded-t-lg last:rounded-b-lg flex flex-col items-start min-w-0"
+                    >
+                      <span className="font-medium truncate w-full">{p.name}</span>
+                      <span className="text-slate-500 text-xs">
+                        ${Number(p.price).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
+        </div>
+      )}
+      <div className="flex justify-between items-center pt-4 mt-4 border-t-2 border-slate-200">
+        <span className="font-bold text-slate-900">Total</span>
+        <Price amount={total} variant="total" />
+      </div>
+      {job.paymentStatus === "PAID" ? (
+        <PaidStatusBlock job={job} />
+      ) : (
+        <div className="mt-4 flex flex-col gap-2">
+          <div className="flex flex-wrap gap-2">
+            <a
+              href={`/pay/${job.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+              </svg>
+              Pay online
+            </a>
+            <a
+              href={`/pay/${job.id}`}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+              </svg>
+              Collect in person
+            </a>
+            <RecordCashButton jobId={job.id} onRecorded={onJobUpdated} total={total} />
+          </div>
+          <CopyPaymentLinkButton jobId={job.id} />
+        </div>
+      )}
     </div>
   );
 }
