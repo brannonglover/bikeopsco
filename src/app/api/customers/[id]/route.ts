@@ -12,6 +12,26 @@ const updateCustomerSchema = z.object({
   notes: z.string().optional().nullable(),
 });
 
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const customer = await prisma.customer.findUnique({ where: { id } });
+    if (!customer) {
+      return NextResponse.json({ error: "Customer not found" }, { status: 404 });
+    }
+    return NextResponse.json(customer);
+  } catch (error) {
+    console.error("GET /api/customers/[id] error:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch customer" },
+      { status: 500 }
+    );
+  }
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

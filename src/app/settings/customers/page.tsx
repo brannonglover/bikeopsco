@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { formatCustomerName } from "@/lib/customer";
 import {
   formatPhoneInputUS,
@@ -34,7 +35,9 @@ function findColumnForImport(
   return idx >= 0 ? idx : null;
 }
 
-export default function CustomersPage() {
+function CustomersPageContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
@@ -103,7 +106,7 @@ export default function CustomersPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const startEdit = (c: Customer) => {
+  const startEdit = useCallback((c: Customer) => {
     setEditingCustomer(c);
     setEditFirstName(c.firstName);
     setEditLastName(c.lastName ?? "");
@@ -111,7 +114,32 @@ export default function CustomersPage() {
     setEditPhone(phoneToInputValue(c.phone));
     setEditAddress(c.address ?? "");
     setEditNotes(c.notes ?? "");
-  };
+  }, []);
+
+  useEffect(() => {
+    const editId = searchParams.get("edit");
+    if (!editId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/customers/${editId}`);
+        if (cancelled) return;
+        if (!res.ok) {
+          router.replace("/settings/customers", { scroll: false });
+          return;
+        }
+        const customer = await res.json();
+        if (cancelled) return;
+        startEdit(customer);
+        router.replace("/settings/customers", { scroll: false });
+      } catch {
+        if (!cancelled) router.replace("/settings/customers", { scroll: false });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams, router, startEdit]);
 
   const cancelEdit = () => {
     setEditingCustomer(null);
@@ -993,5 +1021,17 @@ export default function CustomersPage() {
         saving={saving}
       />
     </div>
+  );
+}
+
+export default function CustomersPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="py-12 text-center text-slate-500">Loading customers...</div>
+      }
+    >
+      <CustomersPageContent />
+    </Suspense>
   );
 }

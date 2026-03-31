@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState, useRef } from "react";
 import type { Job, JobBike, JobProduct, JobService, Stage } from "@/lib/types";
 import { Price } from "@/components/ui/Price";
@@ -957,7 +958,17 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
 
           {job.customer && (
             <div>
-              <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">Customer</h3>
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide">
+                  Customer
+                </h3>
+                <Link
+                  href={`/settings/customers?edit=${job.customer.id}`}
+                  className="text-sm font-medium text-indigo-600 hover:text-indigo-800 hover:underline shrink-0 touch-manipulation"
+                >
+                  Edit
+                </Link>
+              </div>
               <p className="font-medium text-slate-900">
                 {job.customer.lastName
                   ? `${job.customer.firstName} ${job.customer.lastName}`
