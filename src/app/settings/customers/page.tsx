@@ -130,7 +130,7 @@ function CustomersPageContent() {
         }
         const customer = await res.json();
         if (cancelled) return;
-        startEdit(customer);
+        setDetailCustomer(customer);
         router.replace("/settings/customers", { scroll: false });
       } catch {
         if (!cancelled) router.replace("/settings/customers", { scroll: false });
@@ -139,7 +139,7 @@ function CustomersPageContent() {
     return () => {
       cancelled = true;
     };
-  }, [searchParams, router, startEdit]);
+  }, [searchParams, router]);
 
   const cancelEdit = () => {
     setEditingCustomer(null);
@@ -972,7 +972,7 @@ function CustomersPageContent() {
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      startEdit(c);
+                      setDetailCustomer(c);
                     }}
                     className="text-sm text-indigo-600 hover:underline font-medium"
                   >
