@@ -2,7 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { formatCustomerName } from "@/lib/customer";
-import { formatPhoneDisplay, phoneTelHref } from "@/lib/phone";
+import {
+  formatPhoneDisplay,
+  formatPhoneInputUS,
+  phoneTelHref,
+  phoneToInputValue,
+} from "@/lib/phone";
 import { BikePlaceholderIcon } from "@/components/ui/BikePlaceholderIcon";
 import type L from "leaflet";
 
@@ -31,7 +36,12 @@ interface CustomerDetailModalProps {
   customer: Customer | null;
   isOpen: boolean;
   onClose: () => void;
-  onEdit?: (customer: Customer) => void;
+  /** Editable fields + bikes in one modal (no separate field-only step). */
+  inlineCustomerEdit?: boolean;
+  /** After saving customer fields in inline mode. */
+  onCustomerSaved?: (customer: Customer) => void;
+  /** View mode: enter inline edit without closing the modal. */
+  onBeginEditCustomer?: () => void;
 }
 
 function BikeImageSearch({
@@ -648,12 +658,22 @@ export function CustomerDetailModal({
   customer,
   isOpen,
   onClose,
-  onEdit,
+  inlineCustomerEdit = false,
+  onCustomerSaved,
+  onBeginEditCustomer,
 }: CustomerDetailModalProps) {
   const [bikes, setBikes] = useState<Bike[]>([]);
   const [bikesLoading, setBikesLoading] = useState(false);
   const [showAddBike, setShowAddBike] = useState(false);
   const [editingBike, setEditingBike] = useState<Bike | null>(null);
+
+  const [editFirstName, setEditFirstName] = useState("");
+  const [editLastName, setEditLastName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editAddress, setEditAddress] = useState("");
+  const [editNotes, setEditNotes] = useState("");
+  const [savingCustomer, setSavingCustomer] = useState(false);
 
   const fetchBikes = useCallback(async (customerId: string) => {
     setBikesLoading(true);
@@ -678,6 +698,45 @@ export function CustomerDetailModal({
     }
   }, [customer?.id, fetchBikes]);
 
+  useEffect(() => {
+    if (!customer || !inlineCustomerEdit) return;
+    setEditFirstName(customer.firstName);
+    setEditLastName(customer.lastName ?? "");
+    setEditEmail(customer.email ?? "");
+    setEditPhone(phoneToInputValue(customer.phone));
+    setEditAddress(customer.address ?? "");
+    setEditNotes(customer.notes ?? "");
+  }, [customer, inlineCustomerEdit]);
+
+  const handleSaveCustomerFields = async () => {
+    if (!customer || !editFirstName.trim()) return;
+    setSavingCustomer(true);
+    try {
+      const res = await fetch(`/api/customers/${customer.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          firstName: editFirstName.trim(),
+          lastName: editLastName.trim() || null,
+          email: editEmail.trim() || null,
+          phone: editPhone.trim() || null,
+          address: editAddress.trim() || null,
+          notes: editNotes.trim() || null,
+        }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setEditPhone(phoneToInputValue(updated.phone));
+        onCustomerSaved?.(updated);
+      } else {
+        const err = await res.json();
+        alert(err.error || "Failed to save");
+      }
+    } finally {
+      setSavingCustomer(false);
+    }
+  };
+
   const handleBackdropClick = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget) onClose();
   };
@@ -697,7 +756,9 @@ export function CustomerDetailModal({
           <>
             <div className="sticky top-0 bg-white border-b border-slate-200 px-4 sm:px-6 py-4 flex justify-between items-start">
               <h2 className="text-lg sm:text-xl font-bold text-slate-900 truncate pr-2">
-                {formatCustomerName(customer)}
+                {inlineCustomerEdit
+                  ? "Edit customer"
+                  : formatCustomerName(customer)}
               </h2>
               <button
                 type="button"
@@ -710,44 +771,129 @@ export function CustomerDetailModal({
             </div>
 
             <div className="p-4 sm:p-6 space-y-4">
-              {(customer.email || customer.phone) && (
+              {inlineCustomerEdit ? (
                 <div>
-                  <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">
-                    Contact
+                  <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">
+                    Customer
                   </h3>
-                  <div className="space-y-1">
-                    {customer.email && (
-                      <p>
-                        <a
-                          href={`mailto:${customer.email}`}
-                          className="text-blue-600 hover:underline"
-                        >
-                          {customer.email}
-                        </a>
-                      </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        First name *
+                      </label>
+                      <input
+                        value={editFirstName}
+                        onChange={(e) => setEditFirstName(e.target.value)}
+                        className="w-full px-4 py-2 border border-slate-300 rounded-lg"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        Last name
+                      </label>
+                      <input
+                        value={editLastName}
+                        onChange={(e) => setEditLastName(e.target.value)}
+                        className="w-full px-4 py-2 border border-slate-300 rounded-lg"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        Email
+                      </label>
+                      <input
+                        type="email"
+                        value={editEmail}
+                        onChange={(e) => setEditEmail(e.target.value)}
+                        className="w-full px-4 py-2 border border-slate-300 rounded-lg"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        Phone
+                      </label>
+                      <input
+                        type="tel"
+                        autoComplete="tel"
+                        value={editPhone}
+                        onChange={(e) =>
+                          setEditPhone(formatPhoneInputUS(e.target.value))
+                        }
+                        className="w-full px-4 py-2 border border-slate-300 rounded-lg"
+                        placeholder="(555) 123-4567"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        Address
+                      </label>
+                      <input
+                        value={editAddress}
+                        onChange={(e) => setEditAddress(e.target.value)}
+                        className="w-full px-4 py-2 border border-slate-300 rounded-lg"
+                      />
+                    </div>
+                    {editAddress.trim() && (
+                      <div className="sm:col-span-2">
+                        <CustomerMap address={editAddress.trim()} />
+                      </div>
                     )}
-                    {customer.phone && (
-                      <p>
-                        <a
-                          href={phoneTelHref(customer.phone)}
-                          className="text-blue-600 hover:underline"
-                        >
-                          {formatPhoneDisplay(customer.phone)}
-                        </a>
-                      </p>
-                    )}
+                    <div className="sm:col-span-2">
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        Notes
+                      </label>
+                      <textarea
+                        value={editNotes}
+                        onChange={(e) => setEditNotes(e.target.value)}
+                        rows={2}
+                        className="w-full px-4 py-2 border border-slate-300 rounded-lg"
+                      />
+                    </div>
                   </div>
                 </div>
-              )}
+              ) : (
+                <>
+                  {(customer.email || customer.phone) && (
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                        Contact
+                      </h3>
+                      <div className="space-y-1">
+                        {customer.email && (
+                          <p>
+                            <a
+                              href={`mailto:${customer.email}`}
+                              className="text-blue-600 hover:underline"
+                            >
+                              {customer.email}
+                            </a>
+                          </p>
+                        )}
+                        {customer.phone && (
+                          <p>
+                            <a
+                              href={phoneTelHref(customer.phone)}
+                              className="text-blue-600 hover:underline"
+                            >
+                              {formatPhoneDisplay(customer.phone)}
+                            </a>
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
-              {customer.address && (
-                <div>
-                  <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">
-                    Address
-                  </h3>
-                  <p className="text-slate-700">{customer.address}</p>
-                  <CustomerMap address={customer.address} />
-                </div>
+                  {customer.address && (
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                        Address
+                      </h3>
+                      <p className="text-slate-700">{customer.address}</p>
+                      <CustomerMap address={customer.address} />
+                    </div>
+                  )}
+                </>
               )}
 
               <div>
@@ -859,7 +1005,7 @@ export function CustomerDetailModal({
                 )}
               </div>
 
-              {customer.notes && (
+              {!inlineCustomerEdit && customer.notes && (
                 <div>
                   <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">
                     Notes
@@ -870,7 +1016,8 @@ export function CustomerDetailModal({
                 </div>
               )}
 
-              {!customer.email &&
+              {!inlineCustomerEdit &&
+                !customer.email &&
                 !customer.phone &&
                 !customer.address &&
                 !customer.notes &&
@@ -883,26 +1030,47 @@ export function CustomerDetailModal({
                 )}
             </div>
 
-            <div className="sticky bottom-0 bg-slate-50 border-t border-slate-200 px-6 py-4 flex gap-2">
-              {onEdit && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onClose();
-                    onEdit(customer);
-                  }}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
-                >
-                  Edit
-                </button>
+            <div className="sticky bottom-0 bg-slate-50 border-t border-slate-200 px-6 py-4 flex flex-wrap gap-2">
+              {inlineCustomerEdit ? (
+                <>
+                  <button
+                    type="button"
+                    disabled={
+                      savingCustomer || !editFirstName.trim()
+                    }
+                    onClick={handleSaveCustomerFields}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {savingCustomer ? "Saving…" : "Save customer"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 font-medium"
+                  >
+                    Close
+                  </button>
+                </>
+              ) : (
+                <>
+                  {onBeginEditCustomer && (
+                    <button
+                      type="button"
+                      onClick={onBeginEditCustomer}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                    >
+                      Edit
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 font-medium"
+                  >
+                    Close
+                  </button>
+                </>
               )}
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 font-medium"
-              >
-                Close
-              </button>
             </div>
           </>
         ) : (

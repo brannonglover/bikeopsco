@@ -1,16 +1,14 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { formatCustomerName } from "@/lib/customer";
 import {
   formatPhoneInputUS,
   formatPhoneDisplay,
   phoneTelHref,
-  phoneToInputValue,
 } from "@/lib/phone";
 import { CustomerDetailModal } from "@/components/customers/CustomerDetailModal";
-import { CustomerEditModal } from "@/components/customers/CustomerEditModal";
 
 interface Customer {
   id: string;
@@ -40,13 +38,6 @@ function CustomersPageContent() {
   const searchParams = useSearchParams();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
-  const [editFirstName, setEditFirstName] = useState("");
-  const [editLastName, setEditLastName] = useState("");
-  const [editEmail, setEditEmail] = useState("");
-  const [editPhone, setEditPhone] = useState("");
-  const [editAddress, setEditAddress] = useState("");
-  const [editNotes, setEditNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newFirstName, setNewFirstName] = useState("");
@@ -84,6 +75,7 @@ function CustomersPageContent() {
   const [firstRowIsHeader, setFirstRowIsHeader] = useState(true);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [detailCustomer, setDetailCustomer] = useState<Customer | null>(null);
+  const [detailInlineEdit, setDetailInlineEdit] = useState(false);
   const actionsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -106,16 +98,6 @@ function CustomersPageContent() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const startEdit = useCallback((c: Customer) => {
-    setEditingCustomer(c);
-    setEditFirstName(c.firstName);
-    setEditLastName(c.lastName ?? "");
-    setEditEmail(c.email ?? "");
-    setEditPhone(phoneToInputValue(c.phone));
-    setEditAddress(c.address ?? "");
-    setEditNotes(c.notes ?? "");
-  }, []);
-
   useEffect(() => {
     const editId = searchParams.get("edit");
     if (!editId) return;
@@ -131,6 +113,7 @@ function CustomersPageContent() {
         const customer = await res.json();
         if (cancelled) return;
         setDetailCustomer(customer);
+        setDetailInlineEdit(true);
         router.replace("/settings/customers", { scroll: false });
       } catch {
         if (!cancelled) router.replace("/settings/customers", { scroll: false });
@@ -140,52 +123,6 @@ function CustomersPageContent() {
       cancelled = true;
     };
   }, [searchParams, router]);
-
-  const cancelEdit = () => {
-    setEditingCustomer(null);
-  };
-
-  const handleFormChange = (field: string, value: string) => {
-    switch (field) {
-      case "firstName": setEditFirstName(value); break;
-      case "lastName": setEditLastName(value); break;
-      case "email": setEditEmail(value); break;
-      case "phone": setEditPhone(formatPhoneInputUS(value)); break;
-      case "address": setEditAddress(value); break;
-      case "notes": setEditNotes(value); break;
-    }
-  };
-
-  const saveEdit = async () => {
-    if (!editingCustomer) return;
-    setSaving(true);
-    try {
-      const res = await fetch(`/api/customers/${editingCustomer.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          firstName: editFirstName.trim(),
-          lastName: editLastName.trim() || null,
-          email: editEmail.trim() || null,
-          phone: editPhone.trim() || null,
-          address: editAddress.trim() || null,
-          notes: editNotes.trim() || null,
-        }),
-      });
-      if (res.ok) {
-        const updated = await res.json();
-        setCustomers((prev) =>
-          prev.map((c) => (c.id === updated.id ? updated : c))
-        );
-        setEditingCustomer(null);
-      } else {
-        const err = await res.json();
-        alert(err.error || "Failed to save");
-      }
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const handleAdd = async () => {
     if (!newFirstName.trim()) return;
@@ -929,7 +866,10 @@ function CustomersPageContent() {
               <div className="flex items-start justify-between gap-4">
                 <button
                   type="button"
-                  onClick={() => setDetailCustomer(c)}
+                  onClick={() => {
+                    setDetailCustomer(c);
+                    setDetailInlineEdit(false);
+                  }}
                   className="flex-1 text-left min-w-0"
                 >
                   <h3 className="font-semibold text-slate-900 hover:text-indigo-600 transition-colors">
@@ -973,6 +913,7 @@ function CustomersPageContent() {
                     onClick={(e) => {
                       e.stopPropagation();
                       setDetailCustomer(c);
+                      setDetailInlineEdit(true);
                     }}
                     className="text-sm text-indigo-600 hover:underline font-medium"
                   >
@@ -997,28 +938,18 @@ function CustomersPageContent() {
       <CustomerDetailModal
         customer={detailCustomer}
         isOpen={detailCustomer !== null}
-        onClose={() => setDetailCustomer(null)}
-        onEdit={(c) => {
+        inlineCustomerEdit={detailInlineEdit}
+        onCustomerSaved={(updated) => {
+          setCustomers((prev) =>
+            prev.map((c) => (c.id === updated.id ? updated : c))
+          );
+          setDetailCustomer(updated);
+        }}
+        onBeginEditCustomer={() => setDetailInlineEdit(true)}
+        onClose={() => {
           setDetailCustomer(null);
-          startEdit(c);
+          setDetailInlineEdit(false);
         }}
-      />
-
-      <CustomerEditModal
-        customer={editingCustomer}
-        isOpen={editingCustomer !== null}
-        onClose={cancelEdit}
-        formState={{
-          firstName: editFirstName,
-          lastName: editLastName,
-          email: editEmail,
-          phone: editPhone,
-          address: editAddress,
-          notes: editNotes,
-        }}
-        onFormChange={handleFormChange}
-        onSave={saveEdit}
-        saving={saving}
       />
     </div>
   );
