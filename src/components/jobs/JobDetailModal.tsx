@@ -6,7 +6,11 @@ import type { Job, JobBike, JobProduct, JobService, Stage } from "@/lib/types";
 import { Price } from "@/components/ui/Price";
 import { BikePlaceholderIcon } from "@/components/ui/BikePlaceholderIcon";
 import { resolveEffectiveBikeType } from "@/lib/bike-type";
-import { getJobBikeDisplayTitle } from "@/lib/job-display";
+import {
+  formatBikeTypeDisplayLineForJob,
+  getDisplayPartsForJobBikeRow,
+  getJobBikeDisplayTitle,
+} from "@/lib/job-display";
 import { formatPhoneDisplay, phoneTelHref } from "@/lib/phone";
 
 function resolveBikeImageUrl(b: JobBike, customerBikes?: { make: string; model: string; imageUrl: string | null }[]): string | null {
@@ -79,22 +83,6 @@ function buildBikesPayloadForPatch(
   ];
 }
 
-function formatBikeTypeDisplayLine(b: JobBike): string {
-  if (b.bikeType === "REGULAR") return "Standard bike";
-  if (b.bikeType === "E_BIKE") return "E-bike";
-  const eff =
-    resolveEffectiveBikeType({
-      bikeType: b.bikeType,
-      make: b.make,
-      model: b.model,
-      bikeId: b.bikeId,
-      bike: b.bike,
-    }) === "E_BIKE"
-      ? "E-bike"
-      : "Standard bike";
-  return `${eff} · auto`;
-}
-
 function PencilIcon({ className }: { className?: string }) {
   return (
     <svg className={className} width="16" height="16" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
@@ -152,9 +140,11 @@ function JobBikeSection({
       </h3>
       <div className={`grid gap-3 ${hasMultiple ? "grid-cols-1 sm:grid-cols-2" : ""}`}>
         {bikes.map((b, i) => {
-          const displayName = b.nickname?.trim() ? b.nickname : `${b.make} ${b.model}`;
-          const subtitle = b.nickname?.trim() ? `${b.make} ${b.model}` : null;
-          const imageUrl = resolveBikeImageUrl(b, customerBikes);
+          const dp = getDisplayPartsForJobBikeRow(job, b);
+          const displayName = dp.nickname?.trim() ? dp.nickname : `${dp.make} ${dp.model}`;
+          const subtitle = dp.nickname?.trim() ? `${dp.make} ${dp.model}` : null;
+          const imageUrl =
+            dp.imageUrl ?? resolveBikeImageUrl({ ...b, make: dp.make, model: dp.model }, customerBikes);
           const size = hasMultiple ? "w-16 h-16" : "w-24 h-24";
           const isEditing = onJobUpdated && editingBikeIndex === i;
 
@@ -182,8 +172,8 @@ function JobBikeSection({
                   <p className="text-xs text-slate-500 mt-1.5">
                     {resolveEffectiveBikeType({
                       bikeType: b.bikeType,
-                      make: b.make,
-                      model: b.model,
+                      make: dp.make,
+                      model: dp.model,
                       bikeId: b.bikeId,
                       bike: b.bike,
                     }) === "E_BIKE"
@@ -195,7 +185,8 @@ function JobBikeSection({
                 {onJobUpdated && !isEditing && (
                   <div className="flex items-start justify-between gap-2 mt-1.5">
                     <p className="text-xs text-slate-600 min-w-0 leading-snug">
-                      <span className="text-slate-400">Type:</span> {formatBikeTypeDisplayLine(b)}
+                      <span className="text-slate-400">Type:</span>{" "}
+                      {formatBikeTypeDisplayLineForJob(job, b)}
                     </p>
                     <button
                       type="button"
@@ -255,11 +246,13 @@ function JobBikesInvoiceSection({ job }: { job: Job }) {
       </h3>
       <div className={`flex flex-wrap gap-2 ${hasMultiple ? "" : ""}`}>
         {bikes.map((b) => {
-          const imageUrl = resolveBikeImageUrl(b, customerBikes);
+          const dp = getDisplayPartsForJobBikeRow(job, b);
+          const imageUrl =
+            dp.imageUrl ?? resolveBikeImageUrl({ ...b, make: dp.make, model: dp.model }, customerBikes);
           const eff = resolveEffectiveBikeType({
             bikeType: b.bikeType,
-            make: b.make,
-            model: b.model,
+            make: dp.make,
+            model: dp.model,
             bikeId: b.bikeId,
             bike: b.bike,
           });
@@ -276,10 +269,10 @@ function JobBikesInvoiceSection({ job }: { job: Job }) {
               </div>
             )}
             <span className="font-medium text-slate-900">
-              {b.nickname?.trim() ? b.nickname : `${b.make} ${b.model}`}
+              {dp.nickname?.trim() ? dp.nickname : `${dp.make} ${dp.model}`}
             </span>
-            {b.nickname?.trim() && (
-              <span className="text-slate-500">({b.make} {b.model})</span>
+            {dp.nickname?.trim() && (
+              <span className="text-slate-500">({dp.make} {dp.model})</span>
             )}
             <span className="text-xs text-slate-500 border-l border-slate-200 pl-2 ml-1">
               {eff === "E_BIKE" ? "E-bike" : "Standard"}

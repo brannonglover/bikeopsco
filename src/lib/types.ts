@@ -119,7 +119,13 @@ export interface JobBike {
   imageUrl: string | null;
   bikeId: string | null;
   sortOrder: number;
-  bike?: { imageUrl: string | null; bikeType: BikeType | null; make: string; model: string } | null;
+  bike?: {
+    imageUrl: string | null;
+    bikeType: BikeType | null;
+    make: string;
+    model: string;
+    nickname?: string | null;
+  } | null;
 }
 
 export interface Job {

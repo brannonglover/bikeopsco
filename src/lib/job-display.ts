@@ -1,16 +1,91 @@
 import type { Job, JobBike } from "@/lib/types";
-
-/** Make/model for a job bike row, preferring the linked customer bike when present. */
-function effectiveJobBikeMakeModel(jb: JobBike): { make: string; model: string } {
-  if (jb.bikeId && jb.bike) {
-    return { make: jb.bike.make, model: jb.bike.model };
-  }
-  return { make: jb.make, model: jb.model };
-}
+import { resolveEffectiveBikeType } from "@/lib/bike-type";
 
 /** No live link to a Bike row (deleted from profile clears bikeId, or never linked). */
 function isJobBikeUnlinkedFromProfile(jb: JobBike): boolean {
   return !jb.bikeId || !jb.bike;
+}
+
+export type JobBikeDisplayParts = {
+  make: string;
+  model: string;
+  nickname: string | null;
+  imageUrl: string | null;
+};
+
+/** Resolved make/model/nickname/image for one job bike row (detail modal, invoice section). */
+export function resolveJobBikeDisplayParts(job: Job, jb: JobBike): JobBikeDisplayParts {
+  const customerBikes = job.customer?.bikes;
+  if (customerBikes?.length === 1 && isJobBikeUnlinkedFromProfile(jb)) {
+    const cb = customerBikes[0];
+    const nick = jb.nickname?.trim() || cb.nickname?.trim() || null;
+    return {
+      make: cb.make,
+      model: cb.model,
+      nickname: nick,
+      imageUrl: jb.imageUrl ?? jb.bike?.imageUrl ?? cb.imageUrl ?? null,
+    };
+  }
+  if (jb.bikeId && jb.bike) {
+    const nick =
+      jb.nickname?.trim() || jb.bike.nickname?.trim() || null;
+    return {
+      make: jb.bike.make,
+      model: jb.bike.model,
+      nickname: nick,
+      imageUrl: jb.imageUrl ?? jb.bike.imageUrl ?? null,
+    };
+  }
+  return {
+    make: jb.make,
+    model: jb.model,
+    nickname: jb.nickname?.trim() || null,
+    imageUrl: jb.imageUrl ?? jb.bike?.imageUrl ?? null,
+  };
+}
+
+/** Legacy job with no jobBikes rows — synthetic row id `"legacy"`. */
+export function resolveLegacyJobBikeDisplayParts(job: Job): JobBikeDisplayParts {
+  if (job.customer?.bikes?.length === 1) {
+    const cb = job.customer.bikes[0];
+    return {
+      make: cb.make,
+      model: cb.model,
+      nickname: cb.nickname?.trim() ?? null,
+      imageUrl: cb.imageUrl ?? null,
+    };
+  }
+  return {
+    make: job.bikeMake,
+    model: job.bikeModel,
+    nickname: null,
+    imageUrl: null,
+  };
+}
+
+export function getDisplayPartsForJobBikeRow(job: Job, b: JobBike): JobBikeDisplayParts {
+  if (b.id === "legacy") {
+    return resolveLegacyJobBikeDisplayParts(job);
+  }
+  return resolveJobBikeDisplayParts(job, b);
+}
+
+/** Bike type line in job detail (matches previous JobBike formatting). */
+export function formatBikeTypeDisplayLineForJob(job: Job, b: JobBike): string {
+  const dp = getDisplayPartsForJobBikeRow(job, b);
+  if (b.bikeType === "REGULAR") return "Standard bike";
+  if (b.bikeType === "E_BIKE") return "E-bike";
+  const eff =
+    resolveEffectiveBikeType({
+      bikeType: b.bikeType,
+      make: dp.make,
+      model: dp.model,
+      bikeId: b.bikeId,
+      bike: b.bike,
+    }) === "E_BIKE"
+      ? "E-bike"
+      : "Standard bike";
+  return `${eff} · auto`;
 }
 
 /**
@@ -24,24 +99,17 @@ function isJobBikeUnlinkedFromProfile(jb: JobBike): boolean {
  */
 export function getJobBikeDisplayTitle(job: Job): string {
   const rows = [...(job.jobBikes ?? [])].sort((a, b) => a.sortOrder - b.sortOrder);
-  const customerBikes = job.customer?.bikes;
 
   if (rows.length === 0) {
-    return job.bikeMake === "Multiple"
-      ? `${job.bikeModel}`
-      : `${job.bikeMake} ${job.bikeModel}`.trim();
+    if (job.bikeMake === "Multiple") {
+      return job.bikeModel;
+    }
+    const leg = resolveLegacyJobBikeDisplayParts(job);
+    return `${leg.make} ${leg.model}`.trim();
   }
   if (rows.length === 1) {
-    const row = rows[0];
-    if (
-      customerBikes?.length === 1 &&
-      isJobBikeUnlinkedFromProfile(row)
-    ) {
-      const b = customerBikes[0];
-      return `${b.make} ${b.model}`.trim();
-    }
-    const { make, model } = effectiveJobBikeMakeModel(row);
-    return `${make} ${model}`.trim();
+    const dp = resolveJobBikeDisplayParts(job, rows[0]);
+    return `${dp.make} ${dp.model}`.trim();
   }
   if (job.bikeMake === "Multiple") {
     return job.bikeModel;
