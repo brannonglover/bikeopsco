@@ -6,6 +6,7 @@ import type { Job, JobBike, JobProduct, JobService, Stage } from "@/lib/types";
 import { Price } from "@/components/ui/Price";
 import { BikePlaceholderIcon } from "@/components/ui/BikePlaceholderIcon";
 import { resolveEffectiveBikeType } from "@/lib/bike-type";
+import { getJobBikeDisplayTitle } from "@/lib/job-display";
 import { formatPhoneDisplay, phoneTelHref } from "@/lib/phone";
 
 function resolveBikeImageUrl(b: JobBike, customerBikes?: { make: string; model: string; imageUrl: string | null }[]): string | null {
@@ -883,9 +884,7 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
         )}
         <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-slate-200 flex-shrink-0">
           <h2 className="text-lg sm:text-xl font-bold text-slate-900 truncate pr-2">
-            {job.bikeMake === "Multiple"
-              ? `${job.bikeModel}`
-              : `${job.bikeMake} ${job.bikeModel}`}
+            {getJobBikeDisplayTitle(job)}
           </h2>
           <button
             onClick={onClose}

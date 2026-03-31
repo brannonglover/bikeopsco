@@ -3,6 +3,7 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { Job, Stage } from "@/lib/types";
+import { getJobBikeDisplayTitle } from "@/lib/job-display";
 
 const STAGE_LABELS: Record<Stage, string> = {
   PENDING_APPROVAL: "Pending approval",
@@ -99,7 +100,7 @@ export function JobCardContent({
         )}
       </div>
       <h3 className="font-semibold text-slate-900">
-        {job.bikeMake} {job.bikeModel}
+        {getJobBikeDisplayTitle(job)}
       </h3>
       {job.customer && (
         <p className="text-sm text-slate-700 font-medium mt-1.5" title={`${job.customer.firstName}${job.customer.lastName ? ` ${job.customer.lastName}` : ""}`}>

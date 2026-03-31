@@ -1,6 +1,7 @@
 "use client";
 
 import type { Job } from "@/lib/types";
+import { getJobBikeDisplayTitle } from "@/lib/job-display";
 
 function formatShortDate(d: Date | string | null) {
   if (!d) return null;
@@ -80,7 +81,7 @@ export function MobileJobQueue({
                       <div className="min-w-0 flex-1">
                         <p className="font-semibold text-slate-900 truncate">{customerLine(job)}</p>
                         <p className="text-sm text-slate-600 truncate">
-                          {job.bikeMake} {job.bikeModel}
+                          {getJobBikeDisplayTitle(job)}
                         </p>
                       </div>
                       {job.dropOffDate && (
@@ -152,7 +153,7 @@ export function MobileJobQueue({
                       <div className="min-w-0 flex-1">
                         <p className="font-semibold text-slate-900 truncate">{customerLine(job)}</p>
                         <p className="text-sm text-slate-600 truncate">
-                          {job.bikeMake} {job.bikeModel}
+                          {getJobBikeDisplayTitle(job)}
                         </p>
                         <div className="flex flex-wrap gap-1.5 mt-1.5">
                           <span
