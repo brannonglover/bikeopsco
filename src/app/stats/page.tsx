@@ -10,6 +10,14 @@ interface Stats {
   stripeRevenue?: { day: number; week: number; month: number; year: number };
   cashRevenue?: { day: number; week: number; month: number; year: number };
   importedRevenue: { day: number; week: number; month: number; year: number };
+  lastYear?: {
+    calendarYear: number;
+    revenue: number;
+    shopRevenue: number;
+    stripeRevenue: number;
+    cashRevenue: number;
+    importedRevenue: number;
+  };
   topServices: { name: string; count: number; revenue: number }[];
 }
 
@@ -56,6 +64,39 @@ export default function StatsPage() {
         (Stripe card charges and cash), so card totals match what hit Stripe; imported history
         (e.g. Square) is separate.
       </p>
+
+      {stats.lastYear && (
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm mb-6 max-w-md">
+          <p className="text-sm font-medium text-slate-500 uppercase tracking-wide mb-3">
+            {stats.lastYear.calendarYear} (full year)
+          </p>
+          <div>
+            <Price amount={stats.lastYear.revenue} variant="total" className="text-2xl" />
+            <p className="text-sm text-slate-600">revenue</p>
+            {(() => {
+              const stripe = stats.lastYear.stripeRevenue;
+              const cash = stats.lastYear.cashRevenue;
+              const imp = stats.lastYear.importedRevenue;
+              const parts: { label: string; amount: number }[] = [];
+              if (stripe > 0) parts.push({ label: "Stripe", amount: stripe });
+              if (cash > 0) parts.push({ label: "Cash", amount: cash });
+              if (imp > 0) parts.push({ label: "imported", amount: imp });
+              if (parts.length === 0) return null;
+              return (
+                <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+                  {parts.map((p, i) => (
+                    <span key={p.label}>
+                      {i > 0 ? " · " : null}
+                      {p.label}{" "}
+                      <Price amount={p.amount} variant="inline" className="text-xs" />
+                    </span>
+                  ))}
+                </p>
+              );
+            })()}
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 mb-10">
         {PERIODS.map(({ key, label }) => (

@@ -96,6 +96,10 @@ function addPaymentToPeriods(
 export async function GET() {
   try {
     const ranges = getDateRanges();
+    const now = new Date();
+    const y = now.getUTCFullYear();
+    const lastYearStart = new Date(Date.UTC(y - 1, 0, 1, 0, 0, 0));
+    const lastYearEnd = new Date(Date.UTC(y, 0, 1, 0, 0, 0) - 1);
 
     const completedJobs = await prisma.job.findMany({
       where: { stage: "COMPLETED" },
@@ -136,6 +140,10 @@ export async function GET() {
       month: 0,
       year: 0,
     };
+    let lastYearShopRevenue = 0;
+    let lastYearStripeRevenue = 0;
+    let lastYearCashRevenue = 0;
+    let lastYearImportedRevenue = 0;
 
     for (const job of completedJobs) {
       const date = job.completedAt ?? job.updatedAt;
@@ -162,6 +170,14 @@ export async function GET() {
           } else if (pay.paymentMethod?.toLowerCase() === "cash") {
             addPaymentToPeriods(ranges, payDate, amt, cashRevenueByPeriod);
           }
+          if (inRange(payDate, lastYearStart, lastYearEnd, payDate)) {
+            lastYearShopRevenue += amt;
+            if (pay.stripePaymentIntentId) {
+              lastYearStripeRevenue += amt;
+            } else if (pay.paymentMethod?.toLowerCase() === "cash") {
+              lastYearCashRevenue += amt;
+            }
+          }
         }
       } else {
         const revenue = lineItemRevenue(job);
@@ -170,6 +186,9 @@ export async function GET() {
           if (inRange(date, start, end, job.updatedAt)) {
             shopRevenueByPeriod[period] += revenue;
           }
+        }
+        if (inRange(date, lastYearStart, lastYearEnd, job.updatedAt)) {
+          lastYearShopRevenue += revenue;
         }
       }
     }
@@ -192,6 +211,9 @@ export async function GET() {
         if (inRange(row.occurredAt, start, end, row.occurredAt)) {
           importedRevenueByPeriod[period] += amt;
         }
+      }
+      if (inRange(row.occurredAt, lastYearStart, lastYearEnd, row.occurredAt)) {
+        lastYearImportedRevenue += amt;
       }
     }
 
@@ -225,6 +247,8 @@ export async function GET() {
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
 
+    const lastYearRevenue = lastYearShopRevenue + lastYearImportedRevenue;
+
     return NextResponse.json({
       bikes: bikesByPeriod,
       revenue: revenueByPeriod,
@@ -232,6 +256,14 @@ export async function GET() {
       stripeRevenue: stripeRevenueByPeriod,
       cashRevenue: cashRevenueByPeriod,
       importedRevenue: importedRevenueByPeriod,
+      lastYear: {
+        calendarYear: y - 1,
+        revenue: lastYearRevenue,
+        shopRevenue: lastYearShopRevenue,
+        stripeRevenue: lastYearStripeRevenue,
+        cashRevenue: lastYearCashRevenue,
+        importedRevenue: lastYearImportedRevenue,
+      },
       topServices,
     });
   } catch (error) {
