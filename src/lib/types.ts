@@ -133,6 +133,7 @@ export interface Job {
   bikeMake: string;
   bikeModel: string;
   jobBikes?: JobBike[];
+  workingOnJobBikeId?: string | null;
   stage: Stage;
   deliveryType: DeliveryType;
   dropOffDate: string | null;

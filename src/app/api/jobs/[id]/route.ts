@@ -20,6 +20,7 @@ const updateJobSchema = z.object({
   bikeMake: z.string().min(1).optional(),
   bikeModel: z.string().min(1).optional(),
   bikes: z.array(bikeSchema).optional(),
+  workingOnJobBikeId: z.string().optional().nullable(),
   customerId: z.string().optional().nullable(),
   deliveryType: z.enum(["DROP_OFF_AT_SHOP", "COLLECTION_SERVICE"]).optional(),
   dropOffDate: z.string().datetime().optional().nullable(),
@@ -91,6 +92,7 @@ export async function PATCH(
     if (data.pickupDate !== undefined) updateData.pickupDate = data.pickupDate ? new Date(data.pickupDate) : null;
     if (data.collectionAddress !== undefined) updateData.collectionAddress = data.collectionAddress;
     if (data.notes !== undefined) updateData.notes = data.notes;
+    if (data.workingOnJobBikeId !== undefined) updateData.workingOnJobBikeId = data.workingOnJobBikeId;
 
     if (data.stage === "COMPLETED") {
       updateData.completedAt = new Date();

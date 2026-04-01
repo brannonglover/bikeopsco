@@ -3,7 +3,7 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { Job, Stage } from "@/lib/types";
-import { getJobBikeDisplayTitle } from "@/lib/job-display";
+import { getJobBikeDisplayTitle, getDisplayPartsForJobBikeRow } from "@/lib/job-display";
 
 const STAGE_LABELS: Record<Stage, string> = {
   PENDING_APPROVAL: "Pending approval",
@@ -102,6 +102,20 @@ export function JobCardContent({
       <h3 className="font-semibold text-slate-900">
         {getJobBikeDisplayTitle(job)}
       </h3>
+      {job.workingOnJobBikeId && (() => {
+        const activeBike = (job.jobBikes ?? []).find((b) => b.id === job.workingOnJobBikeId);
+        if (!activeBike) return null;
+        const dp = getDisplayPartsForJobBikeRow(job, activeBike);
+        const bikeName = dp.nickname?.trim() || `${dp.make} ${dp.model}`;
+        return (
+          <p className="flex items-center gap-1 text-[11px] font-semibold text-amber-700 mt-0.5">
+            <svg className="w-3 h-3 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+              <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
+            </svg>
+            Working on {bikeName}
+          </p>
+        );
+      })()}
       {job.customer && (
         <p className="text-sm text-slate-700 font-medium mt-1.5" title={`${job.customer.firstName}${job.customer.lastName ? ` ${job.customer.lastName}` : ""}`}>
           {job.customer.lastName

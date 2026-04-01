@@ -186,6 +186,14 @@ function PencilIcon({ className }: { className?: string }) {
   );
 }
 
+function WrenchIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="16" height="16" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+      <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
+    </svg>
+  );
+}
+
 function JobBikeSection({
   job,
   onJobUpdated,
@@ -201,6 +209,7 @@ function JobBikeSection({
   const customerBikes = job.customer?.bikes;
   const [savingIndex, setSavingIndex] = useState<number | null>(null);
   const [editingBikeIndex, setEditingBikeIndex] = useState<number | null>(null);
+  const [savingWorkingOn, setSavingWorkingOn] = useState(false);
 
   useEffect(() => {
     setEditingBikeIndex(null);
@@ -228,6 +237,25 @@ function JobBikeSection({
     }
   };
 
+  const handleToggleWorkingOn = async (bikeId: string) => {
+    if (!onJobUpdated || savingWorkingOn) return;
+    const nextId = job.workingOnJobBikeId === bikeId ? null : bikeId;
+    setSavingWorkingOn(true);
+    try {
+      const res = await fetch(`/api/jobs/${job.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workingOnJobBikeId: nextId }),
+      });
+      if (res.ok) {
+        const updatedJob = (await res.json()) as Job;
+        onJobUpdated(updatedJob);
+      }
+    } finally {
+      setSavingWorkingOn(false);
+    }
+  };
+
   return (
     <div>
       <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">
@@ -242,11 +270,17 @@ function JobBikeSection({
             dp.imageUrl ?? resolveBikeImageUrl({ ...b, make: dp.make, model: dp.model }, customerBikes);
           const size = hasMultiple ? "w-16 h-16" : "w-24 h-24";
           const isEditing = onJobUpdated && editingBikeIndex === i;
+          const isWorkingOn = b.id !== "legacy" && job.workingOnJobBikeId === b.id;
+          const canToggleWorkingOn = onJobUpdated && b.id !== "legacy";
 
           return (
             <div
               key={b.id}
-              className={`flex gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm min-w-0 ${hasMultiple ? "" : "flex-1"}`}
+              className={`flex gap-3 rounded-xl border p-3 shadow-sm min-w-0 transition-colors ${
+                isWorkingOn
+                  ? "border-amber-400 bg-amber-50/60 ring-1 ring-amber-300"
+                  : "border-slate-200 bg-white"
+              } ${hasMultiple ? "" : "flex-1"}`}
             >
               {imageUrl ? (
                 <img
@@ -260,7 +294,14 @@ function JobBikeSection({
                 </div>
               )}
               <div className="min-w-0 flex-1 flex flex-col">
-                <p className="font-medium text-slate-900 truncate">{displayName}</p>
+                <div className="flex items-start justify-between gap-1">
+                  <p className="font-medium text-slate-900 truncate">{displayName}</p>
+                  {isWorkingOn && (
+                    <span className="flex-shrink-0 text-[10px] font-bold uppercase tracking-wide text-amber-700 bg-amber-200 px-1.5 py-0.5 rounded-md whitespace-nowrap">
+                      Working on
+                    </span>
+                  )}
+                </div>
                 {subtitle && <p className="text-sm text-slate-500 truncate">{subtitle}</p>}
 
                 {!onJobUpdated && (
@@ -316,6 +357,23 @@ function JobBikeSection({
                       Cancel
                     </button>
                   </div>
+                )}
+
+                {canToggleWorkingOn && (
+                  <button
+                    type="button"
+                    onClick={() => handleToggleWorkingOn(b.id)}
+                    disabled={savingWorkingOn}
+                    className={`mt-2 inline-flex items-center gap-1.5 self-start text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-colors touch-manipulation min-h-[32px] disabled:opacity-50 ${
+                      isWorkingOn
+                        ? "bg-amber-200 text-amber-800 hover:bg-amber-300"
+                        : "bg-slate-100 text-slate-600 hover:bg-amber-100 hover:text-amber-800"
+                    }`}
+                    title={isWorkingOn ? "Stop working on this bike" : "Mark as working on this bike"}
+                  >
+                    <WrenchIcon className="w-3.5 h-3.5" />
+                    {isWorkingOn ? "Working on this" : "Work on this"}
+                  </button>
                 )}
               </div>
             </div>

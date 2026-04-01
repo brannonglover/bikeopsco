@@ -56,6 +56,7 @@ model JobBike {
   bike      Bike?    @relation(fields: [bikeId], references: [id], onDelete: SetNull)
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
+  workingOnJob Job?  @relation("WorkingOnBike")
 
   @@index([jobId])
 }
@@ -65,6 +66,8 @@ model Job {
   bikeMake          String       // Legacy / summary – first bike or "Multiple"
   bikeModel         String       // Legacy / summary
   jobBikes          JobBike[]
+  workingOnJobBikeId String?     @unique
+  workingOnJobBike   JobBike?    @relation("WorkingOnBike", fields: [workingOnJobBikeId], references: [id], onDelete: SetNull)
   stage             Stage        @default(BOOKED_IN)
   deliveryType      DeliveryType @default(DROP_OFF_AT_SHOP)
   dropOffDate       DateTime?

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { Price } from "@/components/ui/Price";
+import { BikePlaceholderIcon } from "@/components/ui/BikePlaceholderIcon";
 
 const STAGE_LABELS: Record<string, string> = {
   PENDING_APPROVAL: "Awaiting confirmation",
@@ -27,26 +28,97 @@ const STAGE_DESCRIPTIONS: Record<string, string> = {
   CANCELLED: "This job has been cancelled.",
 };
 
+const BIKE_STATUS_LABEL: Record<string, string> = {
+  PENDING_APPROVAL: "Awaiting confirmation",
+  BOOKED_IN: "Booked in",
+  RECEIVED: "Received",
+  WORKING_ON: "In queue",
+  WAITING_ON_PARTS: "Waiting on parts",
+  BIKE_READY: "Ready for pickup",
+  COMPLETED: "Completed",
+  CANCELLED: "Cancelled",
+};
+
 function formatDate(s: string | null): string {
   if (!s) return "—";
   const d = new Date(s);
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
+type StatusJobBike = {
+  id: string;
+  make: string;
+  model: string;
+  nickname: string | null;
+  imageUrl: string | null;
+  bikeId: string | null;
+  bike?: { imageUrl: string | null; nickname?: string | null; make: string; model: string } | null;
+};
+
+type StatusJob = {
+  id: string;
+  bikeMake: string;
+  bikeModel: string;
+  stage: string;
+  workingOnJobBikeId?: string | null;
+  jobBikes?: StatusJobBike[];
+  customer?: { bikes?: { make: string; model: string; imageUrl: string | null }[] } | null;
+  dropOffDate: string | null;
+  pickupDate: string | null;
+  paymentStatus: string;
+  cancellationReason?: string | null;
+  jobServices: { service: { name: string }; quantity: number; unitPrice: string | number }[];
+};
+
+function resolveBikeDisplay(b: StatusJobBike): { name: string; imageUrl: string | null } {
+  const linked = b.bikeId && b.bike ? b.bike : null;
+  const make = linked?.make ?? b.make;
+  const model = linked?.model ?? b.model;
+  const nickname = b.nickname?.trim() || linked?.nickname?.trim() || null;
+  const imageUrl = b.imageUrl ?? linked?.imageUrl ?? null;
+  return {
+    name: nickname || `${make} ${model}`,
+    imageUrl,
+  };
+}
+
+function BikeStatusBadge({ stage, isWorkingOn }: { stage: string; isWorkingOn: boolean }) {
+  if (isWorkingOn) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-800 bg-amber-100 border border-amber-200 px-2 py-1 rounded-full">
+        <span className="relative flex h-2 w-2">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-75" />
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
+        </span>
+        Being worked on now
+      </span>
+    );
+  }
+
+  const label = BIKE_STATUS_LABEL[stage] ?? stage;
+
+  const colorMap: Record<string, string> = {
+    PENDING_APPROVAL: "text-slate-600 bg-slate-100 border-slate-200",
+    BOOKED_IN: "text-slate-600 bg-slate-100 border-slate-200",
+    RECEIVED: "text-blue-700 bg-blue-50 border-blue-200",
+    WORKING_ON: "text-slate-600 bg-slate-100 border-slate-200",
+    WAITING_ON_PARTS: "text-yellow-800 bg-yellow-50 border-yellow-200",
+    BIKE_READY: "text-emerald-700 bg-emerald-50 border-emerald-200",
+    COMPLETED: "text-emerald-700 bg-emerald-50 border-emerald-200",
+    CANCELLED: "text-red-700 bg-red-50 border-red-200",
+  };
+
+  return (
+    <span className={`inline-flex text-xs font-semibold px-2 py-1 rounded-full border ${colorMap[stage] ?? "text-slate-600 bg-slate-100 border-slate-200"}`}>
+      {label}
+    </span>
+  );
+}
+
 export default function StatusPage() {
   const params = useParams();
   const jobId = params?.jobId as string;
-  const [job, setJob] = useState<{
-    id: string;
-    bikeMake: string;
-    bikeModel: string;
-    stage: string;
-    dropOffDate: string | null;
-    pickupDate: string | null;
-    paymentStatus: string;
-    cancellationReason?: string | null;
-    jobServices: { service: { name: string }; quantity: number; unitPrice: string | number }[];
-  } | null>(null);
+  const [job, setJob] = useState<StatusJob | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -91,6 +163,12 @@ export default function StatusPage() {
   const stageLabel = STAGE_LABELS[job.stage] ?? job.stage;
   const stageDesc = STAGE_DESCRIPTIONS[job.stage] ?? "";
 
+  const bikes: StatusJobBike[] = (job.jobBikes ?? []).length > 0
+    ? [...(job.jobBikes ?? [])].sort((a: StatusJobBike & { sortOrder?: number }, b: StatusJobBike & { sortOrder?: number }) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+    : [];
+  const hasBikes = bikes.length > 0;
+  const hasMultipleBikes = bikes.length > 1;
+
   return (
     <div className="w-full max-w-md space-y-6">
       <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -133,6 +211,48 @@ export default function StatusPage() {
               )}
           </div>
         </div>
+
+        {hasBikes && (
+          <div className="mt-5 pt-4 border-t border-slate-200">
+            <h2 className="text-sm font-semibold text-slate-700 mb-3">
+              {hasMultipleBikes ? `Your bikes (${bikes.length})` : "Your bike"}
+            </h2>
+            <div className="space-y-3">
+              {bikes.map((b) => {
+                const { name, imageUrl } = resolveBikeDisplay(b);
+                const isWorkingOn = !!job.workingOnJobBikeId && job.workingOnJobBikeId === b.id;
+                return (
+                  <div
+                    key={b.id}
+                    className={`flex items-center gap-3 rounded-xl border p-3 transition-colors ${
+                      isWorkingOn
+                        ? "border-amber-300 bg-amber-50/50"
+                        : "border-slate-200 bg-slate-50/50"
+                    }`}
+                  >
+                    {imageUrl ? (
+                      <img
+                        src={imageUrl}
+                        alt={name}
+                        className="w-14 h-14 flex-shrink-0 object-cover rounded-lg border border-slate-200"
+                      />
+                    ) : (
+                      <div className="w-14 h-14 flex-shrink-0 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center">
+                        <BikePlaceholderIcon className="w-6 h-6 text-slate-400" />
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-slate-900 truncate">{name}</p>
+                      <div className="mt-1">
+                        <BikeStatusBadge stage={job.stage} isWorkingOn={isWorkingOn} />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {(job.dropOffDate || job.pickupDate) && (
           <dl className="mt-4 space-y-1 text-sm">
