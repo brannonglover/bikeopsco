@@ -17,6 +17,17 @@ function getDateRanges() {
   monday.setUTCHours(0, 0, 0, 0);
   const weekStart = monday;
 
+  // Calendar month/year can start after the current week (e.g. April 1 vs week
+  // beginning Monday March 30 UTC). Without aligning, jobs in that week but
+  // before the 1st count for "this week" but not "this month". Extend month/year
+  // backward to weekStart when needed so week ⊆ month ⊆ year.
+  const monthCalStart = utc(y, m, 1, 0, 0, 0);
+  const yearCalStart = utc(y, 0, 1, 0, 0, 0);
+  const monthStart = new Date(
+    Math.min(monthCalStart.getTime(), weekStart.getTime())
+  );
+  const yearStart = new Date(Math.min(yearCalStart.getTime(), weekStart.getTime()));
+
   return {
     day: {
       start: utc(y, m, d, 0, 0, 0),
@@ -27,11 +38,11 @@ function getDateRanges() {
       end: now,
     },
     month: {
-      start: utc(y, m, 1, 0, 0, 0),
+      start: monthStart,
       end: now,
     },
     year: {
-      start: utc(y, 0, 1, 0, 0, 0),
+      start: yearStart,
       end: now,
     },
   };
