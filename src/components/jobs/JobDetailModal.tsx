@@ -1179,6 +1179,8 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
   const [addingProduct, setAddingProduct] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
   const [removingProduct, setRemovingProduct] = useState<string | null>(null);
+  const [updatingServiceQty, setUpdatingServiceQty] = useState<string | null>(null);
+  const [updatingServicePrice, setUpdatingServicePrice] = useState<string | null>(null);
   const [servicesDropdownOpen, setServicesDropdownOpen] = useState(false);
   const [productsDropdownOpen, setProductsDropdownOpen] = useState(false);
   const [expandedServiceIds, setExpandedServiceIds] = useState<Set<string>>(new Set());
@@ -1286,6 +1288,41 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
     }
   };
 
+  const adjustServiceQuantity = async (jobServiceId: string, quantity: number) => {
+    if (quantity < 1) return;
+    setUpdatingServiceQty(jobServiceId);
+    try {
+      const res = await fetch(`/api/jobs/${job.id}/services`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobServiceId, quantity }),
+      });
+      if (res.ok) {
+        const updatedJob = await fetch(`/api/jobs/${job.id}`).then((r) => r.json());
+        onJobUpdated?.(updatedJob);
+      }
+    } finally {
+      setUpdatingServiceQty(null);
+    }
+  };
+
+  const updateServiceUnitPrice = async (jobServiceId: string, unitPrice: number) => {
+    setUpdatingServicePrice(jobServiceId);
+    try {
+      const res = await fetch(`/api/jobs/${job.id}/services`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobServiceId, unitPrice }),
+      });
+      if (res.ok) {
+        const updatedJob = await fetch(`/api/jobs/${job.id}`).then((r) => r.json());
+        onJobUpdated?.(updatedJob);
+      }
+    } finally {
+      setUpdatingServicePrice(null);
+    }
+  };
+
   const handleAddProduct = async (productId: string) => {
     setAddingProduct(true);
     setProductsDropdownOpen(false);
@@ -1349,8 +1386,11 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
         <div className="space-y-2 mb-3">
           {jobServices.map((js) => {
             const price = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);
-            const lineTotal = price * (js.quantity || 1);
+            const qty = js.quantity || 1;
+            const lineTotal = price * qty;
             const isExpanded = expandedServiceIds.has(js.id);
+            const isSystemLine = Boolean(js.service?.isSystem);
+            const qtyBusy = updatingServiceQty === js.id;
             return (
               <div
                 key={`service-${js.id}`}
@@ -1374,12 +1414,37 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                     </span>
                     <p className="font-medium text-slate-900 min-w-0">
                       {js.service?.name ?? "Unknown service"}
-                      {js.quantity > 1 && (
-                        <span className="text-slate-500 font-normal"> × {js.quantity}</span>
+                      {qty > 1 && (
+                        <span className="text-slate-500 font-normal"> × {qty}</span>
                       )}
                     </p>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                    {!isSystemLine && (
+                      <div className="flex items-center rounded-md border border-slate-200 bg-white">
+                        <button
+                          type="button"
+                          aria-label="Decrease quantity"
+                          disabled={qty <= 1 || qtyBusy}
+                          onClick={() => adjustServiceQuantity(js.id, qty - 1)}
+                          className="px-2 py-1 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-transparent rounded-l-md text-sm leading-none"
+                        >
+                          −
+                        </button>
+                        <span className="min-w-[1.75rem] text-center text-sm tabular-nums text-slate-800 px-0.5">
+                          {qtyBusy ? "…" : qty}
+                        </span>
+                        <button
+                          type="button"
+                          aria-label="Increase quantity"
+                          disabled={qtyBusy}
+                          onClick={() => adjustServiceQuantity(js.id, qty + 1)}
+                          className="px-2 py-1 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-transparent rounded-r-md text-sm leading-none"
+                        >
+                          +
+                        </button>
+                      </div>
+                    )}
                     <Price amount={lineTotal} variant="inline" />
                     <button
                       onClick={() => handleRemoveService(js.id)}
@@ -1403,9 +1468,34 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                         <p className="text-xs text-slate-600 mt-2 whitespace-pre-line">{js.service.description}</p>
                       )}
                       <dl className="mt-2 text-xs text-slate-500 space-y-1">
-                        <div className="flex justify-between gap-4">
-                          <dt>Unit price</dt>
-                          <dd><Price amount={price} variant="inline" /></dd>
+                        <div className="flex justify-between items-center gap-4">
+                          <dt className="shrink-0">Unit price</dt>
+                          <dd className="min-w-0 flex justify-end">
+                            {isSystemLine ? (
+                              <Price amount={price} variant="inline" />
+                            ) : (
+                              <input
+                                key={`unit-${js.id}-${price}`}
+                                type="number"
+                                min={0}
+                                step={0.01}
+                                disabled={updatingServicePrice === js.id}
+                                defaultValue={Number.isFinite(price) ? String(price) : "0"}
+                                onClick={(e) => e.stopPropagation()}
+                                onBlur={(e) => {
+                                  const raw = e.target.value.trim();
+                                  const next = parseFloat(raw);
+                                  if (!Number.isFinite(next) || next < 0) return;
+                                  const rounded = Math.round(next * 100) / 100;
+                                  const current = Math.round(price * 100) / 100;
+                                  if (rounded === current) return;
+                                  void updateServiceUnitPrice(js.id, rounded);
+                                }}
+                                className="w-28 max-w-full rounded border border-slate-200 bg-white px-2 py-1 text-right text-sm tabular-nums text-slate-800 disabled:opacity-50"
+                                aria-label="Unit price"
+                              />
+                            )}
+                          </dd>
                         </div>
                         <div className="flex justify-between gap-4">
                           <dt>Quantity</dt>
