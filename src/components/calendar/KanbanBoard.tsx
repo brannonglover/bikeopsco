@@ -201,6 +201,8 @@ export function KanbanBoard() {
     {} as Record<Stage, Job[]>
   );
 
+  const completedCount = jobs.filter((j) => j.stage === "COMPLETED").length;
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24 text-slate-500 font-medium">
@@ -259,10 +261,14 @@ export function KanbanBoard() {
         <div className="flex flex-wrap gap-2">
           <button
             onClick={handleArchiveCompleted}
-            disabled={archiving || jobs.filter((j) => j.stage === "COMPLETED").length === 0}
+            disabled={archiving || completedCount === 0}
             className="px-4 py-3 border border-slate-300 bg-white text-slate-700 rounded-xl font-semibold text-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 touch-manipulation min-h-[44px]"
           >
-            {archiving ? "Archiving…" : "Archive completed"}
+            {archiving
+              ? "Archive Completed"
+              : completedCount > 0
+                ? `Archive (${completedCount})`
+                : "Archive"}
           </button>
           <button
             onClick={() => setNewJobModalOpen(true)}
