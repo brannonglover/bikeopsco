@@ -182,9 +182,25 @@ export default function StatsPage() {
                 method: "POST",
                 body: fd,
               });
-              const data = await res.json();
+              const raw = await res.text();
+              let data: {
+                error?: string;
+                ok?: boolean;
+                processed?: number;
+                created?: number;
+                updated?: number;
+                warnings?: string[];
+              } = {};
+              try {
+                data = raw ? (JSON.parse(raw) as typeof data) : {};
+              } catch {
+                setImportStatus(
+                  `Import failed (HTTP ${res.status}). The server did not return JSON — often a timeout or gateway error with large files. ${raw.slice(0, 280)}`
+                );
+                return;
+              }
               if (!res.ok) {
-                setImportStatus(data.error ?? "Import failed.");
+                setImportStatus(data.error ?? `Import failed (HTTP ${res.status}).`);
                 return;
               }
               const w = data.warnings?.length
@@ -194,9 +210,21 @@ export default function StatsPage() {
                 `Imported ${data.processed} row(s) (${data.created} new, ${data.updated} updated).${w}`
               );
               setImportFile(null);
-              await reloadStats();
-            } catch {
-              setImportStatus("Network error — try again.");
+              try {
+                await reloadStats();
+              } catch (reloadErr) {
+                console.error("reloadStats after import:", reloadErr);
+                setImportStatus((prev) =>
+                  prev
+                    ? `${prev} Stats could not refresh automatically — reload the page.`
+                    : "Stats could not refresh — reload the page."
+                );
+              }
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              setImportStatus(
+                `Request failed: ${msg}. If the file is very large, try splitting the CSV or importing again (rows with Payment IDs update in place).`
+              );
             } finally {
               setImportBusy(false);
             }

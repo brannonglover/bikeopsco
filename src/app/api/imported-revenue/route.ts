@@ -8,6 +8,12 @@ import {
   type ParsedImportRow,
 } from "@/lib/imported-revenue-csv";
 
+/** Serverless timeout (e.g. Vercel Pro). Hobby max is 10s — large imports may still need a smaller CSV. */
+export const maxDuration = 60;
+
+const CREATE_CHUNK = 800;
+const UPSERT_CHUNK = 40;
+
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) {
@@ -24,7 +30,7 @@ export async function POST(request: Request) {
     const file = form.get("file");
     const src = form.get("source");
     if (typeof src === "string" && src.trim()) source = src.trim().slice(0, 64);
-    if (!(file instanceof File)) {
+    if (!(file instanceof Blob)) {
       return NextResponse.json({ error: "Missing CSV file (field name: file)." }, { status: 400 });
     }
     const text = await file.text();
@@ -85,6 +91,9 @@ export async function POST(request: Request) {
   let created = 0;
   let upserted = 0;
 
+  const withoutId: Prisma.ImportedRevenueCreateManyInput[] = [];
+  const withId: ParsedImportRow[] = [];
+
   for (const row of rows) {
     const amount = new Prisma.Decimal(String(row.amount));
     const base = {
@@ -93,26 +102,55 @@ export async function POST(request: Request) {
       amount,
       description: row.description ?? null,
     };
-
     if (row.externalId) {
-      const existing = await prisma.importedRevenue.findUnique({
-        where: { externalId: row.externalId },
-      });
-      await prisma.importedRevenue.upsert({
-        where: { externalId: row.externalId },
-        create: { ...base, externalId: row.externalId },
-        update: {
-          amount,
-          occurredAt: row.occurredAt,
-          description: base.description,
-          source,
-        },
-      });
-      if (existing) upserted++;
-      else created++;
+      withId.push(row);
     } else {
-      await prisma.importedRevenue.create({ data: base });
-      created++;
+      withoutId.push(base);
+    }
+  }
+
+  for (let i = 0; i < withoutId.length; i += CREATE_CHUNK) {
+    const chunk = withoutId.slice(i, i + CREATE_CHUNK);
+    const result = await prisma.importedRevenue.createMany({ data: chunk });
+    created += result.count;
+  }
+
+  for (let i = 0; i < withId.length; i += UPSERT_CHUNK) {
+    const chunk = withId.slice(i, i + UPSERT_CHUNK);
+    const ids = chunk.map((r) => r.externalId!);
+    const existing = await prisma.importedRevenue.findMany({
+      where: { externalId: { in: ids } },
+      select: { externalId: true },
+    });
+    const existingSet = new Set(
+      existing.map((e) => e.externalId).filter((x): x is string => x != null)
+    );
+
+    await prisma.$transaction(
+      chunk.map((row) => {
+        const amount = new Prisma.Decimal(String(row.amount));
+        const base = {
+          source,
+          occurredAt: row.occurredAt,
+          amount,
+          description: row.description ?? null,
+        };
+        return prisma.importedRevenue.upsert({
+          where: { externalId: row.externalId! },
+          create: { ...base, externalId: row.externalId! },
+          update: {
+            amount,
+            occurredAt: row.occurredAt,
+            description: base.description,
+            source,
+          },
+        });
+      })
+    );
+
+    for (const row of chunk) {
+      if (existingSet.has(row.externalId!)) upserted++;
+      else created++;
     }
   }
 
