@@ -13,6 +13,101 @@ import {
 } from "@/lib/job-display";
 import { formatPhoneDisplay, phoneTelHref } from "@/lib/phone";
 
+function formatChatPreviewTime(iso: string): string {
+  const d = new Date(iso);
+  const diffMs = Date.now() - d.getTime();
+  const minutes = Math.floor(diffMs / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+type CustomerChatPreviewPayload = {
+  id: string;
+  lastMessage: {
+    body: string | null;
+    sender: "STAFF" | "CUSTOMER";
+    createdAt: string;
+    attachmentCount: number;
+  } | null;
+};
+
+function CustomerChatSection({ customerId }: { customerId: string }) {
+  const [status, setStatus] = useState<"loading" | "error" | "ready">("loading");
+  const [conversation, setConversation] = useState<CustomerChatPreviewPayload | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setStatus("loading");
+    fetch(`/api/conversations/by-customer/${encodeURIComponent(customerId)}`)
+      .then((r) => r.json())
+      .then((data: { conversation?: CustomerChatPreviewPayload | null }) => {
+        if (cancelled) return;
+        setConversation(data.conversation ?? null);
+        setStatus("ready");
+      })
+      .catch(() => {
+        if (!cancelled) setStatus("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [customerId]);
+
+  const chatHref = `/chat?customer=${encodeURIComponent(customerId)}`;
+
+  const lastMessageLine = (msg: NonNullable<CustomerChatPreviewPayload["lastMessage"]>) => {
+    const text = msg.body?.trim();
+    const hasAtt = msg.attachmentCount > 0;
+    const prefix = msg.sender === "STAFF" ? "You: " : "";
+    if (text) {
+      const t = text.length > 140 ? `${text.slice(0, 140)}…` : text;
+      return prefix + t;
+    }
+    if (hasAtt) return `${prefix}📎 Image`;
+    return `${prefix}—`;
+  };
+
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">Chat</h3>
+      {status === "loading" && <p className="text-sm text-slate-400">Loading…</p>}
+      {status === "error" && (
+        <Link
+          href={chatHref}
+          className="text-sm font-medium text-indigo-600 hover:text-indigo-800 hover:underline touch-manipulation"
+        >
+          Open chat
+        </Link>
+      )}
+      {status === "ready" && (
+        <div className="space-y-2">
+          {conversation?.lastMessage ? (
+            <p className="text-sm text-slate-600 line-clamp-3 whitespace-pre-wrap">
+              {lastMessageLine(conversation.lastMessage)}
+              <span className="text-slate-400 text-xs ml-1.5">
+                · {formatChatPreviewTime(conversation.lastMessage.createdAt)}
+              </span>
+            </p>
+          ) : (
+            <p className="text-sm text-slate-500">No messages yet.</p>
+          )}
+          <Link
+            href={chatHref}
+            className="inline-flex text-sm font-medium text-indigo-600 hover:text-indigo-800 hover:underline touch-manipulation"
+          >
+            Open chat
+          </Link>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function resolveBikeImageUrl(b: JobBike, customerBikes?: { make: string; model: string; imageUrl: string | null }[]): string | null {
   const url = b.imageUrl ?? b.bike?.imageUrl ?? null;
   if (url) return url;
@@ -1094,6 +1189,8 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
               </div>
             </div>
           )}
+
+          {job.customer && <CustomerChatSection customerId={job.customer.id} />}
             </>
           )}
         </div>

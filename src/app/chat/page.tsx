@@ -1,7 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { useState, useEffect, useRef, useCallback, useLayoutEffect } from "react";
+import { useState, useEffect, useRef, useCallback, useLayoutEffect, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import type { Conversation, ChatMessage, Customer } from "@/lib/types";
 import { useChatNotifications } from "@/hooks/useChatNotifications";
 import { ChatMessageBubble } from "@/components/chat/ChatMessageBubble";
@@ -146,7 +147,12 @@ function InviteButton({ customerId }: { customerId: string }) {
   );
 }
 
-export default function ChatPage() {
+function ChatPageContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const customerIdFromUrl = searchParams.get("customer");
+  const deepLinkCustomerRef = useRef<string | null>(null);
+
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -255,6 +261,51 @@ export default function ChatPage() {
   }, [fetchConversations]);
 
   useEffect(() => {
+    deepLinkCustomerRef.current = null;
+  }, [customerIdFromUrl]);
+
+  useEffect(() => {
+    if (loading || !customerIdFromUrl) return;
+
+    const existing = conversations.find(
+      (c) => c.customerId === customerIdFromUrl && !c.jobId
+    );
+    if (existing) {
+      setSelectedId(existing.id);
+      deepLinkCustomerRef.current = customerIdFromUrl;
+      router.replace("/chat", { scroll: false });
+      return;
+    }
+
+    if (deepLinkCustomerRef.current === customerIdFromUrl) return;
+
+    deepLinkCustomerRef.current = customerIdFromUrl;
+    let cancelled = false;
+    fetch("/api/conversations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ customerId: customerIdFromUrl }),
+    })
+      .then(async (res) => {
+        if (cancelled) return;
+        if (res.ok) {
+          const newConv = (await res.json()) as Conversation;
+          setConversations((prev) => [newConv, ...prev]);
+          setSelectedId(newConv.id);
+          router.replace("/chat", { scroll: false });
+        } else {
+          deepLinkCustomerRef.current = null;
+        }
+      })
+      .catch(() => {
+        deepLinkCustomerRef.current = null;
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, customerIdFromUrl, conversations, router]);
+
+  useEffect(() => {
     if (!selectedId) {
       setMessages([]);
       setCustomerTypingAt(null);
@@ -338,32 +389,35 @@ export default function ChatPage() {
       .catch(() => setCustomers([]));
   };
 
-  const handleSelectCustomer = async (customerId: string) => {
-    const existing = conversations.find((c) => c.customerId === customerId && !c.jobId);
-    if (existing) {
-      setSelectedId(existing.id);
-      setShowNewConvModal(false);
-      return;
-    }
-    try {
-      const res = await fetch("/api/conversations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customerId }),
-      });
-      if (res.ok) {
-        const newConv = await res.json();
-        setConversations((prev) => [newConv, ...prev]);
-        setSelectedId(newConv.id);
+  const handleSelectCustomer = useCallback(
+    async (customerId: string) => {
+      const existing = conversations.find((c) => c.customerId === customerId && !c.jobId);
+      if (existing) {
+        setSelectedId(existing.id);
         setShowNewConvModal(false);
-      } else {
-        const err = await res.json();
-        alert(err.error ?? "Failed to create conversation");
+        return;
       }
-    } catch {
-      alert("Failed to create conversation");
-    }
-  };
+      try {
+        const res = await fetch("/api/conversations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ customerId }),
+        });
+        if (res.ok) {
+          const newConv = await res.json();
+          setConversations((prev) => [newConv, ...prev]);
+          setSelectedId(newConv.id);
+          setShowNewConvModal(false);
+        } else {
+          const err = await res.json();
+          alert(err.error ?? "Failed to create conversation");
+        }
+      } catch {
+        alert("Failed to create conversation");
+      }
+    },
+    [conversations]
+  );
 
   const filteredCustomers = customers.filter((c) => {
     const q = customerSearch.toLowerCase();
@@ -782,5 +836,19 @@ export default function ChatPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function ChatPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-[50vh] flex-col items-center justify-center bg-slate-50 text-slate-500">
+          Loading…
+        </div>
+      }
+    >
+      <ChatPageContent />
+    </Suspense>
   );
 }
