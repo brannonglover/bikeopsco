@@ -302,3 +302,18 @@ model ChatSession {
   expiresAt DateTime
   createdAt DateTime @default(now())
 }
+
+/// Historical revenue from outside the app (e.g. Square exports) for reporting and taxes.
+model ImportedRevenue {
+  id          String   @id @default(cuid())
+  source      String   @default("SQUARE")
+  occurredAt  DateTime
+  amount      Decimal  @db.Decimal(10, 2)
+  description String?
+  /// Square payment id or other stable id — avoids duplicate rows on re-import
+  externalId  String?  @unique
+  createdAt   DateTime   @default(now())
+
+  @@index([occurredAt])
+  @@index([source])
+}

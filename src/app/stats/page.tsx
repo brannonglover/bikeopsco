@@ -1,11 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Price } from "@/components/ui/Price";
 
 interface Stats {
   bikes: { day: number; week: number; month: number; year: number };
   revenue: { day: number; week: number; month: number; year: number };
+  shopRevenue: { day: number; week: number; month: number; year: number };
+  stripeRevenue?: { day: number; week: number; month: number; year: number };
+  cashRevenue?: { day: number; week: number; month: number; year: number };
+  importedRevenue: { day: number; week: number; month: number; year: number };
   topServices: { name: string; count: number; revenue: number }[];
 }
 
@@ -19,13 +23,18 @@ const PERIODS = [
 export default function StatsPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [importBusy, setImportBusy] = useState(false);
+
+  const reloadStats = useCallback(
+    () => fetch("/api/stats").then((res) => res.json()).then(setStats),
+    []
+  );
 
   useEffect(() => {
-    fetch("/api/stats")
-      .then((res) => res.json())
-      .then(setStats)
-      .finally(() => setLoading(false));
-  }, []);
+    reloadStats().finally(() => setLoading(false));
+  }, [reloadStats]);
 
   if (loading) {
     return (
@@ -43,7 +52,9 @@ export default function StatsPage() {
     <div className="max-w-5xl">
       <h1 className="text-2xl font-bold text-slate-900 mb-2">Stats</h1>
       <p className="text-slate-600 mb-8">
-        Overview of completed bikes and revenue by time period.
+        Completed bikes by when the job finished. Revenue uses recorded payments when available
+        (Stripe card charges and cash), so card totals match what hit Stripe; imported history
+        (e.g. Square) is separate.
       </p>
 
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 mb-10">
@@ -65,6 +76,27 @@ export default function StatsPage() {
               <div>
                 <Price amount={stats.revenue[key]} variant="total" className="text-xl" />
                 <p className="text-sm text-slate-600">revenue</p>
+                {(() => {
+                  const stripe = stats.stripeRevenue?.[key] ?? 0;
+                  const cash = stats.cashRevenue?.[key] ?? 0;
+                  const imp = stats.importedRevenue[key];
+                  const parts: { label: string; amount: number }[] = [];
+                  if (stripe > 0) parts.push({ label: "Stripe", amount: stripe });
+                  if (cash > 0) parts.push({ label: "Cash", amount: cash });
+                  if (imp > 0) parts.push({ label: "imported", amount: imp });
+                  if (parts.length === 0) return null;
+                  return (
+                    <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+                      {parts.map((p, i) => (
+                        <span key={p.label}>
+                          {i > 0 ? " · " : null}
+                          {p.label}{" "}
+                          <Price amount={p.amount} variant="inline" className="text-xs" />
+                        </span>
+                      ))}
+                    </p>
+                  );
+                })()}
               </div>
             </div>
           </div>
@@ -119,6 +151,76 @@ export default function StatsPage() {
               </tbody>
             </table>
           </div>
+        )}
+      </section>
+
+      <section className="mt-12 pt-8 border-t border-slate-200">
+        <h2 className="text-lg font-semibold text-slate-900 mb-2">
+          Historical Square (or other) revenue
+        </h2>
+        <p className="text-slate-600 text-sm mb-4 max-w-2xl">
+          If you processed payments in Square before this app, export your transactions from the
+          Square Dashboard (Reports → Sales, or Transactions) as CSV, then upload it here. Amounts
+          are added to the revenue totals above. Rows with a Payment ID column are de-duplicated if
+          you re-import.
+        </p>
+        <form
+          className="flex flex-wrap items-end gap-3"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (!importFile) {
+              setImportStatus("Choose a CSV file first.");
+              return;
+            }
+            setImportBusy(true);
+            setImportStatus(null);
+            const fd = new FormData();
+            fd.append("file", importFile);
+            fd.append("source", "SQUARE");
+            try {
+              const res = await fetch("/api/imported-revenue", {
+                method: "POST",
+                body: fd,
+              });
+              const data = await res.json();
+              if (!res.ok) {
+                setImportStatus(data.error ?? "Import failed.");
+                return;
+              }
+              const w = data.warnings?.length
+                ? ` Warnings: ${data.warnings.slice(0, 3).join(" ")}`
+                : "";
+              setImportStatus(
+                `Imported ${data.processed} row(s) (${data.created} new, ${data.updated} updated).${w}`
+              );
+              setImportFile(null);
+              await reloadStats();
+            } catch {
+              setImportStatus("Network error — try again.");
+            } finally {
+              setImportBusy(false);
+            }
+          }}
+        >
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">CSV file</label>
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              className="block text-sm text-slate-600 file:mr-3 file:rounded-lg file:border file:border-slate-200 file:bg-white file:px-3 file:py-1.5 file:text-sm"
+              onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={importBusy}
+            className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm font-medium hover:bg-slate-800 disabled:opacity-50"
+          >
+            {importBusy ? "Importing…" : "Import CSV"}
+          </button>
+        </form>
+        {importStatus && (
+          <p className="mt-3 text-sm text-slate-700 whitespace-pre-wrap">{importStatus}</p>
         )}
       </section>
     </div>
