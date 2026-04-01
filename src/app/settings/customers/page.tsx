@@ -892,7 +892,7 @@ function CustomersPageContent() {
                         <a
                           href={phoneTelHref(c.phone)}
                           onClick={(e) => e.stopPropagation()}
-                          className="text-indigo-600 hover:underline"
+                          className="phone-link-touch text-indigo-600 hover:underline"
                         >
                           {formatPhoneDisplay(c.phone)}
                         </a>

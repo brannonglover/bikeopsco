@@ -47,6 +47,16 @@
 }
 
 @layer utilities {
+  /**
+   * Tel links: allow long-press copy / system callout on mobile.
+   * Overrides touch-action: manipulation on anchors in @layer base.
+   */
+  .phone-link-touch {
+    -webkit-touch-callout: default;
+    user-select: text;
+    touch-action: auto;
+  }
+
   .text-balance {
     text-wrap: balance;
   }

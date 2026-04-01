@@ -874,7 +874,7 @@ export function CustomerDetailModal({
                           <p>
                             <a
                               href={phoneTelHref(customer.phone)}
-                              className="text-blue-600 hover:underline"
+                              className="phone-link-touch text-blue-600 hover:underline"
                             >
                               {formatPhoneDisplay(customer.phone)}
                             </a>

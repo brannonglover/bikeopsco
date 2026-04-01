@@ -822,7 +822,7 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-t-2xl sm:rounded-2xl shadow-soft-lg max-w-lg w-full max-h-[95vh] sm:max-h-[90vh] flex flex-col relative border border-slate-200/80 sm:border-t-0"
+        className="bg-white rounded-t-2xl sm:rounded-2xl shadow-soft-lg w-full max-w-lg sm:max-w-4xl max-h-[95vh] sm:max-h-[90vh] flex flex-col relative border border-slate-200/80 sm:border-t-0"
         onClick={(e) => e.stopPropagation()}
       >
         {showCancelReason && (
@@ -977,7 +977,7 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
               {job.customer.phone && (
                 <a
                   href={phoneTelHref(job.customer.phone)}
-                  className="block text-sm text-slate-600 hover:text-slate-800"
+                  className="phone-link-touch block text-sm text-slate-600 hover:text-slate-800"
                 >
                   {formatPhoneDisplay(job.customer.phone)}
                 </a>
