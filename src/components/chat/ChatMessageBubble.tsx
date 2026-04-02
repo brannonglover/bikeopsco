@@ -17,6 +17,8 @@ type ChatMessageBubbleProps = {
   actionMutedClassName: string;
   /** Save button in edit mode (use light text on dark/green bubbles) */
   saveEditButtonClassName?: string;
+  /** Whether the other party has viewed this message */
+  viewed?: boolean;
   onPatch?: (messageId: string, body: string | null) => Promise<boolean>;
   onDelete?: (messageId: string) => Promise<boolean>;
   onRemoveAttachment?: (messageId: string, attachmentId: string) => Promise<boolean>;
@@ -32,6 +34,7 @@ export function ChatMessageBubble({
   linkClassName,
   actionMutedClassName,
   saveEditButtonClassName,
+  viewed,
   onPatch,
   onDelete,
   onRemoveAttachment,
@@ -214,6 +217,9 @@ export function ChatMessageBubble({
                 {formatChatTime(msg.createdAt)}
                 {msg.editedAt ? (
                   <span className="opacity-80"> · Edited</span>
+                ) : null}
+                {isOwn && viewed ? (
+                  <span className="opacity-80"> · Viewed</span>
                 ) : null}
               </span>
               {showActions ? (

@@ -228,6 +228,8 @@ model Conversation {
   customerTypingAt   DateTime?
   /// When staff last opened this thread (GET messages). Used for unread badge vs customer messages.
   staffLastReadAt    DateTime?
+  /// When the customer last opened this thread (GET messages). Used for "Viewed" indicator on staff messages.
+  customerLastReadAt DateTime?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 }

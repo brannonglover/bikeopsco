@@ -19,7 +19,7 @@ export async function GET(
     const [conversation, messages] = await Promise.all([
       prisma.conversation.findUnique({
         where: { id: conversationId },
-        select: { customerTypingAt: true, updatedAt: true },
+        select: { customerTypingAt: true, customerLastReadAt: true, updatedAt: true },
       }),
       prisma.message.findMany({
         where: { conversationId },
@@ -46,6 +46,7 @@ export async function GET(
       messages,
       customerTypingAt: conversation.customerTypingAt?.toISOString() ?? null,
       staffLastReadAt: (readUpdate.staffLastReadAt ?? new Date()).toISOString(),
+      customerLastReadAt: conversation.customerLastReadAt?.toISOString() ?? null,
     });
   } catch (error) {
     console.error("GET /api/conversations/[id]/messages error:", error);

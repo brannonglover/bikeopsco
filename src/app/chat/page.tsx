@@ -196,6 +196,7 @@ function ChatPageContent() {
   } | null>(null);
   const [swipeOpenId, setSwipeOpenId] = useState<string | null>(null);
   const [customerTypingAt, setCustomerTypingAt] = useState<string | null>(null);
+  const [customerLastReadAt, setCustomerLastReadAt] = useState<string | null>(null);
   const [, setTypingTick] = useState(0);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const selectedIdRef = useRef<string | null>(null);
@@ -266,6 +267,7 @@ function ChatPageContent() {
     } else {
       setMessages(data.messages ?? []);
       setCustomerTypingAt(data.customerTypingAt ?? null);
+      setCustomerLastReadAt(data.customerLastReadAt ?? null);
       if (typeof data.staffLastReadAt === "string") {
         setConversations((prev) => {
           if (prev.length === 0) return prev;
@@ -333,6 +335,7 @@ function ChatPageContent() {
     if (!selectedId) {
       setMessages([]);
       setCustomerTypingAt(null);
+      setCustomerLastReadAt(null);
       setMessagesLoading(false);
       return;
     }
@@ -340,6 +343,7 @@ function ChatPageContent() {
     setMessagesLoading(true);
     setMessages([]);
     setCustomerTypingAt(null);
+    setCustomerLastReadAt(null);
     fetchMessages(selectedId, { signal: ac.signal }).finally(() => {
       setMessagesLoading(false);
     });
@@ -724,6 +728,11 @@ function ChatPageContent() {
                         saveEditButtonClassName={
                           msg.sender === "STAFF"
                             ? "text-xs font-medium text-white hover:text-emerald-100"
+                            : undefined
+                        }
+                        viewed={
+                          msg.sender === "STAFF" && customerLastReadAt != null
+                            ? new Date(msg.createdAt).getTime() <= new Date(customerLastReadAt).getTime()
                             : undefined
                         }
                         onPatch={msg.sender === "STAFF" ? patchStaffMessage : undefined}

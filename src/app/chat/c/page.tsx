@@ -15,6 +15,7 @@ export default function CustomerChatPage() {
   const [loginMessage, setLoginMessage] = useState<string | null>(null);
   const [customerName, setCustomerName] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [staffLastReadAt, setStaffLastReadAt] = useState<string | null>(null);
   const [inputText, setInputText] = useState("");
   const [pendingImages, setPendingImages] = useState<{ id: string; url: string; filename: string }[]>([]);
   const [sending, setSending] = useState(false);
@@ -56,7 +57,12 @@ export default function CustomerChatPage() {
     const res = await fetch("/api/chat/conversation/messages", { credentials: "include" });
     if (res.ok) {
       const data = await res.json();
-      setMessages(data);
+      if (Array.isArray(data)) {
+        setMessages(data);
+      } else {
+        setMessages(data.messages ?? []);
+        setStaffLastReadAt(data.staffLastReadAt ?? null);
+      }
     }
   }, []);
 
@@ -397,6 +403,11 @@ export default function CustomerChatPage() {
               saveEditButtonClassName={
                 msg.sender === "CUSTOMER"
                   ? "text-xs font-medium text-white hover:text-emerald-100"
+                  : undefined
+              }
+              viewed={
+                msg.sender === "CUSTOMER" && staffLastReadAt != null
+                  ? new Date(msg.createdAt).getTime() <= new Date(staffLastReadAt).getTime()
                   : undefined
               }
               onPatch={msg.sender === "CUSTOMER" ? patchCustomerMessage : undefined}

@@ -105,6 +105,8 @@ export interface Conversation {
   customerTypingAt?: string | null;
   /** ISO time when staff last loaded this thread; unread badge if last message is newer from customer. */
   staffLastReadAt?: string | null;
+  /** ISO time when the customer last loaded this thread; "Viewed" indicator on staff messages. */
+  customerLastReadAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
