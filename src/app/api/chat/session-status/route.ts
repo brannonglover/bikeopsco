@@ -28,14 +28,14 @@ export async function GET(request: NextRequest) {
     }
 
     const pendingToken = await prisma.magicLinkToken.findFirst({
-      where: { customerId, expiresAt: { gt: now } },
+      where: { customerId },
       orderBy: { createdAt: "desc" },
     });
 
     return NextResponse.json({
       expiresAt: null,
       pendingInvite: !!pendingToken,
-      pendingInviteExpiresAt: pendingToken?.expiresAt.toISOString() ?? null,
+      pendingInviteSentAt: pendingToken?.createdAt.toISOString() ?? null,
     });
   } catch (error) {
     console.error("GET /api/chat/session-status error:", error);
