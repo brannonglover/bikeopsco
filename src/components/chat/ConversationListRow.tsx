@@ -32,7 +32,7 @@ function LastMessagePreview({ conv }: { conv: Conversation }) {
   if (!last) return <span className="text-slate-400 text-sm">No messages yet</span>;
   const text = last.body?.trim();
   const hasAttachment = last.attachments?.length ? last.attachments.length > 0 : false;
-  const preview = text || (hasAttachment ? "📎 Image" : "");
+  const preview = text || (hasAttachment ? "Image" : "");
   return (
     <span className="text-slate-500 text-sm truncate block">
       {preview || "—"}
@@ -139,6 +139,8 @@ export function ConversationListRow({
   };
 
   const showUnread = hasUnreadCustomerMessage(conv);
+  const lastMsg = conv.messages?.[0];
+  const showAttachment = !!(lastMsg?.attachments?.length);
 
   return (
     <li className="relative md:static">
@@ -193,6 +195,16 @@ export function ConversationListRow({
               }`}
               aria-hidden
             />
+          )}
+          {showAttachment && (
+            <span
+              className={`pointer-events-none absolute ${showUnread ? "top-2 right-6" : "top-2 right-2"} text-slate-400`}
+              aria-label="Has attachment"
+            >
+              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
+              </svg>
+            </span>
           )}
           <span className="sr-only">{showUnread ? "Unread message. " : ""}</span>
           <CustomerName conv={conv} />
