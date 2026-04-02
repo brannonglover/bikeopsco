@@ -20,6 +20,7 @@ export default function CustomerChatPage() {
   const [sending, setSending] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
+  const editingCountRef = useRef(0);
   const typingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const sendTyping = useCallback((active: boolean) => {
@@ -150,6 +151,7 @@ export default function CustomerChatPage() {
   useCustomerChatNotifications(messages, status === "chat");
 
   useEffect(() => {
+    if (editingCountRef.current > 0) return;
     const el = messagesScrollRef.current;
     if (!el) return;
     el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
@@ -202,6 +204,10 @@ export default function CustomerChatPage() {
       // ignore
     }
   };
+
+  const handleBubbleEditingChange = useCallback((isEditing: boolean) => {
+    editingCountRef.current += isEditing ? 1 : -1;
+  }, []);
 
   const patchCustomerMessage = useCallback(async (messageId: string, body: string | null) => {
     const res = await fetch(`/api/chat/conversation/messages/${messageId}`, {
@@ -378,6 +384,7 @@ export default function CustomerChatPage() {
               onPatch={msg.sender === "CUSTOMER" ? patchCustomerMessage : undefined}
               onDelete={msg.sender === "CUSTOMER" ? deleteCustomerMessage : undefined}
               onRemoveAttachment={msg.sender === "CUSTOMER" ? removeCustomerAttachment : undefined}
+              onEditingChange={handleBubbleEditingChange}
             />
           ))}
         </div>

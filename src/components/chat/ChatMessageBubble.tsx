@@ -20,6 +20,7 @@ type ChatMessageBubbleProps = {
   onPatch?: (messageId: string, body: string | null) => Promise<boolean>;
   onDelete?: (messageId: string) => Promise<boolean>;
   onRemoveAttachment?: (messageId: string, attachmentId: string) => Promise<boolean>;
+  onEditingChange?: (editing: boolean) => void;
 };
 
 export function ChatMessageBubble({
@@ -34,6 +35,7 @@ export function ChatMessageBubble({
   onPatch,
   onDelete,
   onRemoveAttachment,
+  onEditingChange,
 }: ChatMessageBubbleProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(msg.body ?? "");
@@ -59,6 +61,10 @@ export function ChatMessageBubble({
       textareaRef.current?.focus();
     }
   }, [editing, autoResize]);
+
+  useEffect(() => {
+    onEditingChange?.(editing);
+  }, [editing, onEditingChange]);
 
   const handleSave = async () => {
     if (!onPatch) return;
@@ -101,12 +107,18 @@ export function ChatMessageBubble({
 
   const showActions = isOwn && (onPatch || onDelete) && !editing;
   const canEdit = Boolean(onPatch);
+  const isImageOnly =
+    (msg.attachments?.length ?? 0) > 0 && !msg.body && !editing;
 
   return (
     <div className={`flex ${align === "end" ? "justify-end" : "justify-start"}`}>
-      <div className={`max-w-[85%] md:max-w-[70%] rounded-2xl px-4 py-2 ${bubbleClassName}`}>
+      <div
+        className={`${editing ? "w-full" : "max-w-[85%] md:max-w-[70%]"} rounded-2xl ${
+          isImageOnly ? "overflow-hidden" : `px-4 py-2 ${bubbleClassName}`
+        }`}
+      >
         {msg.attachments?.length ? (
-          <div className="space-y-2 mb-2">
+          <div className={isImageOnly ? "space-y-0.5" : "space-y-2 mb-2"}>
             {msg.attachments.map((att) => (
               <div key={att.id} className="relative group/att">
                 <a
@@ -120,7 +132,11 @@ export function ChatMessageBubble({
                     alt={att.filename}
                     width={320}
                     height={192}
-                    className="rounded-lg max-h-48 object-cover w-full"
+                    className={
+                      isImageOnly
+                        ? "w-full object-cover"
+                        : "rounded-lg max-h-48 object-cover w-full"
+                    }
                   />
                 </a>
                 {isOwn && onRemoveAttachment && !editing && (
@@ -188,9 +204,9 @@ export function ChatMessageBubble({
               />
             ) : null}
             <div
-              className={`flex items-center gap-2 mt-1 min-h-[1.25rem] text-xs ${metaClassName} ${
-                align === "end" ? "justify-end" : "justify-start"
-              }`}
+              className={`flex items-center gap-2 mt-1 min-h-[1.25rem] text-xs ${
+                isImageOnly ? "text-slate-500 px-3 pb-1.5" : metaClassName
+              } ${align === "end" ? "justify-end" : "justify-start"}`}
             >
               <span className="min-w-0">
                 {formatChatTime(msg.createdAt)}
@@ -204,7 +220,9 @@ export function ChatMessageBubble({
                     <button
                       type="button"
                       onClick={() => setEditing(true)}
-                      className={`p-1 rounded-md transition-opacity opacity-90 hover:opacity-100 ${actionMutedClassName}`}
+                      className={`p-1 rounded-md transition-opacity opacity-90 hover:opacity-100 ${
+                        isImageOnly ? "text-slate-500 hover:text-slate-700" : actionMutedClassName
+                      }`}
                       disabled={busy}
                       aria-label="Edit message"
                     >
@@ -222,7 +240,9 @@ export function ChatMessageBubble({
                     <button
                       type="button"
                       onClick={handleDelete}
-                      className={`p-1 rounded-md transition-opacity opacity-90 hover:opacity-100 ${actionMutedClassName}`}
+                      className={`p-1 rounded-md transition-opacity opacity-90 hover:opacity-100 ${
+                        isImageOnly ? "text-slate-500 hover:text-slate-700" : actionMutedClassName
+                      }`}
                       disabled={busy}
                       aria-label="Delete message"
                     >

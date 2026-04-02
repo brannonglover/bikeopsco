@@ -165,6 +165,7 @@ function ChatPageContent() {
   const [customerSearch, setCustomerSearch] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
+  const editingCountRef = useRef(0);
   const [contextMenu, setContextMenu] = useState<{
     convId: string;
     x: number;
@@ -375,6 +376,7 @@ function ChatPageContent() {
   }, [typingSignal]);
 
   useEffect(() => {
+    if (editingCountRef.current > 0) return;
     const el = messagesScrollRef.current;
     if (!el) return;
     el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
@@ -450,6 +452,10 @@ function ChatPageContent() {
   const removePendingImage = (id: string) => {
     setPendingImages((prev) => prev.filter((p) => p.id !== id));
   };
+
+  const handleBubbleEditingChange = useCallback((isEditing: boolean) => {
+    editingCountRef.current += isEditing ? 1 : -1;
+  }, []);
 
   const patchStaffMessage = useCallback(
     async (messageId: string, body: string | null) => {
@@ -684,6 +690,7 @@ function ChatPageContent() {
                         onPatch={msg.sender === "STAFF" ? patchStaffMessage : undefined}
                         onDelete={msg.sender === "STAFF" ? deleteStaffMessage : undefined}
                         onRemoveAttachment={msg.sender === "STAFF" ? removeStaffAttachment : undefined}
+                        onEditingChange={handleBubbleEditingChange}
                       />
                     ))}
                     {showCustomerTyping && (
