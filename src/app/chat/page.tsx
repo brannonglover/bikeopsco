@@ -166,6 +166,8 @@ function ChatPageContent() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const editingCountRef = useRef(0);
+  const [showScrollDown, setShowScrollDown] = useState(false);
+  const isAtBottomRef = useRef(true);
   const [contextMenu, setContextMenu] = useState<{
     convId: string;
     x: number;
@@ -377,10 +379,25 @@ function ChatPageContent() {
 
   useEffect(() => {
     if (editingCountRef.current > 0) return;
+    if (!isAtBottomRef.current) return;
     const el = messagesScrollRef.current;
     if (!el) return;
     el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [messages, showCustomerTyping]);
+
+  const handleMessagesScroll = useCallback(() => {
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+    isAtBottomRef.current = atBottom;
+    setShowScrollDown(!atBottom);
+  }, []);
+
+  const scrollToBottom = useCallback(() => {
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }, []);
 
   const openNewConvModal = () => {
     setShowNewConvModal(true);
@@ -649,9 +666,10 @@ function ChatPageContent() {
               </header>
 
               {/* Clip scroll overscroll so elastic bounce doesn’t distort the composer below */}
-              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
                 <div
                   ref={messagesScrollRef}
+                  onScroll={handleMessagesScroll}
                   className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain touch-pan-y"
                 >
                   <div className="p-4 space-y-3">
@@ -700,6 +718,18 @@ function ChatPageContent() {
                     )}
                   </div>
                 </div>
+                {showScrollDown && (
+                  <button
+                    type="button"
+                    onClick={scrollToBottom}
+                    className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white shadow-md border border-slate-200 text-slate-700 hover:bg-slate-50 transition-opacity"
+                    aria-label="Scroll to latest message"
+                  >
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                )}
               </div>
 
               <footer className="shrink-0 border-t border-slate-200 bg-slate-50 p-4 isolate">

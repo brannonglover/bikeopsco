@@ -21,6 +21,8 @@ export default function CustomerChatPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const editingCountRef = useRef(0);
+  const [showScrollDown, setShowScrollDown] = useState(false);
+  const isAtBottomRef = useRef(true);
   const typingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const sendTyping = useCallback((active: boolean) => {
@@ -152,10 +154,25 @@ export default function CustomerChatPage() {
 
   useEffect(() => {
     if (editingCountRef.current > 0) return;
+    if (!isAtBottomRef.current) return;
     const el = messagesScrollRef.current;
     if (!el) return;
     el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [messages]);
+
+  const handleMessagesScroll = useCallback(() => {
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+    isAtBottomRef.current = atBottom;
+    setShowScrollDown(!atBottom);
+  }, []);
+
+  const scrollToBottom = useCallback(() => {
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -357,7 +374,8 @@ export default function CustomerChatPage() {
           </button>
         </header>
 
-        <div ref={messagesScrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
+        <div className="relative flex-1 min-h-0">
+        <div ref={messagesScrollRef} onScroll={handleMessagesScroll} className="absolute inset-0 overflow-y-auto p-4 space-y-3">
           {messages.map((msg) => (
             <ChatMessageBubble
               key={msg.id}
@@ -387,6 +405,19 @@ export default function CustomerChatPage() {
               onEditingChange={handleBubbleEditingChange}
             />
           ))}
+        </div>
+          {showScrollDown && (
+            <button
+              type="button"
+              onClick={scrollToBottom}
+              className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white shadow-md border border-slate-200 text-slate-700 hover:bg-slate-50 transition-opacity"
+              aria-label="Scroll to latest message"
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+          )}
         </div>
 
         <div className="flex-shrink-0 p-4 border-t border-slate-200 bg-slate-50">
