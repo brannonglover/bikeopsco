@@ -189,6 +189,7 @@ export default function CustomerChatPage() {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    e.target.value = "";
     const formData = new FormData();
     formData.append("file", file);
     try {
@@ -200,7 +201,6 @@ export default function CustomerChatPage() {
     } catch {
       // ignore
     }
-    e.target.value = "";
   };
 
   const patchCustomerMessage = useCallback(async (messageId: string, body: string | null) => {
@@ -233,6 +233,30 @@ export default function CustomerChatPage() {
     alert(typeof err.error === "string" ? err.error : "Failed to delete message");
     return false;
   }, []);
+
+  const removeCustomerAttachment = useCallback(
+    async (messageId: string, attachmentId: string) => {
+      const res = await fetch(
+        `/api/chat/conversation/messages/${messageId}/attachments/${attachmentId}`,
+        { method: "DELETE", credentials: "include" }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data.messageDeleted) {
+          setMessages((prev) => prev.filter((m) => m.id !== messageId));
+        } else {
+          setMessages((prev) =>
+            prev.map((m) => (m.id === messageId ? data.message : m))
+          );
+        }
+        return true;
+      }
+      const err = await res.json().catch(() => ({}));
+      alert(typeof err.error === "string" ? err.error : "Failed to remove image");
+      return false;
+    },
+    []
+  );
 
   const handleSend = async () => {
     const hasText = inputText.trim().length > 0;
@@ -353,6 +377,7 @@ export default function CustomerChatPage() {
               }
               onPatch={msg.sender === "CUSTOMER" ? patchCustomerMessage : undefined}
               onDelete={msg.sender === "CUSTOMER" ? deleteCustomerMessage : undefined}
+              onRemoveAttachment={msg.sender === "CUSTOMER" ? removeCustomerAttachment : undefined}
             />
           ))}
         </div>

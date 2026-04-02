@@ -430,6 +430,7 @@ function ChatPageContent() {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    e.target.value = "";
     const formData = new FormData();
     formData.append("file", file);
     try {
@@ -444,7 +445,6 @@ function ChatPageContent() {
     } catch {
       alert("Failed to upload image");
     }
-    e.target.value = "";
   };
 
   const removePendingImage = (id: string) => {
@@ -485,6 +485,32 @@ function ChatPageContent() {
       }
       const err = await res.json().catch(() => ({}));
       alert(typeof err.error === "string" ? err.error : "Failed to delete message");
+      return false;
+    },
+    [selectedId, fetchConversations]
+  );
+
+  const removeStaffAttachment = useCallback(
+    async (messageId: string, attachmentId: string) => {
+      if (!selectedId) return false;
+      const res = await fetch(
+        `/api/conversations/${selectedId}/messages/${messageId}/attachments/${attachmentId}`,
+        { method: "DELETE" }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data.messageDeleted) {
+          setMessages((prev) => prev.filter((m) => m.id !== messageId));
+        } else {
+          setMessages((prev) =>
+            prev.map((m) => (m.id === messageId ? data.message : m))
+          );
+        }
+        fetchConversations();
+        return true;
+      }
+      const err = await res.json().catch(() => ({}));
+      alert(typeof err.error === "string" ? err.error : "Failed to remove image");
       return false;
     },
     [selectedId, fetchConversations]
@@ -657,6 +683,7 @@ function ChatPageContent() {
                         }
                         onPatch={msg.sender === "STAFF" ? patchStaffMessage : undefined}
                         onDelete={msg.sender === "STAFF" ? deleteStaffMessage : undefined}
+                        onRemoveAttachment={msg.sender === "STAFF" ? removeStaffAttachment : undefined}
                       />
                     ))}
                     {showCustomerTyping && (

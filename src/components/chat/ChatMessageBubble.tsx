@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import type { ChatMessage } from "@/lib/types";
 import { formatChatTime } from "@/lib/format-chat-time";
 import { LinkifiedMessageBody } from "./LinkifiedMessageBody";
@@ -19,6 +19,7 @@ type ChatMessageBubbleProps = {
   saveEditButtonClassName?: string;
   onPatch?: (messageId: string, body: string | null) => Promise<boolean>;
   onDelete?: (messageId: string) => Promise<boolean>;
+  onRemoveAttachment?: (messageId: string, attachmentId: string) => Promise<boolean>;
 };
 
 export function ChatMessageBubble({
@@ -32,16 +33,32 @@ export function ChatMessageBubble({
   saveEditButtonClassName,
   onPatch,
   onDelete,
+  onRemoveAttachment,
 }: ChatMessageBubbleProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(msg.body ?? "");
   const [busy, setBusy] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const autoResize = useCallback(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = `${ta.scrollHeight}px`;
+  }, []);
 
   useEffect(() => {
     if (!editing) {
       setDraft(msg.body ?? "");
     }
   }, [msg.body, msg.id, editing]);
+
+  useEffect(() => {
+    if (editing) {
+      autoResize();
+      textareaRef.current?.focus();
+    }
+  }, [editing, autoResize]);
 
   const handleSave = async () => {
     if (!onPatch) return;
@@ -71,6 +88,17 @@ export function ChatMessageBubble({
     }
   };
 
+  const handleRemoveAttachment = async (attachmentId: string) => {
+    if (!onRemoveAttachment) return;
+    if (!confirm("Remove this image from the message?")) return;
+    setBusy(true);
+    try {
+      await onRemoveAttachment(msg.id, attachmentId);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const showActions = isOwn && (onPatch || onDelete) && !editing;
   const canEdit = Boolean(onPatch);
 
@@ -80,21 +108,33 @@ export function ChatMessageBubble({
         {msg.attachments?.length ? (
           <div className="space-y-2 mb-2">
             {msg.attachments.map((att) => (
-              <a
-                key={att.id}
-                href={att.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block"
-              >
-                <Image
-                  src={att.url}
-                  alt={att.filename}
-                  width={320}
-                  height={192}
-                  className="rounded-lg max-h-48 object-cover w-full"
-                />
-              </a>
+              <div key={att.id} className="relative group/att">
+                <a
+                  href={att.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block"
+                >
+                  <Image
+                    src={att.url}
+                    alt={att.filename}
+                    width={320}
+                    height={192}
+                    className="rounded-lg max-h-48 object-cover w-full"
+                  />
+                </a>
+                {isOwn && onRemoveAttachment && !editing && (
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveAttachment(att.id)}
+                    className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/60 text-white text-sm flex items-center justify-center opacity-70 md:opacity-0 md:group-hover/att:opacity-100 transition-opacity hover:bg-red-600"
+                    aria-label="Remove image"
+                    disabled={busy}
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
             ))}
           </div>
         ) : null}
@@ -102,10 +142,15 @@ export function ChatMessageBubble({
         {editing ? (
           <div className="space-y-2">
             <textarea
+              ref={textareaRef}
               value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              rows={3}
-              className="w-full rounded-lg px-3 py-2 text-sm text-slate-900 bg-white border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              onChange={(e) => {
+                setDraft(e.target.value);
+                autoResize();
+              }}
+              rows={1}
+              className="w-full rounded-lg px-3 py-2 text-sm text-slate-900 bg-white border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none overflow-hidden"
+              style={{ minHeight: "2.5rem" }}
               disabled={busy}
             />
             <div className="flex gap-2 justify-end">
