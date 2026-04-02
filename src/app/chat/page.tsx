@@ -75,10 +75,13 @@ function CustomerName({ conv }: { conv: Conversation }) {
   );
 }
 
+type InviteStatus = "idle" | "pending" | "active";
+
 function InviteButton({ customerId }: { customerId: string }) {
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [daysLeft, setDaysLeft] = useState<number | null>(null);
+  const [status, setStatus] = useState<InviteStatus>("idle");
 
   const refetchSession = useCallback(() => {
     fetch(`/api/chat/session-status?customerId=${encodeURIComponent(customerId)}`)
@@ -90,11 +93,19 @@ function InviteButton({ customerId }: { customerId: string }) {
           const ms = expires.getTime() - now.getTime();
           const days = Math.max(0, Math.ceil(ms / (24 * 60 * 60 * 1000)));
           setDaysLeft(days);
+          setStatus("active");
+        } else if (data.pendingInvite) {
+          setDaysLeft(null);
+          setStatus("pending");
         } else {
           setDaysLeft(null);
+          setStatus("idle");
         }
       })
-      .catch(() => setDaysLeft(null));
+      .catch(() => {
+        setDaysLeft(null);
+        setStatus("idle");
+      });
   }, [customerId]);
 
   useEffect(() => {
@@ -115,6 +126,7 @@ function InviteButton({ customerId }: { customerId: string }) {
       const data = await res.json();
       if (res.ok) {
         setMessage(data.message ?? "Invite sent!");
+        refetchSession();
       } else {
         setMessage(data.error ?? "Failed to send");
       }
@@ -128,9 +140,18 @@ function InviteButton({ customerId }: { customerId: string }) {
   const buttonLabel =
     sending
       ? "Sending…"
-      : daysLeft !== null && daysLeft > 0
+      : status === "active" && daysLeft !== null && daysLeft > 0
         ? `${daysLeft} day${daysLeft === 1 ? "" : "s"} left`
-        : "Invite to chat";
+        : status === "pending"
+          ? "Invited — awaiting reply"
+          : "Invite to chat";
+
+  const buttonStyle =
+    status === "pending"
+      ? "px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-50 rounded-lg hover:bg-amber-100 disabled:opacity-50"
+      : status === "active"
+        ? "px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100 disabled:opacity-50"
+        : "px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100 disabled:opacity-50";
 
   return (
     <div className="flex items-center gap-2 flex-shrink-0">
@@ -139,7 +160,7 @@ function InviteButton({ customerId }: { customerId: string }) {
         type="button"
         onClick={handleClick}
         disabled={sending}
-        className="px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100 disabled:opacity-50"
+        className={buttonStyle}
       >
         {buttonLabel}
       </button>

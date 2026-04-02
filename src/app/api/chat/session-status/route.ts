@@ -16,16 +16,27 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "customerId required" }, { status: 400 });
     }
 
+    const now = new Date();
+
     const session = await prisma.chatSession.findFirst({
       where: { customerId },
       orderBy: { expiresAt: "desc" },
     });
 
-    if (!session || session.expiresAt < new Date()) {
-      return NextResponse.json({ expiresAt: null });
+    if (session && session.expiresAt >= now) {
+      return NextResponse.json({ expiresAt: session.expiresAt.toISOString(), pendingInvite: false });
     }
 
-    return NextResponse.json({ expiresAt: session.expiresAt.toISOString() });
+    const pendingToken = await prisma.magicLinkToken.findFirst({
+      where: { customerId, expiresAt: { gt: now } },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return NextResponse.json({
+      expiresAt: null,
+      pendingInvite: !!pendingToken,
+      pendingInviteExpiresAt: pendingToken?.expiresAt.toISOString() ?? null,
+    });
   } catch (error) {
     console.error("GET /api/chat/session-status error:", error);
     return NextResponse.json(
