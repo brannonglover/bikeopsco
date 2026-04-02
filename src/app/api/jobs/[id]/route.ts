@@ -21,6 +21,8 @@ const updateJobSchema = z.object({
   bikeModel: z.string().min(1).optional(),
   bikes: z.array(bikeSchema).optional(),
   workingOnJobBikeId: z.string().optional().nullable(),
+  completeJobBikeId: z.string().optional(),
+  uncompleteJobBikeId: z.string().optional(),
   customerId: z.string().optional().nullable(),
   deliveryType: z.enum(["DROP_OFF_AT_SHOP", "COLLECTION_SERVICE"]).optional(),
   dropOffDate: z.string().datetime().optional().nullable(),
@@ -129,6 +131,21 @@ export async function PATCH(
             bikeType: b.bikeType ?? null,
             sortOrder: i,
           })),
+        });
+      }
+      if (data.completeJobBikeId) {
+        await tx.jobBike.update({
+          where: { id: data.completeJobBikeId, jobId: id },
+          data: { completedAt: new Date() },
+        });
+        if (existingJob.workingOnJobBikeId === data.completeJobBikeId) {
+          await tx.job.update({ where: { id }, data: { workingOnJobBikeId: null } });
+        }
+      }
+      if (data.uncompleteJobBikeId) {
+        await tx.jobBike.update({
+          where: { id: data.uncompleteJobBikeId, jobId: id },
+          data: { completedAt: null },
         });
       }
       await syncCollectionJobService(tx, id);

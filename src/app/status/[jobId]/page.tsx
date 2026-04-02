@@ -52,6 +52,7 @@ type StatusJobBike = {
   nickname: string | null;
   imageUrl: string | null;
   bikeId: string | null;
+  completedAt?: string | null;
   bike?: { imageUrl: string | null; nickname?: string | null; make: string; model: string } | null;
 };
 
@@ -82,7 +83,18 @@ function resolveBikeDisplay(b: StatusJobBike): { name: string; imageUrl: string 
   };
 }
 
-function BikeStatusBadge({ stage, isWorkingOn }: { stage: string; isWorkingOn: boolean }) {
+function BikeStatusBadge({ stage, isWorkingOn, isCompleted }: { stage: string; isWorkingOn: boolean; isCompleted: boolean }) {
+  if (isCompleted) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-full">
+        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20" aria-hidden>
+          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+        </svg>
+        Done
+      </span>
+    );
+  }
+
   if (isWorkingOn) {
     return (
       <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-800 bg-amber-100 border border-amber-200 px-2 py-1 rounded-full">
@@ -221,13 +233,16 @@ export default function StatusPage() {
               {bikes.map((b) => {
                 const { name, imageUrl } = resolveBikeDisplay(b);
                 const isWorkingOn = !!job.workingOnJobBikeId && job.workingOnJobBikeId === b.id;
+                const isCompleted = !!b.completedAt;
                 return (
                   <div
                     key={b.id}
                     className={`flex items-center gap-3 rounded-xl border p-3 transition-colors ${
-                      isWorkingOn
-                        ? "border-amber-300 bg-amber-50/50"
-                        : "border-slate-200 bg-slate-50/50"
+                      isCompleted
+                        ? "border-emerald-200 bg-emerald-50/40"
+                        : isWorkingOn
+                          ? "border-amber-300 bg-amber-50/50"
+                          : "border-slate-200 bg-slate-50/50"
                     }`}
                   >
                     {imageUrl ? (
@@ -242,9 +257,9 @@ export default function StatusPage() {
                       </div>
                     )}
                     <div className="min-w-0 flex-1">
-                      <p className="font-medium text-slate-900 truncate">{name}</p>
+                      <p className={`font-medium truncate ${isCompleted ? "text-slate-500" : "text-slate-900"}`}>{name}</p>
                       <div className="mt-1">
-                        <BikeStatusBadge stage={job.stage} isWorkingOn={isWorkingOn} />
+                        <BikeStatusBadge stage={job.stage} isWorkingOn={isWorkingOn} isCompleted={isCompleted} />
                       </div>
                     </div>
                   </div>

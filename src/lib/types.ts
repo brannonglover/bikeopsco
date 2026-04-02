@@ -119,6 +119,7 @@ export interface JobBike {
   imageUrl: string | null;
   bikeId: string | null;
   sortOrder: number;
+  completedAt: string | null;
   bike?: {
     imageUrl: string | null;
     bikeType: BikeType | null;

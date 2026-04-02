@@ -210,6 +210,7 @@ function JobBikeSection({
   const [savingIndex, setSavingIndex] = useState<number | null>(null);
   const [editingBikeIndex, setEditingBikeIndex] = useState<number | null>(null);
   const [savingWorkingOn, setSavingWorkingOn] = useState(false);
+  const [savingComplete, setSavingComplete] = useState<string | null>(null);
 
   useEffect(() => {
     setEditingBikeIndex(null);
@@ -256,6 +257,27 @@ function JobBikeSection({
     }
   };
 
+  const handleToggleComplete = async (bikeId: string, isCompleted: boolean) => {
+    if (!onJobUpdated || savingComplete) return;
+    setSavingComplete(bikeId);
+    try {
+      const body = isCompleted
+        ? { uncompleteJobBikeId: bikeId }
+        : { completeJobBikeId: bikeId };
+      const res = await fetch(`/api/jobs/${job.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        const updatedJob = (await res.json()) as Job;
+        onJobUpdated(updatedJob);
+      }
+    } finally {
+      setSavingComplete(null);
+    }
+  };
+
   return (
     <div>
       <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">
@@ -271,15 +293,18 @@ function JobBikeSection({
           const size = hasMultiple ? "w-16 h-16" : "w-24 h-24";
           const isEditing = onJobUpdated && editingBikeIndex === i;
           const isWorkingOn = b.id !== "legacy" && job.workingOnJobBikeId === b.id;
-          const canToggleWorkingOn = onJobUpdated && b.id !== "legacy";
+          const isCompleted = !!b.completedAt;
+          const canInteract = onJobUpdated && b.id !== "legacy";
 
           return (
             <div
               key={b.id}
               className={`flex gap-3 rounded-xl border p-3 shadow-sm min-w-0 transition-colors ${
-                isWorkingOn
-                  ? "border-amber-400 bg-amber-50/60 ring-1 ring-amber-300"
-                  : "border-slate-200 bg-white"
+                isCompleted
+                  ? "border-emerald-300 bg-emerald-50/50"
+                  : isWorkingOn
+                    ? "border-amber-400 bg-amber-50/60 ring-1 ring-amber-300"
+                    : "border-slate-200 bg-white"
               } ${hasMultiple ? "" : "flex-1"}`}
             >
               {imageUrl ? (
@@ -295,9 +320,21 @@ function JobBikeSection({
               )}
               <div className="min-w-0 flex-1 flex flex-col">
                 <div className="flex items-start justify-between gap-1">
-                  <p className="font-medium text-slate-900 truncate">{displayName}</p>
-                  {isWorkingOn && (
-                    <span className="flex-shrink-0 text-[10px] font-bold uppercase tracking-wide text-amber-700 bg-amber-200 px-1.5 py-0.5 rounded-md whitespace-nowrap">
+                  <p className={`font-medium truncate ${isCompleted ? "text-slate-500" : "text-slate-900"}`}>{displayName}</p>
+                  {isCompleted && (
+                    <span className="flex-shrink-0 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-emerald-700 bg-emerald-200 px-1.5 py-0.5 rounded-md whitespace-nowrap">
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20" aria-hidden>
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                      Done
+                    </span>
+                  )}
+                  {isWorkingOn && !isCompleted && (
+                    <span className="flex-shrink-0 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-amber-700 bg-amber-200 px-1.5 py-0.5 rounded-md whitespace-nowrap">
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-600 opacity-75" />
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-600" />
+                      </span>
                       Working on
                     </span>
                   )}
@@ -359,21 +396,47 @@ function JobBikeSection({
                   </div>
                 )}
 
-                {canToggleWorkingOn && (
-                  <button
-                    type="button"
-                    onClick={() => handleToggleWorkingOn(b.id)}
-                    disabled={savingWorkingOn}
-                    className={`mt-2 inline-flex items-center gap-1.5 self-start text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-colors touch-manipulation min-h-[32px] disabled:opacity-50 ${
-                      isWorkingOn
-                        ? "bg-amber-200 text-amber-800 hover:bg-amber-300"
-                        : "bg-slate-100 text-slate-600 hover:bg-amber-100 hover:text-amber-800"
-                    }`}
-                    title={isWorkingOn ? "Stop working on this bike" : "Mark as working on this bike"}
-                  >
-                    <WrenchIcon className="w-3.5 h-3.5" />
-                    {isWorkingOn ? "Working on this" : "Work on this"}
-                  </button>
+                {canInteract && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {isCompleted ? (
+                      <button
+                        type="button"
+                        onClick={() => handleToggleComplete(b.id, true)}
+                        disabled={!!savingComplete}
+                        className="inline-flex items-center gap-1.5 self-start text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors touch-manipulation min-h-[32px] disabled:opacity-50"
+                        title="Undo done — mark this bike as not completed"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a5 5 0 010 10H9m-6-6l3-3m0 0l3 3m-3-3v12" />
+                        </svg>
+                        Undo done
+                      </button>
+                    ) : isWorkingOn ? (
+                      <button
+                        type="button"
+                        onClick={() => handleToggleComplete(b.id, false)}
+                        disabled={!!savingComplete}
+                        className="inline-flex items-center gap-1.5 self-start text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors touch-manipulation min-h-[32px] disabled:opacity-50 shadow-sm"
+                        title="Mark this bike as done"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden>
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                        Mark done
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleToggleWorkingOn(b.id)}
+                        disabled={savingWorkingOn}
+                        className="inline-flex items-center gap-1.5 self-start text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-amber-100 hover:text-amber-800 transition-colors touch-manipulation min-h-[32px] disabled:opacity-50"
+                        title="Mark as working on this bike"
+                      >
+                        <WrenchIcon className="w-3.5 h-3.5" />
+                        Work on this
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             </div>

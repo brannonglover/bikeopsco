@@ -54,9 +54,10 @@ model JobBike {
   imageUrl  String?
   bikeId    String?
   bike      Bike?    @relation(fields: [bikeId], references: [id], onDelete: SetNull)
-  sortOrder Int      @default(0)
-  createdAt DateTime @default(now())
-  workingOnJob Job?  @relation("WorkingOnBike")
+  sortOrder   Int       @default(0)
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  workingOnJob Job?     @relation("WorkingOnBike")
 
   @@index([jobId])
 }
