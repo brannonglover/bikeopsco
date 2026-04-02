@@ -63,7 +63,9 @@ export function ChatMessageBubble({
   }, [editing, autoResize]);
 
   useEffect(() => {
-    onEditingChange?.(editing);
+    if (!editing) return;
+    onEditingChange?.(true);
+    return () => onEditingChange?.(false);
   }, [editing, onEditingChange]);
 
   const handleSave = async () => {
