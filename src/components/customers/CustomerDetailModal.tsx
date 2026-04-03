@@ -49,11 +49,13 @@ function BikeImageSearch({
   model,
   onSelect,
   disabled,
+  onBusyChange,
 }: {
   make: string;
   model: string;
   onSelect: (url: string) => void;
   disabled?: boolean;
+  onBusyChange?: (busy: boolean) => void;
 }) {
   const [searching, setSearching] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -106,6 +108,7 @@ function BikeImageSearch({
 
   const handlePick = async (fullUrl: string) => {
     setImporting(true);
+    onBusyChange?.(true);
     try {
       const res = await fetch("/api/bikes/import-image", {
         method: "POST",
@@ -123,6 +126,7 @@ function BikeImageSearch({
       alert("Could not save image");
     } finally {
       setImporting(false);
+      onBusyChange?.(false);
     }
   };
 
@@ -208,6 +212,8 @@ function AddBikeForm({
   const [bikeType, setBikeType] = useState<"AUTO" | "REGULAR" | "E_BIKE">("AUTO");
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const imageBusy = uploading || importing;
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -283,18 +289,19 @@ function AddBikeForm({
                   type="file"
                   accept="image/jpeg,image/png,image/gif,image/webp"
                   className="hidden"
-                  disabled={uploading}
+                  disabled={imageBusy}
                   onChange={handleImageUpload}
                 />
                 <span className="text-xs text-slate-500 text-center px-1">
-                  {uploading ? "..." : "Add photo"}
+                  {imageBusy ? "..." : "Add photo"}
                 </span>
               </label>
               <BikeImageSearch
                 make={make}
                 model={model}
                 onSelect={setImageUrl}
-                disabled={uploading}
+                disabled={imageBusy}
+                onBusyChange={setImporting}
               />
             </div>
           )}
@@ -340,10 +347,10 @@ function AddBikeForm({
       <div className="flex gap-2 pt-2">
         <button
           type="submit"
-          disabled={saving || !make.trim() || !model.trim()}
+          disabled={saving || imageBusy || !make.trim() || !model.trim()}
           className="px-3 py-1.5 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-50"
         >
-          {saving ? "Adding..." : "Add"}
+          {saving ? "Adding..." : imageBusy ? "Uploading image..." : "Add"}
         </button>
         <button
           type="button"
@@ -375,6 +382,8 @@ function EditBikeForm({
   );
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const imageBusy = uploading || importing;
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -453,18 +462,19 @@ function EditBikeForm({
                   type="file"
                   accept="image/jpeg,image/png,image/gif,image/webp"
                   className="hidden"
-                  disabled={uploading}
+                  disabled={imageBusy}
                   onChange={handleImageUpload}
                 />
                 <span className="text-xs text-slate-500 text-center px-1">
-                  {uploading ? "..." : "Add photo"}
+                  {imageBusy ? "..." : "Add photo"}
                 </span>
               </label>
               <BikeImageSearch
                 make={make}
                 model={model}
                 onSelect={setImageUrl}
-                disabled={uploading}
+                disabled={imageBusy}
+                onBusyChange={setImporting}
               />
             </div>
           )}
@@ -510,10 +520,10 @@ function EditBikeForm({
       <div className="flex gap-2 pt-2">
         <button
           type="submit"
-          disabled={saving || !make.trim() || !model.trim()}
+          disabled={saving || imageBusy || !make.trim() || !model.trim()}
           className="px-3 py-1.5 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-50"
         >
-          {saving ? "Saving..." : "Save"}
+          {saving ? "Saving..." : imageBusy ? "Uploading image..." : "Save"}
         </button>
         <button
           type="button"
