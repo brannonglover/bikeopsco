@@ -43,7 +43,7 @@ export async function PATCH(
         body: trimmed,
         editedAt: new Date(),
       },
-      include: { attachments: true },
+      include: { attachments: true, reactions: true },
     });
 
     await prisma.conversation.update({

@@ -538,6 +538,37 @@ function ChatPageContent() {
     [selectedId, fetchConversations]
   );
 
+  const toggleReaction = useCallback(
+    async (messageId: string, emoji: string) => {
+      if (!selectedId) return;
+      const msg = messages.find((m) => m.id === messageId);
+      const myReaction = (msg?.reactions ?? []).find(
+        (r) => r.reactorType === "STAFF"
+      );
+      try {
+        if (myReaction?.emoji === emoji) {
+          await fetch(
+            `/api/conversations/${selectedId}/messages/${messageId}/reactions`,
+            { method: "DELETE" }
+          );
+        } else {
+          await fetch(
+            `/api/conversations/${selectedId}/messages/${messageId}/reactions`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ emoji }),
+            }
+          );
+        }
+        fetchMessages(selectedId);
+      } catch {
+        // silently fail
+      }
+    },
+    [selectedId, messages, fetchMessages]
+  );
+
   const removeStaffAttachment = useCallback(
     async (messageId: string, attachmentId: string) => {
       if (!selectedId) return false;
@@ -735,10 +766,12 @@ function ChatPageContent() {
                             ? new Date(msg.createdAt).getTime() <= new Date(customerLastReadAt).getTime()
                             : undefined
                         }
+                        role="STAFF"
                         onPatch={msg.sender === "STAFF" ? patchStaffMessage : undefined}
                         onDelete={msg.sender === "STAFF" ? deleteStaffMessage : undefined}
                         onRemoveAttachment={msg.sender === "STAFF" ? removeStaffAttachment : undefined}
                         onEditingChange={handleBubbleEditingChange}
+                        onToggleReaction={toggleReaction}
                       />
                     ))}
                     {showCustomerTyping && (

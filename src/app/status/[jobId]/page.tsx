@@ -53,6 +53,7 @@ type StatusJobBike = {
   imageUrl: string | null;
   bikeId: string | null;
   completedAt?: string | null;
+  waitingOnPartsAt?: string | null;
   bike?: { imageUrl: string | null; nickname?: string | null; make: string; model: string } | null;
 };
 
@@ -83,7 +84,7 @@ function resolveBikeDisplay(b: StatusJobBike): { name: string; imageUrl: string 
   };
 }
 
-function BikeStatusBadge({ stage, isWorkingOn, isCompleted }: { stage: string; isWorkingOn: boolean; isCompleted: boolean }) {
+function BikeStatusBadge({ stage, isWorkingOn, isCompleted, isWaitingOnParts }: { stage: string; isWorkingOn: boolean; isCompleted: boolean; isWaitingOnParts: boolean }) {
   if (isCompleted) {
     return (
       <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-full">
@@ -91,6 +92,17 @@ function BikeStatusBadge({ stage, isWorkingOn, isCompleted }: { stage: string; i
           <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
         </svg>
         Done
+      </span>
+    );
+  }
+
+  if (isWaitingOnParts) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-red-700 bg-red-50 border border-red-200 px-2 py-1 rounded-full">
+        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20" aria-hidden>
+          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+        </svg>
+        Waiting on parts
       </span>
     );
   }
@@ -234,15 +246,18 @@ export default function StatusPage() {
                 const { name, imageUrl } = resolveBikeDisplay(b);
                 const isWorkingOn = !!job.workingOnJobBikeId && job.workingOnJobBikeId === b.id;
                 const isCompleted = !!b.completedAt;
+                const isWaitingOnParts = !!b.waitingOnPartsAt && !isCompleted;
                 return (
                   <div
                     key={b.id}
                     className={`flex items-center gap-3 rounded-xl border p-3 transition-colors ${
                       isCompleted
                         ? "border-emerald-200 bg-emerald-50/40"
-                        : isWorkingOn
-                          ? "border-amber-300 bg-amber-50/50"
-                          : "border-slate-200 bg-slate-50/50"
+                        : isWaitingOnParts
+                          ? "border-red-200 bg-red-50/40"
+                          : isWorkingOn
+                            ? "border-amber-300 bg-amber-50/50"
+                            : "border-slate-200 bg-slate-50/50"
                     }`}
                   >
                     {imageUrl ? (
@@ -257,9 +272,9 @@ export default function StatusPage() {
                       </div>
                     )}
                     <div className="min-w-0 flex-1">
-                      <p className={`font-medium truncate ${isCompleted ? "text-slate-500" : "text-slate-900"}`}>{name}</p>
+                      <p className={`font-medium truncate ${isCompleted || isWaitingOnParts ? "text-slate-500" : "text-slate-900"}`}>{name}</p>
                       <div className="mt-1">
-                        <BikeStatusBadge stage={job.stage} isWorkingOn={isWorkingOn} isCompleted={isCompleted} />
+                        <BikeStatusBadge stage={job.stage} isWorkingOn={isWorkingOn} isCompleted={isCompleted} isWaitingOnParts={isWaitingOnParts} />
                       </div>
                     </div>
                   </div>

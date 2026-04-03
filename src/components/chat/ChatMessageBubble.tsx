@@ -2,9 +2,11 @@
 
 import Image from "next/image";
 import { useState, useEffect, useRef, useCallback } from "react";
-import type { ChatMessage } from "@/lib/types";
+import type { ChatMessage, MessageSender } from "@/lib/types";
 import { formatChatTime } from "@/lib/format-chat-time";
 import { LinkifiedMessageBody } from "./LinkifiedMessageBody";
+
+export const REACTION_EMOJIS = ["\u{1F44D}", "\u{2764}\u{FE0F}", "\u{1F602}", "\u{1F62E}", "\u{1F622}", "\u{1F64F}"];
 
 type ChatMessageBubbleProps = {
   msg: ChatMessage;
@@ -19,10 +21,13 @@ type ChatMessageBubbleProps = {
   saveEditButtonClassName?: string;
   /** Whether the other party has viewed this message */
   viewed?: boolean;
+  /** Which side is the current user (used for reaction ownership) */
+  role?: MessageSender;
   onPatch?: (messageId: string, body: string | null) => Promise<boolean>;
   onDelete?: (messageId: string) => Promise<boolean>;
   onRemoveAttachment?: (messageId: string, attachmentId: string) => Promise<boolean>;
   onEditingChange?: (editing: boolean) => void;
+  onToggleReaction?: (messageId: string, emoji: string) => void;
 };
 
 export function ChatMessageBubble({
@@ -35,10 +40,12 @@ export function ChatMessageBubble({
   actionMutedClassName,
   saveEditButtonClassName,
   viewed,
+  role,
   onPatch,
   onDelete,
   onRemoveAttachment,
   onEditingChange,
+  onToggleReaction,
 }: ChatMessageBubbleProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(msg.body ?? "");
@@ -110,13 +117,37 @@ export function ChatMessageBubble({
     }
   };
 
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const emojiPickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showEmojiPicker) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(e.target as Node)) {
+        setShowEmojiPicker(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showEmojiPicker]);
+
   const showActions = isOwn && (onPatch || onDelete) && !editing;
   const canEdit = Boolean(onPatch);
   const isImageOnly =
     (msg.attachments?.length ?? 0) > 0 && !msg.body && !editing;
 
+  const reactions = msg.reactions ?? [];
+  const aggregated = reactions.reduce<Record<string, number>>((acc, r) => {
+    acc[r.emoji] = (acc[r.emoji] ?? 0) + 1;
+    return acc;
+  }, {});
+  const myReaction = role
+    ? reactions.find((r) => r.reactorType === role)
+    : undefined;
+
   return (
-    <div className={`flex ${align === "end" ? "justify-end" : "justify-start"}`}>
+    <div className={`flex flex-col ${align === "end" ? "items-end" : "items-start"}`}>
+      <div className="relative group/msg">
       <div
         className={`${editing ? "w-full" : "max-w-[85%] md:max-w-[70%]"} rounded-2xl ${
           isImageOnly ? "overflow-hidden" : `px-4 py-2 ${bubbleClassName}`
@@ -270,6 +301,70 @@ export function ChatMessageBubble({
           </>
         )}
       </div>
+
+      {onToggleReaction && !editing && (
+        <button
+          type="button"
+          onClick={() => setShowEmojiPicker((p) => !p)}
+          className={`absolute ${
+            align === "end" ? "-left-8" : "-right-8"
+          } top-1/2 -translate-y-1/2 w-7 h-7 rounded-full flex items-center justify-center text-sm opacity-0 group-hover/msg:opacity-100 transition-opacity bg-white border border-slate-200 shadow-sm hover:bg-slate-50 text-slate-500`}
+          aria-label="Add reaction"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.182 15.182a4.5 4.5 0 01-6.364 0M21 12a9 9 0 11-18 0 9 9 0 0118 0zM9.75 9.75c0 .414-.168.75-.375.75S9 10.164 9 9.75 9.168 9 9.375 9s.375.336.375.75zm-.375 0h.008v.015h-.008V9.75zm5.625 0c0 .414-.168.75-.375.75s-.375-.336-.375-.75.168-.75.375-.75.375.336.375.75zm-.375 0h.008v.015h-.008V9.75z" />
+          </svg>
+        </button>
+      )}
+
+      {showEmojiPicker && (
+        <div
+          ref={emojiPickerRef}
+          className={`absolute ${
+            align === "end" ? "right-0" : "left-0"
+          } -top-12 z-20 flex items-center gap-1 px-2 py-1.5 rounded-full bg-white border border-slate-200 shadow-lg`}
+        >
+          {REACTION_EMOJIS.map((emoji) => (
+            <button
+              key={emoji}
+              type="button"
+              onClick={() => {
+                onToggleReaction?.(msg.id, emoji);
+                setShowEmojiPicker(false);
+              }}
+              className={`w-8 h-8 rounded-full flex items-center justify-center text-lg hover:bg-slate-100 transition-colors ${
+                myReaction?.emoji === emoji ? "bg-emerald-100 ring-2 ring-emerald-400" : ""
+              }`}
+            >
+              {emoji}
+            </button>
+          ))}
+        </div>
+      )}
+      </div>
+
+      {Object.keys(aggregated).length > 0 && (
+        <div className={`flex flex-wrap gap-1 mt-1 ${align === "end" ? "justify-end" : "justify-start"}`}>
+          {Object.entries(aggregated).map(([emoji, count]) => {
+            const isMine = myReaction?.emoji === emoji;
+            return (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => onToggleReaction?.(msg.id, emoji)}
+                className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-sm border transition-colors ${
+                  isMine
+                    ? "bg-emerald-50 border-emerald-300 text-emerald-800"
+                    : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                <span>{emoji}</span>
+                {count > 1 && <span className="text-xs">{count}</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

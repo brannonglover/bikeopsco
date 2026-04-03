@@ -24,7 +24,7 @@ export async function PATCH(
         messages: {
           orderBy: { createdAt: "desc" },
           take: 1,
-          include: { attachments: true },
+          include: { attachments: true, reactions: true },
         },
       },
     });
@@ -56,7 +56,7 @@ export async function GET(
         job: true,
         messages: {
           orderBy: { createdAt: "asc" },
-          include: { attachments: true },
+          include: { attachments: true, reactions: true },
         },
       },
     });

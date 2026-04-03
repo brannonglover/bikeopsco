@@ -60,7 +60,7 @@ export async function DELETE(
 
     const updated = await prisma.message.findUnique({
       where: { id: messageId },
-      include: { attachments: true },
+      include: { attachments: true, reactions: true },
     });
 
     return NextResponse.json({ messageDeleted: false, message: updated });

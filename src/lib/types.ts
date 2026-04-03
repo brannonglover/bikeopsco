@@ -84,12 +84,21 @@ export interface MessageAttachment {
   createdAt: string;
 }
 
+export interface MessageReaction {
+  id: string;
+  messageId: string;
+  emoji: string;
+  reactorType: MessageSender;
+  createdAt: string;
+}
+
 export interface ChatMessage {
   id: string;
   conversationId: string;
   sender: MessageSender;
   body: string | null;
   attachments: MessageAttachment[];
+  reactions: MessageReaction[];
   createdAt: string;
   editedAt?: string | null;
 }
@@ -122,6 +131,7 @@ export interface JobBike {
   bikeId: string | null;
   sortOrder: number;
   completedAt: string | null;
+  waitingOnPartsAt: string | null;
   bike?: {
     imageUrl: string | null;
     bikeType: BikeType | null;

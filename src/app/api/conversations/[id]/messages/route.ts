@@ -24,7 +24,7 @@ export async function GET(
       prisma.message.findMany({
         where: { conversationId },
         orderBy: { createdAt: "asc" },
-        include: { attachments: true },
+        include: { attachments: true, reactions: true },
       }),
     ]);
 
@@ -96,7 +96,7 @@ export async function POST(
             }
           : undefined,
       },
-      include: { attachments: true },
+      include: { attachments: true, reactions: true },
     });
 
     await prisma.conversation.update({

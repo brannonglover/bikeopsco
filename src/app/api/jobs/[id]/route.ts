@@ -23,6 +23,8 @@ const updateJobSchema = z.object({
   workingOnJobBikeId: z.string().optional().nullable(),
   completeJobBikeId: z.string().optional(),
   uncompleteJobBikeId: z.string().optional(),
+  waitForPartsJobBikeId: z.string().optional(),
+  unwaitForPartsJobBikeId: z.string().optional(),
   customerId: z.string().optional().nullable(),
   deliveryType: z.enum(["DROP_OFF_AT_SHOP", "COLLECTION_SERVICE"]).optional(),
   dropOffDate: z.string().datetime().optional().nullable(),
@@ -136,7 +138,7 @@ export async function PATCH(
       if (data.completeJobBikeId) {
         await tx.jobBike.update({
           where: { id: data.completeJobBikeId, jobId: id },
-          data: { completedAt: new Date() },
+          data: { completedAt: new Date(), waitingOnPartsAt: null },
         });
         if (existingJob.workingOnJobBikeId === data.completeJobBikeId) {
           await tx.job.update({ where: { id }, data: { workingOnJobBikeId: null } });
@@ -147,6 +149,28 @@ export async function PATCH(
           where: { id: data.uncompleteJobBikeId, jobId: id },
           data: { completedAt: null },
         });
+      }
+      if (data.waitForPartsJobBikeId) {
+        await tx.jobBike.update({
+          where: { id: data.waitForPartsJobBikeId, jobId: id },
+          data: { waitingOnPartsAt: new Date() },
+        });
+        if (existingJob.workingOnJobBikeId === data.waitForPartsJobBikeId) {
+          await tx.job.update({ where: { id }, data: { workingOnJobBikeId: null } });
+        }
+      }
+      if (data.unwaitForPartsJobBikeId) {
+        await tx.jobBike.update({
+          where: { id: data.unwaitForPartsJobBikeId, jobId: id },
+          data: { waitingOnPartsAt: null },
+        });
+      }
+      if (data.stage === "WAITING_ON_PARTS" && existingJob.workingOnJobBikeId) {
+        await tx.jobBike.update({
+          where: { id: existingJob.workingOnJobBikeId, jobId: id },
+          data: { waitingOnPartsAt: new Date() },
+        });
+        await tx.job.update({ where: { id }, data: { workingOnJobBikeId: null } });
       }
       await syncCollectionJobService(tx, id);
       const result = await tx.job.findUnique({

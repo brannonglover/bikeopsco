@@ -54,9 +54,10 @@ model JobBike {
   imageUrl  String?
   bikeId    String?
   bike      Bike?    @relation(fields: [bikeId], references: [id], onDelete: SetNull)
-  sortOrder   Int       @default(0)
-  completedAt DateTime?
-  createdAt   DateTime  @default(now())
+  sortOrder        Int       @default(0)
+  completedAt      DateTime?
+  waitingOnPartsAt DateTime?
+  createdAt        DateTime  @default(now())
   workingOnJob Job?     @relation("WorkingOnBike")
 
   @@index([jobId])
@@ -243,9 +244,22 @@ model Message {
   /// Twilio inbound MessageSid — dedupes webhook retries
   smsSid             String?             @unique
   attachments        MessageAttachment[]
+  reactions          MessageReaction[]
   chatReminderEmails ChatReminderEmail[]
   createdAt          DateTime            @default(now())
   editedAt           DateTime?
+}
+
+model MessageReaction {
+  id          String        @id @default(cuid())
+  messageId   String
+  message     Message       @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  emoji       String
+  reactorType MessageSender
+  createdAt   DateTime      @default(now())
+
+  @@unique([messageId, reactorType])
+  @@index([messageId])
 }
 
 /// One nudge email per conversation + message + kind (so we do not repeat while that message is still last).

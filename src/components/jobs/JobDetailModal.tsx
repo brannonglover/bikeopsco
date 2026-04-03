@@ -211,6 +211,7 @@ function JobBikeSection({
   const [editingBikeIndex, setEditingBikeIndex] = useState<number | null>(null);
   const [savingWorkingOn, setSavingWorkingOn] = useState(false);
   const [savingComplete, setSavingComplete] = useState<string | null>(null);
+  const [savingWaiting, setSavingWaiting] = useState<string | null>(null);
 
   useEffect(() => {
     setEditingBikeIndex(null);
@@ -278,6 +279,42 @@ function JobBikeSection({
     }
   };
 
+  const handleWaitForParts = async (bikeId: string) => {
+    if (!onJobUpdated || savingWaiting) return;
+    setSavingWaiting(bikeId);
+    try {
+      const res = await fetch(`/api/jobs/${job.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ waitForPartsJobBikeId: bikeId }),
+      });
+      if (res.ok) {
+        const updatedJob = (await res.json()) as Job;
+        onJobUpdated(updatedJob);
+      }
+    } finally {
+      setSavingWaiting(null);
+    }
+  };
+
+  const handleResumeWork = async (bikeId: string) => {
+    if (!onJobUpdated || savingWaiting) return;
+    setSavingWaiting(bikeId);
+    try {
+      const res = await fetch(`/api/jobs/${job.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ unwaitForPartsJobBikeId: bikeId, workingOnJobBikeId: bikeId }),
+      });
+      if (res.ok) {
+        const updatedJob = (await res.json()) as Job;
+        onJobUpdated(updatedJob);
+      }
+    } finally {
+      setSavingWaiting(null);
+    }
+  };
+
   return (
     <div>
       <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">
@@ -294,6 +331,7 @@ function JobBikeSection({
           const isEditing = onJobUpdated && editingBikeIndex === i;
           const isWorkingOn = b.id !== "legacy" && job.workingOnJobBikeId === b.id;
           const isCompleted = !!b.completedAt;
+          const isWaitingOnParts = !!b.waitingOnPartsAt && !isCompleted;
           const canInteract = onJobUpdated && b.id !== "legacy";
 
           return (
@@ -302,9 +340,11 @@ function JobBikeSection({
               className={`flex gap-3 rounded-xl border p-3 shadow-sm min-w-0 transition-colors ${
                 isCompleted
                   ? "border-emerald-300 bg-emerald-50/50"
-                  : isWorkingOn
-                    ? "border-amber-400 bg-amber-50/60 ring-1 ring-amber-300"
-                    : "border-slate-200 bg-white"
+                  : isWaitingOnParts
+                    ? "border-red-300 bg-red-50/50 ring-1 ring-red-200"
+                    : isWorkingOn
+                      ? "border-amber-400 bg-amber-50/60 ring-1 ring-amber-300"
+                      : "border-slate-200 bg-white"
               } ${hasMultiple ? "" : "flex-1"}`}
             >
               {imageUrl ? (
@@ -320,7 +360,7 @@ function JobBikeSection({
               )}
               <div className="min-w-0 flex-1 flex flex-col">
                 <div className="flex items-start justify-between gap-1">
-                  <p className={`font-medium truncate ${isCompleted ? "text-slate-500" : "text-slate-900"}`}>{displayName}</p>
+                  <p className={`font-medium truncate ${isCompleted || isWaitingOnParts ? "text-slate-500" : "text-slate-900"}`}>{displayName}</p>
                   {isCompleted && (
                     <span className="flex-shrink-0 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-emerald-700 bg-emerald-200 px-1.5 py-0.5 rounded-md whitespace-nowrap">
                       <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20" aria-hidden>
@@ -329,7 +369,15 @@ function JobBikeSection({
                       Done
                     </span>
                   )}
-                  {isWorkingOn && !isCompleted && (
+                  {isWaitingOnParts && !isCompleted && (
+                    <span className="flex-shrink-0 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-red-700 bg-red-200 px-1.5 py-0.5 rounded-md whitespace-nowrap">
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20" aria-hidden>
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                      </svg>
+                      Waiting on parts
+                    </span>
+                  )}
+                  {isWorkingOn && !isCompleted && !isWaitingOnParts && (
                     <span className="flex-shrink-0 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-amber-700 bg-amber-200 px-1.5 py-0.5 rounded-md whitespace-nowrap">
                       <span className="relative flex h-2 w-2">
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-600 opacity-75" />
@@ -411,19 +459,44 @@ function JobBikeSection({
                         </svg>
                         Undo done
                       </button>
-                    ) : isWorkingOn ? (
+                    ) : isWaitingOnParts ? (
                       <button
                         type="button"
-                        onClick={() => handleToggleComplete(b.id, false)}
-                        disabled={!!savingComplete}
-                        className="inline-flex items-center gap-1.5 self-start text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors touch-manipulation min-h-[32px] disabled:opacity-50 shadow-sm"
-                        title="Mark this bike as done"
+                        onClick={() => handleResumeWork(b.id)}
+                        disabled={!!savingWaiting}
+                        className="inline-flex items-center gap-1.5 self-start text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-amber-100 text-amber-800 hover:bg-amber-200 transition-colors touch-manipulation min-h-[32px] disabled:opacity-50"
+                        title="Parts arrived — resume working on this bike"
                       >
-                        <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden>
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
-                        Mark done
+                        <WrenchIcon className="w-3.5 h-3.5" />
+                        Resume work
                       </button>
+                    ) : isWorkingOn ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleComplete(b.id, false)}
+                          disabled={!!savingComplete}
+                          className="inline-flex items-center gap-1.5 self-start text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors touch-manipulation min-h-[32px] disabled:opacity-50 shadow-sm"
+                          title="Mark this bike as done"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden>
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                          Mark done
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleWaitForParts(b.id)}
+                          disabled={!!savingWaiting}
+                          className="inline-flex items-center gap-1.5 self-start text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 transition-colors touch-manipulation min-h-[32px] disabled:opacity-50"
+                          title="Waiting on parts for this bike"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden>
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                          </svg>
+                          Waiting on parts
+                        </button>
+                      </>
                     ) : (
                       <button
                         type="button"

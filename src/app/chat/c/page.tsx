@@ -263,6 +263,37 @@ export default function CustomerChatPage() {
     return false;
   }, []);
 
+  const toggleReaction = useCallback(
+    async (messageId: string, emoji: string) => {
+      const msg = messages.find((m) => m.id === messageId);
+      const myReaction = (msg?.reactions ?? []).find(
+        (r) => r.reactorType === "CUSTOMER"
+      );
+      try {
+        if (myReaction?.emoji === emoji) {
+          await fetch(
+            `/api/chat/conversation/messages/${messageId}/reactions`,
+            { method: "DELETE", credentials: "include" }
+          );
+        } else {
+          await fetch(
+            `/api/chat/conversation/messages/${messageId}/reactions`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({ emoji }),
+            }
+          );
+        }
+        fetchMessages();
+      } catch {
+        // silently fail
+      }
+    },
+    [messages, fetchMessages]
+  );
+
   const removeCustomerAttachment = useCallback(
     async (messageId: string, attachmentId: string) => {
       const res = await fetch(
@@ -410,10 +441,12 @@ export default function CustomerChatPage() {
                   ? new Date(msg.createdAt).getTime() <= new Date(staffLastReadAt).getTime()
                   : undefined
               }
+              role="CUSTOMER"
               onPatch={msg.sender === "CUSTOMER" ? patchCustomerMessage : undefined}
               onDelete={msg.sender === "CUSTOMER" ? deleteCustomerMessage : undefined}
               onRemoveAttachment={msg.sender === "CUSTOMER" ? removeCustomerAttachment : undefined}
               onEditingChange={handleBubbleEditingChange}
+              onToggleReaction={toggleReaction}
             />
           ))}
         </div>
