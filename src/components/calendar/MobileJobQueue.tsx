@@ -25,6 +25,8 @@ interface MobileJobQueueProps {
   onJobClick: (job: Job) => void;
   onAccept: (jobId: string) => void;
   onReject: (job: Job) => void;
+  jobNotifyCustomer?: (jobId: string) => boolean;
+  onJobNotifyCustomerChange?: (jobId: string, notify: boolean) => void;
 }
 
 export function MobileJobQueue({
@@ -33,6 +35,8 @@ export function MobileJobQueue({
   onJobClick,
   onAccept,
   onReject,
+  jobNotifyCustomer,
+  onJobNotifyCustomerChange,
 }: MobileJobQueueProps) {
   if (pendingJobs.length === 0 && bookedInJobs.length === 0) {
     return null;
@@ -116,6 +120,27 @@ export function MobileJobQueue({
                       Reject
                     </button>
                   </div>
+                  {jobNotifyCustomer &&
+                    onJobNotifyCustomerChange &&
+                    job.customer &&
+                    (job.customer.email || job.customer.phone) && (
+                      <label className="flex items-start gap-2 mt-2.5 px-0.5 cursor-pointer select-none touch-manipulation">
+                        <input
+                          type="checkbox"
+                          checked={jobNotifyCustomer(job.id)}
+                          onChange={(e) =>
+                            onJobNotifyCustomerChange(job.id, e.target.checked)
+                          }
+                          className="mt-0.5 h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+                        />
+                        <span className="text-[11px] text-slate-600 leading-snug">
+                          <span className="font-semibold text-slate-800">Notify customer</span>
+                          <span className="block text-slate-500 mt-0.5">
+                            Uncheck to skip email and SMS when accepting or rejecting from here.
+                          </span>
+                        </span>
+                      </label>
+                    )}
                 </li>
               ))}
             </ul>

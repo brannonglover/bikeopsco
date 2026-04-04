@@ -58,6 +58,8 @@ export function JobCardContent({
   onReject,
   showMobileStageSelect,
   onStageChange,
+  notifyCustomer = true,
+  onNotifyCustomerChange,
 }: {
   job: Job;
   onAccept?: (jobId: string) => void;
@@ -65,6 +67,9 @@ export function JobCardContent({
   /** On narrow viewports, show a status control instead of relying on drag between columns. */
   showMobileStageSelect?: boolean;
   onStageChange?: (stage: Stage) => void;
+  /** When false, board actions skip customer email/SMS for this job. */
+  notifyCustomer?: boolean;
+  onNotifyCustomerChange?: (notify: boolean) => void;
 }) {
   const address =
     job.deliveryType === "COLLECTION_SERVICE"
@@ -73,6 +78,13 @@ export function JobCardContent({
   const mapsUrl = address
     ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`
     : null;
+
+  const showNotifyToggle =
+    !!onNotifyCustomerChange &&
+    !!job.customer &&
+    !!(job.customer.email || job.customer.phone) &&
+    job.stage !== "CANCELLED" &&
+    job.stage !== "COMPLETED";
 
   return (
     <div className="bg-white rounded-xl border border-slate-200/80 p-4 shadow-soft min-w-0 w-full">
@@ -103,11 +115,7 @@ export function JobCardContent({
         {getJobBikeDisplayTitle(job)}
       </h3>
       {(() => {
-        if (
-          job.stage === "WORKING_ON" ||
-          job.stage === "COMPLETED" ||
-          job.stage === "CANCELLED"
-        ) {
+        if (job.stage === "COMPLETED" || job.stage === "CANCELLED") {
           return null;
         }
         const hasWaitingBike = (job.jobBikes ?? []).some(
@@ -247,6 +255,34 @@ export function JobCardContent({
           </select>
         </div>
       )}
+      {showNotifyToggle && (
+        <div
+          className="mt-3 pt-3 border-t border-slate-100"
+          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <label className="flex items-start gap-2.5 cursor-pointer select-none touch-manipulation">
+            <input
+              type="checkbox"
+              checked={notifyCustomer}
+              onChange={(e) => onNotifyCustomerChange(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+              aria-describedby={`job-notify-hint-${job.id}`}
+            />
+            <span className="min-w-0">
+              <span className="block text-xs font-semibold text-slate-800">
+                Notify customer
+              </span>
+              <span
+                id={`job-notify-hint-${job.id}`}
+                className="block text-[11px] text-slate-500 mt-0.5 leading-snug"
+              >
+                Uncheck to skip email and SMS when you move or accept this job from the board.
+              </span>
+            </span>
+          </label>
+        </div>
+      )}
     </div>
   );
 }
@@ -260,6 +296,8 @@ interface JobCardProps {
   dragDisabled?: boolean;
   showMobileStageSelect?: boolean;
   onStageChange?: (stage: Stage) => void;
+  notifyCustomer?: boolean;
+  onNotifyCustomerChange?: (notify: boolean) => void;
 }
 
 export function JobCard({
@@ -270,6 +308,8 @@ export function JobCard({
   dragDisabled,
   showMobileStageSelect,
   onStageChange,
+  notifyCustomer,
+  onNotifyCustomerChange,
 }: JobCardProps) {
   const {
     attributes,
@@ -324,6 +364,8 @@ export function JobCard({
           onReject={onReject}
           showMobileStageSelect={showMobileStageSelect}
           onStageChange={onStageChange}
+          notifyCustomer={notifyCustomer}
+          onNotifyCustomerChange={onNotifyCustomerChange}
         />
       )}
     </div>

@@ -38,6 +38,8 @@ interface StageColumnProps {
   dragDisabled?: boolean;
   showMobileStageSelect?: boolean;
   onStageChange?: JobStageChangeHandler;
+  jobNotifyCustomer?: (jobId: string) => boolean;
+  onJobNotifyCustomerChange?: (jobId: string, notify: boolean) => void;
 }
 
 export function StageColumn({
@@ -49,6 +51,8 @@ export function StageColumn({
   dragDisabled,
   showMobileStageSelect,
   onStageChange,
+  jobNotifyCustomer,
+  onJobNotifyCustomerChange,
 }: StageColumnProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: stage,
@@ -81,6 +85,14 @@ export function StageColumn({
               showMobileStageSelect={showMobileStageSelect}
               onStageChange={
                 onStageChange ? (s) => onStageChange(job.id, s) : undefined
+              }
+              notifyCustomer={
+                jobNotifyCustomer ? jobNotifyCustomer(job.id) : undefined
+              }
+              onNotifyCustomerChange={
+                onJobNotifyCustomerChange
+                  ? (notify) => onJobNotifyCustomerChange(job.id, notify)
+                  : undefined
               }
             />
           ))}

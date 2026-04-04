@@ -36,6 +36,27 @@ const STAGES: Stage[] = [
 /** Main board columns - Cancelled is shown in a collapsible section below */
 const DISPLAY_STAGES: Stage[] = STAGES.filter((s) => s !== "CANCELLED");
 
+/** Match PATCH semantics: any stage except Waiting on parts clears bike-level waiting flags. */
+function withOptimisticStageChange(job: Job, newStage: Stage): Job {
+  if (newStage === "WAITING_ON_PARTS") {
+    return { ...job, stage: newStage };
+  }
+  return {
+    ...job,
+    stage: newStage,
+    jobBikes: (job.jobBikes ?? []).map((b) =>
+      b.completedAt ? b : { ...b, waitingOnPartsAt: null }
+    ),
+  };
+}
+
+function cloneJobForRevert(job: Job): Job {
+  return {
+    ...job,
+    jobBikes: job.jobBikes?.map((b) => ({ ...b })),
+  };
+}
+
 export function KanbanBoard() {
   const searchParams = useSearchParams();
   const paidJobId = searchParams.get("paid");
@@ -48,7 +69,28 @@ export function KanbanBoard() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [archiving, setArchiving] = useState(false);
+  /** Job IDs for which board actions should not send customer email/SMS. */
+  const [jobsSkippingCustomerNotify, setJobsSkippingCustomerNotify] = useState<
+    Set<string>
+  >(() => new Set());
   const isMobileBoard = useIsMobileBoard();
+
+  const jobNotifyCustomer = useCallback(
+    (jobId: string) => !jobsSkippingCustomerNotify.has(jobId),
+    [jobsSkippingCustomerNotify]
+  );
+
+  const onJobNotifyCustomerChange = useCallback(
+    (jobId: string, notify: boolean) => {
+      setJobsSkippingCustomerNotify((prev) => {
+        const next = new Set(prev);
+        if (notify) next.delete(jobId);
+        else next.add(jobId);
+        return next;
+      });
+    },
+    []
+  );
 
   const fetchJobs = useCallback((opts?: { silent?: boolean }) => {
     if (!opts?.silent) setLoading(true);
@@ -71,10 +113,14 @@ export function KanbanBoard() {
   const handleAccept = useCallback(
     async (jobId: string) => {
       try {
+        const body: Record<string, unknown> = { stage: "BOOKED_IN" };
+        if (jobsSkippingCustomerNotify.has(jobId)) {
+          body.notifyCustomer = false;
+        }
         const res = await fetch(`/api/jobs/${jobId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ stage: "BOOKED_IN" }),
+          body: JSON.stringify(body),
         });
         if (res.ok) {
           const updated = await res.json();
@@ -89,7 +135,7 @@ export function KanbanBoard() {
         console.error("Failed to accept job", e);
       }
     },
-    [selectedJob?.id]
+    [jobsSkippingCustomerNotify, selectedJob?.id]
   );
 
   const handleRejectClick = useCallback((job: Job) => {
@@ -99,13 +145,17 @@ export function KanbanBoard() {
   const handleRejectConfirm = useCallback(
     async (jobId: string, reason: string) => {
       try {
+        const body: Record<string, unknown> = {
+          stage: "CANCELLED",
+          cancellationReason: reason.trim(),
+        };
+        if (jobsSkippingCustomerNotify.has(jobId)) {
+          body.notifyCustomer = false;
+        }
         const res = await fetch(`/api/jobs/${jobId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            stage: "CANCELLED",
-            cancellationReason: reason.trim(),
-          }),
+          body: JSON.stringify(body),
         });
         if (res.ok) {
           const updated = await res.json();
@@ -118,7 +168,7 @@ export function KanbanBoard() {
         console.error("Failed to reject job", e);
       }
     },
-    [selectedJob?.id]
+    [jobsSkippingCustomerNotify, selectedJob?.id]
   );
 
   const handleArchiveCompleted = useCallback(async () => {
@@ -154,38 +204,45 @@ export function KanbanBoard() {
     async (jobId: string, newStage: Stage, opts?: { endDrag?: boolean }) => {
       const endDrag = opts?.endDrag ?? false;
       let previousStage: Stage | undefined;
+      let revertSnapshot: Job | null = null;
       flushSync(() => {
         if (endDrag) setActiveJobId(null);
         setJobs((prev) => {
           const job = prev.find((j) => j.id === jobId);
           if (!job || job.stage === newStage) return prev;
           previousStage = job.stage;
-          return prev.map((j) => (j.id === jobId ? { ...j, stage: newStage } : j));
+          revertSnapshot = cloneJobForRevert(job);
+          return prev.map((j) =>
+            j.id === jobId ? withOptimisticStageChange(job, newStage) : j
+          );
         });
         if (previousStage !== undefined) {
           setSelectedJob((sel) =>
-            sel?.id === jobId ? { ...sel, stage: newStage } : sel
+            sel?.id === jobId ? withOptimisticStageChange(sel, newStage) : sel
           );
         }
       });
       if (previousStage === undefined) return;
 
       const revert = () => {
+        if (!revertSnapshot) return;
         setJobs((prev) =>
-          prev.map((j) =>
-            j.id === jobId ? { ...j, stage: previousStage! } : j
-          )
+          prev.map((j) => (j.id === jobId ? revertSnapshot! : j))
         );
         setSelectedJob((sel) =>
-          sel?.id === jobId ? { ...sel, stage: previousStage! } : sel
+          sel?.id === jobId ? revertSnapshot! : sel
         );
       };
 
       try {
+        const body: Record<string, unknown> = { stage: newStage };
+        if (jobsSkippingCustomerNotify.has(jobId)) {
+          body.notifyCustomer = false;
+        }
         const res = await fetch(`/api/jobs/${jobId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ stage: newStage }),
+          body: JSON.stringify(body),
         });
         if (res.ok) {
           const updated = await res.json();
@@ -199,7 +256,7 @@ export function KanbanBoard() {
         revert();
       }
     },
-    []
+    [jobsSkippingCustomerNotify]
   );
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -323,6 +380,8 @@ export function KanbanBoard() {
           onJobClick={(job) => setSelectedJob(job)}
           onAccept={handleAccept}
           onReject={handleRejectClick}
+          jobNotifyCustomer={jobNotifyCustomer}
+          onJobNotifyCustomerChange={onJobNotifyCustomerChange}
         />
 
         <p className="md:hidden text-xs font-medium text-slate-400 -mb-1 flex-shrink-0">
@@ -342,6 +401,8 @@ export function KanbanBoard() {
               dragDisabled={isMobileBoard}
               showMobileStageSelect={isMobileBoard}
               onStageChange={patchJobStage}
+              jobNotifyCustomer={jobNotifyCustomer}
+              onJobNotifyCustomerChange={onJobNotifyCustomerChange}
             />
           ))}
         </div>

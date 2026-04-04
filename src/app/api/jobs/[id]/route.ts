@@ -16,6 +16,8 @@ const bikeSchema = z.object({
 
 const updateJobSchema = z.object({
   stage: z.enum(["BOOKED_IN", "RECEIVED", "WORKING_ON", "WAITING_ON_PARTS", "BIKE_READY", "COMPLETED", "CANCELLED"]).optional(),
+  /** When false, skip customer email and SMS for this update (stage / pending rejection). Defaults to true if omitted. */
+  notifyCustomer: z.boolean().optional(),
   cancellationReason: z.string().min(1).optional(),
   bikeMake: z.string().min(1).optional(),
   bikeModel: z.string().min(1).optional(),
@@ -199,7 +201,8 @@ export async function PATCH(
         });
         await tx.job.update({ where: { id }, data: { workingOnJobBikeId: null } });
       }
-      if (data.stage === "WORKING_ON") {
+      /** Dragging the card out of Waiting on parts (or any other column) must drop bike-level flags; only staying in WAITING_ON_PARTS keeps them. */
+      if (data.stage !== undefined && data.stage !== "WAITING_ON_PARTS") {
         await tx.jobBike.updateMany({
           where: {
             jobId: id,
@@ -227,7 +230,8 @@ export async function PATCH(
     if (
       data.stage === "CANCELLED" &&
       existingJob?.stage === "PENDING_APPROVAL" &&
-      job.customer?.email
+      job.customer?.email &&
+      data.notifyCustomer !== false
     ) {
       const reason = (data.cancellationReason ?? job.cancellationReason ?? "").trim();
       sendBookingDeclinedEmail(job.customer.email, {
@@ -239,7 +243,13 @@ export async function PATCH(
     }
 
     // Don't send notifications when cancelling or marking complete (internal status only)
-    if (data.stage && data.stage !== "CANCELLED" && data.stage !== "COMPLETED" && existingJob) {
+    if (
+      data.notifyCustomer !== false &&
+      data.stage &&
+      data.stage !== "CANCELLED" &&
+      data.stage !== "COMPLETED" &&
+      existingJob
+    ) {
       const templateSlug = getTemplateForStage(data.stage, existingJob.deliveryType);
       const smsTemplateSlug = getTemplateSlugForStage(data.stage, existingJob.deliveryType);
 
