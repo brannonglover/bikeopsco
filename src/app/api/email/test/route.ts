@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
+import {
+  buildCustomerEmailHtml,
+  customerEmailLogoAttachments,
+  getCustomerEmailLogoParts,
+} from "@/lib/email";
 import { getResendApiKey } from "@/lib/env";
 
 /**
@@ -30,12 +35,21 @@ export async function GET(request: NextRequest) {
 
   const from = process.env.FROM_EMAIL || "BBM Services <onboarding@resend.dev>";
 
+  const logo = getCustomerEmailLogoParts();
+  const html = buildCustomerEmailHtml({
+    innerHtml: "<p style=\"margin:0\">If you got this, Resend is working.</p>",
+    logoSrc: logo.src,
+    heading: "BBM Services – Email test",
+  });
+  const attachments = customerEmailLogoAttachments(logo);
+
   try {
     const { data, error } = await resend.emails.send({
       from,
       to,
       subject: "BBM Services – Email test",
-      html: "<p>If you got this, Resend is working.</p>",
+      html,
+      ...(attachments && { attachments }),
     });
 
     if (error) {

@@ -1049,21 +1049,30 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
   const [cancelReason, setCancelReason] = useState("");
   const [cancelReasonOther, setCancelReasonOther] = useState("");
   const [job, setJob] = useState<Job | null>(jobProp);
+  const latestJobPropRef = useRef(jobProp);
+  latestJobPropRef.current = jobProp;
 
   // Mirror parent job when it changes (e.g. kanban drag PATCH updates selectedJob — same id, new object)
   useEffect(() => {
     setJob(jobProp);
   }, [jobProp]);
 
-  // One GET per modal open (per job id) to enrich linked bike data. Do not depend on jobProp.updatedAt —
-  // refetching after every PATCH/board update lets a slow GET overwrite fresh PATCH state and revive stale waitingOnPartsAt.
+  // One GET per modal open (per job id) to enrich linked bike data. A slow response must not overwrite
+  // a newer job from the parent (e.g. board drag PATCH cleared waiting flags; GET started at open still has old rows).
   useEffect(() => {
     if (!isOpen || !jobProp?.id) return;
     const ac = new AbortController();
-    fetch(`/api/jobs/${jobProp.id}`, { signal: ac.signal })
+    const openedJobId = jobProp.id;
+    fetch(`/api/jobs/${openedJobId}`, { signal: ac.signal })
       .then((res) => (res.ok ? res.json() : null))
-      .then((fetched) => {
-        if (fetched) setJob(fetched);
+      .then((fetched: Job | null) => {
+        if (!fetched || ac.signal.aborted) return;
+        const live = latestJobPropRef.current;
+        if (!live || live.id !== openedJobId) return;
+        const fetchedMs = Date.parse(fetched.updatedAt);
+        const liveMs = Date.parse(live.updatedAt);
+        if (Number.isFinite(fetchedMs) && Number.isFinite(liveMs) && fetchedMs < liveMs) return;
+        setJob(fetched);
       })
       .catch(() => {});
     return () => ac.abort();

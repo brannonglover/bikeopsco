@@ -16,26 +16,44 @@ function getFromEmail(): string {
   return `BBM Services <${email}>`;
 }
 
-const LOGO_CID = "receipt-logo";
+const CUSTOMER_EMAIL_LOGO_CID = "customer-email-logo";
 
-function getReceiptLogoAttachment(): { content: Buffer; contentId: string } | null {
+/** Logo for customer-facing emails: favicon-192x192.png (URL when app URL is set, else CID attachment). */
+export function getCustomerEmailLogoParts(): {
+  src: string;
+  attachment?: { filename: string; content: Buffer; contentId: string };
+} {
+  const explicit =
+    process.env.CUSTOMER_EMAIL_LOGO_URL?.trim() || process.env.SHOP_LOGO_URL?.trim();
+  if (explicit?.startsWith("http")) {
+    return { src: explicit };
+  }
+  const base = getAppUrl();
+  if (base) {
+    return { src: `${base}/favicon-192x192.png` };
+  }
   try {
-    const logoPath = path.join(process.cwd(), "public", "bbm-logo-wo.png");
+    const logoPath = path.join(process.cwd(), "public", "favicon-192x192.png");
     if (fs.existsSync(logoPath)) {
-      return { content: fs.readFileSync(logoPath), contentId: LOGO_CID };
+      return {
+        src: `cid:${CUSTOMER_EMAIL_LOGO_CID}`,
+        attachment: {
+          filename: "favicon-192x192.png",
+          content: fs.readFileSync(logoPath),
+          contentId: CUSTOMER_EMAIL_LOGO_CID,
+        },
+      };
     }
   } catch {
     // ignore
   }
-  return null;
+  return { src: "" };
 }
 
-function getReceiptLogoUrl(): string {
-  const explicit = process.env.SHOP_LOGO_URL?.trim();
-  if (explicit && explicit.startsWith("http")) return explicit;
-  const base = getAppUrl();
-  if (base) return `${base}/bbm-logo-wo.png`;
-  return "";
+export function customerEmailLogoAttachments(
+  logo: ReturnType<typeof getCustomerEmailLogoParts>
+): { filename: string; content: Buffer; contentId: string }[] | undefined {
+  return logo.attachment ? [logo.attachment] : undefined;
 }
 
 export function mergeTemplateVariables(
@@ -50,6 +68,130 @@ export function mergeTemplateVariables(
     );
   }
   return result;
+}
+
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/** Aligns with src/app/globals.css --primary, --background, --foreground, --muted, --border */
+const BIKE_OPS_EMAIL = {
+  font: "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+  bgPage: "#f8fafc",
+  bgCard: "#ffffff",
+  bgFooter: "#f1f5f9",
+  border: "#e2e8f0",
+  text: "#334155",
+  heading: "#0f172a",
+  muted: "#64748b",
+  primary: "#4f46e5",
+  accentBar: "#4f46e5",
+} as const;
+
+function bikeOpsEmailShopSubtitle(): string | null {
+  const shop = process.env.SHOP_NAME?.trim();
+  if (!shop) return null;
+  if (shop.replace(/\s+/g, " ").toLowerCase() === "bike ops") return null;
+  return shop;
+}
+
+/**
+ * Shared HTML shell for customer emails — table layout, Plus Jakarta Sans, Bike Ops colors (matches web app).
+ */
+export function buildCustomerEmailHtml(options: {
+  innerHtml: string;
+  logoSrc: string;
+  heading?: string;
+}): string {
+  const { innerHtml, logoSrc, heading } = options;
+  const { font, bgPage, bgCard, bgFooter, border, text, heading: headColor, muted, accentBar } =
+    BIKE_OPS_EMAIL;
+
+  const logoImg = logoSrc
+    ? `<img src="${logoSrc.startsWith("cid:") ? logoSrc : escapeHtml(logoSrc)}" border="0" alt="Bike Ops" width="192" style="max-width:192px;height:auto;display:block;margin:0 auto" />`
+    : "";
+
+  const headingRow = heading
+    ? `<tr>
+    <td style="padding:8px 40px 4px;font-family:${font};color:${headColor};text-align:center">
+      <h1 style="margin:0;font-size:26px;line-height:1.25;font-weight:700;letter-spacing:-0.02em;color:${headColor}">${escapeHtml(heading)}</h1>
+    </td>
+  </tr>`
+    : "";
+
+  const shopSub = bikeOpsEmailShopSubtitle();
+  const footerSecondary = shopSub
+    ? `<p style="margin:6px 0 0;font-family:${font};font-size:13px;line-height:1.5;color:${muted}">${escapeHtml(shopSub)}</p>`
+    : "";
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light" />
+  <meta name="supported-color-schemes" content="light" />
+  <title>Bike Ops</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&amp;display=swap" rel="stylesheet" />
+</head>
+<body style="margin:0;padding:0;background-color:${bgPage};-webkit-text-size-adjust:100%">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:${bgPage}">
+  <tbody><tr><td align="center" style="padding:28px 16px 40px">
+    <table role="presentation" width="640" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:640px;background-color:${bgCard};border:1px solid ${border};border-radius:12px;overflow:hidden">
+      <tbody>
+        <tr>
+          <td style="height:4px;line-height:4px;font-size:0;background-color:${accentBar};mso-line-height-rule:exactly">&nbsp;</td>
+        </tr>
+        <tr>
+          <td align="center" style="padding:28px 40px 12px">${logoImg}</td>
+        </tr>
+        ${headingRow}
+        <tr>
+          <td style="padding:${heading ? "16px" : "8px"} 40px 8px;font-family:${font};font-size:15px;line-height:1.65;color:${text}">
+            ${innerHtml}
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:24px 40px 28px;background-color:${bgFooter};border-top:1px solid ${border}">
+            <p style="margin:0;font-family:${font};font-size:14px;line-height:1.5;font-weight:600;color:${headColor}">Bike Ops</p>
+            ${footerSecondary}
+            <p style="margin:10px 0 0;font-family:${font};font-size:12px;line-height:1.5;color:${muted}">Thanks for choosing us for your bike care.</p>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="margin:16px 0 0;font-family:${font};font-size:11px;line-height:1.4;color:${muted};max-width:640px">
+      You are receiving this because you booked or interacted with our shop. If this was not you, you can ignore this message.
+    </p>
+  </td></tr></tbody>
+</table>
+</body>
+</html>`;
+}
+
+/** Primary action button — Bike Ops indigo (matches app --primary). */
+export function buildCustomerEmailCtaButton(href: string, label: string): string {
+  const { font, primary } = BIKE_OPS_EMAIL;
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:24px auto 0;border-collapse:separate;width:100%;max-width:100%">
+  <tbody><tr>
+    <td align="center" style="padding:0">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:400px;border-collapse:separate">
+        <tbody><tr>
+          <td align="center" bgcolor="${primary}" style="background-color:${primary};border-radius:10px;mso-padding-alt:0">
+            <a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" style="display:block;padding:14px 28px;font-family:${font};font-size:15px;font-weight:600;line-height:1.25;color:#ffffff;text-decoration:none;border-radius:10px">${escapeHtml(label)}</a>
+          </td>
+        </tr></tbody>
+      </table>
+    </td>
+  </tr></tbody>
+</table>`;
 }
 
 interface JobForEmail {
@@ -92,7 +234,7 @@ export async function sendJobEmail(
   const baseUrl = getAppUrl();
   const statusUrl = baseUrl ? `${baseUrl}/status/${job.id}` : "";
   const statusButtonHtml = statusUrl
-    ? `<a href="${statusUrl}" style="display: inline-block; padding: 12px 24px; background-color: #f59e0b; color: white !important; text-decoration: none; font-weight: 600; border-radius: 8px;">Track your repair status</a>`
+    ? buildCustomerEmailCtaButton(statusUrl, "Track your repair status")
     : "";
 
   const vars: Record<string, string> = {
@@ -111,13 +253,17 @@ export async function sendJobEmail(
 
   const subject = mergeTemplateVariables(template.subject, vars);
   const bodyHtml = mergeTemplateVariables(template.bodyHtml, vars);
+  const logo = getCustomerEmailLogoParts();
+  const html = buildCustomerEmailHtml({ innerHtml: bodyHtml, logoSrc: logo.src });
+  const attachments = customerEmailLogoAttachments(logo);
 
   try {
     const { error } = await resend.emails.send({
       from: getFromEmail(),
       to: recipient,
       subject,
-      html: bodyHtml,
+      html,
+      ...(attachments && { attachments }),
     });
 
     if (error) {
@@ -272,13 +418,17 @@ export async function sendBookingDeclinedEmail(
 
   const subject = mergeTemplateVariables(template.subject, vars);
   const bodyHtml = mergeTemplateVariables(template.bodyHtml, vars);
+  const logo = getCustomerEmailLogoParts();
+  const html = buildCustomerEmailHtml({ innerHtml: bodyHtml, logoSrc: logo.src });
+  const attachments = customerEmailLogoAttachments(logo);
 
   try {
     const { error } = await resend.emails.send({
       from: getFromEmail(),
       to: recipient,
       subject,
-      html: bodyHtml,
+      html,
+      ...(attachments && { attachments }),
     });
     if (error) return { ok: false, error: error.message };
     return { ok: true };
@@ -336,12 +486,11 @@ function formatPrice(amount: number): string {
   });
 }
 
-function buildInvoiceHtml(
+function buildInvoiceInnerHtml(
   job: JobForInvoice,
   subtotal: number,
   totalPaid: number,
-  shopName: string,
-  logoSrc: string
+  shopName: string
 ): string {
   const hasSurcharge = totalPaid > subtotal;
   const customerName = job.customer
@@ -381,103 +530,45 @@ function buildInvoiceHtml(
   }).join("");
   const rows = serviceRows + productRows;
 
-  const headerContent = logoSrc
-    ? `<img src="${logoSrc.startsWith("cid:") ? logoSrc : escapeHtml(logoSrc)}" alt="${escapeHtml(shopName)}" width="280" height="auto" style="max-height: 88px; width: auto; display: block; margin: 0 auto 20px; object-fit: contain;">
-              <p style="margin: 0; font-size: 13px; color: rgba(255,255,255,0.9); letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600;">Payment Receipt</p>`
-    : `<h1 style="margin: 0; font-size: 24px; font-weight: 700; color: white; letter-spacing: -0.025em;">${escapeHtml(shopName)}</h1>
-              <p style="margin: 6px 0 0; font-size: 14px; color: rgba(255,255,255,0.9);">Payment Receipt</p>`;
-
   return `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Payment Receipt - ${escapeHtml(shopName)}</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <style type="text/css">
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap');
-  </style>
-</head>
-<body style="margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f8fafc; color: #0f172a;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f8fafc; padding: 40px 20px;">
+<p style="margin:0 0 20px;font-size:16px;color:#64748b">Thank you for your payment, ${escapeHtml(customerName)}.</p>
+<p style="margin:0 0 24px;font-size:14px;color:#64748b">${escapeHtml(date)}</p>
+
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom:24px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+  <thead>
+    <tr style="background-color:#f8fafc">
+      <th style="padding:14px 18px;text-align:left;font-size:15px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em">Item</th>
+      <th style="padding:14px 18px;text-align:center;font-size:15px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em">Qty</th>
+      <th style="padding:14px 18px;text-align:right;font-size:15px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em">Unit Price</th>
+      <th style="padding:14px 18px;text-align:right;font-size:15px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em">Total</th>
+    </tr>
+  </thead>
+  <tbody>${rows}</tbody>
+</table>
+
+<div style="padding:16px;background-color:#f1f5f9;border-radius:8px;border:1px solid #e2e8f0">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+    ${hasSurcharge ? `
     <tr>
-      <td align="center">
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 560px; background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -2px rgba(0,0,0,0.04); overflow: hidden;">
-          <tr>
-            <td style="padding: 36px 32px 24px; background: linear-gradient(135deg, #b45309 0%, #d97706 100%); text-align: center;">
-              ${headerContent}
-            </td>
-          </tr>
-          <tr>
-            <td style="padding: 28px 32px;">
-              <p style="margin: 0 0 20px; font-size: 16px; color: #64748b;">Thank you for your payment, ${escapeHtml(customerName)}.</p>
-              <p style="margin: 0 0 24px; font-size: 14px; color: #64748b;">${escapeHtml(date)}</p>
-
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 24px; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
-                <thead>
-                  <tr style="background-color: #f8fafc;">
-                    <th style="padding: 14px 18px; text-align: left; font-size: 15px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Item</th>
-                    <th style="padding: 14px 18px; text-align: center; font-size: 15px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Qty</th>
-                    <th style="padding: 14px 18px; text-align: right; font-size: 15px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Unit Price</th>
-                    <th style="padding: 14px 18px; text-align: right; font-size: 15px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${rows}
-                </tbody>
-              </table>
-
-              <div style="padding: 16px; background-color: #f1f5f9; border-radius: 8px; border: 1px solid #e2e8f0;">
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-                  ${hasSurcharge ? `
-                  <tr>
-                    <td style="font-size: 16px; font-weight: 600; color: #475569;">Subtotal</td>
-                    <td style="font-size: 16px; font-weight: 600; color: #334155; text-align: right;">${formatPrice(subtotal)}</td>
-                  </tr>
-                  <tr>
-                    <td style="font-size: 16px; font-weight: 600; color: #475569; padding-top: 8px;">Card processing fee</td>
-                    <td style="font-size: 16px; font-weight: 600; color: #334155; text-align: right; padding-top: 8px;">${formatPrice(totalPaid - subtotal)}</td>
-                  </tr>
-                  ` : ""}
-                  <tr>
-                    <td style="font-size: 16px; font-weight: 700; color: #475569; padding-top: ${hasSurcharge ? "8px" : "0"};">Total paid</td>
-                    <td style="font-size: 20px; font-weight: 700; color: #334155; text-align: right; padding-top: ${hasSurcharge ? "8px" : "0"};">${formatPrice(totalPaid)}</td>
-                  </tr>
-                </table>
-              </div>
-
-              <p style="margin: 24px 0 0; font-size: 14px; color: #64748b;">
-                This receipt is for your ${escapeHtml(job.bikeMake)} ${escapeHtml(job.bikeModel)} repair.
-              </p>
-
-              <p style="margin: 20px 0 0; font-size: 14px; color: #64748b;">
-                If you have any questions, please don't hesitate to get in touch.
-              </p>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding: 20px 32px; background-color: #f8fafc; border-top: 1px solid #e2e8f0;">
-              <p style="margin: 0; font-size: 12px; color: #94a3b8;">Thank you for choosing ${escapeHtml(shopName)}.</p>
-            </td>
-          </tr>
-        </table>
-      </td>
+      <td style="font-size:16px;font-weight:600;color:#475569">Subtotal</td>
+      <td style="font-size:16px;font-weight:600;color:#334155;text-align:right">${formatPrice(subtotal)}</td>
+    </tr>
+    <tr>
+      <td style="font-size:16px;font-weight:600;color:#475569;padding-top:8px">Card processing fee</td>
+      <td style="font-size:16px;font-weight:600;color:#334155;text-align:right;padding-top:8px">${formatPrice(totalPaid - subtotal)}</td>
+    </tr>
+    ` : ""}
+    <tr>
+      <td style="font-size:16px;font-weight:700;color:#475569;padding-top:${hasSurcharge ? "8px" : "0"}">Total paid</td>
+      <td style="font-size:20px;font-weight:700;color:#334155;text-align:right;padding-top:${hasSurcharge ? "8px" : "0"}">${formatPrice(totalPaid)}</td>
     </tr>
   </table>
-</body>
-</html>
-  `.trim();
-}
+</div>
 
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+<p style="margin:24px 0 0;font-size:14px;color:#64748b">This receipt is for your ${escapeHtml(job.bikeMake)} ${escapeHtml(job.bikeModel)} repair.</p>
+<p style="margin:20px 0 0;font-size:14px;color:#64748b">If you have any questions, please don't hesitate to get in touch.</p>
+<p style="margin:20px 0 0;font-size:12px;color:#94a3b8">Thank you for choosing ${escapeHtml(shopName)}.</p>
+  `.trim();
 }
 
 const SHOP_NAME = process.env.SHOP_NAME || "Basement Bike Mechanic";
@@ -495,40 +586,19 @@ export async function sendChatMagicLinkEmail(
 
   const shopName = SHOP_NAME;
   const subject = `Sign in to chat with ${shopName}`;
-  const html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background: #f8fafc; color: #0f172a; }
-    .container { max-width: 480px; margin: 0 auto; padding: 40px 20px; }
-    .card { background: white; border-radius: 12px; padding: 32px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.07); }
-    .btn { display: inline-block; padding: 14px 28px; background: #059669; color: white !important; text-decoration: none; font-weight: 600; border-radius: 8px; }
-    .muted { color: #64748b; font-size: 14px; margin-top: 24px; }
-    .link { color: #059669; word-break: break-all; font-size: 12px; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="card">
-      <h1 style="margin: 0 0 16px; font-size: 22px;">Chat with ${escapeHtml(shopName)}</h1>
-      <p style="margin: 0 0 24px; font-size: 16px; color: #475569;">
-        Click the button below to sign in and start chatting with us. This link expires in 15 minutes.
-      </p>
-      <a href="${magicLinkUrl}" class="btn">Sign in to chat</a>
-      <p class="muted">
-        If you didn't request this email, you can safely ignore it.
-      </p>
-      <p class="muted">
-        Or copy this link: <a href="${magicLinkUrl}" class="link">${magicLinkUrl}</a>
-      </p>
-    </div>
-  </div>
-</body>
-</html>
-  `.trim();
+  const logo = getCustomerEmailLogoParts();
+  const innerHtml = `
+<p style="margin:0 0 24px;color:#475569">Click the button below to sign in and start chatting with us. This link expires in 15 minutes.</p>
+${buildCustomerEmailCtaButton(magicLinkUrl, "Sign in to chat")}
+<p style="margin:24px 0 0;font-size:12px;color:#6b7280">If you didn't request this email, you can safely ignore it.</p>
+<p style="margin:12px 0 0;font-size:12px;color:#64748b;word-break:break-all">Or copy this link: <a href="${escapeHtml(magicLinkUrl)}" style="color:#4f46e5;text-decoration:underline">${escapeHtml(magicLinkUrl)}</a></p>
+`.trim();
+  const html = buildCustomerEmailHtml({
+    innerHtml,
+    logoSrc: logo.src,
+    heading: `Chat with ${shopName}`,
+  });
+  const attachments = customerEmailLogoAttachments(logo);
 
   try {
     const { error } = await resend.emails.send({
@@ -536,6 +606,7 @@ export async function sendChatMagicLinkEmail(
       to: recipient,
       subject,
       html,
+      ...(attachments && { attachments }),
     });
     if (error) return { ok: false, error: error.message };
     return { ok: true };
@@ -566,7 +637,7 @@ export async function sendChatCustomerReplyReminder(
   const hasLatestInBody = trimmedBody.length > 0 || files.length > 0;
 
   const latestMessageHtml = hasLatestInBody
-    ? `<div style="margin: 0 0 24px; padding: 16px; background: #f1f5f9; border-radius: 8px; border-left: 4px solid #059669; font-size: 15px; color: #334155;">
+    ? `<div style="margin: 0 0 24px; padding: 16px; background: #f1f5f9; border-radius: 8px; border-left: 4px solid #4f46e5; font-size: 15px; color: #334155;">
         ${trimmedBody.length > 0 ? `<div style="white-space: pre-wrap; word-break: break-word;">${escapeHtml(trimmedBody)}</div>` : ""}
         ${files.length > 0 ? `<p style="margin: ${trimmedBody.length > 0 ? "12px" : "0"} 0 0; font-size: 14px; color: #475569;"><span style="color: #64748b;">Included:</span> ${files.map((f) => escapeHtml(f)).join(", ")}</p>` : ""}
       </div>`
@@ -587,35 +658,19 @@ export async function sendChatCustomerReplyReminder(
     ? `Hi ${name},\n\nWe sent you a message in chat at least ${reminderMinutes} minute${reminderMinutes === 1 ? "" : "s"} ago. Here is the latest message:\n\n${plainLatest}\n\nOpen chat: ${chatUrl}\n\nIf you already replied, you can ignore this email.`
     : `Hi ${name},\n\nWe sent you a message in chat at least ${reminderMinutes} minute${reminderMinutes === 1 ? "" : "s"} ago. When you have a moment, please open the conversation and reply.\n\n${chatUrl}\n\nIf you already replied, you can ignore this email.`;
 
-  const html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background: #f8fafc; color: #0f172a; }
-    .container { max-width: 480px; margin: 0 auto; padding: 40px 20px; }
-    .card { background: white; border-radius: 12px; padding: 32px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.07); }
-    .btn { display: inline-block; padding: 14px 28px; background: #059669; color: white !important; text-decoration: none; font-weight: 600; border-radius: 8px; }
-    .muted { color: #64748b; font-size: 14px; margin-top: 24px; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="card">
-      <h1 style="margin: 0 0 16px; font-size: 22px;">Hi ${escapeHtml(name)},</h1>
-      ${intro}
-      ${latestMessageHtml}
-      <a href="${chatUrl}" class="btn">Open chat</a>
-      <p class="muted">
-        If you already replied, you can ignore this email.
-      </p>
-    </div>
-  </div>
-</body>
-</html>
-  `.trim();
+  const logo = getCustomerEmailLogoParts();
+  const innerHtml = `
+${intro}
+${latestMessageHtml}
+${buildCustomerEmailCtaButton(chatUrl, "Open chat")}
+<p style="margin:24px 0 0;font-size:12px;color:#6b7280">If you already replied, you can ignore this email.</p>
+`.trim();
+  const html = buildCustomerEmailHtml({
+    innerHtml,
+    logoSrc: logo.src,
+    heading: `Hi ${name}`,
+  });
+  const attachments = customerEmailLogoAttachments(logo);
 
   try {
     const { error } = await resend.emails.send({
@@ -624,6 +679,7 @@ export async function sendChatCustomerReplyReminder(
       subject,
       text: textBody,
       html,
+      ...(attachments && { attachments }),
     });
     if (error) return { ok: false, error: error.message };
     return { ok: true };
@@ -720,20 +776,14 @@ export async function sendPaymentReceiptEmail(
 
   const subject = `Payment receipt – ${job.bikeMake} ${job.bikeModel} – ${SHOP_NAME}`;
 
-  const logoAttachment = getReceiptLogoAttachment();
-  const logoUrl = getReceiptLogoUrl();
-  const logoSrc = logoAttachment ? `cid:${LOGO_CID}` : logoUrl;
-  const html = buildInvoiceHtml(job, subtotal, paid, SHOP_NAME, logoSrc);
-
-  const attachments = logoAttachment
-    ? [
-        {
-          filename: "bbm-logo-wo.png",
-          content: logoAttachment.content,
-          contentId: LOGO_CID,
-        },
-      ]
-    : undefined;
+  const logo = getCustomerEmailLogoParts();
+  const innerHtml = buildInvoiceInnerHtml(job, subtotal, paid, SHOP_NAME);
+  const html = buildCustomerEmailHtml({
+    innerHtml,
+    logoSrc: logo.src,
+    heading: "Payment receipt",
+  });
+  const attachments = customerEmailLogoAttachments(logo);
 
   try {
     const { data, error } = await resend.emails.send({
