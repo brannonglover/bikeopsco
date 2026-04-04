@@ -331,11 +331,9 @@ function JobBikeSection({
           const isEditing = onJobUpdated && editingBikeIndex === i;
           const isWorkingOn = b.id !== "legacy" && job.workingOnJobBikeId === b.id;
           const isCompleted = !!b.completedAt;
+          // Never show waiting for the bike currently marked as working (clears badge even if GET/PATCH order left stale waitingOnPartsAt).
           const isWaitingOnParts =
-            !!b.waitingOnPartsAt &&
-            !isCompleted &&
-            job.workingOnJobBikeId !== b.id &&
-            job.stage !== "WORKING_ON";
+            !!b.waitingOnPartsAt && !isCompleted && job.workingOnJobBikeId !== b.id;
           const canInteract = onJobUpdated && b.id !== "legacy";
 
           return (
@@ -983,7 +981,8 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
     setJob(jobProp);
   }, [jobProp]);
 
-  // Fetch fresh job when opening or when the job row changes (abort stale responses so an old GET cannot overwrite a board drag / PATCH)
+  // One GET per modal open (per job id) to enrich linked bike data. Do not depend on jobProp.updatedAt —
+  // refetching after every PATCH/board update lets a slow GET overwrite fresh PATCH state and revive stale waitingOnPartsAt.
   useEffect(() => {
     if (!isOpen || !jobProp?.id) return;
     const ac = new AbortController();
@@ -994,7 +993,7 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
       })
       .catch(() => {});
     return () => ac.abort();
-  }, [isOpen, jobProp?.id, jobProp?.updatedAt]);
+  }, [isOpen, jobProp?.id]);
 
   const handleCancelJobClick = () => {
     if (!job || job.stage === "CANCELLED") return;
