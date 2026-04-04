@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import {
+  closestCorners,
   DndContext,
   DragEndEvent,
   DragOverlay,
@@ -149,32 +150,49 @@ export function KanbanBoard() {
     setActiveJobId(event.active.id as string);
   };
 
-  const patchJobStage = useCallback(
-    async (jobId: string, newStage: Stage) => {
-      const job = jobs.find((j) => j.id === jobId);
-      if (!job || job.stage === newStage) return;
+  const patchJobStage = useCallback(async (jobId: string, newStage: Stage) => {
+    let previousStage: Stage | undefined;
+    setJobs((prev) => {
+      const job = prev.find((j) => j.id === jobId);
+      if (!job || job.stage === newStage) return prev;
+      previousStage = job.stage;
+      return prev.map((j) => (j.id === jobId ? { ...j, stage: newStage } : j));
+    });
+    if (previousStage === undefined) return;
 
-      try {
-        const res = await fetch(`/api/jobs/${jobId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ stage: newStage }),
-        });
-        if (res.ok) {
-          const updated = await res.json();
-          setJobs((prev) =>
-            prev.map((j) => (j.id === jobId ? updated : j))
-          );
-          if (selectedJob?.id === jobId) {
-            setSelectedJob(updated);
-          }
-        }
-      } catch (e) {
-        console.error("Failed to update job", e);
+    setSelectedJob((sel) =>
+      sel?.id === jobId ? { ...sel, stage: newStage } : sel
+    );
+
+    const revert = () => {
+      setJobs((prev) =>
+        prev.map((j) =>
+          j.id === jobId ? { ...j, stage: previousStage! } : j
+        )
+      );
+      setSelectedJob((sel) =>
+        sel?.id === jobId ? { ...sel, stage: previousStage! } : sel
+      );
+    };
+
+    try {
+      const res = await fetch(`/api/jobs/${jobId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stage: newStage }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setJobs((prev) => prev.map((j) => (j.id === jobId ? updated : j)));
+        setSelectedJob((sel) => (sel?.id === jobId ? updated : sel));
+      } else {
+        revert();
       }
-    },
-    [jobs, selectedJob?.id]
-  );
+    } catch (e) {
+      console.error("Failed to update job", e);
+      revert();
+    }
+  }, []);
 
   const handleDragEnd = async (event: DragEndEvent) => {
     setActiveJobId(null);
@@ -285,6 +303,7 @@ export function KanbanBoard() {
 
       <DndContext
         sensors={sensors}
+        collisionDetection={closestCorners}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
