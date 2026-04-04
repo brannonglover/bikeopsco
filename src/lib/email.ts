@@ -194,6 +194,32 @@ export function buildCustomerEmailCtaButton(href: string, label: string): string
 </table>`;
 }
 
+/** Sample merge values for staff preview (Email Templates settings, etc.). */
+export function mergeEmailTemplateWithPreviewVars(bodyHtml: string): string {
+  const base = getAppUrl();
+  const statusUrl = base ? `${base}/status/preview` : "https://example.com/status/preview";
+  const shopName = process.env.SHOP_NAME?.trim() || "Your shop";
+  const vars: Record<string, string> = {
+    customerName: "Alex Rider",
+    bikeMake: "Trek",
+    bikeModel: "Domane SL 5",
+    shopName,
+    customerNotes: "Please check the rear derailleur.",
+    statusUrl,
+    statusButtonHtml: buildCustomerEmailCtaButton(statusUrl, "Track your repair status"),
+    rejectionReason:
+      "We are fully booked for your requested dates. We hope to serve you another time.",
+  };
+  return mergeTemplateVariables(bodyHtml, vars);
+}
+
+/** Full customer email HTML as sent (wrapper + logo + sample variable merge). */
+export function buildCustomerEmailPreviewDocument(bodyHtml: string): string {
+  const merged = mergeEmailTemplateWithPreviewVars(bodyHtml);
+  const logo = getCustomerEmailLogoParts();
+  return buildCustomerEmailHtml({ innerHtml: merged, logoSrc: logo.src });
+}
+
 interface JobForEmail {
   id: string;
   bikeMake: string;
