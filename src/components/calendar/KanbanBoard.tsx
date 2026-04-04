@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
+import { flushSync } from "react-dom";
 import {
-  closestCorners,
   DndContext,
   DragEndEvent,
   DragOverlay,
@@ -150,54 +150,64 @@ export function KanbanBoard() {
     setActiveJobId(event.active.id as string);
   };
 
-  const patchJobStage = useCallback(async (jobId: string, newStage: Stage) => {
-    let previousStage: Stage | undefined;
-    setJobs((prev) => {
-      const job = prev.find((j) => j.id === jobId);
-      if (!job || job.stage === newStage) return prev;
-      previousStage = job.stage;
-      return prev.map((j) => (j.id === jobId ? { ...j, stage: newStage } : j));
-    });
-    if (previousStage === undefined) return;
-
-    setSelectedJob((sel) =>
-      sel?.id === jobId ? { ...sel, stage: newStage } : sel
-    );
-
-    const revert = () => {
-      setJobs((prev) =>
-        prev.map((j) =>
-          j.id === jobId ? { ...j, stage: previousStage! } : j
-        )
-      );
-      setSelectedJob((sel) =>
-        sel?.id === jobId ? { ...sel, stage: previousStage! } : sel
-      );
-    };
-
-    try {
-      const res = await fetch(`/api/jobs/${jobId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ stage: newStage }),
+  const patchJobStage = useCallback(
+    async (jobId: string, newStage: Stage, opts?: { endDrag?: boolean }) => {
+      const endDrag = opts?.endDrag ?? false;
+      let previousStage: Stage | undefined;
+      flushSync(() => {
+        if (endDrag) setActiveJobId(null);
+        setJobs((prev) => {
+          const job = prev.find((j) => j.id === jobId);
+          if (!job || job.stage === newStage) return prev;
+          previousStage = job.stage;
+          return prev.map((j) => (j.id === jobId ? { ...j, stage: newStage } : j));
+        });
+        if (previousStage !== undefined) {
+          setSelectedJob((sel) =>
+            sel?.id === jobId ? { ...sel, stage: newStage } : sel
+          );
+        }
       });
-      if (res.ok) {
-        const updated = await res.json();
-        setJobs((prev) => prev.map((j) => (j.id === jobId ? updated : j)));
-        setSelectedJob((sel) => (sel?.id === jobId ? updated : sel));
-      } else {
+      if (previousStage === undefined) return;
+
+      const revert = () => {
+        setJobs((prev) =>
+          prev.map((j) =>
+            j.id === jobId ? { ...j, stage: previousStage! } : j
+          )
+        );
+        setSelectedJob((sel) =>
+          sel?.id === jobId ? { ...sel, stage: previousStage! } : sel
+        );
+      };
+
+      try {
+        const res = await fetch(`/api/jobs/${jobId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ stage: newStage }),
+        });
+        if (res.ok) {
+          const updated = await res.json();
+          setJobs((prev) => prev.map((j) => (j.id === jobId ? updated : j)));
+          setSelectedJob((sel) => (sel?.id === jobId ? updated : sel));
+        } else {
+          revert();
+        }
+      } catch (e) {
+        console.error("Failed to update job", e);
         revert();
       }
-    } catch (e) {
-      console.error("Failed to update job", e);
-      revert();
-    }
-  }, []);
+    },
+    []
+  );
 
-  const handleDragEnd = async (event: DragEndEvent) => {
-    setActiveJobId(null);
+  const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
-    if (!over) return;
+    if (!over) {
+      setActiveJobId(null);
+      return;
+    }
 
     const jobId = active.id as string;
     let newStage: Stage;
@@ -207,7 +217,8 @@ export function KanbanBoard() {
       const targetJob = jobs.find((j) => j.id === over.id);
       newStage = targetJob ? targetJob.stage : (over.id as Stage);
     }
-    await patchJobStage(jobId, newStage);
+
+    void patchJobStage(jobId, newStage, { endDrag: true });
   };
 
   const sensors = useSensors(
@@ -303,7 +314,6 @@ export function KanbanBoard() {
 
       <DndContext
         sensors={sensors}
-        collisionDetection={closestCorners}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
@@ -379,7 +389,7 @@ export function KanbanBoard() {
           </div>
         ) : null}
 
-        <DragOverlay dropAnimation={{ duration: 200, easing: "cubic-bezier(0.18, 0.67, 0.6, 1.22)" }}>
+        <DragOverlay dropAnimation={{ duration: 0 }}>
           {(() => {
             const job = activeJobId ? jobs.find((j) => j.id === activeJobId) : null;
             return job ? (

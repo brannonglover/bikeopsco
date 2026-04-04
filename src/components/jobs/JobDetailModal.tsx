@@ -331,7 +331,10 @@ function JobBikeSection({
           const isEditing = onJobUpdated && editingBikeIndex === i;
           const isWorkingOn = b.id !== "legacy" && job.workingOnJobBikeId === b.id;
           const isCompleted = !!b.completedAt;
-          const isWaitingOnParts = !!b.waitingOnPartsAt && !isCompleted;
+          const isWaitingOnParts =
+            !!b.waitingOnPartsAt &&
+            !isCompleted &&
+            job.stage !== "WORKING_ON";
           const canInteract = onJobUpdated && b.id !== "legacy";
 
           return (
@@ -974,19 +977,24 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
   const [cancelReasonOther, setCancelReasonOther] = useState("");
   const [job, setJob] = useState<Job | null>(jobProp);
 
+  // Mirror parent job when it changes (e.g. kanban drag PATCH updates selectedJob — same id, new object)
+  useEffect(() => {
+    setJob(jobProp);
+  }, [jobProp]);
+
   // Fetch fresh job data when modal opens so we get bike images from linked Bike records
   useEffect(() => {
-    if (isOpen && jobProp?.id) {
-      setJob(jobProp);
-      fetch(`/api/jobs/${jobProp.id}`)
-        .then((res) => (res.ok ? res.json() : null))
-        .then((fetched) => {
-          if (fetched) setJob(fetched);
-        })
-        .catch(() => {});
-    } else {
-      setJob(jobProp);
-    }
+    if (!isOpen || !jobProp?.id) return;
+    let cancelled = false;
+    fetch(`/api/jobs/${jobProp.id}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((fetched) => {
+        if (!cancelled && fetched) setJob(fetched);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
   }, [isOpen, jobProp?.id]);
 
   const handleCancelJobClick = () => {
