@@ -16,78 +16,54 @@ function getFromEmail(): string {
   return `BBM Services <${email}>`;
 }
 
-const CUSTOMER_EMAIL_FAVICON_CID = "customer-email-favicon";
-const CUSTOMER_EMAIL_WORDMARK_CID = "customer-email-wordmark";
+const CUSTOMER_EMAIL_HEADER_LOGO_CID = "customer-email-header-logo";
+const DEFAULT_HEADER_LOGO_FILE = "bbm-logo-wo.png";
 
 export interface CustomerEmailBrandingAssets {
-  faviconSrc: string;
-  wordmarkSrc: string;
+  /** Centered header image (bbm-logo-wo.png or HTTPS override). */
+  headerLogoSrc: string;
   attachments?: { filename: string; content: Buffer; contentId: string }[];
 }
 
 /**
- * Favicon (shown at 96px) + wordmark for customer emails.
- * URLs from NEXT_PUBLIC_APP_URL when set; otherwise CID-embedded files from /public.
- * Optional overrides: CUSTOMER_EMAIL_FAVICON_URL, CUSTOMER_EMAIL_WORDMARK_URL, or
- * CUSTOMER_EMAIL_LOGO_URL / SHOP_LOGO_URL (HTTPS wordmark only, legacy).
+ * Single centered header logo for customer emails (`/public/bbm-logo-wo.png`).
+ * URL from app base when set; otherwise CID-embedded file.
+ * Override: CUSTOMER_EMAIL_HEADER_LOGO_URL or CUSTOMER_EMAIL_LOGO_URL / SHOP_LOGO_URL (HTTPS).
  */
 export function getCustomerEmailBrandingAssets(): CustomerEmailBrandingAssets {
   const base = getAppUrl();
-  const wordmarkOverride =
-    process.env.CUSTOMER_EMAIL_WORDMARK_URL?.trim() ||
+  const logoOverride =
+    process.env.CUSTOMER_EMAIL_HEADER_LOGO_URL?.trim() ||
     process.env.CUSTOMER_EMAIL_LOGO_URL?.trim() ||
     process.env.SHOP_LOGO_URL?.trim();
-  const faviconOverride = process.env.CUSTOMER_EMAIL_FAVICON_URL?.trim();
 
-  const attachments: { filename: string; content: Buffer; contentId: string }[] = [];
-  let faviconSrc = "";
-  let wordmarkSrc = "";
-
-  if (faviconOverride?.startsWith("http")) {
-    faviconSrc = faviconOverride;
-  } else if (base) {
-    faviconSrc = `${base}/favicon-192x192.png`;
-  } else {
-    try {
-      const favPath = path.join(process.cwd(), "public", "favicon-192x192.png");
-      if (fs.existsSync(favPath)) {
-        faviconSrc = `cid:${CUSTOMER_EMAIL_FAVICON_CID}`;
-        attachments.push({
-          filename: "favicon-192x192.png",
-          content: fs.readFileSync(favPath),
-          contentId: CUSTOMER_EMAIL_FAVICON_CID,
-        });
-      }
-    } catch {
-      // ignore
-    }
+  if (logoOverride?.startsWith("http")) {
+    return { headerLogoSrc: logoOverride };
   }
 
-  if (wordmarkOverride?.startsWith("http")) {
-    wordmarkSrc = wordmarkOverride;
-  } else if (base) {
-    wordmarkSrc = `${base}/bike-ops-logo.png`;
-  } else {
-    try {
-      const wmPath = path.join(process.cwd(), "public", "bike-ops-logo.png");
-      if (fs.existsSync(wmPath)) {
-        wordmarkSrc = `cid:${CUSTOMER_EMAIL_WORDMARK_CID}`;
-        attachments.push({
-          filename: "bike-ops-logo.png",
-          content: fs.readFileSync(wmPath),
-          contentId: CUSTOMER_EMAIL_WORDMARK_CID,
-        });
-      }
-    } catch {
-      // ignore
-    }
+  if (base) {
+    return { headerLogoSrc: `${base}/${DEFAULT_HEADER_LOGO_FILE}` };
   }
 
-  return {
-    faviconSrc,
-    wordmarkSrc,
-    attachments: attachments.length > 0 ? attachments : undefined,
-  };
+  try {
+    const logoPath = path.join(process.cwd(), "public", DEFAULT_HEADER_LOGO_FILE);
+    if (fs.existsSync(logoPath)) {
+      return {
+        headerLogoSrc: `cid:${CUSTOMER_EMAIL_HEADER_LOGO_CID}`,
+        attachments: [
+          {
+            filename: DEFAULT_HEADER_LOGO_FILE,
+            content: fs.readFileSync(logoPath),
+            contentId: CUSTOMER_EMAIL_HEADER_LOGO_CID,
+          },
+        ],
+      };
+    }
+  } catch {
+    // ignore
+  }
+
+  return { headerLogoSrc: "" };
 }
 
 export function customerEmailBrandingAttachments(
@@ -143,24 +119,16 @@ function bikeOpsEmailShopSubtitle(): string | null {
   return shop;
 }
 
-function buildCustomerEmailHeaderBlock(faviconSrc: string, wordmarkSrc: string): string {
-  if (!faviconSrc && !wordmarkSrc) return "";
-  const srcAttr = (src: string) => (src.startsWith("cid:") ? src : escapeHtml(src));
-  const favTd =
-    faviconSrc !== ""
-      ? `<td style="padding:0 12px 0 0;vertical-align:middle;line-height:0">
-          <img src="${srcAttr(faviconSrc)}" width="96" height="96" alt="Bike Ops icon" style="display:block;border:0;width:96px;height:96px;max-width:96px;object-fit:contain" />
-        </td>`
-      : "";
-  const wmTd =
-    wordmarkSrc !== ""
-      ? `<td style="vertical-align:middle;line-height:0">
-          <img src="${srcAttr(wordmarkSrc)}" height="96" alt="Bike Ops — Bike repair shop management" style="display:block;border:0;height:96px;width:auto;max-width:380px" />
-        </td>`
-      : "";
-  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;border-collapse:collapse">
-  <tbody><tr>${favTd}${wmTd}</tr></tbody>
-</table>`;
+/** Header logo: height-led so wide wordmarks stay proportional (not full-card width). */
+const EMAIL_HEADER_LOGO_MAX_HEIGHT_PX = 64;
+const EMAIL_HEADER_LOGO_MAX_WIDTH_PX = 220;
+
+function buildCustomerEmailHeaderBlock(headerLogoSrc: string): string {
+  if (!headerLogoSrc) return "";
+  const src = headerLogoSrc.startsWith("cid:") ? headerLogoSrc : escapeHtml(headerLogoSrc);
+  const h = EMAIL_HEADER_LOGO_MAX_HEIGHT_PX;
+  const w = EMAIL_HEADER_LOGO_MAX_WIDTH_PX;
+  return `<img src="${src}" alt="Basement Bike Mechanic" height="${h}" style="display:block;margin:0 auto;border:0;height:${h}px;max-height:${h}px;width:auto;max-width:${w}px;object-fit:contain;outline:none;text-decoration:none" />`;
 }
 
 /**
@@ -168,15 +136,14 @@ function buildCustomerEmailHeaderBlock(faviconSrc: string, wordmarkSrc: string):
  */
 export function buildCustomerEmailHtml(options: {
   innerHtml: string;
-  faviconSrc: string;
-  wordmarkSrc: string;
+  headerLogoSrc: string;
   heading?: string;
 }): string {
-  const { innerHtml, faviconSrc, wordmarkSrc, heading } = options;
+  const { innerHtml, headerLogoSrc, heading } = options;
   const { font, bgPage, bgCard, bgFooter, border, text, heading: headColor, muted, accentBar } =
     BIKE_OPS_EMAIL;
 
-  const headerBlock = buildCustomerEmailHeaderBlock(faviconSrc, wordmarkSrc);
+  const headerBlock = buildCustomerEmailHeaderBlock(headerLogoSrc);
 
   const headingRow = heading
     ? `<tr>
@@ -309,8 +276,7 @@ export async function sendEmailTemplateTestEmail(
   const branding = getCustomerEmailBrandingAssets();
   const html = buildCustomerEmailHtml({
     innerHtml: mergedBody,
-    faviconSrc: branding.faviconSrc,
-    wordmarkSrc: branding.wordmarkSrc,
+    headerLogoSrc: branding.headerLogoSrc,
   });
   const attachments = customerEmailBrandingAttachments(branding);
 
@@ -335,8 +301,7 @@ export function buildCustomerEmailPreviewDocument(bodyHtml: string): string {
   const branding = getCustomerEmailBrandingAssets();
   return buildCustomerEmailHtml({
     innerHtml: merged,
-    faviconSrc: branding.faviconSrc,
-    wordmarkSrc: branding.wordmarkSrc,
+    headerLogoSrc: branding.headerLogoSrc,
   });
 }
 
@@ -402,8 +367,7 @@ export async function sendJobEmail(
   const branding = getCustomerEmailBrandingAssets();
   const html = buildCustomerEmailHtml({
     innerHtml: bodyHtml,
-    faviconSrc: branding.faviconSrc,
-    wordmarkSrc: branding.wordmarkSrc,
+    headerLogoSrc: branding.headerLogoSrc,
   });
   const attachments = customerEmailBrandingAttachments(branding);
 
@@ -571,8 +535,7 @@ export async function sendBookingDeclinedEmail(
   const branding = getCustomerEmailBrandingAssets();
   const html = buildCustomerEmailHtml({
     innerHtml: bodyHtml,
-    faviconSrc: branding.faviconSrc,
-    wordmarkSrc: branding.wordmarkSrc,
+    headerLogoSrc: branding.headerLogoSrc,
   });
   const attachments = customerEmailBrandingAttachments(branding);
 
@@ -749,8 +712,7 @@ ${buildCustomerEmailCtaButton(magicLinkUrl, "Sign in to chat")}
 `.trim();
   const html = buildCustomerEmailHtml({
     innerHtml,
-    faviconSrc: branding.faviconSrc,
-    wordmarkSrc: branding.wordmarkSrc,
+    headerLogoSrc: branding.headerLogoSrc,
     heading: `Chat with ${shopName}`,
   });
   const attachments = customerEmailBrandingAttachments(branding);
@@ -822,8 +784,7 @@ ${buildCustomerEmailCtaButton(chatUrl, "Open chat")}
 `.trim();
   const html = buildCustomerEmailHtml({
     innerHtml,
-    faviconSrc: branding.faviconSrc,
-    wordmarkSrc: branding.wordmarkSrc,
+    headerLogoSrc: branding.headerLogoSrc,
     heading: `Hi ${name}`,
   });
   const attachments = customerEmailBrandingAttachments(branding);
@@ -936,8 +897,7 @@ export async function sendPaymentReceiptEmail(
   const innerHtml = buildInvoiceInnerHtml(job, subtotal, paid, SHOP_NAME);
   const html = buildCustomerEmailHtml({
     innerHtml,
-    faviconSrc: branding.faviconSrc,
-    wordmarkSrc: branding.wordmarkSrc,
+    headerLogoSrc: branding.headerLogoSrc,
     heading: "Payment receipt",
   });
   const attachments = customerEmailBrandingAttachments(branding);

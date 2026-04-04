@@ -38,8 +38,7 @@ export async function GET(request: NextRequest) {
   const branding = getCustomerEmailBrandingAssets();
   const html = buildCustomerEmailHtml({
     innerHtml: "<p style=\"margin:0\">If you got this, Resend is working.</p>",
-    faviconSrc: branding.faviconSrc,
-    wordmarkSrc: branding.wordmarkSrc,
+    headerLogoSrc: branding.headerLogoSrc,
     heading: "BBM Services – Email test",
   });
   const attachments = customerEmailBrandingAttachments(branding);
