@@ -194,7 +194,13 @@ export async function PATCH(
           data: { waitingOnPartsAt: null },
         });
       }
-      if (data.stage === "WAITING_ON_PARTS" && existingJob.workingOnJobBikeId) {
+      /** Only when the job actually moves into this column — not idempotent WOP PATCHs (would re-set waiting after resume / unwait). */
+      if (
+        data.stage === "WAITING_ON_PARTS" &&
+        existingJob.stage !== "WAITING_ON_PARTS" &&
+        existingJob.workingOnJobBikeId &&
+        !data.unwaitForPartsJobBikeId
+      ) {
         await tx.jobBike.update({
           where: { id: existingJob.workingOnJobBikeId, jobId: id },
           data: { waitingOnPartsAt: new Date() },

@@ -194,6 +194,13 @@ function WrenchIcon({ className }: { className?: string }) {
   );
 }
 
+function shouldLeaveWaitingOnPartsColumn(job: Job, exceptBikeId: string): boolean {
+  if (job.stage !== "WAITING_ON_PARTS") return false;
+  return !(job.jobBikes ?? []).some(
+    (b) => b.id !== exceptBikeId && !!b.waitingOnPartsAt && !b.completedAt
+  );
+}
+
 function JobBikeSection({
   job,
   onJobUpdated,
@@ -244,10 +251,15 @@ function JobBikeSection({
     const nextId = job.workingOnJobBikeId === bikeId ? null : bikeId;
     setSavingWorkingOn(true);
     try {
+      const body: Record<string, unknown> = { workingOnJobBikeId: nextId };
+      if (nextId && shouldLeaveWaitingOnPartsColumn(job, nextId)) {
+        body.stage = "WORKING_ON";
+        body.notifyCustomer = false;
+      }
       const res = await fetch(`/api/jobs/${job.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workingOnJobBikeId: nextId }),
+        body: JSON.stringify(body),
       });
       if (res.ok) {
         const updatedJob = (await res.json()) as Job;
@@ -301,10 +313,18 @@ function JobBikeSection({
     if (!onJobUpdated || savingWaiting) return;
     setSavingWaiting(bikeId);
     try {
+      const body: Record<string, unknown> = {
+        unwaitForPartsJobBikeId: bikeId,
+        workingOnJobBikeId: bikeId,
+      };
+      if (shouldLeaveWaitingOnPartsColumn(job, bikeId)) {
+        body.stage = "WORKING_ON";
+        body.notifyCustomer = false;
+      }
       const res = await fetch(`/api/jobs/${job.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ unwaitForPartsJobBikeId: bikeId, workingOnJobBikeId: bikeId }),
+        body: JSON.stringify(body),
       });
       if (res.ok) {
         const updatedJob = (await res.json()) as Job;
@@ -319,10 +339,15 @@ function JobBikeSection({
     if (!onJobUpdated || savingWaiting) return;
     setSavingWaiting(bikeId);
     try {
+      const body: Record<string, unknown> = { unwaitForPartsJobBikeId: bikeId };
+      if (shouldLeaveWaitingOnPartsColumn(job, bikeId)) {
+        body.stage = "WORKING_ON";
+        body.notifyCustomer = false;
+      }
       const res = await fetch(`/api/jobs/${job.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ unwaitForPartsJobBikeId: bikeId }),
+        body: JSON.stringify(body),
       });
       if (res.ok) {
         const updatedJob = (await res.json()) as Job;
