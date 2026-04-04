@@ -79,7 +79,10 @@ export async function PATCH(
 
     const existingJob = await prisma.job.findUnique({
       where: { id },
-      include: { customer: true },
+      include: {
+        customer: true,
+        jobBikes: { select: { id: true, completedAt: true } },
+      },
     });
     if (!existingJob) {
       return NextResponse.json({ error: "Job not found" }, { status: 404 });
@@ -97,6 +100,24 @@ export async function PATCH(
     if (data.collectionAddress !== undefined) updateData.collectionAddress = data.collectionAddress;
     if (data.notes !== undefined) updateData.notes = data.notes;
     if (data.workingOnJobBikeId !== undefined) updateData.workingOnJobBikeId = data.workingOnJobBikeId;
+
+    /** When moving to Working on, pick the only open bike automatically; multiple bikes need an explicit tap in the job modal. */
+    let autoWorkingOnJobBikeId: string | null = null;
+    if (
+      data.stage === "WORKING_ON" &&
+      data.workingOnJobBikeId === undefined
+    ) {
+      const incomplete = (existingJob.jobBikes ?? []).filter((b) => !b.completedAt);
+      if (incomplete.length === 1) {
+        autoWorkingOnJobBikeId = incomplete[0].id;
+        updateData.workingOnJobBikeId = incomplete[0].id;
+      }
+    }
+
+    const workingOnBikeIdToClearWaiting: string | null =
+      data.workingOnJobBikeId !== undefined
+        ? data.workingOnJobBikeId
+        : autoWorkingOnJobBikeId;
 
     if (data.stage === "COMPLETED") {
       updateData.completedAt = new Date();
@@ -116,9 +137,9 @@ export async function PATCH(
         where: { id },
         data: updateData,
       });
-      if (data.workingOnJobBikeId) {
+      if (workingOnBikeIdToClearWaiting) {
         await tx.jobBike.update({
-          where: { id: data.workingOnJobBikeId, jobId: id },
+          where: { id: workingOnBikeIdToClearWaiting, jobId: id },
           data: { waitingOnPartsAt: null },
         });
       }

@@ -315,6 +315,24 @@ function JobBikeSection({
     }
   };
 
+  const handleClearWaitingOnPartsOnly = async (bikeId: string) => {
+    if (!onJobUpdated || savingWaiting) return;
+    setSavingWaiting(bikeId);
+    try {
+      const res = await fetch(`/api/jobs/${job.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ unwaitForPartsJobBikeId: bikeId }),
+      });
+      if (res.ok) {
+        const updatedJob = (await res.json()) as Job;
+        onJobUpdated(updatedJob);
+      }
+    } finally {
+      setSavingWaiting(null);
+    }
+  };
+
   return (
     <div>
       <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">
@@ -372,21 +390,52 @@ function JobBikeSection({
                     </span>
                   )}
                   {isWaitingOnParts && !isCompleted && (
-                    <span className="flex-shrink-0 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-red-700 bg-red-200 px-1.5 py-0.5 rounded-md whitespace-nowrap">
-                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20" aria-hidden>
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-                      </svg>
-                      Waiting on parts
-                    </span>
+                    canInteract ? (
+                      <button
+                        type="button"
+                        onClick={() => handleClearWaitingOnPartsOnly(b.id)}
+                        disabled={!!savingWaiting}
+                        className="flex-shrink-0 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-red-700 bg-red-200 px-1.5 py-0.5 rounded-md whitespace-nowrap hover:bg-red-300 transition-colors disabled:opacity-50"
+                        title="Remove waiting on parts if this was a mistake"
+                      >
+                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20" aria-hidden>
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                        </svg>
+                        Waiting on parts
+                      </button>
+                    ) : (
+                      <span className="flex-shrink-0 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-red-700 bg-red-200 px-1.5 py-0.5 rounded-md whitespace-nowrap">
+                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20" aria-hidden>
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                        </svg>
+                        Waiting on parts
+                      </span>
+                    )
                   )}
                   {isWorkingOn && !isCompleted && !isWaitingOnParts && (
-                    <span className="flex-shrink-0 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-amber-700 bg-amber-200 px-1.5 py-0.5 rounded-md whitespace-nowrap">
-                      <span className="relative flex h-2 w-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-600 opacity-75" />
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-600" />
+                    canInteract ? (
+                      <button
+                        type="button"
+                        onClick={() => handleToggleWorkingOn(b.id)}
+                        disabled={savingWorkingOn}
+                        className="flex-shrink-0 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-amber-700 bg-amber-200 px-1.5 py-0.5 rounded-md whitespace-nowrap hover:bg-amber-300 transition-colors disabled:opacity-50"
+                        title="Stop showing this bike as working on"
+                      >
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-600 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-600" />
+                        </span>
+                        Working on
+                      </button>
+                    ) : (
+                      <span className="flex-shrink-0 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-amber-700 bg-amber-200 px-1.5 py-0.5 rounded-md whitespace-nowrap">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-600 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-600" />
+                        </span>
+                        Working on
                       </span>
-                      Working on
-                    </span>
+                    )
                   )}
                 </div>
                 {subtitle && <p className="text-sm text-slate-500 truncate">{subtitle}</p>}
