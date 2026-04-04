@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
 import {
   buildCustomerEmailHtml,
-  customerEmailLogoAttachments,
-  getCustomerEmailLogoParts,
+  customerEmailBrandingAttachments,
+  getCustomerEmailBrandingAssets,
 } from "@/lib/email";
 import { getResendApiKey } from "@/lib/env";
 
@@ -35,13 +35,14 @@ export async function GET(request: NextRequest) {
 
   const from = process.env.FROM_EMAIL || "BBM Services <onboarding@resend.dev>";
 
-  const logo = getCustomerEmailLogoParts();
+  const branding = getCustomerEmailBrandingAssets();
   const html = buildCustomerEmailHtml({
     innerHtml: "<p style=\"margin:0\">If you got this, Resend is working.</p>",
-    logoSrc: logo.src,
+    faviconSrc: branding.faviconSrc,
+    wordmarkSrc: branding.wordmarkSrc,
     heading: "BBM Services – Email test",
   });
-  const attachments = customerEmailLogoAttachments(logo);
+  const attachments = customerEmailBrandingAttachments(branding);
 
   try {
     const { data, error } = await resend.emails.send({

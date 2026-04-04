@@ -14,6 +14,13 @@ interface EmailTemplate {
 const PREVIEW_IFRAME_CLASS =
   "w-full min-h-[min(70vh,720px)] h-[min(70vh,720px)] bg-white block border-0";
 
+const TEST_TO_STORAGE_KEY = "bikeops-email-templates-test-to";
+
+function isLikelyEmail(value: string): boolean {
+  const t = value.trim();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t);
+}
+
 export default function EmailTemplatesPage() {
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -23,6 +30,64 @@ export default function EmailTemplatesPage() {
   const [saving, setSaving] = useState(false);
   const [livePreviewHtml, setLivePreviewHtml] = useState("");
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [testToEmail, setTestToEmail] = useState("");
+  const [sendingTestSlug, setSendingTestSlug] = useState<string | null>(null);
+  const [testBanner, setTestBanner] = useState<{
+    variant: "ok" | "error";
+    text: string;
+  } | null>(null);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(TEST_TO_STORAGE_KEY);
+      if (saved) setTestToEmail(saved);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const persistTestToEmail = () => {
+    try {
+      const t = testToEmail.trim();
+      if (t) localStorage.setItem(TEST_TO_STORAGE_KEY, t);
+    } catch {
+      // ignore
+    }
+  };
+
+  const sendTestEmail = async (slug: string) => {
+    const to = testToEmail.trim();
+    if (!isLikelyEmail(to)) {
+      setTestBanner({
+        variant: "error",
+        text: "Enter a valid email in “Send test emails to” above.",
+      });
+      return;
+    }
+    setTestBanner(null);
+    setSendingTestSlug(slug);
+    try {
+      const res = await fetch("/api/email-templates/test-send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug, to }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setTestBanner({
+          variant: "error",
+          text: data.error ?? "Could not send test email.",
+        });
+        return;
+      }
+      setTestBanner({
+        variant: "ok",
+        text: `Test email sent to ${to}. The subject includes “[test]”. Check inbox and spam.`,
+      });
+    } finally {
+      setSendingTestSlug(null);
+    }
+  };
 
   useEffect(() => {
     fetch("/api/email-templates")
@@ -114,6 +179,42 @@ export default function EmailTemplatesPage() {
         sample names and a demo status link). The stored template is only the message body; the shell is
         added automatically when emails send.
       </p>
+      <div className="mb-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <label
+          htmlFor="email-templates-test-to"
+          className="block text-sm font-medium text-slate-800 mb-1"
+        >
+          Send test emails to
+        </label>
+        <input
+          id="email-templates-test-to"
+          type="email"
+          autoComplete="email"
+          placeholder="you@example.com"
+          value={testToEmail}
+          onChange={(e) => setTestToEmail(e.target.value)}
+          onBlur={persistTestToEmail}
+          className="w-full max-w-md px-3 py-2 text-sm border border-slate-300 rounded-lg"
+        />
+        <p className="mt-2 text-xs text-slate-500">
+          Saved in this browser. Each template’s <strong>Send test email</strong> uses the saved template
+          from the database (save your edits first). Sample merge data matches the on-page preview.
+        </p>
+      </div>
+
+      {testBanner && (
+        <div
+          className={`mb-6 rounded-lg px-4 py-3 text-sm ${
+            testBanner.variant === "ok"
+              ? "bg-emerald-50 text-emerald-900 border border-emerald-200"
+              : "bg-red-50 text-red-900 border border-red-200"
+          }`}
+          role="status"
+        >
+          {testBanner.text}
+        </div>
+      )}
+
       <p className="text-slate-600 mb-6 break-words text-sm">
         Merge fields:{" "}
         <code className="bg-slate-100 px-1 rounded">{`{{customerName}}`}</code>,{" "}
@@ -145,15 +246,32 @@ export default function EmailTemplatesPage() {
                     </p>
                   )}
                 </div>
-                <div className="flex shrink-0 gap-2">
+                <div className="flex shrink-0 flex-wrap gap-2">
                   {!isEditing ? (
-                    <button
-                      type="button"
-                      onClick={() => startEdit(t)}
-                      className="text-sm px-4 py-2 rounded-lg bg-indigo-600 text-white font-medium hover:bg-indigo-700"
-                    >
-                      Edit template
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => sendTestEmail(t.slug)}
+                        disabled={
+                          !isLikelyEmail(testToEmail) || sendingTestSlug === t.slug
+                        }
+                        title={
+                          !isLikelyEmail(testToEmail)
+                            ? "Add a valid email above"
+                            : "Sends the saved template with sample data and full layout"
+                        }
+                        className="text-sm px-4 py-2 rounded-lg border border-slate-300 bg-white text-slate-800 font-medium hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {sendingTestSlug === t.slug ? "Sending…" : "Send test email"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => startEdit(t)}
+                        className="text-sm px-4 py-2 rounded-lg bg-indigo-600 text-white font-medium hover:bg-indigo-700"
+                      >
+                        Edit template
+                      </button>
+                    </>
                   ) : (
                     <>
                       <button

@@ -16,44 +16,84 @@ function getFromEmail(): string {
   return `BBM Services <${email}>`;
 }
 
-const CUSTOMER_EMAIL_LOGO_CID = "customer-email-logo";
+const CUSTOMER_EMAIL_FAVICON_CID = "customer-email-favicon";
+const CUSTOMER_EMAIL_WORDMARK_CID = "customer-email-wordmark";
 
-/** Logo for customer-facing emails: favicon-192x192.png (URL when app URL is set, else CID attachment). */
-export function getCustomerEmailLogoParts(): {
-  src: string;
-  attachment?: { filename: string; content: Buffer; contentId: string };
-} {
-  const explicit =
-    process.env.CUSTOMER_EMAIL_LOGO_URL?.trim() || process.env.SHOP_LOGO_URL?.trim();
-  if (explicit?.startsWith("http")) {
-    return { src: explicit };
-  }
-  const base = getAppUrl();
-  if (base) {
-    return { src: `${base}/favicon-192x192.png` };
-  }
-  try {
-    const logoPath = path.join(process.cwd(), "public", "favicon-192x192.png");
-    if (fs.existsSync(logoPath)) {
-      return {
-        src: `cid:${CUSTOMER_EMAIL_LOGO_CID}`,
-        attachment: {
-          filename: "favicon-192x192.png",
-          content: fs.readFileSync(logoPath),
-          contentId: CUSTOMER_EMAIL_LOGO_CID,
-        },
-      };
-    }
-  } catch {
-    // ignore
-  }
-  return { src: "" };
+export interface CustomerEmailBrandingAssets {
+  faviconSrc: string;
+  wordmarkSrc: string;
+  attachments?: { filename: string; content: Buffer; contentId: string }[];
 }
 
-export function customerEmailLogoAttachments(
-  logo: ReturnType<typeof getCustomerEmailLogoParts>
+/**
+ * Favicon (shown at 96px) + wordmark for customer emails.
+ * URLs from NEXT_PUBLIC_APP_URL when set; otherwise CID-embedded files from /public.
+ * Optional overrides: CUSTOMER_EMAIL_FAVICON_URL, CUSTOMER_EMAIL_WORDMARK_URL, or
+ * CUSTOMER_EMAIL_LOGO_URL / SHOP_LOGO_URL (HTTPS wordmark only, legacy).
+ */
+export function getCustomerEmailBrandingAssets(): CustomerEmailBrandingAssets {
+  const base = getAppUrl();
+  const wordmarkOverride =
+    process.env.CUSTOMER_EMAIL_WORDMARK_URL?.trim() ||
+    process.env.CUSTOMER_EMAIL_LOGO_URL?.trim() ||
+    process.env.SHOP_LOGO_URL?.trim();
+  const faviconOverride = process.env.CUSTOMER_EMAIL_FAVICON_URL?.trim();
+
+  const attachments: { filename: string; content: Buffer; contentId: string }[] = [];
+  let faviconSrc = "";
+  let wordmarkSrc = "";
+
+  if (faviconOverride?.startsWith("http")) {
+    faviconSrc = faviconOverride;
+  } else if (base) {
+    faviconSrc = `${base}/favicon-192x192.png`;
+  } else {
+    try {
+      const favPath = path.join(process.cwd(), "public", "favicon-192x192.png");
+      if (fs.existsSync(favPath)) {
+        faviconSrc = `cid:${CUSTOMER_EMAIL_FAVICON_CID}`;
+        attachments.push({
+          filename: "favicon-192x192.png",
+          content: fs.readFileSync(favPath),
+          contentId: CUSTOMER_EMAIL_FAVICON_CID,
+        });
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  if (wordmarkOverride?.startsWith("http")) {
+    wordmarkSrc = wordmarkOverride;
+  } else if (base) {
+    wordmarkSrc = `${base}/bike-ops-logo.png`;
+  } else {
+    try {
+      const wmPath = path.join(process.cwd(), "public", "bike-ops-logo.png");
+      if (fs.existsSync(wmPath)) {
+        wordmarkSrc = `cid:${CUSTOMER_EMAIL_WORDMARK_CID}`;
+        attachments.push({
+          filename: "bike-ops-logo.png",
+          content: fs.readFileSync(wmPath),
+          contentId: CUSTOMER_EMAIL_WORDMARK_CID,
+        });
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  return {
+    faviconSrc,
+    wordmarkSrc,
+    attachments: attachments.length > 0 ? attachments : undefined,
+  };
+}
+
+export function customerEmailBrandingAttachments(
+  assets: CustomerEmailBrandingAssets
 ): { filename: string; content: Buffer; contentId: string }[] | undefined {
-  return logo.attachment ? [logo.attachment] : undefined;
+  return assets.attachments;
 }
 
 export function mergeTemplateVariables(
@@ -93,11 +133,34 @@ const BIKE_OPS_EMAIL = {
   accentBar: "#4f46e5",
 } as const;
 
+const CUSTOMER_EMAIL_FOOTER_BRAND = "Basement Bike Mechanic";
+
 function bikeOpsEmailShopSubtitle(): string | null {
   const shop = process.env.SHOP_NAME?.trim();
   if (!shop) return null;
-  if (shop.replace(/\s+/g, " ").toLowerCase() === "bike ops") return null;
+  const norm = shop.replace(/\s+/g, " ").toLowerCase();
+  if (norm === "bike ops" || norm === "basement bike mechanic") return null;
   return shop;
+}
+
+function buildCustomerEmailHeaderBlock(faviconSrc: string, wordmarkSrc: string): string {
+  if (!faviconSrc && !wordmarkSrc) return "";
+  const srcAttr = (src: string) => (src.startsWith("cid:") ? src : escapeHtml(src));
+  const favTd =
+    faviconSrc !== ""
+      ? `<td style="padding:0 12px 0 0;vertical-align:middle;line-height:0">
+          <img src="${srcAttr(faviconSrc)}" width="96" height="96" alt="Bike Ops icon" style="display:block;border:0;width:96px;height:96px;max-width:96px;object-fit:contain" />
+        </td>`
+      : "";
+  const wmTd =
+    wordmarkSrc !== ""
+      ? `<td style="vertical-align:middle;line-height:0">
+          <img src="${srcAttr(wordmarkSrc)}" height="96" alt="Bike Ops — Bike repair shop management" style="display:block;border:0;height:96px;width:auto;max-width:380px" />
+        </td>`
+      : "";
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;border-collapse:collapse">
+  <tbody><tr>${favTd}${wmTd}</tr></tbody>
+</table>`;
 }
 
 /**
@@ -105,16 +168,15 @@ function bikeOpsEmailShopSubtitle(): string | null {
  */
 export function buildCustomerEmailHtml(options: {
   innerHtml: string;
-  logoSrc: string;
+  faviconSrc: string;
+  wordmarkSrc: string;
   heading?: string;
 }): string {
-  const { innerHtml, logoSrc, heading } = options;
+  const { innerHtml, faviconSrc, wordmarkSrc, heading } = options;
   const { font, bgPage, bgCard, bgFooter, border, text, heading: headColor, muted, accentBar } =
     BIKE_OPS_EMAIL;
 
-  const logoImg = logoSrc
-    ? `<img src="${logoSrc.startsWith("cid:") ? logoSrc : escapeHtml(logoSrc)}" border="0" alt="Bike Ops" width="192" style="max-width:192px;height:auto;display:block;margin:0 auto" />`
-    : "";
+  const headerBlock = buildCustomerEmailHeaderBlock(faviconSrc, wordmarkSrc);
 
   const headingRow = heading
     ? `<tr>
@@ -136,7 +198,7 @@ export function buildCustomerEmailHtml(options: {
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="color-scheme" content="light" />
   <meta name="supported-color-schemes" content="light" />
-  <title>Bike Ops</title>
+  <title>${escapeHtml(CUSTOMER_EMAIL_FOOTER_BRAND)}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&amp;display=swap" rel="stylesheet" />
@@ -150,7 +212,7 @@ export function buildCustomerEmailHtml(options: {
           <td style="height:4px;line-height:4px;font-size:0;background-color:${accentBar};mso-line-height-rule:exactly">&nbsp;</td>
         </tr>
         <tr>
-          <td align="center" style="padding:28px 40px 12px">${logoImg}</td>
+          <td align="center" style="padding:28px 40px 12px">${headerBlock}</td>
         </tr>
         ${headingRow}
         <tr>
@@ -160,7 +222,7 @@ export function buildCustomerEmailHtml(options: {
         </tr>
         <tr>
           <td style="padding:24px 40px 28px;background-color:${bgFooter};border-top:1px solid ${border}">
-            <p style="margin:0;font-family:${font};font-size:14px;line-height:1.5;font-weight:600;color:${headColor}">Bike Ops</p>
+            <p style="margin:0;font-family:${font};font-size:14px;line-height:1.5;font-weight:600;color:${headColor}">${escapeHtml(CUSTOMER_EMAIL_FOOTER_BRAND)}</p>
             ${footerSecondary}
             <p style="margin:10px 0 0;font-family:${font};font-size:12px;line-height:1.5;color:${muted}">Thanks for choosing us for your bike care.</p>
           </td>
@@ -194,12 +256,12 @@ export function buildCustomerEmailCtaButton(href: string, label: string): string
 </table>`;
 }
 
-/** Sample merge values for staff preview (Email Templates settings, etc.). */
-export function mergeEmailTemplateWithPreviewVars(bodyHtml: string): string {
+/** Sample merge values for staff preview and test sends (Email Templates settings). */
+export function getEmailTemplatePreviewVars(): Record<string, string> {
   const base = getAppUrl();
   const statusUrl = base ? `${base}/status/preview` : "https://example.com/status/preview";
-  const shopName = process.env.SHOP_NAME?.trim() || "Your shop";
-  const vars: Record<string, string> = {
+  const shopName = process.env.SHOP_NAME?.trim() || "Basement Bike Mechanic";
+  return {
     customerName: "Alex Rider",
     bikeMake: "Trek",
     bikeModel: "Domane SL 5",
@@ -210,14 +272,72 @@ export function mergeEmailTemplateWithPreviewVars(bodyHtml: string): string {
     rejectionReason:
       "We are fully booked for your requested dates. We hope to serve you another time.",
   };
-  return mergeTemplateVariables(bodyHtml, vars);
+}
+
+export function mergeEmailTemplateWithPreviewVars(bodyHtml: string): string {
+  return mergeTemplateVariables(bodyHtml, getEmailTemplatePreviewVars());
+}
+
+/**
+ * Send one customer-style email using a DB template slug + preview merge data (for staff testing).
+ */
+export async function sendEmailTemplateTestEmail(
+  slug: string,
+  recipient: string
+): Promise<{ ok: boolean; error?: string }> {
+  const resend = getResend();
+  if (!resend) {
+    return { ok: false, error: "Email not configured (set RESEND_API_KEY)" };
+  }
+
+  const trimmedTo = recipient.trim();
+  if (!trimmedTo || !trimmedTo.includes("@")) {
+    return { ok: false, error: "Invalid email address" };
+  }
+
+  const { prisma } = await import("./db");
+  const template = await prisma.emailTemplate.findUnique({
+    where: { slug: slug.trim() },
+  });
+  if (!template) {
+    return { ok: false, error: "Template not found" };
+  }
+
+  const vars = getEmailTemplatePreviewVars();
+  const subject = `${mergeTemplateVariables(template.subject, vars)} [test]`;
+  const mergedBody = mergeTemplateVariables(template.bodyHtml, vars);
+  const branding = getCustomerEmailBrandingAssets();
+  const html = buildCustomerEmailHtml({
+    innerHtml: mergedBody,
+    faviconSrc: branding.faviconSrc,
+    wordmarkSrc: branding.wordmarkSrc,
+  });
+  const attachments = customerEmailBrandingAttachments(branding);
+
+  try {
+    const { error } = await resend.emails.send({
+      from: getFromEmail(),
+      to: trimmedTo,
+      subject,
+      html,
+      ...(attachments && { attachments }),
+    });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Unknown error" };
+  }
 }
 
 /** Full customer email HTML as sent (wrapper + logo + sample variable merge). */
 export function buildCustomerEmailPreviewDocument(bodyHtml: string): string {
   const merged = mergeEmailTemplateWithPreviewVars(bodyHtml);
-  const logo = getCustomerEmailLogoParts();
-  return buildCustomerEmailHtml({ innerHtml: merged, logoSrc: logo.src });
+  const branding = getCustomerEmailBrandingAssets();
+  return buildCustomerEmailHtml({
+    innerHtml: merged,
+    faviconSrc: branding.faviconSrc,
+    wordmarkSrc: branding.wordmarkSrc,
+  });
 }
 
 interface JobForEmail {
@@ -279,9 +399,13 @@ export async function sendJobEmail(
 
   const subject = mergeTemplateVariables(template.subject, vars);
   const bodyHtml = mergeTemplateVariables(template.bodyHtml, vars);
-  const logo = getCustomerEmailLogoParts();
-  const html = buildCustomerEmailHtml({ innerHtml: bodyHtml, logoSrc: logo.src });
-  const attachments = customerEmailLogoAttachments(logo);
+  const branding = getCustomerEmailBrandingAssets();
+  const html = buildCustomerEmailHtml({
+    innerHtml: bodyHtml,
+    faviconSrc: branding.faviconSrc,
+    wordmarkSrc: branding.wordmarkSrc,
+  });
+  const attachments = customerEmailBrandingAttachments(branding);
 
   try {
     const { error } = await resend.emails.send({
@@ -444,9 +568,13 @@ export async function sendBookingDeclinedEmail(
 
   const subject = mergeTemplateVariables(template.subject, vars);
   const bodyHtml = mergeTemplateVariables(template.bodyHtml, vars);
-  const logo = getCustomerEmailLogoParts();
-  const html = buildCustomerEmailHtml({ innerHtml: bodyHtml, logoSrc: logo.src });
-  const attachments = customerEmailLogoAttachments(logo);
+  const branding = getCustomerEmailBrandingAssets();
+  const html = buildCustomerEmailHtml({
+    innerHtml: bodyHtml,
+    faviconSrc: branding.faviconSrc,
+    wordmarkSrc: branding.wordmarkSrc,
+  });
+  const attachments = customerEmailBrandingAttachments(branding);
 
   try {
     const { error } = await resend.emails.send({
@@ -612,7 +740,7 @@ export async function sendChatMagicLinkEmail(
 
   const shopName = SHOP_NAME;
   const subject = `Sign in to chat with ${shopName}`;
-  const logo = getCustomerEmailLogoParts();
+  const branding = getCustomerEmailBrandingAssets();
   const innerHtml = `
 <p style="margin:0 0 24px;color:#475569">Click the button below to sign in and start chatting with us. This link expires in 15 minutes.</p>
 ${buildCustomerEmailCtaButton(magicLinkUrl, "Sign in to chat")}
@@ -621,10 +749,11 @@ ${buildCustomerEmailCtaButton(magicLinkUrl, "Sign in to chat")}
 `.trim();
   const html = buildCustomerEmailHtml({
     innerHtml,
-    logoSrc: logo.src,
+    faviconSrc: branding.faviconSrc,
+    wordmarkSrc: branding.wordmarkSrc,
     heading: `Chat with ${shopName}`,
   });
-  const attachments = customerEmailLogoAttachments(logo);
+  const attachments = customerEmailBrandingAttachments(branding);
 
   try {
     const { error } = await resend.emails.send({
@@ -684,7 +813,7 @@ export async function sendChatCustomerReplyReminder(
     ? `Hi ${name},\n\nWe sent you a message in chat at least ${reminderMinutes} minute${reminderMinutes === 1 ? "" : "s"} ago. Here is the latest message:\n\n${plainLatest}\n\nOpen chat: ${chatUrl}\n\nIf you already replied, you can ignore this email.`
     : `Hi ${name},\n\nWe sent you a message in chat at least ${reminderMinutes} minute${reminderMinutes === 1 ? "" : "s"} ago. When you have a moment, please open the conversation and reply.\n\n${chatUrl}\n\nIf you already replied, you can ignore this email.`;
 
-  const logo = getCustomerEmailLogoParts();
+  const branding = getCustomerEmailBrandingAssets();
   const innerHtml = `
 ${intro}
 ${latestMessageHtml}
@@ -693,10 +822,11 @@ ${buildCustomerEmailCtaButton(chatUrl, "Open chat")}
 `.trim();
   const html = buildCustomerEmailHtml({
     innerHtml,
-    logoSrc: logo.src,
+    faviconSrc: branding.faviconSrc,
+    wordmarkSrc: branding.wordmarkSrc,
     heading: `Hi ${name}`,
   });
-  const attachments = customerEmailLogoAttachments(logo);
+  const attachments = customerEmailBrandingAttachments(branding);
 
   try {
     const { error } = await resend.emails.send({
@@ -802,14 +932,15 @@ export async function sendPaymentReceiptEmail(
 
   const subject = `Payment receipt – ${job.bikeMake} ${job.bikeModel} – ${SHOP_NAME}`;
 
-  const logo = getCustomerEmailLogoParts();
+  const branding = getCustomerEmailBrandingAssets();
   const innerHtml = buildInvoiceInnerHtml(job, subtotal, paid, SHOP_NAME);
   const html = buildCustomerEmailHtml({
     innerHtml,
-    logoSrc: logo.src,
+    faviconSrc: branding.faviconSrc,
+    wordmarkSrc: branding.wordmarkSrc,
     heading: "Payment receipt",
   });
-  const attachments = customerEmailLogoAttachments(logo);
+  const attachments = customerEmailBrandingAttachments(branding);
 
   try {
     const { data, error } = await resend.emails.send({
