@@ -76,17 +76,19 @@ export function KanbanBoard() {
           body: JSON.stringify({ stage: "BOOKED_IN" }),
         });
         if (res.ok) {
+          const updated = await res.json();
           setJobs((prev) =>
-            prev.map((j) =>
-              j.id === jobId ? { ...j, stage: "BOOKED_IN" as Stage } : j
-            )
+            prev.map((j) => (j.id === jobId ? updated : j))
           );
+          if (selectedJob?.id === jobId) {
+            setSelectedJob(updated);
+          }
         }
       } catch (e) {
         console.error("Failed to accept job", e);
       }
     },
-    []
+    [selectedJob?.id]
   );
 
   const handleRejectClick = useCallback((job: Job) => {
@@ -159,17 +161,19 @@ export function KanbanBoard() {
           body: JSON.stringify({ stage: newStage }),
         });
         if (res.ok) {
+          const updated = await res.json();
           setJobs((prev) =>
-            prev.map((j) =>
-              j.id === jobId ? { ...j, stage: newStage } : j
-            )
+            prev.map((j) => (j.id === jobId ? updated : j))
           );
+          if (selectedJob?.id === jobId) {
+            setSelectedJob(updated);
+          }
         }
       } catch (e) {
         console.error("Failed to update job", e);
       }
     },
-    [jobs]
+    [jobs, selectedJob?.id]
   );
 
   const handleDragEnd = async (event: DragEndEvent) => {

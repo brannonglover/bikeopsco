@@ -172,6 +172,16 @@ export async function PATCH(
         });
         await tx.job.update({ where: { id }, data: { workingOnJobBikeId: null } });
       }
+      if (data.stage === "WORKING_ON") {
+        await tx.jobBike.updateMany({
+          where: {
+            jobId: id,
+            completedAt: null,
+            waitingOnPartsAt: { not: null },
+          },
+          data: { waitingOnPartsAt: null },
+        });
+      }
       await syncCollectionJobService(tx, id);
       const result = await tx.job.findUnique({
         where: { id },

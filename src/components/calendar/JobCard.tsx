@@ -102,6 +102,31 @@ export function JobCardContent({
       <h3 className="font-semibold text-slate-900">
         {getJobBikeDisplayTitle(job)}
       </h3>
+      {(() => {
+        if (
+          job.stage === "WORKING_ON" ||
+          job.stage === "COMPLETED" ||
+          job.stage === "CANCELLED"
+        ) {
+          return null;
+        }
+        const hasWaitingBike = (job.jobBikes ?? []).some(
+          (b) => b.waitingOnPartsAt && !b.completedAt
+        );
+        if (job.stage !== "WAITING_ON_PARTS" && !hasWaitingBike) return null;
+        return (
+          <p className="flex items-center gap-1 text-[11px] font-semibold text-red-700 mt-0.5">
+            <svg className="w-3 h-3 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+              <path
+                fillRule="evenodd"
+                d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z"
+                clipRule="evenodd"
+              />
+            </svg>
+            Waiting on parts
+          </p>
+        );
+      })()}
       {job.workingOnJobBikeId && (() => {
         const activeBike = (job.jobBikes ?? []).find((b) => b.id === job.workingOnJobBikeId);
         if (!activeBike) return null;
