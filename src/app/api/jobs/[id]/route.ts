@@ -116,6 +116,12 @@ export async function PATCH(
         where: { id },
         data: updateData,
       });
+      if (data.workingOnJobBikeId) {
+        await tx.jobBike.update({
+          where: { id: data.workingOnJobBikeId, jobId: id },
+          data: { waitingOnPartsAt: null },
+        });
+      }
       if (data.bikes !== undefined) {
         await tx.jobBike.deleteMany({ where: { jobId: id } });
         const bikes =

@@ -334,6 +334,7 @@ function JobBikeSection({
           const isWaitingOnParts =
             !!b.waitingOnPartsAt &&
             !isCompleted &&
+            job.workingOnJobBikeId !== b.id &&
             job.stage !== "WORKING_ON";
           const canInteract = onJobUpdated && b.id !== "legacy";
 
@@ -982,20 +983,18 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
     setJob(jobProp);
   }, [jobProp]);
 
-  // Fetch fresh job data when modal opens so we get bike images from linked Bike records
+  // Fetch fresh job when opening or when the job row changes (abort stale responses so an old GET cannot overwrite a board drag / PATCH)
   useEffect(() => {
     if (!isOpen || !jobProp?.id) return;
-    let cancelled = false;
-    fetch(`/api/jobs/${jobProp.id}`)
+    const ac = new AbortController();
+    fetch(`/api/jobs/${jobProp.id}`, { signal: ac.signal })
       .then((res) => (res.ok ? res.json() : null))
       .then((fetched) => {
-        if (!cancelled && fetched) setJob(fetched);
+        if (fetched) setJob(fetched);
       })
       .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [isOpen, jobProp?.id]);
+    return () => ac.abort();
+  }, [isOpen, jobProp?.id, jobProp?.updatedAt]);
 
   const handleCancelJobClick = () => {
     if (!job || job.stage === "CANCELLED") return;
