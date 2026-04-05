@@ -8,14 +8,14 @@ import type { Job, Stage } from "@/lib/types";
 type JobStageChangeHandler = (jobId: string, stage: Stage) => void;
 
 const STAGE_COLORS: Record<Stage, string> = {
-  PENDING_APPROVAL: "bg-amber-600",
-  BOOKED_IN: "bg-slate-500",
-  RECEIVED: "bg-slate-600",
-  WORKING_ON: "bg-amber-500",
-  WAITING_ON_PARTS: "bg-amber-400",
-  BIKE_READY: "bg-emerald-500",
-  COMPLETED: "bg-indigo-500",
-  CANCELLED: "bg-red-500",
+  PENDING_APPROVAL: "bg-amber-600 dark:bg-amber-700",
+  BOOKED_IN: "bg-slate-500 dark:bg-slate-600",
+  RECEIVED: "bg-slate-600 dark:bg-slate-700",
+  WORKING_ON: "bg-amber-500 dark:bg-amber-600",
+  WAITING_ON_PARTS: "bg-amber-400 dark:bg-amber-500",
+  BIKE_READY: "bg-emerald-500 dark:bg-emerald-600",
+  COMPLETED: "bg-indigo-500 dark:bg-indigo-600",
+  CANCELLED: "bg-red-500 dark:bg-red-600",
 };
 
 const STAGE_LABELS: Record<Stage, string> = {
