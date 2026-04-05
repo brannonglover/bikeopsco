@@ -18,15 +18,40 @@
     --ring: #6366f1;
     --primary: #4f46e5;
     --primary-foreground: #ffffff;
+    --surface: #ffffff;
+    --surface-border: #e2e8f0;
+    --surface-border-subtle: #f1f5f9;
+    --text-heading: #1e293b;
+    --text-secondary: #64748b;
+    --text-tertiary: #475569;
+    --text-muted: #94a3b8;
+    --input-bg: #ffffff;
+    --input-border: #cbd5e1;
+    --subtle-bg: #f1f5f9;
+    --icon: #64748b;
+    --icon-muted: #cbd5e1;
   }
 
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --background: #0f172a;
-      --foreground: #f1f5f9;
-      --muted: #94a3b8;
-      --border: #334155;
-    }
+  .dark {
+    --background: #0f172a;
+    --foreground: #f8fafc;
+    --muted: #94a3b8;
+    --border: #334155;
+    --ring: #818cf8;
+    --primary: #818cf8;
+    --primary-foreground: #0f172a;
+    --surface: #1e293b;
+    --surface-border: #334155;
+    --surface-border-subtle: #334155;
+    --text-heading: #e2e8f0;
+    --text-secondary: #94a3b8;
+    --text-tertiary: #cbd5e1;
+    --text-muted: #64748b;
+    --input-bg: #334155;
+    --input-border: #475569;
+    --subtle-bg: #334155;
+    --icon: #94a3b8;
+    --icon-muted: #475569;
   }
 
   body {
@@ -78,23 +103,23 @@
     min-width: 0;
     max-width: 100%;
     border-radius: 0.75rem;
-    border: 1px solid #e2e8f0;
-    background-color: #ffffff;
+    border: 1px solid var(--input-border);
+    background-color: var(--input-bg);
     padding: 0.5rem 1rem;
     font-size: 1rem;
-    color: #0f172a;
+    color: var(--foreground);
     transition: border-color 0.15s, box-shadow 0.15s;
     box-sizing: border-box;
   }
   .input-book::placeholder {
-    color: #94a3b8;
+    color: var(--text-muted);
   }
   .input-book:hover {
-    border-color: #cbd5e1;
+    border-color: var(--border);
   }
   .input-book:focus {
     outline: none;
-    border-color: #94a3b8;
+    border-color: var(--muted);
     box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.15);
   }
   textarea.input-book {
@@ -105,6 +130,129 @@
 
 /* Clean, minimal background */
 .bg-mesh {
-  background-color: #fafafa;
-  background-image: linear-gradient(to bottom, #ffffff 0%, #f8fafc 100%);
+  background-color: var(--background);
+  background-image: linear-gradient(to bottom, var(--surface) 0%, var(--background) 100%);
+}
+
+.dark .bg-mesh {
+  background-color: var(--background);
+  background-image: none;
+}
+
+/*
+ * Global dark-mode overrides for common Tailwind utilities.
+ * html.dark .class has higher specificity than a bare utility,
+ * so these transparently convert the light palette across the whole app.
+ */
+html.dark .bg-white,
+html.dark .bg-white\/95 {
+  background-color: var(--surface);
+}
+html.dark .bg-white\/60 {
+  background-color: rgba(30, 41, 59, 0.6);
+}
+html.dark .bg-white\/20 {
+  background-color: rgba(30, 41, 59, 0.2);
+}
+html.dark .bg-white\/15 {
+  background-color: rgba(30, 41, 59, 0.15);
+}
+html.dark .bg-slate-50,
+html.dark .bg-slate-50\/90 {
+  background-color: var(--background);
+}
+html.dark .bg-slate-100 {
+  background-color: var(--subtle-bg);
+}
+
+/* Text overrides */
+html.dark .text-slate-900 {
+  color: var(--foreground);
+}
+html.dark .text-slate-800 {
+  color: var(--text-heading);
+}
+html.dark .text-slate-700 {
+  color: var(--text-tertiary);
+}
+html.dark .text-slate-600 {
+  color: var(--text-tertiary);
+}
+html.dark .text-slate-500 {
+  color: var(--text-secondary);
+}
+html.dark .text-slate-400 {
+  color: var(--text-muted);
+}
+
+/* Border overrides */
+html.dark .border-slate-200,
+html.dark .border-slate-200\/80,
+html.dark .border-slate-100 {
+  border-color: var(--surface-border);
+}
+html.dark .border-slate-300 {
+  border-color: var(--input-border);
+}
+
+/* Ring / outline overrides */
+html.dark .ring-slate-200 {
+  --tw-ring-color: var(--surface-border);
+}
+
+/* Divide overrides */
+html.dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--surface-border);
+}
+html.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--surface-border-subtle);
+}
+
+/* Placeholder overrides */
+html.dark .placeholder-slate-400::placeholder,
+html.dark .placeholder\:text-slate-400::placeholder {
+  color: var(--text-muted);
+}
+
+/* Hover state overrides */
+html.dark .hover\:bg-slate-50:hover {
+  background-color: var(--subtle-bg);
+}
+html.dark .hover\:bg-slate-100:hover {
+  background-color: var(--subtle-bg);
+}
+html.dark .hover\:text-slate-700:hover,
+html.dark .hover\:text-slate-800:hover,
+html.dark .hover\:text-slate-900:hover {
+  color: var(--foreground);
+}
+
+/* Focus ring overrides */
+html.dark .focus\:ring-slate-200:focus {
+  --tw-ring-color: var(--surface-border);
+}
+html.dark .focus\:border-slate-300:focus {
+  border-color: var(--input-border);
+}
+
+/* Gradient overrides */
+html.dark .from-slate-50\/90 {
+  --tw-gradient-from: rgba(15, 23, 42, 0.9);
+}
+html.dark .to-white {
+  --tw-gradient-to: var(--surface);
+}
+
+/* Shadow softening in dark mode */
+html.dark .shadow-soft {
+  box-shadow: 0 2px 15px -3px rgba(0, 0, 0, 0.3), 0 10px 20px -2px rgba(0, 0, 0, 0.2);
+}
+html.dark .shadow-soft-lg {
+  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.4), 0 2px 10px -2px rgba(0, 0, 0, 0.2);
+}
+html.dark .shadow-lg {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -4px rgba(0, 0, 0, 0.2);
+}
+html.dark .shadow-xl {
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.2);
 }

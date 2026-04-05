@@ -1,6 +1,7 @@
 import { Plus_Jakarta_Sans } from "next/font/google";
 import { AppShell } from "@/components/AppShell";
 import { AuthProvider } from "@/components/AuthProvider";
+import { ThemeProvider } from "@/contexts/ThemeContext";
 import "./globals.css";
 
 const jakarta = Plus_Jakarta_Sans({
@@ -39,11 +40,20 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={jakarta.variable}>
-      <body className="antialiased bg-mesh text-slate-800 min-h-screen font-sans flex">
-        <AuthProvider>
-          <AppShell>{children}</AppShell>
-        </AuthProvider>
+    <html lang="en" className={jakarta.variable} suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var m=localStorage.getItem("bikeops_theme_preference");var d=m==="dark"||(m!=="light"&&matchMedia("(prefers-color-scheme:dark)").matches);if(d)document.documentElement.classList.add("dark")}catch(e){}})()`,
+          }}
+        />
+      </head>
+      <body className="antialiased bg-mesh text-foreground min-h-screen font-sans flex">
+        <ThemeProvider>
+          <AuthProvider>
+            <AppShell>{children}</AppShell>
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );
