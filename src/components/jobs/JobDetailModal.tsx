@@ -377,6 +377,9 @@ function JobBikeSection({
           // Never show waiting for the bike currently marked as working (clears badge even if GET/PATCH order left stale waitingOnPartsAt).
           const isWaitingOnParts =
             !!b.waitingOnPartsAt && !isCompleted && job.workingOnJobBikeId !== b.id;
+          /** DB inconsistency: working on this bike but parts flag still set — offer clear, not another "waiting" control. */
+          const stalePartsFlagWhileWorkingOn =
+            isWorkingOn && !!b.waitingOnPartsAt && !isCompleted;
           const canInteract = onJobUpdated && b.id !== "legacy";
 
           return (
@@ -560,18 +563,33 @@ function JobBikeSection({
                           </svg>
                           Mark done
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => handleWaitForParts(b.id)}
-                          disabled={!!savingWaiting}
-                          className="inline-flex items-center gap-1.5 self-start text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 transition-colors touch-manipulation min-h-[32px] disabled:opacity-50"
-                          title="Waiting on parts for this bike"
-                        >
-                          <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden>
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-                          </svg>
-                          Waiting on parts
-                        </button>
+                        {stalePartsFlagWhileWorkingOn ? (
+                          <button
+                            type="button"
+                            onClick={() => handleClearWaitingOnPartsOnly(b.id)}
+                            disabled={!!savingWaiting}
+                            className="inline-flex items-center gap-1.5 self-start text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-red-200 bg-white text-red-700 hover:bg-red-50 transition-colors touch-manipulation min-h-[32px] disabled:opacity-50"
+                            title="Remove the parts hold on this bike (fixes stuck status after moving columns)"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden>
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                            </svg>
+                            Clear parts hold
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleWaitForParts(b.id)}
+                            disabled={!!savingWaiting}
+                            className="inline-flex items-center gap-1.5 self-start text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-red-50 hover:text-red-800 hover:border-red-200 transition-colors touch-manipulation min-h-[32px] disabled:opacity-50"
+                            title="Mark this bike as waiting on parts (customer sees this status)"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden>
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                            </svg>
+                            Need parts
+                          </button>
+                        )}
                       </>
                     ) : (
                       <button
