@@ -59,7 +59,7 @@ export function MobileJobQueue({
             aria-labelledby="mobile-queue-pending-heading"
             className="rounded-2xl border border-amber-200/90 bg-gradient-to-b from-amber-50/90 to-white shadow-soft overflow-hidden"
           >
-            <div className="flex items-center gap-2 px-3.5 py-2.5 bg-amber-600 dark:bg-amber-700 text-white">
+            <div className="flex items-center gap-2 px-3.5 py-2.5 bg-amber-600 dark:bg-amber-800 text-white">
               <span
                 className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/20 text-sm font-bold"
                 aria-hidden
@@ -152,7 +152,7 @@ export function MobileJobQueue({
             aria-labelledby="mobile-queue-booked-heading"
             className="rounded-2xl border border-slate-200/90 bg-gradient-to-b from-slate-50/90 to-white shadow-soft overflow-hidden"
           >
-            <div className="flex items-center gap-2 px-3.5 py-2.5 bg-slate-600 dark:bg-slate-700 text-white">
+            <div className="flex items-center gap-2 px-3.5 py-2.5 bg-slate-600 dark:bg-slate-800 text-white">
               <span
                 className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/15 text-sm font-bold"
                 aria-hidden
