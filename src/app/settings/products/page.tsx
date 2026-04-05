@@ -34,6 +34,7 @@ export default function ProductsPage() {
   const [newStockQuantity, setNewStockQuantity] = useState("");
   const [newSupplier, setNewSupplier] = useState("");
   const [uploading, setUploading] = useState(false);
+  const uploadGeneration = useRef(0);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<{
     created: number;
@@ -89,6 +90,8 @@ export default function ProductsPage() {
   }, [searchQuery]);
 
   const startEdit = (product: Product) => {
+    uploadGeneration.current++;
+    setUploading(false);
     setEditing(product.id);
     setEditName(product.name);
     setEditDescription(product.description ?? "");
@@ -99,6 +102,8 @@ export default function ProductsPage() {
   };
 
   const cancelEdit = () => {
+    uploadGeneration.current++;
+    setUploading(false);
     setEditing(null);
   };
 
@@ -199,6 +204,7 @@ export default function ProductsPage() {
     file: File,
     setImageUrl: (url: string) => void
   ) => {
+    const gen = ++uploadGeneration.current;
     setUploading(true);
     try {
       const formData = new FormData();
@@ -208,15 +214,19 @@ export default function ProductsPage() {
         body: formData,
       });
       const data = await res.json();
+      if (gen !== uploadGeneration.current) return;
       if (res.ok && data.url) {
         setImageUrl(data.url);
       } else {
         alert(data.error || "Upload failed");
       }
     } catch {
+      if (gen !== uploadGeneration.current) return;
       alert("Upload failed");
     } finally {
-      setUploading(false);
+      if (gen === uploadGeneration.current) {
+        setUploading(false);
+      }
     }
   };
 
@@ -367,7 +377,17 @@ export default function ProductsPage() {
         {!showAddForm ? (
           <>
             <button
-              onClick={() => setShowAddForm(true)}
+              onClick={() => {
+                setNewName("");
+                setNewDescription("");
+                setNewImageUrl("");
+                setNewPrice("");
+                setNewStockQuantity("");
+                setNewSupplier("");
+                uploadGeneration.current++;
+                setUploading(false);
+                setShowAddForm(true);
+              }}
               className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium"
             >
               + Add Product
@@ -566,6 +586,7 @@ export default function ProductsPage() {
                   setNewPrice("");
                   setNewStockQuantity("");
                   setNewSupplier("");
+                  uploadGeneration.current++;
                   setUploading(false);
                 }}
                 className="px-4 py-2 text-slate-600 hover:text-slate-800"

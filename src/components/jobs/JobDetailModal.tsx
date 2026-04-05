@@ -2029,7 +2029,7 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                 {adding ? "Adding…" : "+ Add service"}
               </button>
               {servicesDropdownOpen && (
-                <div className="absolute bottom-full left-0 right-0 mb-1 bg-white border border-slate-200 rounded-lg shadow-lg z-20 flex flex-col">
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-20 flex flex-col">
                   <div className="p-2 border-b border-slate-100">
                     <input
                       ref={serviceSearchRef}
@@ -2082,7 +2082,7 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                 {addingProduct ? "Adding…" : "+ Add product"}
               </button>
               {productsDropdownOpen && (
-                <div className="absolute bottom-full left-0 right-0 mb-1 bg-white border border-slate-200 rounded-lg shadow-lg z-20 flex flex-col">
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-20 flex flex-col">
                   <div className="p-2 border-b border-slate-100">
                     <input
                       ref={productSearchRef}
