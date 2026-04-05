@@ -36,18 +36,46 @@ const STAGES: Stage[] = [
 /** Main board columns - Cancelled is shown in a collapsible section below */
 const DISPLAY_STAGES: Stage[] = STAGES.filter((s) => s !== "CANCELLED");
 
-/** Match PATCH semantics: any stage except Waiting on parts clears bike-level waiting flags. */
+/** Match PATCH semantics so the card does not “snap” again when the server JSON arrives. */
 function withOptimisticStageChange(job: Job, newStage: Stage): Job {
+  const bikes = job.jobBikes ?? [];
+  const incomplete = bikes.filter((b) => !b.completedAt);
+
   if (newStage === "WAITING_ON_PARTS") {
+    const wid = job.workingOnJobBikeId;
+    if (job.stage !== "WAITING_ON_PARTS" && wid) {
+      const now = new Date().toISOString();
+      return {
+        ...job,
+        stage: newStage,
+        workingOnJobBikeId: null,
+        jobBikes: bikes.map((b) =>
+          b.id === wid && !b.completedAt
+            ? { ...b, waitingOnPartsAt: now }
+            : b
+        ),
+      };
+    }
     return { ...job, stage: newStage };
   }
-  return {
+
+  let next: Job = {
     ...job,
     stage: newStage,
-    jobBikes: (job.jobBikes ?? []).map((b) =>
+    jobBikes: bikes.map((b) =>
       b.completedAt ? b : { ...b, waitingOnPartsAt: null }
     ),
   };
+
+  if (newStage === "WORKING_ON" && incomplete.length === 1) {
+    next = { ...next, workingOnJobBikeId: incomplete[0].id };
+  }
+
+  if (newStage === "COMPLETED") {
+    next = { ...next, completedAt: new Date().toISOString() };
+  }
+
+  return next;
 }
 
 function cloneJobForRevert(job: Job): Job {

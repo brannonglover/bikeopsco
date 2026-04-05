@@ -248,7 +248,7 @@ export async function PATCH(
       }).catch((e) => console.error("[Reject] Declined email failed:", e));
     }
 
-    // Don't send notifications when cancelling or marking complete (internal status only)
+    // Dedup checks + sends run after the response is built so the board PATCH returns as soon as the DB work finishes.
     if (
       data.notifyCustomer !== false &&
       data.stage &&
@@ -258,28 +258,37 @@ export async function PATCH(
     ) {
       const templateSlug = getTemplateForStage(data.stage, existingJob.deliveryType);
       const smsTemplateSlug = getTemplateSlugForStage(data.stage, existingJob.deliveryType);
-
-      // Email
       const customerEmail = job.customer?.email;
-      if (customerEmail && templateSlug) {
-        const emailAlreadySent = await prisma.jobEmail.findFirst({
-          where: { jobId: id, templateSlug },
-        });
-        if (!emailAlreadySent) {
-          sendJobEmail(templateSlug, customerEmail, job).catch(console.error);
-        }
-      }
-
-      // SMS
       const customerPhone = job.customer?.phone;
-      if (customerPhone && smsTemplateSlug) {
-        const smsAlreadySent = await prisma.jobSms.findFirst({
-          where: { jobId: id, templateSlug: smsTemplateSlug },
-        });
-        if (!smsAlreadySent) {
-          sendJobSms(smsTemplateSlug, customerPhone, job).catch(console.error);
+
+      void (async () => {
+        try {
+          const emailPromise =
+            customerEmail && templateSlug
+              ? prisma.jobEmail.findFirst({
+                  where: { jobId: id, templateSlug },
+                })
+              : Promise.resolve(null);
+          const smsPromise =
+            customerPhone && smsTemplateSlug
+              ? prisma.jobSms.findFirst({
+                  where: { jobId: id, templateSlug: smsTemplateSlug },
+                })
+              : Promise.resolve(null);
+          const [emailAlreadySent, smsAlreadySent] = await Promise.all([
+            emailPromise,
+            smsPromise,
+          ]);
+          if (customerEmail && templateSlug && !emailAlreadySent) {
+            sendJobEmail(templateSlug, customerEmail, job).catch(console.error);
+          }
+          if (customerPhone && smsTemplateSlug && !smsAlreadySent) {
+            sendJobSms(smsTemplateSlug, customerPhone, job).catch(console.error);
+          }
+        } catch (e) {
+          console.error("[PATCH job] stage notification dedup/send failed:", e);
         }
-      }
+      })();
     }
 
     return NextResponse.json(job);
