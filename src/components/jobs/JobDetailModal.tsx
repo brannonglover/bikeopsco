@@ -295,10 +295,14 @@ function JobBikeSection({
     if (!onJobUpdated || savingWaiting) return;
     setSavingWaiting(bikeId);
     try {
+      const body: Record<string, unknown> = { waitForPartsJobBikeId: bikeId };
+      if (job.stage !== "WAITING_ON_PARTS") {
+        body.stage = "WAITING_ON_PARTS";
+      }
       const res = await fetch(`/api/jobs/${job.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ waitForPartsJobBikeId: bikeId }),
+        body: JSON.stringify(body),
       });
       if (res.ok) {
         const updatedJob = (await res.json()) as Job;
