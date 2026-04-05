@@ -132,15 +132,17 @@ model Service {
 }
 
 model JobService {
-  id        String   @id @default(cuid())
-  jobId     String
-  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  serviceId String
-  service   Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  quantity  Int      @default(1)
-  unitPrice Decimal @db.Decimal(10, 2)
-  notes     String?
-  createdAt DateTime @default(now())
+  id                String   @id @default(cuid())
+  jobId             String
+  job               Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  serviceId         String?
+  service           Service? @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  /// Name for ad-hoc line items not linked to the service catalog
+  customServiceName String?
+  quantity          Int      @default(1)
+  unitPrice         Decimal  @db.Decimal(10, 2)
+  notes             String?
+  createdAt         DateTime @default(now())
 }
 
 enum Stage {

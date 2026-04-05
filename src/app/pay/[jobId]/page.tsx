@@ -84,7 +84,7 @@ export default function PayPage() {
     bikeMake: string;
     bikeModel: string;
     customer?: { firstName: string; lastName?: string | null; email?: string | null } | null;
-    jobServices: { service: { name: string }; quantity: number; unitPrice: string | number }[];
+    jobServices: { service?: { name: string } | null; customServiceName?: string | null; quantity: number; unitPrice: string | number }[];
     jobProducts?: { product: { name: string }; quantity: number; unitPrice: string | number }[];
     paymentStatus: string;
   } | null>(null);

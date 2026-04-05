@@ -2,10 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 
-const addServiceSchema = z.object({
-  serviceId: z.string().min(1),
-  quantity: z.number().int().min(1).optional().default(1),
-});
+const addServiceSchema = z.union([
+  z.object({
+    serviceId: z.string().min(1),
+    quantity: z.number().int().min(1).optional().default(1),
+  }),
+  z.object({
+    customServiceName: z.string().min(1),
+    unitPrice: z.number().min(0).optional().default(0),
+    quantity: z.number().int().min(1).optional().default(1),
+  }),
+]);
 
 export async function POST(
   request: NextRequest,
@@ -16,33 +23,44 @@ export async function POST(
     const body = await request.json();
     const data = addServiceSchema.parse(body);
 
-    const service = await prisma.service.findUnique({
-      where: { id: data.serviceId },
-    });
+    if ("serviceId" in data) {
+      const service = await prisma.service.findUnique({
+        where: { id: data.serviceId },
+      });
 
-    if (!service) {
-      return NextResponse.json(
-        { error: "Service not found" },
-        { status: 404 }
-      );
-    }
+      if (!service) {
+        return NextResponse.json(
+          { error: "Service not found" },
+          { status: 404 }
+        );
+      }
 
-    if (service.isSystem) {
-      return NextResponse.json(
-        { error: "This service is added automatically (e.g. collection fee)." },
-        { status: 400 }
-      );
+      if (service.isSystem) {
+        return NextResponse.json(
+          { error: "This service is added automatically (e.g. collection fee)." },
+          { status: 400 }
+        );
+      }
+
+      const jobService = await prisma.jobService.create({
+        data: {
+          jobId,
+          serviceId: data.serviceId,
+          quantity: data.quantity,
+          unitPrice: service.price,
+        },
+        include: { service: true },
+      });
+
+      return NextResponse.json(jobService);
     }
 
     const jobService = await prisma.jobService.create({
       data: {
         jobId,
-        serviceId: data.serviceId,
+        customServiceName: data.customServiceName,
         quantity: data.quantity,
-        unitPrice: service.price,
-      },
-      include: {
-        service: true,
+        unitPrice: data.unitPrice,
       },
     });
 
@@ -79,7 +97,7 @@ export async function DELETE(
       where: { id: jobServiceId, jobId },
       include: { service: true },
     });
-    if (existing?.service.isSystem) {
+    if (existing?.service?.isSystem) {
       return NextResponse.json(
         {
           error:
@@ -144,7 +162,7 @@ export async function PATCH(
       );
     }
 
-    if (existing.service.isSystem) {
+    if (existing.service?.isSystem) {
       return NextResponse.json(
         {
           error:

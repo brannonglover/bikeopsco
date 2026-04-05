@@ -78,7 +78,8 @@ export async function POST(
           }
         : null,
       jobServices: job.jobServices.map((js) => ({
-        service: { name: js.service.name },
+        service: js.service ? { name: js.service.name } : null,
+        customServiceName: js.customServiceName,
         quantity: js.quantity,
         unitPrice: Number(js.unitPrice),
       })),

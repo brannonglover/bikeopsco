@@ -233,7 +233,7 @@ export async function GET() {
 
     const serviceMap = new Map<string, { name: string; count: number; revenue: number }>();
     for (const js of jobServicesWithService) {
-      const name = js.service.name;
+      const name = js.service?.name ?? js.customServiceName ?? "Custom service";
       if (!serviceMap.has(name)) {
         serviceMap.set(name, { name, count: 0, revenue: 0 });
       }

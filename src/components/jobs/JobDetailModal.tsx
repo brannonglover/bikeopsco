@@ -1414,7 +1414,7 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
                     className="py-2 px-3 rounded-lg bg-slate-50 border border-slate-100 text-sm"
                   >
                     <span className="font-medium text-slate-900">
-                      {js.service?.name ?? "Unknown"}
+                      {js.service?.name ?? js.customServiceName ?? "Unknown"}
                       {js.quantity > 1 && (
                         <span className="text-slate-500 font-normal"> × {js.quantity}</span>
                       )}
@@ -1687,6 +1687,27 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
     }
   };
 
+  const handleAddCustomService = async (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setAdding(true);
+    setServicesDropdownOpen(false);
+    setServiceSearch("");
+    try {
+      const res = await fetch(`/api/jobs/${job.id}/services`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customServiceName: trimmed, unitPrice: 0 }),
+      });
+      if (res.ok) {
+        const updatedJob = await fetch(`/api/jobs/${job.id}`).then((r) => r.json());
+        onJobUpdated?.(updatedJob);
+      }
+    } finally {
+      setAdding(false);
+    }
+  };
+
   const handleRemoveService = async (jobServiceId: string) => {
     setRemoving(jobServiceId);
     try {
@@ -1784,7 +1805,6 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
     }, 0);
 
   const hasLineItems = jobServices.length > 0 || jobProductsList.length > 0;
-  const canAddAnything = availableServices.length > 0 || availableProducts.length > 0;
 
   return (
     <div>
@@ -1794,9 +1814,7 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
       </h3>
       {!hasLineItems ? (
         <p className="text-slate-500 mb-3">
-          {canAddAnything
-            ? "No services or products on this job yet. Add line items below."
-            : "No line items yet. Add services in Settings → Services and products in Settings → Products, then use the buttons below."}
+          No services or products on this job yet. Add line items below.
         </p>
       ) : (
         <div className="space-y-2 mb-3">
@@ -1829,7 +1847,7 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                       Service
                     </span>
                     <p className="font-medium text-slate-900 min-w-0">
-                      {js.service?.name ?? "Unknown service"}
+                      {js.service?.name ?? js.customServiceName ?? "Unknown service"}
                       {qty > 1 && (
                         <span className="text-slate-500 font-normal"> × {qty}</span>
                       )}
@@ -2009,61 +2027,78 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
           })}
         </div>
       )}
-      {(availableServices.length > 0 || availableProducts.length > 0) && (
-        <div className="flex flex-col sm:flex-row flex-wrap gap-2 pt-1 pb-1 border-t border-slate-100">
-          {availableServices.length > 0 && (
-            <div ref={servicesDropdownRef} className="relative flex-1 min-w-[140px] max-w-sm">
-              <button
-                type="button"
-                onClick={() => {
-                  setProductsDropdownOpen(false);
-                  setProductSearch("");
-                  setServicesDropdownOpen((o) => {
-                    if (o) setServiceSearch("");
-                    return !o;
-                  });
-                }}
-                disabled={adding}
-                className="w-full text-left text-sm px-3 py-2 border border-slate-300 rounded-lg bg-white hover:bg-slate-50 truncate disabled:opacity-50"
-              >
-                {adding ? "Adding…" : "+ Add service"}
-              </button>
-              {servicesDropdownOpen && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-20 flex flex-col">
-                  <div className="p-2 border-b border-slate-100">
-                    <input
-                      ref={serviceSearchRef}
-                      type="text"
-                      value={serviceSearch}
-                      onChange={(e) => setServiceSearch(e.target.value)}
-                      placeholder="Search services…"
-                      className="w-full px-2 py-1.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                      autoFocus
-                    />
-                  </div>
-                  <div className="max-h-48 overflow-y-auto">
-                    {filteredServices.length === 0 ? (
-                      <p className="px-3 py-2 text-sm text-slate-400">No matching services</p>
-                    ) : (
-                      filteredServices.map((s) => (
-                        <button
-                          key={s.id}
-                          type="button"
-                          onClick={() => handleAddService(s.id)}
-                          className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50 last:rounded-b-lg flex flex-col items-start min-w-0"
-                        >
-                          <span className="font-medium truncate w-full">{s.name}</span>
-                          <span className="text-slate-500 text-xs">
-                            ${Number(s.price).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </span>
-                        </button>
-                      ))
-                    )}
-                  </div>
+      <div className="flex flex-col sm:flex-row flex-wrap gap-2 pt-1 pb-1 border-t border-slate-100">
+          <div ref={servicesDropdownRef} className="relative flex-1 min-w-[140px] max-w-sm">
+            <button
+              type="button"
+              onClick={() => {
+                setProductsDropdownOpen(false);
+                setProductSearch("");
+                setServicesDropdownOpen((o) => {
+                  if (o) setServiceSearch("");
+                  return !o;
+                });
+              }}
+              disabled={adding}
+              className="w-full text-left text-sm px-3 py-2 border border-slate-300 rounded-lg bg-white hover:bg-slate-50 truncate disabled:opacity-50"
+            >
+              {adding ? "Adding…" : "+ Add service"}
+            </button>
+            {servicesDropdownOpen && (
+              <div className="absolute bottom-full left-0 right-0 mb-1 bg-white border border-slate-200 rounded-lg shadow-lg z-30 flex flex-col">
+                <div className="p-2 border-b border-slate-100 order-last">
+                  <input
+                    ref={serviceSearchRef}
+                    type="text"
+                    value={serviceSearch}
+                    onChange={(e) => setServiceSearch(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Tab" || e.key === "Enter") {
+                        const trimmed = serviceSearch.trim();
+                        if (trimmed && filteredServices.length === 0) {
+                          e.preventDefault();
+                          void handleAddCustomService(trimmed);
+                        }
+                      }
+                    }}
+                    placeholder="Search or type a custom service…"
+                    className="w-full px-2 py-1.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                    autoFocus
+                  />
                 </div>
-              )}
-            </div>
-          )}
+                <div className="max-h-48 overflow-y-auto">
+                  {filteredServices.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => handleAddService(s.id)}
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50 last:rounded-b-lg flex flex-col items-start min-w-0"
+                    >
+                      <span className="font-medium truncate w-full">{s.name}</span>
+                      <span className="text-slate-500 text-xs">
+                        ${Number(s.price).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </button>
+                  ))}
+                  {serviceSearch.trim() && filteredServices.length === 0 && (
+                    <button
+                      type="button"
+                      onClick={() => void handleAddCustomService(serviceSearch)}
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-violet-50 last:rounded-b-lg flex items-center gap-2 min-w-0 text-violet-700"
+                    >
+                      <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                      <span className="truncate">Add &ldquo;{serviceSearch.trim()}&rdquo; as custom service</span>
+                    </button>
+                  )}
+                  {!serviceSearch.trim() && filteredServices.length === 0 && (
+                    <p className="px-3 py-2 text-sm text-slate-400">No available services. Type a name to add a custom one.</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
           {availableProducts.length > 0 && (
             <div ref={productsDropdownRef} className="relative flex-1 min-w-[140px] max-w-sm">
               <button
@@ -2082,8 +2117,8 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                 {addingProduct ? "Adding…" : "+ Add product"}
               </button>
               {productsDropdownOpen && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-20 flex flex-col">
-                  <div className="p-2 border-b border-slate-100">
+                <div className="absolute bottom-full left-0 right-0 mb-1 bg-white border border-slate-200 rounded-lg shadow-lg z-30 flex flex-col">
+                  <div className="p-2 border-b border-slate-100 order-last">
                     <input
                       ref={productSearchRef}
                       type="text"
@@ -2118,7 +2153,6 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
             </div>
           )}
         </div>
-      )}
       <div className="flex justify-between items-center pt-4 mt-4 border-t-2 border-slate-200">
         <span className="font-bold text-slate-900">Total</span>
         <Price amount={total} variant="total" />

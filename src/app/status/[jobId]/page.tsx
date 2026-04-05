@@ -69,7 +69,7 @@ type StatusJob = {
   pickupDate: string | null;
   paymentStatus: string;
   cancellationReason?: string | null;
-  jobServices: { service: { name: string }; quantity: number; unitPrice: string | number }[];
+  jobServices: { service?: { name: string } | null; customServiceName?: string | null; quantity: number; unitPrice: string | number }[];
 };
 
 function resolveBikeDisplay(b: StatusJobBike): { name: string; imageUrl: string | null } {
@@ -307,7 +307,7 @@ export default function StatusPage() {
             <ul className="space-y-1 text-sm text-slate-600">
               {job.jobServices.map((js, i) => (
                 <li key={i}>
-                  {js.service.name} {js.quantity > 1 ? `× ${js.quantity}` : ""}
+                  {js.service?.name ?? js.customServiceName ?? "Service"} {js.quantity > 1 ? `× ${js.quantity}` : ""}
                 </li>
               ))}
             </ul>

@@ -409,7 +409,7 @@ export async function sendBookingRequestNotification(
     pickupDate: Date | string | null;
     customerNotes?: string | null;
     customer: { firstName: string; lastName: string | null; email: string | null; phone: string | null } | null;
-    jobServices?: { service: { name: string }; quantity: number }[];
+    jobServices?: { service?: { name: string } | null; customServiceName?: string | null; quantity: number }[];
   }
 ): Promise<{ ok: boolean; error?: string }> {
   const resend = getResend();
@@ -434,7 +434,7 @@ export async function sendBookingRequestNotification(
     : "Unknown";
   const servicesList =
     job.jobServices
-      ?.map((js) => `${js.service.name}${js.quantity > 1 ? ` × ${js.quantity}` : ""}`)
+      ?.map((js) => `${js.service?.name ?? js.customServiceName ?? "Service"}${js.quantity > 1 ? ` × ${js.quantity}` : ""}`)
       .join(", ") || "None specified";
   const dropOff = job.dropOffDate
     ? new Date(job.dropOffDate).toLocaleDateString("en-US", {
@@ -575,7 +575,8 @@ export function getTemplateForStage(
 }
 
 export interface JobServiceForInvoice {
-  service: { name: string };
+  service?: { name: string } | null;
+  customServiceName?: string | null;
   quantity: number;
   unitPrice: string | number;
 }
@@ -626,7 +627,7 @@ function buildInvoiceInnerHtml(
     const lineTotal = unitPrice * (js.quantity || 1);
     return `
       <tr>
-        <td style="padding: 14px 18px; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 16px;">${escapeHtml(js.service?.name ?? "Service")}</td>
+        <td style="padding: 14px 18px; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 16px;">${escapeHtml(js.service?.name ?? js.customServiceName ?? "Service")}</td>
         <td style="padding: 14px 18px; border-bottom: 1px solid #e2e8f0; color: #64748b; text-align: center; font-size: 16px;">${js.quantity}</td>
         <td style="padding: 14px 18px; border-bottom: 1px solid #e2e8f0; color: #64748b; text-align: right; font-size: 16px;">${formatPrice(unitPrice)}</td>
         <td style="padding: 14px 18px; border-bottom: 1px solid #e2e8f0; color: #0f172a; font-weight: 600; text-align: right; font-size: 16px;">${formatPrice(lineTotal)}</td>
