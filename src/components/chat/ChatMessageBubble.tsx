@@ -133,8 +133,37 @@ export function ChatMessageBubble({
 
   const showActions = isOwn && (onPatch || onDelete) && !editing;
   const canEdit = Boolean(onPatch);
-  const isImageOnly =
-    (msg.attachments?.length ?? 0) > 0 && !msg.body && !editing;
+  const attachments = msg.attachments ?? [];
+  const hasAttachments = attachments.length > 0;
+  /** Image(s) above, caption or editor in the colored bubble below */
+  const splitImageAndTextBubble = hasAttachments && (!!msg.body || editing);
+
+  const attachmentImageBlocks = attachments.map((att) => (
+    <div key={att.id} className="relative group/att">
+      <a href={att.url} target="_blank" rel="noopener noreferrer" className="block">
+        <Image
+          src={att.url}
+          alt={att.filename}
+          width={1600}
+          height={1200}
+          sizes="(max-width: 768px) 85vw, 42vw"
+          style={{ width: "100%", height: "auto" }}
+          className="max-h-[min(70vh,560px)] object-contain"
+        />
+      </a>
+      {isOwn && onRemoveAttachment && !editing && (
+        <button
+          type="button"
+          onClick={() => handleRemoveAttachment(att.id)}
+          className="absolute top-1.5 right-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-sm text-white opacity-70 transition-opacity hover:bg-red-600 md:opacity-0 md:group-hover/att:opacity-100"
+          aria-label="Remove image"
+          disabled={busy}
+        >
+          ×
+        </button>
+      )}
+    </div>
+  ));
 
   const reactions = msg.reactions ?? [];
   const aggregated = reactions.reduce<Record<string, number>>((acc, r) => {
@@ -146,201 +175,224 @@ export function ChatMessageBubble({
     : undefined;
 
   return (
-    <div className={`flex flex-col ${align === "end" ? "items-end" : "items-start"}`}>
-      <div className="relative group/msg">
+    <div
+      className={`flex w-full min-w-0 flex-col ${align === "end" ? "items-end" : "items-start"}`}
+    >
       <div
-        className={`${editing ? "w-full" : "max-w-[85%] md:max-w-[70%]"} rounded-2xl ${
-          isImageOnly ? "overflow-hidden" : `px-4 py-2 ${bubbleClassName}`
+        className={`relative group/msg flex min-w-0 flex-col ${
+          editing ? "w-full" : "w-full max-w-[85%] md:max-w-[70%]"
         }`}
       >
-        {msg.attachments?.length ? (
-          <div className={isImageOnly ? "space-y-0.5" : "space-y-2 mb-2"}>
-            {msg.attachments.map((att) => (
-              <div key={att.id} className="relative group/att">
-                <a
-                  href={att.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block"
-                >
-                  <Image
-                    src={att.url}
-                    alt={att.filename}
-                    width={320}
-                    height={192}
-                    className={
-                      isImageOnly
-                        ? "w-full object-cover"
-                        : "rounded-lg max-h-48 object-cover w-full"
-                    }
-                  />
-                </a>
-                {isOwn && onRemoveAttachment && !editing && (
+        {hasAttachments ? (
+          splitImageAndTextBubble ? (
+            <div className="mb-1.5 w-full overflow-hidden rounded-2xl">
+              <div className="space-y-0.5">{attachmentImageBlocks}</div>
+            </div>
+          ) : (
+            <div className="w-full overflow-hidden rounded-2xl">
+              <div className="space-y-0.5">{attachmentImageBlocks}</div>
+              {!editing ? (
+              <div
+                className={`flex min-h-[1.25rem] items-center gap-2 px-3 pb-1.5 pt-1 text-xs text-slate-500 ${
+                  align === "end" ? "justify-end" : "justify-start"
+                }`}
+              >
+                <span className="min-w-0">
+                  {formatChatTime(msg.createdAt)}
+                  {msg.editedAt ? <span className="opacity-80"> · Edited</span> : null}
+                  {isOwn && viewed ? <span className="opacity-80"> · Viewed</span> : null}
+                </span>
+                {showActions ? (
+                  <span className="flex flex-shrink-0 items-center gap-0.5">
+                    {canEdit ? (
+                      <button
+                        type="button"
+                        onClick={() => setEditing(true)}
+                        className="rounded-md p-1 text-slate-500 opacity-90 transition-opacity hover:text-slate-700 hover:opacity-100"
+                        disabled={busy}
+                        aria-label="Edit message"
+                      >
+                        <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                          />
+                        </svg>
+                      </button>
+                    ) : null}
+                    {onDelete ? (
+                      <button
+                        type="button"
+                        onClick={handleDelete}
+                        className="rounded-md p-1 text-slate-500 opacity-90 transition-opacity hover:text-slate-700 hover:opacity-100"
+                        disabled={busy}
+                        aria-label="Delete message"
+                      >
+                        <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                          />
+                        </svg>
+                      </button>
+                    ) : null}
+                  </span>
+                ) : null}
+              </div>
+              ) : null}
+            </div>
+          )
+        ) : null}
+
+        {splitImageAndTextBubble || !hasAttachments ? (
+          <div className={`w-full rounded-2xl px-4 py-2 ${bubbleClassName}`}>
+            {editing ? (
+              <div className="space-y-2">
+                <textarea
+                  ref={textareaRef}
+                  value={draft}
+                  onChange={(e) => {
+                    setDraft(e.target.value);
+                    autoResize();
+                  }}
+                  rows={1}
+                  className="w-full resize-none overflow-hidden rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  style={{ minHeight: "2.5rem" }}
+                  disabled={busy}
+                />
+                <div className="flex justify-end gap-2">
                   <button
                     type="button"
-                    onClick={() => handleRemoveAttachment(att.id)}
-                    className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/60 text-white text-sm flex items-center justify-center opacity-70 md:opacity-0 md:group-hover/att:opacity-100 transition-opacity hover:bg-red-600"
-                    aria-label="Remove image"
+                    onClick={() => {
+                      setEditing(false);
+                      setDraft(msg.body ?? "");
+                    }}
+                    className={`text-xs ${actionMutedClassName}`}
                     disabled={busy}
                   >
-                    ×
+                    Cancel
                   </button>
-                )}
+                  <button
+                    type="button"
+                    onClick={handleSave}
+                    disabled={busy}
+                    className={
+                      saveEditButtonClassName ??
+                      "text-xs font-medium text-emerald-700 hover:text-emerald-800"
+                    }
+                  >
+                    {busy ? "Saving…" : "Save"}
+                  </button>
+                </div>
               </div>
-            ))}
+            ) : (
+              <>
+                {msg.body ? (
+                  <LinkifiedMessageBody
+                    text={msg.body}
+                    className="break-words whitespace-pre-wrap"
+                    linkClassName={linkClassName}
+                  />
+                ) : null}
+                <div
+                  className={`mt-1 flex min-h-[1.25rem] items-center gap-2 text-xs ${metaClassName} ${
+                    align === "end" ? "justify-end" : "justify-start"
+                  }`}
+                >
+                  <span className="min-w-0">
+                    {formatChatTime(msg.createdAt)}
+                    {msg.editedAt ? <span className="opacity-80"> · Edited</span> : null}
+                    {isOwn && viewed ? <span className="opacity-80"> · Viewed</span> : null}
+                  </span>
+                  {showActions ? (
+                    <span className="flex flex-shrink-0 items-center gap-0.5">
+                      {canEdit ? (
+                        <button
+                          type="button"
+                          onClick={() => setEditing(true)}
+                          className={`rounded-md p-1 opacity-90 transition-opacity hover:opacity-100 ${actionMutedClassName}`}
+                          disabled={busy}
+                          aria-label="Edit message"
+                        >
+                          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                            />
+                          </svg>
+                        </button>
+                      ) : null}
+                      {onDelete ? (
+                        <button
+                          type="button"
+                          onClick={handleDelete}
+                          className={`rounded-md p-1 opacity-90 transition-opacity hover:opacity-100 ${actionMutedClassName}`}
+                          disabled={busy}
+                          aria-label="Delete message"
+                        >
+                          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                            />
+                          </svg>
+                        </button>
+                      ) : null}
+                    </span>
+                  ) : null}
+                </div>
+              </>
+            )}
           </div>
         ) : null}
 
-        {editing ? (
-          <div className="space-y-2">
-            <textarea
-              ref={textareaRef}
-              value={draft}
-              onChange={(e) => {
-                setDraft(e.target.value);
-                autoResize();
-              }}
-              rows={1}
-              className="w-full rounded-lg px-3 py-2 text-sm text-slate-900 bg-white border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none overflow-hidden"
-              style={{ minHeight: "2.5rem" }}
-              disabled={busy}
-            />
-            <div className="flex gap-2 justify-end">
+        {onToggleReaction && !editing && (
+          <button
+            type="button"
+            onClick={() => setShowEmojiPicker((p) => !p)}
+            className={`absolute ${
+              align === "end" ? "-left-8" : "-right-8"
+            } top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-sm text-slate-500 opacity-0 shadow-sm transition-opacity hover:bg-slate-50 group-hover/msg:opacity-100`}
+            aria-label="Add reaction"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.182 15.182a4.5 4.5 0 01-6.364 0M21 12a9 9 0 11-18 0 9 9 0 0118 0zM9.75 9.75c0 .414-.168.75-.375.75S9 10.164 9 9.75 9.168 9 9.375 9s.375.336.375.75zm-.375 0h.008v.015h-.008V9.75zm5.625 0c0 .414-.168.75-.375.75s-.375-.336-.375-.75.168-.75.375-.75.375.336.375.75zm-.375 0h.008v.015h-.008V9.75z" />
+            </svg>
+          </button>
+        )}
+
+        {showEmojiPicker && (
+          <div
+            ref={emojiPickerRef}
+            className={`absolute ${
+              align === "end" ? "right-0" : "left-0"
+            } -top-12 z-20 flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-1.5 shadow-lg`}
+          >
+            {REACTION_EMOJIS.map((emoji) => (
               <button
+                key={emoji}
                 type="button"
                 onClick={() => {
-                  setEditing(false);
-                  setDraft(msg.body ?? "");
+                  onToggleReaction?.(msg.id, emoji);
+                  setShowEmojiPicker(false);
                 }}
-                className={`text-xs ${actionMutedClassName}`}
-                disabled={busy}
+                className={`flex h-8 w-8 items-center justify-center rounded-full text-lg transition-colors hover:bg-slate-100 ${
+                  myReaction?.emoji === emoji ? "bg-emerald-100 ring-2 ring-emerald-400" : ""
+                }`}
               >
-                Cancel
+                {emoji}
               </button>
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={busy}
-                className={
-                  saveEditButtonClassName ??
-                  "text-xs font-medium text-emerald-700 hover:text-emerald-800"
-                }
-              >
-                {busy ? "Saving…" : "Save"}
-              </button>
-            </div>
+            ))}
           </div>
-        ) : (
-          <>
-            {msg.body ? (
-              <LinkifiedMessageBody
-                text={msg.body}
-                className="whitespace-pre-wrap break-words"
-                linkClassName={linkClassName}
-              />
-            ) : null}
-            <div
-              className={`flex items-center gap-2 mt-1 min-h-[1.25rem] text-xs ${
-                isImageOnly ? "text-slate-500 px-3 pb-1.5" : metaClassName
-              } ${align === "end" ? "justify-end" : "justify-start"}`}
-            >
-              <span className="min-w-0">
-                {formatChatTime(msg.createdAt)}
-                {msg.editedAt ? (
-                  <span className="opacity-80"> · Edited</span>
-                ) : null}
-                {isOwn && viewed ? (
-                  <span className="opacity-80"> · Viewed</span>
-                ) : null}
-              </span>
-              {showActions ? (
-                <span className="flex items-center gap-0.5 flex-shrink-0">
-                  {canEdit ? (
-                    <button
-                      type="button"
-                      onClick={() => setEditing(true)}
-                      className={`p-1 rounded-md transition-opacity opacity-90 hover:opacity-100 ${
-                        isImageOnly ? "text-slate-500 hover:text-slate-700" : actionMutedClassName
-                      }`}
-                      disabled={busy}
-                      aria-label="Edit message"
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
-                        />
-                      </svg>
-                    </button>
-                  ) : null}
-                  {onDelete ? (
-                    <button
-                      type="button"
-                      onClick={handleDelete}
-                      className={`p-1 rounded-md transition-opacity opacity-90 hover:opacity-100 ${
-                        isImageOnly ? "text-slate-500 hover:text-slate-700" : actionMutedClassName
-                      }`}
-                      disabled={busy}
-                      aria-label="Delete message"
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                        />
-                      </svg>
-                    </button>
-                  ) : null}
-                </span>
-              ) : null}
-            </div>
-          </>
         )}
-      </div>
-
-      {onToggleReaction && !editing && (
-        <button
-          type="button"
-          onClick={() => setShowEmojiPicker((p) => !p)}
-          className={`absolute ${
-            align === "end" ? "-left-8" : "-right-8"
-          } top-1/2 -translate-y-1/2 w-7 h-7 rounded-full flex items-center justify-center text-sm opacity-0 group-hover/msg:opacity-100 transition-opacity bg-white border border-slate-200 shadow-sm hover:bg-slate-50 text-slate-500`}
-          aria-label="Add reaction"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.182 15.182a4.5 4.5 0 01-6.364 0M21 12a9 9 0 11-18 0 9 9 0 0118 0zM9.75 9.75c0 .414-.168.75-.375.75S9 10.164 9 9.75 9.168 9 9.375 9s.375.336.375.75zm-.375 0h.008v.015h-.008V9.75zm5.625 0c0 .414-.168.75-.375.75s-.375-.336-.375-.75.168-.75.375-.75.375.336.375.75zm-.375 0h.008v.015h-.008V9.75z" />
-          </svg>
-        </button>
-      )}
-
-      {showEmojiPicker && (
-        <div
-          ref={emojiPickerRef}
-          className={`absolute ${
-            align === "end" ? "right-0" : "left-0"
-          } -top-12 z-20 flex items-center gap-1 px-2 py-1.5 rounded-full bg-white border border-slate-200 shadow-lg`}
-        >
-          {REACTION_EMOJIS.map((emoji) => (
-            <button
-              key={emoji}
-              type="button"
-              onClick={() => {
-                onToggleReaction?.(msg.id, emoji);
-                setShowEmojiPicker(false);
-              }}
-              className={`w-8 h-8 rounded-full flex items-center justify-center text-lg hover:bg-slate-100 transition-colors ${
-                myReaction?.emoji === emoji ? "bg-emerald-100 ring-2 ring-emerald-400" : ""
-              }`}
-            >
-              {emoji}
-            </button>
-          ))}
-        </div>
-      )}
       </div>
 
       {Object.keys(aggregated).length > 0 && (
