@@ -50,6 +50,8 @@ function BookForm() {
     dropOffDate: getDefaultDropOffDateTime(),
     pickupDate: "",
     collectionAddress: "",
+    collectionWindowStart: "",
+    collectionWindowEnd: "",
     customerNotes: "",
     serviceIds: [] as string[],
     smsConsent: false,
@@ -110,6 +112,10 @@ function BookForm() {
           pickupDate: form.pickupDate || null,
           collectionAddress:
             form.deliveryType === "COLLECTION_SERVICE" ? form.collectionAddress.trim() || null : null,
+          collectionWindowStart:
+            form.deliveryType === "COLLECTION_SERVICE" ? form.collectionWindowStart || null : null,
+          collectionWindowEnd:
+            form.deliveryType === "COLLECTION_SERVICE" ? form.collectionWindowEnd || null : null,
           customerNotes: form.customerNotes.trim() || null,
           serviceIds: form.serviceIds,
         }),
@@ -370,13 +376,41 @@ function BookForm() {
             <p className="mt-2 text-xs text-slate-500">
               Pickup/dropoff within 5 miles of the shop; fee is added automatically when your booking is accepted.
             </p>
+            <div className="mt-3">
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                Preferred collection window
+              </label>
+              <p className="mb-2 text-xs text-slate-500">
+                What time range works best for the collection?
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-0.5 block text-xs text-slate-500">From</label>
+                  <input
+                    type="time"
+                    value={form.collectionWindowStart}
+                    onChange={(e) => setForm((p) => ({ ...p, collectionWindowStart: e.target.value }))}
+                    className="input-book"
+                  />
+                </div>
+                <div>
+                  <label className="mb-0.5 block text-xs text-slate-500">To</label>
+                  <input
+                    type="time"
+                    value={form.collectionWindowEnd}
+                    onChange={(e) => setForm((p) => ({ ...p, collectionWindowEnd: e.target.value }))}
+                    className="input-book"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="min-w-0">
             <label className="mb-1 block text-sm font-medium text-slate-700">
-              Preferred drop-off date
+              {form.deliveryType === "COLLECTION_SERVICE" ? "Preferred collection pickup" : "Preferred drop-off date"}
             </label>
             <input
               type="datetime-local"
@@ -387,7 +421,7 @@ function BookForm() {
           </div>
           <div className="min-w-0">
             <label className="mb-1 block text-sm font-medium text-slate-700">
-              Preferred pickup date
+              {form.deliveryType === "COLLECTION_SERVICE" ? "Preferred collection return" : "Preferred pickup date"}
             </label>
             <input
               type="datetime-local"

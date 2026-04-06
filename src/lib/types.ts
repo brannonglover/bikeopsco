@@ -153,6 +153,8 @@ export interface Job {
   dropOffDate: string | null;
   pickupDate: string | null;
   collectionAddress: string | null;
+  collectionWindowStart: string | null;
+  collectionWindowEnd: string | null;
   customerId: string | null;
   customer: Customer | null;
   notes: string | null;

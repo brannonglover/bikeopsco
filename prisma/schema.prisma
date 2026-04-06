@@ -74,7 +74,9 @@ model Job {
   deliveryType      DeliveryType @default(DROP_OFF_AT_SHOP)
   dropOffDate       DateTime?
   pickupDate        DateTime?
-  collectionAddress String?
+  collectionAddress     String?
+  collectionWindowStart String?
+  collectionWindowEnd   String?
   customerId        String?
   customer          Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
   notes             String?

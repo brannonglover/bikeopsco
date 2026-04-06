@@ -735,16 +735,20 @@ function JobDetailsDateFields({
 }) {
   const [dropOff, setDropOff] = useState(() => toDateTimeLocalValue(job.dropOffDate));
   const [pickup, setPickup] = useState(() => toDateTimeLocalValue(job.pickupDate));
-  const [savingField, setSavingField] = useState<"dropOffDate" | "pickupDate" | null>(null);
+  const [windowStart, setWindowStart] = useState(job.collectionWindowStart ?? "");
+  const [windowEnd, setWindowEnd] = useState(job.collectionWindowEnd ?? "");
+  const [savingField, setSavingField] = useState<"dropOffDate" | "pickupDate" | "collectionWindow" | null>(null);
 
   useEffect(() => {
     setDropOff(toDateTimeLocalValue(job.dropOffDate));
     setPickup(toDateTimeLocalValue(job.pickupDate));
-  }, [job.id, job.dropOffDate, job.pickupDate]);
+    setWindowStart(job.collectionWindowStart ?? "");
+    setWindowEnd(job.collectionWindowEnd ?? "");
+  }, [job.id, job.dropOffDate, job.pickupDate, job.collectionWindowStart, job.collectionWindowEnd]);
 
   const isCollection = job.deliveryType === "COLLECTION_SERVICE";
-  const firstLabel = isCollection ? "Collection date" : "Drop-off";
-  const secondLabel = isCollection ? "Pickup / return" : "Pickup";
+  const firstLabel = isCollection ? "Collection pickup" : "Drop-off";
+  const secondLabel = isCollection ? "Collection return" : "Pickup";
 
   const persist = async (field: "dropOffDate" | "pickupDate", localVal: string) => {
     if (!onJobUpdated) return;
@@ -773,6 +777,42 @@ function JobDetailsDateFields({
     }
   };
 
+  const persistWindow = async (start: string, end: string) => {
+    if (!onJobUpdated) return;
+    if (start === (job.collectionWindowStart ?? "") && end === (job.collectionWindowEnd ?? "")) return;
+    setSavingField("collectionWindow");
+    try {
+      const res = await fetch(`/api/jobs/${job.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          collectionWindowStart: start || null,
+          collectionWindowEnd: end || null,
+        }),
+      });
+      if (res.ok) {
+        const updated = (await res.json()) as Job;
+        onJobUpdated(updated);
+      }
+    } finally {
+      setSavingField(null);
+    }
+  };
+
+  const formatWindow = (start: string | null, end: string | null) => {
+    if (!start && !end) return null;
+    const fmt = (t: string) => {
+      const [h, m] = t.split(":");
+      const hour = parseInt(h, 10);
+      const ampm = hour >= 12 ? "pm" : "am";
+      const h12 = hour % 12 || 12;
+      return m === "00" ? `${h12}${ampm}` : `${h12}:${m}${ampm}`;
+    };
+    if (start && end) return `${fmt(start)} – ${fmt(end)}`;
+    if (start) return `from ${fmt(start)}`;
+    return `until ${fmt(end!)}`;
+  };
+
   if (!onJobUpdated) {
     return (
       <div>
@@ -782,6 +822,12 @@ function JobDetailsDateFields({
             <dt className="text-slate-500 inline">{firstLabel}:</dt>{" "}
             <dd className="inline text-slate-900">{formatDate(job.dropOffDate)}</dd>
           </div>
+          {isCollection && formatWindow(job.collectionWindowStart, job.collectionWindowEnd) && (
+            <div>
+              <dt className="text-slate-500 inline">Collection window:</dt>{" "}
+              <dd className="inline text-slate-900">{formatWindow(job.collectionWindowStart, job.collectionWindowEnd)}</dd>
+            </div>
+          )}
           <div>
             <dt className="text-slate-500 inline">{secondLabel}:</dt>{" "}
             <dd className="inline text-slate-900">{formatDate(job.pickupDate)}</dd>
@@ -818,6 +864,35 @@ function JobDetailsDateFields({
           />
         </div>
       </div>
+      {isCollection && (
+        <div className="mt-3">
+          <label className="block text-xs font-medium text-slate-600 mb-1">Collection window</label>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="min-w-0">
+              <label className="block text-[11px] text-slate-500 mb-0.5">From</label>
+              <input
+                type="time"
+                value={windowStart}
+                onChange={(e) => setWindowStart(e.target.value)}
+                onBlur={() => persistWindow(windowStart, windowEnd)}
+                disabled={savingField !== null}
+                className="w-full max-w-full min-w-0 px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none disabled:opacity-60 box-border"
+              />
+            </div>
+            <div className="min-w-0">
+              <label className="block text-[11px] text-slate-500 mb-0.5">To</label>
+              <input
+                type="time"
+                value={windowEnd}
+                onChange={(e) => setWindowEnd(e.target.value)}
+                onBlur={() => persistWindow(windowStart, windowEnd)}
+                disabled={savingField !== null}
+                className="w-full max-w-full min-w-0 px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none disabled:opacity-60 box-border"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

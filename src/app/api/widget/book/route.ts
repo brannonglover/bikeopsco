@@ -26,6 +26,8 @@ const bookSchema = z.object({
   dropOffDate: z.string().optional().nullable(),
   pickupDate: z.string().optional().nullable(),
   collectionAddress: z.string().optional().nullable(),
+  collectionWindowStart: z.string().optional().nullable(),
+  collectionWindowEnd: z.string().optional().nullable(),
   customerNotes: z.string().optional().nullable(),
   serviceIds: z.array(z.string()).optional().default([]),
 });
@@ -109,17 +111,41 @@ export async function POST(request: NextRequest) {
           dropOffDate: data.dropOffDate ? new Date(data.dropOffDate) : null,
           pickupDate: data.pickupDate ? new Date(data.pickupDate) : null,
           collectionAddress: data.collectionAddress ?? null,
+          collectionWindowStart: data.collectionWindowStart ?? null,
+          collectionWindowEnd: data.collectionWindowEnd ?? null,
           customerNotes: data.customerNotes ?? null,
         },
       });
 
+      // Find an existing bike for this customer with the same make/model, or create one
+      const makeNormalized = data.bikeMake.trim();
+      const modelNormalized = data.bikeModel.trim();
+      let bike = await tx.bike.findFirst({
+        where: {
+          customerId: customer.id,
+          make: { equals: makeNormalized, mode: "insensitive" },
+          model: { equals: modelNormalized, mode: "insensitive" },
+        },
+      });
+      if (!bike) {
+        bike = await tx.bike.create({
+          data: {
+            customerId: customer.id,
+            make: makeNormalized,
+            model: modelNormalized,
+            bikeType: data.bikeType ?? null,
+          },
+        });
+      }
+
       await tx.jobBike.create({
         data: {
           jobId: newJob.id,
-          make: data.bikeMake.trim(),
-          model: data.bikeModel.trim(),
+          make: makeNormalized,
+          model: modelNormalized,
           sortOrder: 0,
           bikeType: data.bikeType ?? null,
+          bikeId: bike.id,
         },
       });
 

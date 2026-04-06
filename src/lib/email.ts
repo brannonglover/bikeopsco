@@ -326,6 +326,8 @@ interface JobForEmail {
   customerNotes?: string | null;
   dropOffDate?: Date | string | null;
   pickupDate?: Date | string | null;
+  collectionWindowStart?: string | null;
+  collectionWindowEnd?: string | null;
 }
 
 export async function sendJobEmail(
@@ -387,6 +389,21 @@ export async function sendJobEmail(
     statusButtonHtml,
     dropOffDate: formatDate(job.dropOffDate),
     pickupDate: formatDate(job.pickupDate),
+    collectionWindow: (() => {
+      const s = job.collectionWindowStart;
+      const e = job.collectionWindowEnd;
+      if (!s && !e) return "";
+      const fmt = (t: string) => {
+        const [h, m] = t.split(":");
+        const hour = parseInt(h, 10);
+        const ampm = hour >= 12 ? "pm" : "am";
+        const h12 = hour % 12 || 12;
+        return m === "00" ? `${h12}${ampm}` : `${h12}:${m}${ampm}`;
+      };
+      if (s && e) return `${fmt(s)} – ${fmt(e)}`;
+      if (s) return `from ${fmt(s)}`;
+      return `until ${fmt(e!)}`;
+    })(),
   };
 
   const subject = mergeTemplateVariables(template.subject, vars);
@@ -434,6 +451,8 @@ export async function sendBookingRequestNotification(
     deliveryType: string;
     dropOffDate: Date | string | null;
     pickupDate: Date | string | null;
+    collectionWindowStart?: string | null;
+    collectionWindowEnd?: string | null;
     customerNotes?: string | null;
     customer: { firstName: string; lastName: string | null; email: string | null; phone: string | null } | null;
     jobServices?: { service?: { name: string } | null; customServiceName?: string | null; quantity: number }[];
@@ -480,35 +499,95 @@ export async function sendBookingRequestNotification(
       })
     : "Not set";
 
+  const formatWindowTime = (t: string) => {
+    const [h, m] = t.split(":");
+    const hour = parseInt(h, 10);
+    const ampm = hour >= 12 ? "pm" : "am";
+    const h12 = hour % 12 || 12;
+    return m === "00" ? `${h12}${ampm}` : `${h12}:${m}${ampm}`;
+  };
+  let collectionWindowLine = "";
+  if (job.deliveryType === "COLLECTION_SERVICE" && (job.collectionWindowStart || job.collectionWindowEnd)) {
+    const s = job.collectionWindowStart ? formatWindowTime(job.collectionWindowStart) : null;
+    const e = job.collectionWindowEnd ? formatWindowTime(job.collectionWindowEnd) : null;
+    const windowText = s && e ? `${s} – ${e}` : s ? `from ${s}` : `until ${e}`;
+    collectionWindowLine = `<br/><strong>Collection window:</strong> ${windowText}`;
+  }
+
   const subject = `New booking request: ${job.bikeMake} ${job.bikeModel}`;
-  const bodyHtml = `
-<p>A new booking request has been submitted and is awaiting your approval.</p>
+  const innerHtml = `
+<p style="margin:0 0 20px">A new booking request has been submitted and is awaiting your approval.</p>
 
-<p><strong>Customer:</strong> ${customerName}<br/>
-<strong>Email:</strong> ${job.customer?.email ?? "—"}<br/>
-<strong>Phone:</strong> ${job.customer?.phone ?? "—"}</p>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom:20px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+  <tbody>
+    <tr style="background-color:#f8fafc">
+      <td colspan="2" style="padding:12px 16px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#64748b">Customer</td>
+    </tr>
+    <tr>
+      <td style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;width:40%;border-top:1px solid #e2e8f0">Name</td>
+      <td style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(customerName)}</td>
+    </tr>
+    <tr style="background-color:#f8fafc">
+      <td style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;border-top:1px solid #e2e8f0">Email</td>
+      <td style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(job.customer?.email ?? "—")}</td>
+    </tr>
+    <tr>
+      <td style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;border-top:1px solid #e2e8f0">Phone</td>
+      <td style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(job.customer?.phone ?? "—")}</td>
+    </tr>
+  </tbody>
+</table>
 
-<p><strong>Bike:</strong> ${job.bikeMake} ${job.bikeModel}<br/>
-<strong>Delivery:</strong> ${job.deliveryType === "COLLECTION_SERVICE" ? "Collection" : "Drop-off at shop"}</p>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom:20px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+  <tbody>
+    <tr style="background-color:#f8fafc">
+      <td colspan="2" style="padding:12px 16px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#64748b">Booking details</td>
+    </tr>
+    <tr>
+      <td style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;width:40%;border-top:1px solid #e2e8f0">Bike</td>
+      <td style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(job.bikeMake)} ${escapeHtml(job.bikeModel)}</td>
+    </tr>
+    <tr style="background-color:#f8fafc">
+      <td style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;border-top:1px solid #e2e8f0">Delivery</td>
+      <td style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${job.deliveryType === "COLLECTION_SERVICE" ? "Collection service" : "Drop-off at shop"}</td>
+    </tr>
+    <tr>
+      <td style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;border-top:1px solid #e2e8f0">Preferred drop-off</td>
+      <td style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(dropOff)}${collectionWindowLine}</td>
+    </tr>
+    <tr style="background-color:#f8fafc">
+      <td style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;border-top:1px solid #e2e8f0">Preferred pickup</td>
+      <td style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(pickup)}</td>
+    </tr>
+    <tr>
+      <td style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;border-top:1px solid #e2e8f0">Services</td>
+      <td style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(servicesList)}</td>
+    </tr>
+    ${job.customerNotes ? `<tr style="background-color:#f8fafc">
+      <td style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;border-top:1px solid #e2e8f0">Notes</td>
+      <td style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(job.customerNotes)}</td>
+    </tr>` : ""}
+  </tbody>
+</table>
 
-<p><strong>Preferred drop-off:</strong> ${dropOff}<br/>
-<strong>Preferred pickup:</strong> ${pickup}</p>
+${calendarUrl ? buildCustomerEmailCtaButton(calendarUrl, "Review & accept or reject") : ""}
+`.trim();
 
-<p><strong>Services:</strong> ${servicesList}</p>
-
-${job.customerNotes ? `<p><strong>Notes:</strong> ${job.customerNotes}</p>` : ""}
-
-<p><a href="${calendarUrl}" style="display: inline-block; padding: 12px 24px; background-color: #f59e0b; color: white !important; text-decoration: none; font-weight: 600; border-radius: 8px;">Review & accept or reject</a></p>
-
-<p style="color: #64748b; font-size: 12px;">— ${shopName}</p>
-`;
+  const branding = getCustomerEmailBrandingAssets();
+  const html = buildCustomerEmailHtml({
+    innerHtml,
+    headerLogoSrc: branding.headerLogoSrc,
+    heading: "New booking request",
+  });
+  const attachments = customerEmailBrandingAttachments(branding);
 
   try {
     const { error } = await resend.emails.send({
       from: getFromEmail(),
       to: notifyEmail,
       subject,
-      html: bodyHtml,
+      html,
+      ...(attachments && { attachments }),
     });
     if (error) return { ok: false, error: error.message };
     return { ok: true };

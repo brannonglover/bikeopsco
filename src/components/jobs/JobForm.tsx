@@ -29,6 +29,8 @@ const schema = z.object({
   dropOffDate: z.string().optional(),
   pickupDate: z.string().optional(),
   collectionAddress: z.string().optional(),
+  collectionWindowStart: z.string().optional(),
+  collectionWindowEnd: z.string().optional(),
   internalNotes: z.string().optional(),
   customerNotes: z.string().optional(),
   serviceIds: z.array(z.string()).optional(),
@@ -311,6 +313,14 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
         collectionAddress:
           data.deliveryType === "COLLECTION_SERVICE"
             ? data.collectionAddress || selectedCustomer?.address || null
+            : null,
+        collectionWindowStart:
+          data.deliveryType === "COLLECTION_SERVICE"
+            ? data.collectionWindowStart || null
+            : null,
+        collectionWindowEnd:
+          data.deliveryType === "COLLECTION_SERVICE"
+            ? data.collectionWindowEnd || null
             : null,
         internalNotes: data.internalNotes || null,
         customerNotes: data.customerNotes || null,
@@ -623,13 +633,39 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
             <p className="text-xs text-slate-500 mt-2">
               Pickup/dropoff within 5 miles: $20 standard bike, $30 e-bike. The matching line is added to the job automatically (use bike type above or leave Auto to detect from make/model).
             </p>
+            <div className="mt-3">
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Collection Window
+              </label>
+              <p className="text-xs text-slate-500 mb-2">
+                Time window when you plan to collect the bike
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">From</label>
+                  <input
+                    {...register("collectionWindowStart")}
+                    type="time"
+                    className="w-full min-w-0 px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">To</label>
+                  <input
+                    {...register("collectionWindowEnd")}
+                    type="time"
+                    className="w-full min-w-0 px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="min-w-0">
             <label className="block text-sm font-medium text-slate-700 mb-1">
-              Drop-off Date
+              {deliveryType === "COLLECTION_SERVICE" ? "Collection Pickup" : "Drop-off Date"}
             </label>
             <input
               {...register("dropOffDate")}
@@ -639,7 +675,7 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
           </div>
           <div className="min-w-0">
             <label className="block text-sm font-medium text-slate-700 mb-1">
-              Pickup Date
+              {deliveryType === "COLLECTION_SERVICE" ? "Collection Return" : "Pickup Date"}
             </label>
             <input
               {...register("pickupDate")}
