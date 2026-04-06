@@ -238,6 +238,18 @@ export function getEmailTemplatePreviewVars(): Record<string, string> {
     statusButtonHtml: buildCustomerEmailCtaButton(statusUrl, "Track your repair status"),
     rejectionReason:
       "We are fully booked for your requested dates. We hope to serve you another time.",
+    dropOffDate: new Date(Date.now() + 86400000).toLocaleDateString("en-US", {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    }),
+    pickupDate: new Date(Date.now() + 7 * 86400000).toLocaleDateString("en-US", {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    }),
   };
 }
 
@@ -312,6 +324,8 @@ interface JobForEmail {
   stage?: string;
   customer: { firstName: string; lastName: string | null } | null;
   customerNotes?: string | null;
+  dropOffDate?: Date | string | null;
+  pickupDate?: Date | string | null;
 }
 
 export async function sendJobEmail(
@@ -348,6 +362,17 @@ export async function sendJobEmail(
     ? buildCustomerEmailCtaButton(statusUrl, "Track your repair status")
     : "";
 
+  const formatDate = (d: Date | string | null | undefined): string => {
+    if (!d) return "";
+    const date = typeof d === "string" ? new Date(d) : d;
+    return date.toLocaleDateString("en-US", {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
+
   const vars: Record<string, string> = {
     customerName: job.customer
       ? job.customer.lastName
@@ -360,6 +385,8 @@ export async function sendJobEmail(
     customerNotes: job.customerNotes ?? "",
     statusUrl,
     statusButtonHtml,
+    dropOffDate: formatDate(job.dropOffDate),
+    pickupDate: formatDate(job.pickupDate),
   };
 
   const subject = mergeTemplateVariables(template.subject, vars);
