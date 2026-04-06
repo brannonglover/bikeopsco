@@ -76,6 +76,7 @@ function CustomersPageContent() {
   const [actionsOpen, setActionsOpen] = useState(false);
   const [detailCustomer, setDetailCustomer] = useState<Customer | null>(null);
   const [detailInlineEdit, setDetailInlineEdit] = useState(false);
+  const [savedToast, setSavedToast] = useState<string | null>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -944,6 +945,8 @@ function CustomersPageContent() {
             prev.map((c) => (c.id === updated.id ? updated : c))
           );
           setDetailCustomer(updated);
+          setSavedToast("Customer saved successfully");
+          setTimeout(() => setSavedToast(null), 3500);
         }}
         onBeginEditCustomer={() => setDetailInlineEdit(true)}
         onClose={() => {
@@ -951,6 +954,15 @@ function CustomersPageContent() {
           setDetailInlineEdit(false);
         }}
       />
+
+      {savedToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2 px-5 py-3 bg-slate-900 text-white text-sm font-medium rounded-full shadow-lg pointer-events-none">
+          <svg className="w-4 h-4 text-green-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+          {savedToast}
+        </div>
+      )}
     </div>
   );
 }

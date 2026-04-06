@@ -738,6 +738,7 @@ export function CustomerDetailModal({
         const updated = await res.json();
         setEditPhone(phoneToInputValue(updated.phone));
         onCustomerSaved?.(updated);
+        onClose();
       } else {
         const err = await res.json();
         alert(err.error || "Failed to save");
