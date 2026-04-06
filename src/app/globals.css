@@ -253,6 +253,92 @@ html.dark .text-slate-400 {
   color: var(--text-muted);
 }
 
+/* Coloured text overrides — dark badge/label text that is unreadable on dark surfaces */
+html.dark .text-amber-700 {
+  color: #fbbf24;
+}
+html.dark .text-amber-800 {
+  color: #fcd34d;
+}
+html.dark .text-amber-900,
+html.dark .text-amber-900\/80 {
+  color: #fde68a;
+}
+html.dark .text-indigo-800 {
+  color: #a5b4fc;
+}
+html.dark .text-indigo-600 {
+  color: #a5b4fc;
+}
+html.dark .text-emerald-700 {
+  color: #6ee7b7;
+}
+html.dark .text-emerald-800 {
+  color: #6ee7b7;
+}
+html.dark .text-emerald-600 {
+  color: #34d399;
+}
+html.dark .text-emerald-900 {
+  color: #a7f3d0;
+}
+html.dark .text-red-700 {
+  color: #fca5a5;
+}
+html.dark .text-red-800 {
+  color: #fecaca;
+}
+html.dark .text-red-900 {
+  color: #fecaca;
+}
+html.dark .text-blue-700 {
+  color: #93c5fd;
+}
+html.dark .text-blue-900 {
+  color: #93c5fd;
+}
+
+/* Coloured hover text overrides */
+html.dark .hover\:text-indigo-700:hover,
+html.dark .hover\:text-indigo-800:hover {
+  color: #c7d2fe;
+}
+html.dark .hover\:text-emerald-800:hover {
+  color: #a7f3d0;
+}
+html.dark .hover\:text-red-800:hover {
+  color: #fecaca;
+}
+html.dark .hover\:text-amber-800:hover {
+  color: #fde68a;
+}
+
+/* Coloured bg-200 overrides for dark badge backgrounds */
+html.dark .bg-emerald-200 {
+  background-color: rgba(16, 185, 129, 0.2);
+}
+html.dark .bg-red-200 {
+  background-color: rgba(239, 68, 68, 0.2);
+}
+html.dark .bg-amber-200 {
+  background-color: rgba(245, 158, 11, 0.2);
+}
+html.dark .hover\:bg-emerald-200:hover {
+  background-color: rgba(16, 185, 129, 0.25);
+}
+html.dark .hover\:bg-red-200:hover {
+  background-color: rgba(239, 68, 68, 0.25);
+}
+html.dark .hover\:bg-amber-200:hover {
+  background-color: rgba(245, 158, 11, 0.25);
+}
+html.dark .hover\:bg-amber-300:hover {
+  background-color: rgba(245, 158, 11, 0.3);
+}
+html.dark .hover\:bg-red-300:hover {
+  background-color: rgba(239, 68, 68, 0.3);
+}
+
 /* Border overrides */
 html.dark .border-slate-200,
 html.dark .border-slate-200\/80,
