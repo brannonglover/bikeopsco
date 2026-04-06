@@ -173,6 +173,7 @@ export function ChatMessageBubble({
   const myReaction = role
     ? reactions.find((r) => r.reactorType === role)
     : undefined;
+  const hasReactions = Object.keys(aggregated).length > 0;
 
   return (
     <div
@@ -181,7 +182,7 @@ export function ChatMessageBubble({
       <div
         className={`relative group/msg flex min-w-0 flex-col ${
           editing ? "w-full" : "w-full max-w-[85%] md:max-w-[70%]"
-        }`}
+        } ${hasReactions && !editing ? "mb-4" : ""}`}
       >
         {hasAttachments ? (
           splitImageAndTextBubble ? (
@@ -393,30 +394,34 @@ export function ChatMessageBubble({
             ))}
           </div>
         )}
-      </div>
 
-      {Object.keys(aggregated).length > 0 && (
-        <div className={`flex flex-wrap gap-1 mt-1 ${align === "end" ? "justify-end" : "justify-start"}`}>
-          {Object.entries(aggregated).map(([emoji, count]) => {
-            const isMine = myReaction?.emoji === emoji;
-            return (
-              <button
-                key={emoji}
-                type="button"
-                onClick={() => onToggleReaction?.(msg.id, emoji)}
-                className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-sm border transition-colors ${
-                  isMine
-                    ? "bg-emerald-50 border-emerald-300 text-emerald-800"
-                    : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
-                }`}
-              >
-                <span>{emoji}</span>
-                {count > 1 && <span className="text-xs">{count}</span>}
-              </button>
-            );
-          })}
-        </div>
-      )}
+        {hasReactions && !editing && (
+          <div
+            className={`absolute -bottom-3 z-10 flex flex-wrap gap-1 ${
+              align === "end" ? "left-2" : "right-2"
+            }`}
+          >
+            {Object.entries(aggregated).map(([emoji, count]) => {
+              const isMine = myReaction?.emoji === emoji;
+              return (
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={() => onToggleReaction?.(msg.id, emoji)}
+                  className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-sm border shadow-sm transition-colors ${
+                    isMine
+                      ? "bg-emerald-50 border-emerald-300 text-emerald-800"
+                      : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  <span>{emoji}</span>
+                  {count > 1 && <span className="text-xs">{count}</span>}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

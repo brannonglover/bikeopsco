@@ -342,7 +342,8 @@ html.dark .hover\:bg-red-300:hover {
 /* Border overrides */
 html.dark .border-slate-200,
 html.dark .border-slate-200\/80,
-html.dark .border-slate-100 {
+html.dark .border-slate-100,
+html.dark .md\:border-slate-200 {
   border-color: var(--surface-border);
 }
 html.dark .border-slate-300 {
