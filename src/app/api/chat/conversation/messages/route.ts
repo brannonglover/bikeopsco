@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCustomerFromSession } from "@/lib/chat-session";
+import { sendPushToAllStaff } from "@/lib/push";
 import { z } from "zod";
 
 const createSchema = z.object({
@@ -94,6 +95,20 @@ export async function POST(request: NextRequest) {
     where: { id: conversation.id },
     data: { updatedAt: new Date(), customerTypingAt: null },
   });
+
+  const customer = await prisma.customer.findUnique({
+    where: { id: customerId },
+    select: { firstName: true, lastName: true },
+  });
+  const customerName = customer
+    ? [customer.firstName, customer.lastName].filter(Boolean).join(" ")
+    : "Customer";
+  const pushBody = bodyText?.trim() || "Sent a photo";
+  sendPushToAllStaff({
+    title: `New message from ${customerName}`,
+    body: pushBody,
+    data: { type: "new_message", conversationId: conversation.id },
+  }).catch((err) => console.error("Push notify staff:", err));
 
   return NextResponse.json(message);
 }

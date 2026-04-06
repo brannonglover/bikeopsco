@@ -16,11 +16,12 @@ model Customer {
   phone            String?
   address          String?
   notes            String?
-  bikes           Bike[]
+  bikes            Bike[]
   jobs             Job[]
   conversations    Conversation[]
   magicLinkTokens  MagicLinkToken[]
   chatSessions     ChatSession[]
+  pushTokens       PushToken[]
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
 }
@@ -301,12 +302,28 @@ enum MessageSender {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
+  id           String      @id @default(cuid())
+  email        String      @unique
   passwordHash String
   name         String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  pushTokens   PushToken[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+}
+
+model PushToken {
+  id         String    @id @default(cuid())
+  token      String    @unique
+  platform   String
+  userId     String?
+  user       User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([customerId])
 }
 
 model MagicLinkToken {

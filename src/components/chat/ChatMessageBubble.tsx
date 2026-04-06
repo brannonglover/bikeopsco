@@ -5,6 +5,13 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import type { ChatMessage, MessageSender } from "@/lib/types";
 import { formatChatTime } from "@/lib/format-chat-time";
 import { LinkifiedMessageBody } from "./LinkifiedMessageBody";
+import { LinkPreview } from "./LinkPreview";
+
+const URL_REGEX = /(https?:\/\/[^\s<]+)/g;
+
+function extractUrls(text: string): string[] {
+  return Array.from(new Set(text.match(URL_REGEX) ?? []));
+}
 
 export const REACTION_EMOJIS = ["\u{1F44D}", "\u{2764}\u{FE0F}", "\u{1F602}", "\u{1F62E}", "\u{1F622}", "\u{1F64F}"];
 
@@ -299,6 +306,11 @@ export function ChatMessageBubble({
                     linkClassName={linkClassName}
                   />
                 ) : null}
+                {msg.body
+                  ? extractUrls(msg.body).map((url) => (
+                      <LinkPreview key={url} url={url} />
+                    ))
+                  : null}
                 <div
                   className={`mt-1 flex min-h-[1.25rem] items-center gap-2 text-xs ${metaClassName} ${
                     align === "end" ? "justify-end" : "justify-start"

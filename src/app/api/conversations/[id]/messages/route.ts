@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { sendChatStaffSms } from "@/lib/sms";
+import { sendPushToCustomer, sendPushToAllStaff } from "@/lib/push";
 import { z } from "zod";
 
 const createSchema = z.object({
@@ -104,21 +105,52 @@ export async function POST(
       data: { updatedAt: new Date() },
     });
 
-    if (sender === "STAFF" && conversation.customer.phone) {
+    const shopName = process.env.SHOP_NAME || "Basement Bike Mechanic";
+
+    if (sender === "STAFF") {
       const hasText = Boolean(bodyText?.trim());
       const hasAtt = Boolean(attachmentIds?.length);
-      if (hasText) {
-        const smsText = hasAtt
-          ? `${bodyText!.trim()} (see chat for photos)`
-          : bodyText!.trim();
-        sendChatStaffSms(conversation.customer.phone, smsText).catch((err) =>
-          console.error("Chat SMS notify:", err)
-        );
-      } else if (hasAtt) {
-        sendChatStaffSms(conversation.customer.phone, "", {
-          attachmentOnly: true,
-        }).catch((err) => console.error("Chat SMS notify:", err));
+
+      if (conversation.customer.phone) {
+        if (hasText) {
+          const smsText = hasAtt
+            ? `${bodyText!.trim()} (see chat for photos)`
+            : bodyText!.trim();
+          sendChatStaffSms(conversation.customer.phone, smsText).catch((err) =>
+            console.error("Chat SMS notify:", err)
+          );
+        } else if (hasAtt) {
+          sendChatStaffSms(conversation.customer.phone, "", {
+            attachmentOnly: true,
+          }).catch((err) => console.error("Chat SMS notify:", err));
+        }
       }
+
+      const pushBody = hasText
+        ? bodyText!.trim()
+        : hasAtt
+          ? "Sent a photo"
+          : "New message";
+      sendPushToCustomer(conversation.customerId, {
+        title: shopName,
+        body: pushBody,
+        data: { type: "new_message", conversationId },
+      }).catch((err) => console.error("Push notify customer:", err));
+    }
+
+    if (sender === "CUSTOMER") {
+      const customerName = [
+        conversation.customer.firstName,
+        conversation.customer.lastName,
+      ]
+        .filter(Boolean)
+        .join(" ");
+      const pushBody = bodyText?.trim() || "Sent a photo";
+      sendPushToAllStaff({
+        title: `New message from ${customerName}`,
+        body: pushBody,
+        data: { type: "new_message", conversationId },
+      }).catch((err) => console.error("Push notify staff:", err));
     }
 
     return NextResponse.json(message);
