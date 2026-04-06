@@ -472,7 +472,6 @@ export async function sendBookingRequestNotification(
 
   const baseUrl = getAppUrl();
   const calendarUrl = baseUrl ? `${baseUrl}/calendar` : "";
-  const shopName = process.env.SHOP_NAME || "Basement Bike Mechanic";
   const customerName = job.customer
     ? job.customer.lastName
       ? `${job.customer.firstName} ${job.customer.lastName}`
