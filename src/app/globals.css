@@ -166,6 +166,9 @@ html.dark .bg-slate-50\/90 {
 html.dark .bg-slate-50\/80 {
   background-color: rgba(15, 23, 42, 0.8);
 }
+html.dark .bg-slate-50\/60 {
+  background-color: rgba(30, 41, 59, 0.6);
+}
 html.dark .bg-slate-50\/50 {
   background-color: rgba(15, 23, 42, 0.5);
 }
@@ -312,6 +315,9 @@ html.dark .hover\:text-emerald-800:hover {
 html.dark .hover\:text-red-800:hover {
   color: #fecaca;
 }
+html.dark .hover\:text-amber-600:hover {
+  color: #fbbf24;
+}
 html.dark .hover\:text-amber-800:hover {
   color: #fde68a;
 }
@@ -428,6 +434,9 @@ html.dark .border-amber-200\/90 {
 html.dark .border-amber-300,
 html.dark .border-amber-400 {
   border-color: rgba(245, 158, 11, 0.4);
+}
+html.dark .hover\:border-amber-400:hover {
+  border-color: rgba(245, 158, 11, 0.5);
 }
 html.dark .border-emerald-300 {
   border-color: rgba(16, 185, 129, 0.4);

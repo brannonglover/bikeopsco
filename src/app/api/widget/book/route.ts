@@ -3,6 +3,7 @@ import { Stage } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { sendBookingRequestNotification } from "@/lib/email";
+import { sendPushToAllStaff } from "@/lib/push";
 import { syncCollectionJobService } from "@/lib/collection-fee";
 import { coerceCustomerPhone } from "@/lib/phone";
 
@@ -219,9 +220,16 @@ export async function POST(request: NextRequest) {
       return addCorsHeaders(res, origin);
     }
 
-    // Notify shop owner of new booking request
+    // Notify shop owner of new booking request (email + push)
     sendBookingRequestNotification(job).catch((e) =>
-      console.error("[Widget book] Staff notification failed:", e)
+      console.error("[Widget book] Staff email notification failed:", e)
+    );
+    sendPushToAllStaff({
+      title: "New Booking Request",
+      body: `${job.customer.firstName} ${job.customer.lastName} — ${job.bikeMake} ${job.bikeModel}`,
+      data: { type: "booking_request", jobId: job.id },
+    }).catch((e) =>
+      console.error("[Widget book] Staff push notification failed:", e)
     );
 
     const res = NextResponse.json({
