@@ -252,7 +252,7 @@ function JobBikeSection({
     setSavingWorkingOn(true);
     try {
       const body: Record<string, unknown> = { workingOnJobBikeId: nextId };
-      if (nextId && shouldLeaveWaitingOnPartsColumn(job, nextId)) {
+      if (nextId && job.stage !== "WORKING_ON") {
         body.stage = "WORKING_ON";
         body.notifyCustomer = false;
       }
