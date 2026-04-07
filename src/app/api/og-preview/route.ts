@@ -24,6 +24,18 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Invalid URL" }, { status: 400 });
   }
 
+  // Amazon blocks server-side scraping from cloud IPs with bot-detection. Instead,
+  // extract the ASIN and construct the image URL directly from Amazon's image CDN.
+  if (isAmazonUrl(url)) {
+    const asin = extractAsin(url);
+    if (asin) {
+      return NextResponse.json({
+        imageUrl: `https://images-na.ssl-images-amazon.com/images/P/${asin}.01._SL500_.jpg`,
+        title: titleFromAmazonUrl(url),
+      });
+    }
+  }
+
   try {
     const response = await fetch(url, {
       headers: {
@@ -171,4 +183,43 @@ function findImageInJsonLd(data: unknown): string | undefined {
 function extractTitle(html: string): string | undefined {
   const match = /<title[^>]*>([^<]+)<\/title>/i.exec(html);
   return match?.[1]?.trim();
+}
+
+function isAmazonUrl(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    return hostname.includes("amazon.") || hostname.includes("amzn.");
+  } catch {
+    return false;
+  }
+}
+
+function extractAsin(url: string): string | undefined {
+  const patterns = [
+    /\/dp\/([A-Z0-9]{10})/i,
+    /\/gp\/product\/([A-Z0-9]{10})/i,
+    /\/product\/([A-Z0-9]{10})/i,
+  ];
+  for (const pattern of patterns) {
+    const match = pattern.exec(url);
+    if (match) return match[1].toUpperCase();
+  }
+  return undefined;
+}
+
+/**
+ * Derives a human-readable title from the URL slug.
+ * Amazon URLs often look like /Product-Name-Here/dp/ASIN — extract that slug.
+ */
+function titleFromAmazonUrl(url: string): string | null {
+  try {
+    const pathname = new URL(url).pathname;
+    const match = /^\/([^/]+)\/dp\//i.exec(pathname);
+    if (match && match[1].length > 2) {
+      return decodeURIComponent(match[1].replace(/-/g, " "));
+    }
+  } catch {
+    // ignore
+  }
+  return null;
 }
