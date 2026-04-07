@@ -14,6 +14,7 @@ import { hasUnreadCustomerMessage } from "@/lib/chat-unread";
 import { useChatNotifications } from "@/hooks/useChatNotifications";
 
 const StaffChatAttentionContext = createContext(0);
+const StaffChatUnreadCustomerIdsContext = createContext<ReadonlySet<string>>(new Set());
 
 export function StaffChatAttentionProvider({
   children,
@@ -49,11 +50,30 @@ export function StaffChatAttentionProvider({
     [conversations, syncEnabled]
   );
 
+  const unreadCustomerIds = useMemo(
+    () =>
+      new Set(
+        syncEnabled
+          ? conversations.filter(hasUnreadCustomerMessage).map((c) => c.customerId)
+          : []
+      ),
+    [conversations, syncEnabled]
+  );
+
   return (
-    <StaffChatAttentionContext.Provider value={waitingCount}>{children}</StaffChatAttentionContext.Provider>
+    <StaffChatAttentionContext.Provider value={waitingCount}>
+      <StaffChatUnreadCustomerIdsContext.Provider value={unreadCustomerIds}>
+        {children}
+      </StaffChatUnreadCustomerIdsContext.Provider>
+    </StaffChatAttentionContext.Provider>
   );
 }
 
 export function useStaffChatWaitingCount() {
   return useContext(StaffChatAttentionContext);
+}
+
+/** Returns the set of customer IDs that have unread messages waiting for staff. */
+export function useUnreadChatCustomerIds() {
+  return useContext(StaffChatUnreadCustomerIdsContext);
 }

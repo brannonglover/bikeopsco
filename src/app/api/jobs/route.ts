@@ -37,6 +37,7 @@ export async function GET(request: NextRequest) {
     const weekStart = searchParams.get("weekStart");
     const weekEnd = searchParams.get("weekEnd");
     const archived = searchParams.get("archived") === "true";
+    const customerIdFilter = searchParams.get("customerId");
 
     const where: Record<string, unknown> = {};
 
@@ -44,6 +45,10 @@ export async function GET(request: NextRequest) {
       where.archivedAt = { not: null };
     } else {
       where.archivedAt = null;
+    }
+
+    if (customerIdFilter) {
+      where.customerId = customerIdFilter;
     }
 
     if (weekStart && weekEnd) {

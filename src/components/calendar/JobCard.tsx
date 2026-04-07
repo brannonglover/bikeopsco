@@ -4,6 +4,7 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { Job, Stage } from "@/lib/types";
 import { getJobBikeDisplayTitle, getDisplayPartsForJobBikeRow } from "@/lib/job-display";
+import { useUnreadChatCustomerIds } from "@/contexts/StaffChatAttentionContext";
 
 const STAGE_LABELS: Record<Stage, string> = {
   PENDING_APPROVAL: "Pending approval",
@@ -71,6 +72,8 @@ export function JobCardContent({
   notifyCustomer?: boolean;
   onNotifyCustomerChange?: (notify: boolean) => void;
 }) {
+  const unreadChatCustomerIds = useUnreadChatCustomerIds();
+  const hasPendingChat = !!job.customerId && unreadChatCustomerIds.has(job.customerId);
   const address =
     job.deliveryType === "COLLECTION_SERVICE"
       ? job.collectionAddress || job.customer?.address
@@ -150,6 +153,15 @@ export function JobCardContent({
           </p>
         );
       })()}
+      {hasPendingChat && (
+        <p className="flex items-center gap-1 text-[11px] font-semibold text-emerald-700 mt-0.5">
+          <span className="relative flex h-2 w-2 flex-shrink-0">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+          </span>
+          Chat waiting
+        </p>
+      )}
       {job.customer && (
         <p className="text-sm text-slate-700 font-medium mt-1.5" title={`${job.customer.firstName}${job.customer.lastName ? ` ${job.customer.lastName}` : ""}`}>
           {job.customer.lastName

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { flushSync } from "react-dom";
 import {
   DndContext,
@@ -86,8 +86,10 @@ function cloneJobForRevert(job: Job): Job {
 }
 
 export function KanbanBoard() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const paidJobId = searchParams.get("paid");
+  const openJobId = searchParams.get("openJob");
   const [showPaidBanner, setShowPaidBanner] = useState(!!paidJobId);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [cancelledExpanded, setCancelledExpanded] = useState(false);
@@ -223,6 +225,15 @@ export function KanbanBoard() {
       fetchJobs();
     }
   }, [paidJobId, fetchJobs]);
+
+  useEffect(() => {
+    if (!openJobId || loading) return;
+    const job = jobs.find((j) => j.id === openJobId);
+    if (job) {
+      setSelectedJob(job);
+      router.replace("/", { scroll: false });
+    }
+  }, [openJobId, jobs, loading, router]);
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveJobId(event.active.id as string);

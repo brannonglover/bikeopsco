@@ -200,6 +200,7 @@ function ChatPageContent() {
   const [, setTypingTick] = useState(0);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const selectedIdRef = useRef<string | null>(null);
+  const [customerActiveJobId, setCustomerActiveJobId] = useState<string | null>(null);
 
   useLayoutEffect(() => {
     selectedIdRef.current = selectedId;
@@ -357,6 +358,33 @@ function ChatPageContent() {
   }, [selectedId, fetchMessages]);
 
   useChatNotifications(conversations, fetchConversations, selectedId);
+
+  useEffect(() => {
+    const customerId = conversations.find((c) => c.id === selectedId)?.customerId;
+    if (!customerId) {
+      setCustomerActiveJobId(null);
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/jobs?customerId=${encodeURIComponent(customerId)}`)
+      .then((r) => r.json())
+      .then((data: unknown) => {
+        if (cancelled) return;
+        const jobs = Array.isArray(data) ? (data as { id: string; stage: string }[]) : [];
+        const active = jobs.find(
+          (j) => j.stage !== "CANCELLED" && j.stage !== "COMPLETED"
+        );
+        setCustomerActiveJobId(active?.id ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setCustomerActiveJobId(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // Only re-fetch when the selected conversation changes, not on every conversations poll.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
 
   useEffect(() => {
     if (!contextMenu) return;
@@ -716,6 +744,21 @@ function ChatPageContent() {
                     <p className="text-xs text-slate-500 truncate">{selectedConv.customer.email}</p>
                   )}
                 </div>
+                {customerActiveJobId && (
+                  <a
+                    href={`/?openJob=${encodeURIComponent(customerActiveJobId)}`}
+                    className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors"
+                    title="Go to job card on the board"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} aria-hidden>
+                      <rect x="3" y="3" width="7" height="7" />
+                      <rect x="14" y="3" width="7" height="7" />
+                      <rect x="3" y="14" width="7" height="7" />
+                      <rect x="14" y="14" width="7" height="7" />
+                    </svg>
+                    Job card
+                  </a>
+                )}
                 {selectedConv?.customer.email && (
                   <InviteButton customerId={selectedConv.customerId} />
                 )}
