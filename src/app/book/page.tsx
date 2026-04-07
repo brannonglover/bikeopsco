@@ -13,6 +13,12 @@ interface Service {
   price: number;
 }
 
+type BikeEntry = {
+  make: string;
+  model: string;
+  bikeType: "AUTO" | "REGULAR" | "E_BIKE";
+};
+
 const BASE = typeof window !== "undefined" ? "" : process.env.NEXT_PUBLIC_APP_URL || "";
 
 const SHOP_DISPLAY_NAME =
@@ -37,15 +43,13 @@ function BookForm() {
   const [error, setError] = useState<string | null>(null);
 
   const [serviceSearch, setServiceSearch] = useState("");
+  const [bikes, setBikes] = useState<BikeEntry[]>([{ make: "", model: "", bikeType: "AUTO" }]);
   const [form, setForm] = useState({
     firstName: "",
     lastName: "",
     email: "",
     phone: "",
     address: "",
-    bikeMake: "",
-    bikeModel: "",
-    bikeType: "AUTO" as "AUTO" | "REGULAR" | "E_BIKE",
     deliveryType: "DROP_OFF_AT_SHOP" as "DROP_OFF_AT_SHOP" | "COLLECTION_SERVICE",
     dropOffDate: getDefaultDropOffDateTime(),
     pickupDate: "",
@@ -56,6 +60,11 @@ function BookForm() {
     serviceIds: [] as string[],
     smsConsent: false,
   });
+
+  const addBike = () => setBikes((p) => [...p, { make: "", model: "", bikeType: "AUTO" }]);
+  const removeBike = (i: number) => setBikes((p) => p.filter((_, idx) => idx !== i));
+  const updateBike = (i: number, field: keyof BikeEntry, value: string) =>
+    setBikes((p) => p.map((b, idx) => (idx === i ? { ...b, [field]: value } : b)));
 
   useEffect(() => {
     fetch(`${BASE}/api/widget/services`)
@@ -104,9 +113,11 @@ function BookForm() {
           phone: form.phone.trim(),
           smsConsent: true,
           address: form.address.trim() || null,
-          bikeMake: form.bikeMake.trim(),
-          bikeModel: form.bikeModel.trim(),
-          bikeType: form.bikeType === "AUTO" ? undefined : form.bikeType,
+          bikes: bikes.map((b) => ({
+            make: b.make.trim(),
+            model: b.model.trim(),
+            bikeType: b.bikeType === "AUTO" ? undefined : b.bikeType,
+          })),
           deliveryType: form.deliveryType,
           dropOffDate: form.dropOffDate || null,
           pickupDate: form.pickupDate || null,
@@ -257,52 +268,69 @@ function BookForm() {
           </label>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">
-              Bike make *
-            </label>
-            <input
-              type="text"
-              required
-              value={form.bikeMake}
-              onChange={(e) => setForm((p) => ({ ...p, bikeMake: e.target.value }))}
-              className="input-book"
-              placeholder="Trek, Specialized..."
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">
-              Bike model *
-            </label>
-            <input
-              type="text"
-              required
-              value={form.bikeModel}
-              onChange={(e) => setForm((p) => ({ ...p, bikeModel: e.target.value }))}
-              className="input-book"
-              placeholder="Domane SL 6"
-            />
-          </div>
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">Bike type</label>
-          <select
-            value={form.bikeType}
-            onChange={(e) =>
-              setForm((p) => ({
-                ...p,
-                bikeType: e.target.value as "AUTO" | "REGULAR" | "E_BIKE",
-              }))
-            }
-            className="input-book"
+        <div className="space-y-3">
+          {bikes.map((bike, i) => (
+            <div key={i} className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-slate-700">
+                  {bikes.length > 1 ? `Bike ${i + 1}` : "Bike"}
+                </span>
+                {bikes.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => removeBike(i)}
+                    className="text-xs text-red-500 hover:text-red-700 transition-colors"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Make *</label>
+                  <input
+                    type="text"
+                    required
+                    value={bike.make}
+                    onChange={(e) => updateBike(i, "make", e.target.value)}
+                    className="input-book"
+                    placeholder="Trek, Specialized..."
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Model *</label>
+                  <input
+                    type="text"
+                    required
+                    value={bike.model}
+                    onChange={(e) => updateBike(i, "model", e.target.value)}
+                    className="input-book"
+                    placeholder="Domane SL 6"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Type</label>
+                <select
+                  value={bike.bikeType}
+                  onChange={(e) => updateBike(i, "bikeType", e.target.value)}
+                  className="input-book"
+                >
+                  <option value="AUTO">Auto (from make/model)</option>
+                  <option value="REGULAR">Standard bike</option>
+                  <option value="E_BIKE">E-bike</option>
+                </select>
+              </div>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={addBike}
+            className="w-full rounded-xl border-2 border-dashed border-slate-300 py-2.5 text-sm font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600 transition-colors"
           >
-            <option value="AUTO">Auto (from make/model)</option>
-            <option value="REGULAR">Standard bike</option>
-            <option value="E_BIKE">E-bike</option>
-          </select>
-          <p className="mt-1 text-xs text-slate-500">
+            + Add another bike
+          </button>
+          <p className="text-xs text-slate-500">
             For collection service, we charge $20 pickup/dropoff within 5 mi for a standard bike and $30 for an e-bike. Auto uses your make/model to guess.
           </p>
         </div>
