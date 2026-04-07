@@ -596,6 +596,132 @@ ${calendarUrl ? buildCustomerEmailCtaButton(calendarUrl, "Review & accept or rej
   }
 }
 
+export async function sendBookingReceivedEmail(
+  job: {
+    id: string;
+    bikeMake: string;
+    bikeModel: string;
+    deliveryType: string;
+    dropOffDate: Date | string | null;
+    pickupDate: Date | string | null;
+    collectionAddress?: string | null;
+    collectionWindowStart?: string | null;
+    collectionWindowEnd?: string | null;
+    customerNotes?: string | null;
+    customer: { firstName: string; lastName: string | null; email: string | null } | null;
+    jobServices?: { service?: { name: string } | null; customServiceName?: string | null; quantity: number }[];
+  }
+): Promise<{ ok: boolean; error?: string }> {
+  const resend = getResend();
+  if (!resend) return { ok: false, error: "Email not configured" };
+
+  const customerEmail = job.customer?.email?.trim();
+  if (!customerEmail) return { ok: false, error: "No customer email" };
+
+  const customerName = job.customer
+    ? job.customer.lastName
+      ? `${job.customer.firstName} ${job.customer.lastName}`
+      : job.customer.firstName
+    : "there";
+
+  const baseUrl = getAppUrl();
+  const statusUrl = baseUrl ? `${baseUrl}/status/${job.id}` : null;
+
+  const formatDate = (d: Date | string | null): string => {
+    if (!d) return "Not set";
+    return new Date(d).toLocaleDateString("en-US", {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
+
+  const formatWindowTime = (t: string) => {
+    const [h, m] = t.split(":");
+    const hour = parseInt(h, 10);
+    const ampm = hour >= 12 ? "pm" : "am";
+    const h12 = hour % 12 || 12;
+    return m === "00" ? `${h12}${ampm}` : `${h12}:${m}${ampm}`;
+  };
+
+  const servicesList =
+    job.jobServices
+      ?.map((js) => `${js.service?.name ?? js.customServiceName ?? "Service"}${js.quantity > 1 ? ` × ${js.quantity}` : ""}`)
+      .join(", ") || null;
+
+  const isCollection = job.deliveryType === "COLLECTION_SERVICE";
+
+  let scheduleLines = "";
+  if (isCollection) {
+    scheduleLines += `<tr><td style="padding:10px 16px;font-size:14px;color:#64748b;border-bottom:1px solid #e2e8f0;white-space:nowrap;width:40%"><strong>Collection date</strong></td><td style="padding:10px 16px;font-size:14px;color:#334155;border-bottom:1px solid #e2e8f0">${escapeHtml(formatDate(job.dropOffDate))}</td></tr>`;
+    if (job.collectionAddress) {
+      scheduleLines += `<tr><td style="padding:10px 16px;font-size:14px;color:#64748b;border-bottom:1px solid #e2e8f0;white-space:nowrap"><strong>Address</strong></td><td style="padding:10px 16px;font-size:14px;color:#334155;border-bottom:1px solid #e2e8f0">${escapeHtml(job.collectionAddress)}</td></tr>`;
+    }
+    if (job.collectionWindowStart || job.collectionWindowEnd) {
+      const s = job.collectionWindowStart ? formatWindowTime(job.collectionWindowStart) : null;
+      const e = job.collectionWindowEnd ? formatWindowTime(job.collectionWindowEnd) : null;
+      const windowText = s && e ? `${s} – ${e}` : s ? `from ${s}` : `until ${e}`;
+      scheduleLines += `<tr><td style="padding:10px 16px;font-size:14px;color:#64748b;border-bottom:1px solid #e2e8f0;white-space:nowrap"><strong>Collection window</strong></td><td style="padding:10px 16px;font-size:14px;color:#334155;border-bottom:1px solid #e2e8f0">${escapeHtml(windowText)}</td></tr>`;
+    }
+  } else {
+    scheduleLines += `<tr><td style="padding:10px 16px;font-size:14px;color:#64748b;border-bottom:1px solid #e2e8f0;white-space:nowrap;width:40%"><strong>Drop-off date</strong></td><td style="padding:10px 16px;font-size:14px;color:#334155;border-bottom:1px solid #e2e8f0">${escapeHtml(formatDate(job.dropOffDate))}</td></tr>`;
+    scheduleLines += `<tr><td style="padding:10px 16px;font-size:14px;color:#64748b;white-space:nowrap"><strong>Est. pick-up date</strong></td><td style="padding:10px 16px;font-size:14px;color:#334155">${escapeHtml(formatDate(job.pickupDate))}</td></tr>`;
+  }
+
+  const ctaButton = statusUrl
+    ? buildCustomerEmailCtaButton(statusUrl, "Track your booking")
+    : "";
+
+  const innerHtml = `
+<p style="margin:0 0 20px">Hi ${escapeHtml(customerName)},</p>
+<p style="margin:0 0 20px">Thanks for submitting your booking request — we've received it and will review it shortly. You'll get a confirmation email once it's approved.</p>
+
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom:20px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+  <tbody>
+    <tr style="background-color:#f8fafc">
+      <td colspan="2" style="padding:12px 16px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#64748b">Your booking</td>
+    </tr>
+    <tr>
+      <td style="padding:10px 16px;font-size:14px;color:#64748b;border-bottom:1px solid #e2e8f0;white-space:nowrap;width:40%"><strong>Bike</strong></td>
+      <td style="padding:10px 16px;font-size:14px;color:#334155;border-bottom:1px solid #e2e8f0">${escapeHtml(job.bikeMake)} ${escapeHtml(job.bikeModel)}</td>
+    </tr>
+    ${servicesList ? `<tr><td style="padding:10px 16px;font-size:14px;color:#64748b;border-bottom:1px solid #e2e8f0;white-space:nowrap"><strong>Services</strong></td><td style="padding:10px 16px;font-size:14px;color:#334155;border-bottom:1px solid #e2e8f0">${escapeHtml(servicesList)}</td></tr>` : ""}
+    ${scheduleLines}
+  </tbody>
+</table>
+
+${job.customerNotes ? `<p style="margin:0 0 20px;font-size:14px;color:#64748b"><strong>Your notes:</strong> ${escapeHtml(job.customerNotes)}</p>` : ""}
+${ctaButton}
+`;
+
+  const branding = getCustomerEmailBrandingAssets();
+  const html = buildCustomerEmailHtml({
+    innerHtml,
+    headerLogoSrc: branding.headerLogoSrc,
+    heading: "Booking Request Received",
+  });
+  const attachments = customerEmailBrandingAttachments(branding);
+
+  try {
+    const { error } = await resend.emails.send({
+      from: getFromEmail(),
+      to: customerEmail,
+      subject: `We received your booking request — ${job.bikeMake} ${job.bikeModel}`,
+      html,
+      ...(attachments && { attachments }),
+    });
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+    return { ok: true };
+  } catch (e) {
+    const err = e instanceof Error ? e.message : "Unknown error";
+    return { ok: false, error: err };
+  }
+}
+
 export async function sendBookingDeclinedEmail(
   recipient: string,
   job: {

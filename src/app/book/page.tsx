@@ -412,7 +412,7 @@ function BookForm() {
                 What time range works best for the collection?
               </p>
               <div className="grid grid-cols-2 gap-3">
-                <div>
+                <div className="min-w-0 overflow-hidden">
                   <label className="mb-0.5 block text-xs text-slate-500">From</label>
                   <input
                     type="time"
@@ -421,7 +421,7 @@ function BookForm() {
                     className="input-book"
                   />
                 </div>
-                <div>
+                <div className="min-w-0 overflow-hidden">
                   <label className="mb-0.5 block text-xs text-slate-500">To</label>
                   <input
                     type="time"
@@ -436,7 +436,7 @@ function BookForm() {
         )}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="min-w-0">
+          <div className="min-w-0 overflow-hidden">
             <label className="mb-1 block text-sm font-medium text-slate-700">
               {form.deliveryType === "COLLECTION_SERVICE" ? "Preferred collection pickup" : "Preferred drop-off date"}
             </label>
@@ -447,7 +447,7 @@ function BookForm() {
               className="input-book"
             />
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 overflow-hidden">
             <label className="mb-1 block text-sm font-medium text-slate-700">
               {form.deliveryType === "COLLECTION_SERVICE" ? "Preferred collection return" : "Preferred pickup date"}
             </label>
