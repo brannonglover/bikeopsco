@@ -226,7 +226,7 @@ export async function POST(request: NextRequest) {
     );
     sendPushToAllStaff({
       title: "New Booking Request",
-      body: `${job.customer.firstName} ${job.customer.lastName} — ${job.bikeMake} ${job.bikeModel}`,
+      body: `${job.customer?.firstName ?? "Unknown"} ${job.customer?.lastName ?? ""} — ${job.bikeMake} ${job.bikeModel}`,
       data: { type: "booking_request", jobId: job.id },
     }).catch((e) =>
       console.error("[Widget book] Staff push notification failed:", e)
