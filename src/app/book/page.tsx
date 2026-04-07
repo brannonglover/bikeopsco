@@ -347,7 +347,7 @@ function BookForm() {
               placeholder="Search services..."
               className="input-book mb-2"
             />
-            <div className="max-h-32 space-y-2 overflow-y-auto rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
+            <div className="max-h-[9.5rem] space-y-2 overflow-y-auto rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
               {filteredServices.map((s) => (
                 <label
                   key={s.id}
