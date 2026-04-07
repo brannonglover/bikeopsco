@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+import { getToken } from "next-auth/jwt";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { authOptions } from "@/lib/auth";
@@ -16,11 +17,21 @@ const registerSchema = z.object({
  * Customer: validated via chat_session cookie.
  * Returns the identity or null if unauthenticated.
  */
-async function resolveIdentity(): Promise<
+async function resolveIdentity(
+  req: NextRequest
+): Promise<
   | { kind: "staff"; userId: string }
   | { kind: "customer"; customerId: string }
   | null
 > {
+  // Try getToken first: it accepts both the plain and __Secure- cookie variants,
+  // which makes it compatible with the mobile app regardless of which name it stored.
+  const jwtToken = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+  if (jwtToken?.id) {
+    return { kind: "staff", userId: jwtToken.id as string };
+  }
+
+  // Fall back to getServerSession for any browser-based staff sessions.
   const session = await getServerSession(authOptions);
   if (session?.user?.id) {
     return { kind: "staff", userId: session.user.id };
@@ -36,7 +47,7 @@ async function resolveIdentity(): Promise<
 
 /** POST /api/push-tokens — register a push token for the current user. */
 export async function POST(request: NextRequest) {
-  const identity = await resolveIdentity();
+  const identity = await resolveIdentity(request);
   if (!identity) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -83,7 +94,7 @@ export async function POST(request: NextRequest) {
 
 /** DELETE /api/push-tokens?token=... — unregister a push token. */
 export async function DELETE(request: NextRequest) {
-  const identity = await resolveIdentity();
+  const identity = await resolveIdentity(request);
   if (!identity) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

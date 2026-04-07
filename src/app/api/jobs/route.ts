@@ -130,14 +130,45 @@ export async function POST(request: NextRequest) {
         },
       });
 
+      // For each bike without a bikeId, find or create a Bike record on the customer's profile.
+      const resolvedBikes: Array<(typeof bikes)[number] & { bikeId: string | null }> = [];
+      for (const b of bikes) {
+        let bikeId: string | null = b.bikeId ?? null;
+        if (!bikeId && data.customerId) {
+          const existing = await tx.bike.findFirst({
+            where: {
+              customerId: data.customerId,
+              make: { equals: b.make.trim(), mode: "insensitive" },
+              model: { equals: b.model.trim(), mode: "insensitive" },
+            },
+          });
+          if (existing) {
+            bikeId = existing.id;
+          } else {
+            const created = await tx.bike.create({
+              data: {
+                customerId: data.customerId,
+                make: b.make.trim(),
+                model: b.model.trim(),
+                bikeType: b.bikeType ?? null,
+                nickname: b.nickname ?? null,
+                imageUrl: b.imageUrl ?? null,
+              },
+            });
+            bikeId = created.id;
+          }
+        }
+        resolvedBikes.push({ ...b, bikeId });
+      }
+
       await tx.jobBike.createMany({
-        data: bikes.map((b, i) => ({
+        data: resolvedBikes.map((b, i) => ({
           jobId: newJob.id,
           make: b.make,
           model: b.model,
           nickname: b.nickname ?? null,
           imageUrl: b.imageUrl ?? null,
-          bikeId: b.bikeId ?? null,
+          bikeId: b.bikeId,
           bikeType: b.bikeType ?? null,
           sortOrder: i,
         })),

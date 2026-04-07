@@ -155,14 +155,50 @@ export async function PATCH(
           data.bikes.length > 0
             ? data.bikes
             : [{ make: existingJob.bikeMake, model: existingJob.bikeModel }];
+
+        // Determine the effective customerId (may be changing in this same PATCH).
+        const effectiveCustomerId =
+          data.customerId !== undefined ? data.customerId : existingJob.customerId;
+
+        // For each bike without a bikeId, find or create a Bike record on the customer's profile.
+        const resolvedBikes: Array<(typeof bikes)[number] & { bikeId: string | null }> = [];
+        for (const b of bikes) {
+          let bikeId: string | null = ("bikeId" in b ? b.bikeId : null) ?? null;
+          if (!bikeId && effectiveCustomerId) {
+            const existing = await tx.bike.findFirst({
+              where: {
+                customerId: effectiveCustomerId,
+                make: { equals: b.make.trim(), mode: "insensitive" },
+                model: { equals: b.model.trim(), mode: "insensitive" },
+              },
+            });
+            if (existing) {
+              bikeId = existing.id;
+            } else {
+              const created = await tx.bike.create({
+                data: {
+                  customerId: effectiveCustomerId,
+                  make: b.make.trim(),
+                  model: b.model.trim(),
+                  bikeType: ("bikeType" in b ? b.bikeType : null) ?? null,
+                  nickname: ("nickname" in b ? b.nickname : null) ?? null,
+                  imageUrl: ("imageUrl" in b ? b.imageUrl : null) ?? null,
+                },
+              });
+              bikeId = created.id;
+            }
+          }
+          resolvedBikes.push({ ...b, bikeId });
+        }
+
         await tx.jobBike.createMany({
-          data: bikes.map((b, i) => ({
+          data: resolvedBikes.map((b, i) => ({
             jobId: id,
             make: b.make,
             model: b.model,
             nickname: b.nickname ?? null,
             imageUrl: b.imageUrl ?? null,
-            bikeId: b.bikeId ?? null,
+            bikeId: b.bikeId,
             bikeType: b.bikeType ?? null,
             sortOrder: i,
           })),
