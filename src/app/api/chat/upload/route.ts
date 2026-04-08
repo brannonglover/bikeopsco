@@ -44,13 +44,13 @@ export async function POST(request: NextRequest) {
 
     const slug = file.name
       .toLowerCase()
-      .replace(/[^a-z0-9.-]/g, "-")
+      .replace(/[^a-z0-9]/g, "-")
       .replace(/-+/g, "-")
       .replace(/^-|-$/g, "");
-    const ext = file.name.split(".").pop() || "jpg";
+    const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
     const path = `chat/${slug}-${Date.now()}.${ext}`;
 
-    const blob = await put(path, file, { access: BLOB_ACCESS });
+    const blob = await put(path, file, { access: BLOB_ACCESS, addRandomSuffix: true });
     const url = blobDisplayUrl(blob.url, blob.pathname);
 
     const attachment = await prisma.messageAttachment.create({
