@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { sendJobEmail, getTemplateForStage } from "@/lib/email";
 import { syncCollectionJobService } from "@/lib/collection-fee";
+import { sendPushToAllStaff } from "@/lib/push";
 
 const bikeSchema = z.object({
   make: z.string().min(1),
@@ -222,6 +223,13 @@ export async function POST(request: NextRequest) {
         console.error("[Job created] Booking email failed:", result.error);
       }
     }
+
+    const customerName = [job.customer?.firstName, job.customer?.lastName].filter(Boolean).join(" ") || "Walk-in";
+    sendPushToAllStaff({
+      title: "New Job",
+      body: `${customerName} — ${job.bikeMake} ${job.bikeModel}`.trim(),
+      data: { type: "new_job", jobId: job.id },
+    }).catch((e) => console.error("[Job created] Staff push failed:", e));
 
     return NextResponse.json(job);
   } catch (error) {
