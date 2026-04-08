@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
 
-export async function POST(_request: NextRequest) {
+export async function POST() {
   try {
     const stripe = getStripe();
     const connectionToken = await stripe.terminal.connectionTokens.create();
