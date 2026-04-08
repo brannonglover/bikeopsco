@@ -1,0 +1,14 @@
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "apwc_1TJyWA2KeCrirEdDz9ddOHyA",
+      "object": "apple_pay_domain",
+      "created": 1775663990,
+      "domain_name": "bikeops.co",
+      "livemode": true
+    }
+  ],
+  "has_more": false,
+  "url": "/v1/apple_pay/domains"
+}

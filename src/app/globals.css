@@ -57,7 +57,7 @@
   body {
     color: var(--foreground);
     background: var(--background);
-    font-family: var(--font-jakarta), system-ui, -apple-system, sans-serif;
+    font-family: var(--font-jakarta), system-ui, -apple-system, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
     overflow-x: hidden;
     width: 100%;
     max-width: 100%;
