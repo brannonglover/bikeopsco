@@ -4,7 +4,7 @@ import { computeAmountWithSurcharge, getStripe, toCents } from "@/lib/stripe";
 import { z } from "zod";
 
 const bodySchema = z.object({
-  mode: z.enum(["online", "in_person"]).optional().default("online"),
+  mode: z.enum(["online", "in_person", "terminal"]).optional().default("online"),
 });
 
 export async function POST(
@@ -56,15 +56,22 @@ export async function POST(
     const amountInCents = toCents(amountToCharge);
 
     const stripe = getStripe();
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: amountInCents,
-      currency: "usd",
-      automatic_payment_methods: { enabled: true },
-      metadata: {
-        jobId,
-        mode,
-      },
-    });
+    const paymentIntent = await stripe.paymentIntents.create(
+      mode === "terminal"
+        ? {
+            amount: amountInCents,
+            currency: "usd",
+            payment_method_types: ["card_present"],
+            capture_method: "automatic",
+            metadata: { jobId, mode },
+          }
+        : {
+            amount: amountInCents,
+            currency: "usd",
+            automatic_payment_methods: { enabled: true },
+            metadata: { jobId, mode },
+          }
+    );
 
     return NextResponse.json({
       clientSecret: paymentIntent.client_secret,
