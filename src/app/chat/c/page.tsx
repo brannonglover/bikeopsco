@@ -20,6 +20,7 @@ export default function CustomerChatPage() {
   const [pendingImages, setPendingImages] = useState<{ id: string; url: string; filename: string }[]>([]);
   const [sending, setSending] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const composerTextareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const editingCountRef = useRef(0);
   const [showScrollDown, setShowScrollDown] = useState(false);
@@ -340,6 +341,9 @@ export default function CustomerChatPage() {
         setMessages((prev) => [...prev, newMsg]);
         setInputText("");
         setPendingImages([]);
+        if (composerTextareaRef.current) {
+          composerTextareaRef.current.style.height = "auto";
+        }
       }
     } finally {
       setSending(false);
@@ -508,9 +512,10 @@ export default function CustomerChatPage() {
                 <polyline points="21 15 16 10 5 21" />
               </svg>
             </button>
-            <input
-              type="text"
+            <textarea
+              ref={composerTextareaRef}
               value={inputText}
+              rows={1}
               onChange={(e) => {
                 const v = e.target.value;
                 setInputText(v);
@@ -520,13 +525,18 @@ export default function CustomerChatPage() {
                   stopTypingPing();
                 }
               }}
+              onInput={(e) => {
+                const el = e.currentTarget;
+                el.style.height = "auto";
+                el.style.height = `${el.scrollHeight}px`;
+              }}
               onBlur={() => stopTypingPing()}
               onFocus={() => {
                 if (inputText.trim().length > 0) startTypingPing();
               }}
               onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), handleSend())}
               placeholder="Type a message…"
-              className="flex-1 min-w-0 px-4 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+              className="flex-1 min-w-0 px-4 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent resize-none overflow-hidden leading-normal"
             />
             <button
               type="button"

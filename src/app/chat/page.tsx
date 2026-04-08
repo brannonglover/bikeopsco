@@ -185,6 +185,7 @@ function ChatPageContent() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customerSearch, setCustomerSearch] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const composerTextareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const editingCountRef = useRef(0);
   const [showScrollDown, setShowScrollDown] = useState(false);
@@ -646,6 +647,9 @@ function ChatPageContent() {
         saveChatDraft(selectedId, { text: "", pendingImages: [] });
         setInputText("");
         setPendingImages([]);
+        if (composerTextareaRef.current) {
+          composerTextareaRef.current.style.height = "auto";
+        }
         fetchConversations();
       } else {
         const data = await res.json();
@@ -882,13 +886,19 @@ function ChatPageContent() {
                       <polyline points="21 15 16 10 5 21" />
                     </svg>
                   </button>
-                  <input
-                    type="text"
+                  <textarea
+                    ref={composerTextareaRef}
                     value={inputText}
+                    rows={1}
                     onChange={(e) => setInputText(e.target.value)}
+                    onInput={(e) => {
+                      const el = e.currentTarget;
+                      el.style.height = "auto";
+                      el.style.height = `${el.scrollHeight}px`;
+                    }}
                     onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), handleSend())}
                     placeholder="Type a message…"
-                    className="flex-1 px-4 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    className="flex-1 px-4 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent resize-none overflow-hidden leading-normal"
                   />
                   <button
                     type="button"
