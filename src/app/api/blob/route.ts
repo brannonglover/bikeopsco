@@ -19,10 +19,14 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const result = await get(urlOrPath, { access: "private" });
+    const result = await get(urlOrPath, { access: "private", useCache: false });
 
     if (!result) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    if (result.statusCode === 304) {
+      return new NextResponse(null, { status: 304 });
     }
 
     const { stream, blob } = result;
