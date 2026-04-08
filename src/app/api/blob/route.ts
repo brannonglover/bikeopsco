@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { get } from "@vercel/blob";
 
+export const dynamic = "force-dynamic";
+
 /**
  * Proxy route to serve blobs from a private Vercel Blob store.
  * Use when BLOB_ACCESS=private - img src should be /api/blob?path=<pathname>

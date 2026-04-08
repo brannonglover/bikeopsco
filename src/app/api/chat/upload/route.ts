@@ -3,6 +3,8 @@ import { put } from "@vercel/blob";
 import { BLOB_ACCESS, blobDisplayUrl } from "@/lib/blob";
 import { prisma } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+
 const MAX_SIZE_MB = 5;
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
 

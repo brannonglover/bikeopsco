@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { put } from "@vercel/blob";
 import { BLOB_ACCESS, blobDisplayUrl } from "@/lib/blob";
 
+export const dynamic = "force-dynamic";
+
 const MAX_SIZE_MB = 5;
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
 
