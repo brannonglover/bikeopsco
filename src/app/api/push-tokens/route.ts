@@ -49,8 +49,10 @@ async function resolveIdentity(
 export async function POST(request: NextRequest) {
   const identity = await resolveIdentity(request);
   if (!identity) {
+    console.warn("[push-tokens] POST — resolveIdentity returned null. Cookie header:", request.headers.get("cookie")?.slice(0, 60), "Auth header:", request.headers.get("authorization")?.slice(0, 30));
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  console.log("[push-tokens] POST — identity resolved:", identity.kind, identity.kind === "staff" ? identity.userId : identity.customerId);
 
   let body: unknown;
   try {
