@@ -178,6 +178,76 @@ function buildBikesPayloadForPatch(
   ];
 }
 
+function InternalNotesSection({
+  job,
+  onJobUpdated,
+}: {
+  job: Job;
+  onJobUpdated?: (job: Job) => void;
+}) {
+  const [value, setValue] = useState(job.internalNotes ?? "");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setValue(job.internalNotes ?? "");
+  }, [job.id, job.internalNotes]);
+
+  const persist = async () => {
+    if (!onJobUpdated) return;
+    const trimmed = value.trim();
+    const current = (job.internalNotes ?? "").trim();
+    if (trimmed === current) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/jobs/${job.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ internalNotes: trimmed || null }),
+      });
+      if (res.ok) {
+        const updated = (await res.json()) as Job;
+        onJobUpdated(updated);
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-2">
+        <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide">
+          Internal Notes
+        </h3>
+        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+          <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden>
+            <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+          </svg>
+          Staff only
+        </span>
+      </div>
+      {onJobUpdated ? (
+        <textarea
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onBlur={persist}
+          disabled={saving}
+          rows={3}
+          placeholder="Add private notes about this job — not visible to the customer…"
+          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none resize-none disabled:opacity-60 placeholder:text-slate-400"
+        />
+      ) : (
+        value ? (
+          <p className="text-sm text-slate-700 whitespace-pre-wrap">{value}</p>
+        ) : (
+          <p className="text-sm text-slate-400 italic">No internal notes.</p>
+        )
+      )}
+      {saving && <p className="text-xs text-slate-400 mt-1">Saving…</p>}
+    </div>
+  );
+}
+
 function PencilIcon({ className }: { className?: string }) {
   return (
     <svg className={className} width="16" height="16" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
@@ -814,6 +884,7 @@ function JobDetailsDateFields({
   };
 
   if (!onJobUpdated) {
+    const windowDisplay = isCollection ? formatWindow(job.collectionWindowStart, job.collectionWindowEnd) : null;
     return (
       <div>
         <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">Dates</h3>
@@ -822,15 +893,17 @@ function JobDetailsDateFields({
             <dt className="text-slate-500 inline">{firstLabel}:</dt>{" "}
             <dd className="inline text-slate-900">{formatDate(job.dropOffDate)}</dd>
           </div>
-          {isCollection && formatWindow(job.collectionWindowStart, job.collectionWindowEnd) && (
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
             <div>
-              <dt className="text-slate-500 inline">Collection window:</dt>{" "}
-              <dd className="inline text-slate-900">{formatWindow(job.collectionWindowStart, job.collectionWindowEnd)}</dd>
+              <dt className="text-slate-500 inline">{secondLabel}:</dt>{" "}
+              <dd className="inline text-slate-900">{formatDate(job.pickupDate)}</dd>
             </div>
-          )}
-          <div>
-            <dt className="text-slate-500 inline">{secondLabel}:</dt>{" "}
-            <dd className="inline text-slate-900">{formatDate(job.pickupDate)}</dd>
+            {windowDisplay && (
+              <dd className="inline-flex items-center gap-1 text-slate-600">
+                <span className="text-slate-400 text-xs">·</span>
+                <span>{windowDisplay}</span>
+              </dd>
+            )}
           </div>
         </dl>
       </div>
@@ -840,56 +913,83 @@ function JobDetailsDateFields({
   return (
     <div>
       <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">Dates</h3>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="min-w-0">
-          <label className="block text-xs font-medium text-slate-600 mb-1">{firstLabel}</label>
-          <input
-            type="datetime-local"
-            value={dropOff}
-            onChange={(e) => setDropOff(e.target.value)}
-            onBlur={() => persist("dropOffDate", dropOff)}
-            disabled={savingField !== null}
-            className="w-full max-w-full min-w-0 px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none disabled:opacity-60 box-border"
-          />
-        </div>
-        <div className="min-w-0">
-          <label className="block text-xs font-medium text-slate-600 mb-1">{secondLabel}</label>
-          <input
-            type="datetime-local"
-            value={pickup}
-            onChange={(e) => setPickup(e.target.value)}
-            onBlur={() => persist("pickupDate", pickup)}
-            disabled={savingField !== null}
-            className="w-full max-w-full min-w-0 px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none disabled:opacity-60 box-border"
-          />
-        </div>
-      </div>
-      {isCollection && (
-        <div className="mt-3">
-          <label className="block text-xs font-medium text-slate-600 mb-1">Collection window</label>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="min-w-0">
-              <label className="block text-[11px] text-slate-500 mb-0.5">From</label>
-              <input
-                type="time"
-                value={windowStart}
-                onChange={(e) => setWindowStart(e.target.value)}
-                onBlur={() => persistWindow(windowStart, windowEnd)}
-                disabled={savingField !== null}
-                className="w-full max-w-full min-w-0 px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none disabled:opacity-60 box-border"
-              />
+      {isCollection ? (
+        <div className="space-y-3">
+          <div className="min-w-0">
+            <label className="block text-xs font-medium text-slate-600 mb-1">{firstLabel}</label>
+            <input
+              type="datetime-local"
+              value={dropOff}
+              onChange={(e) => setDropOff(e.target.value)}
+              onBlur={() => persist("dropOffDate", dropOff)}
+              disabled={savingField !== null}
+              className="w-full max-w-full min-w-0 px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none disabled:opacity-60 box-border"
+            />
+          </div>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="min-w-0 flex-1" style={{ minWidth: "180px" }}>
+                <label className="block text-xs font-medium text-slate-600 mb-1">{secondLabel}</label>
+                <input
+                  type="datetime-local"
+                  value={pickup}
+                  onChange={(e) => setPickup(e.target.value)}
+                  onBlur={() => persist("pickupDate", pickup)}
+                  disabled={savingField !== null}
+                  className="w-full max-w-full min-w-0 px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none disabled:opacity-60 box-border"
+                />
+              </div>
+              <div className="flex items-end gap-1 flex-shrink-0">
+                <div className="min-w-0">
+                  <label className="block text-[11px] text-slate-500 mb-1">Window from</label>
+                  <input
+                    type="time"
+                    value={windowStart}
+                    onChange={(e) => setWindowStart(e.target.value)}
+                    onBlur={() => persistWindow(windowStart, windowEnd)}
+                    disabled={savingField !== null}
+                    className="w-[110px] max-w-full min-w-0 px-2 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none disabled:opacity-60 box-border"
+                  />
+                </div>
+                <span className="text-slate-400 pb-2.5 text-sm">–</span>
+                <div className="min-w-0">
+                  <label className="block text-[11px] text-slate-500 mb-1">To</label>
+                  <input
+                    type="time"
+                    value={windowEnd}
+                    onChange={(e) => setWindowEnd(e.target.value)}
+                    onBlur={() => persistWindow(windowStart, windowEnd)}
+                    disabled={savingField !== null}
+                    className="w-[110px] max-w-full min-w-0 px-2 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none disabled:opacity-60 box-border"
+                  />
+                </div>
+              </div>
             </div>
-            <div className="min-w-0">
-              <label className="block text-[11px] text-slate-500 mb-0.5">To</label>
-              <input
-                type="time"
-                value={windowEnd}
-                onChange={(e) => setWindowEnd(e.target.value)}
-                onBlur={() => persistWindow(windowStart, windowEnd)}
-                disabled={savingField !== null}
-                className="w-full max-w-full min-w-0 px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none disabled:opacity-60 box-border"
-              />
-            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="min-w-0">
+            <label className="block text-xs font-medium text-slate-600 mb-1">{firstLabel}</label>
+            <input
+              type="datetime-local"
+              value={dropOff}
+              onChange={(e) => setDropOff(e.target.value)}
+              onBlur={() => persist("dropOffDate", dropOff)}
+              disabled={savingField !== null}
+              className="w-full max-w-full min-w-0 px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none disabled:opacity-60 box-border"
+            />
+          </div>
+          <div className="min-w-0">
+            <label className="block text-xs font-medium text-slate-600 mb-1">{secondLabel}</label>
+            <input
+              type="datetime-local"
+              value={pickup}
+              onChange={(e) => setPickup(e.target.value)}
+              onBlur={() => persist("pickupDate", pickup)}
+              disabled={savingField !== null}
+              className="w-full max-w-full min-w-0 px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none disabled:opacity-60 box-border"
+            />
           </div>
         </div>
       )}
@@ -1538,7 +1638,7 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
             </div>
           )}
 
-          {(job.customerNotes || job.notes || job.internalNotes || (job.stage === "CANCELLED" && job.cancellationReason)) && (
+          {(job.customerNotes || job.notes || (job.stage === "CANCELLED" && job.cancellationReason)) && (
             <div>
               <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">Notes</h3>
               <div className="space-y-3">
@@ -1560,15 +1660,17 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
                     <p className="text-sm text-slate-700 whitespace-pre-wrap">{job.notes}</p>
                   </div>
                 )}
-                {job.internalNotes && (
-                  <div>
-                    <p className="text-xs font-medium text-slate-500">Internal notes</p>
-                    <p className="text-sm text-slate-700 whitespace-pre-wrap">{job.internalNotes}</p>
-                  </div>
-                )}
               </div>
             </div>
           )}
+
+          <InternalNotesSection
+            job={job}
+            onJobUpdated={(updated) => {
+              setJob(updated);
+              onJobUpdated?.(updated);
+            }}
+          />
 
           {job.customer && <CustomerChatSection customerId={job.customer.id} />}
             </>

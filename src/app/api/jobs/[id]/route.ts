@@ -35,6 +35,7 @@ const updateJobSchema = z.object({
   collectionWindowStart: z.string().optional().nullable(),
   collectionWindowEnd: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
+  internalNotes: z.string().optional().nullable(),
 });
 
 export async function GET(
@@ -105,6 +106,7 @@ export async function PATCH(
     if (data.collectionWindowStart !== undefined) updateData.collectionWindowStart = data.collectionWindowStart;
     if (data.collectionWindowEnd !== undefined) updateData.collectionWindowEnd = data.collectionWindowEnd;
     if (data.notes !== undefined) updateData.notes = data.notes;
+    if (data.internalNotes !== undefined) updateData.internalNotes = data.internalNotes;
     if (data.workingOnJobBikeId !== undefined) updateData.workingOnJobBikeId = data.workingOnJobBikeId;
 
     /** When moving to Working on, pick the only open bike automatically; multiple bikes need an explicit tap in the job modal. */
