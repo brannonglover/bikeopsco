@@ -122,7 +122,7 @@ export default async function ReviewWidget() {
 
   const featuredReviews = (
     Array.isArray(settings?.featuredReviews) ? settings.featuredReviews : []
-  ) as ReviewEntry[];
+  ) as unknown as ReviewEntry[];
 
   // Merge live reviews: google first, then yelp, limit to 5 total
   const liveReviews: ReviewEntry[] = [
