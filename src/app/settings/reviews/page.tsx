@@ -445,16 +445,16 @@ export default function ReviewsSettingsPage() {
               placeholder="https://www.yelp.com/writeareview/biz/..."
               className={inputCls}
             />
-            {settings.yelpAlias && (
+            {settings.yelpAlias ? (
               <p className="mt-1 text-xs text-green-600 dark:text-green-400 font-medium">
                 ✓ Business alias detected: <code className="font-mono">{settings.yelpAlias}</code> — Yelp reviews will load automatically.
               </p>
-            )}
-            {!settings.yelpAlias && settings.yelpReviewUrl && (
+            ) : null}
+            {(!settings.yelpAlias && !!settings.yelpReviewUrl) ? (
               <p className="mt-1 text-xs text-text-secondary">
                 Find this on your Yelp business page → &quot;Write a Review&quot;.
               </p>
-            )}
+            ) : null}
           </div>
         </div>
       </section>
@@ -561,7 +561,7 @@ export default function ReviewsSettingsPage() {
           <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-2">Embed code</p>
           <div className="flex items-start gap-2">
             <pre className="flex-1 min-w-0 rounded-lg bg-background border border-surface-border px-3 py-2.5 text-xs text-foreground font-mono whitespace-pre overflow-x-auto" suppressHydrationWarning>{iframeCode || null}</pre>
-            {iframeCode && <CopyButton text={iframeCode} />}
+            {iframeCode ? <CopyButton text={iframeCode} /> : null}
           </div>
         </div>
 
@@ -569,7 +569,7 @@ export default function ReviewsSettingsPage() {
           <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-2">JSON API</p>
           <div className="flex items-center gap-2">
             <code className="flex-1 min-w-0 rounded-lg bg-background border border-surface-border px-3 py-2 text-xs text-foreground font-mono truncate" suppressHydrationWarning>{apiUrl || null}</code>
-            {apiUrl && <CopyButton text={apiUrl} />}
+            {apiUrl ? <CopyButton text={apiUrl} /> : null}
           </div>
         </div>
       </section>

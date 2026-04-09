@@ -172,11 +172,11 @@ export function ReviewCarousel({ reviews }: { reviews: ReviewEntry[] }) {
                     >
                       {review.author}
                     </p>
-                    {review.relativeTime && (
+                    {review.relativeTime ? (
                       <p style={{ fontSize: "10px", color: "#9ca3af", margin: 0 }}>
                         {review.relativeTime}
                       </p>
-                    )}
+                    ) : null}
                   </div>
                 </div>
 
@@ -187,7 +187,7 @@ export function ReviewCarousel({ reviews }: { reviews: ReviewEntry[] }) {
                 </div>
 
                 {/* Review text */}
-                {truncated && (
+                {truncated ? (
                   <p
                     style={{
                       fontSize: "11.5px",
@@ -198,7 +198,7 @@ export function ReviewCarousel({ reviews }: { reviews: ReviewEntry[] }) {
                   >
                     &ldquo;{truncated}&rdquo;
                   </p>
-                )}
+                ) : null}
               </div>
             );
           })}
