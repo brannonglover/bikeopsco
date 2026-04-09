@@ -5,6 +5,14 @@
  * automatic vars as fallbacks.
  */
 
+export function getGooglePlacesApiKey(): string | null {
+  return process.env.GOOGLE_PLACES_API_KEY?.trim() || null;
+}
+
+export function getYelpApiKey(): string | null {
+  return process.env.YELP_API_KEY?.trim() || null;
+}
+
 /** Resend API key - tries RESEND_API_KEY, then BIKEOPS_RESEND_API_KEY */
 export function getResendApiKey(): string | null {
   const key =

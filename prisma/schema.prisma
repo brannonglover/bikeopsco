@@ -355,9 +355,15 @@ model ChatSession {
 }
 
 model ReviewSettings {
-  id              String  @id @default("default")
-  googleReviewUrl String?
-  yelpReviewUrl   String?
+  id                  String  @id @default("default")
+  googleReviewUrl     String?
+  yelpReviewUrl       String?
+  googlePlaceId       String?
+  googleRating        Float?
+  googleReviewCount   Int?
+  yelpRating          Float?
+  yelpReviewCount     Int?
+  featuredReviews     Json?   @default("[]")
 }
 
 model ReviewRequest {

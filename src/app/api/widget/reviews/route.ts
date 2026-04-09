@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import {
+  fetchGooglePlaceData,
+  fetchYelpBusinessData,
+  extractYelpAlias,
+} from "@/lib/reviews";
+import { getGooglePlacesApiKey, getYelpApiKey } from "@/lib/env";
 
 function addCorsHeaders(response: NextResponse, origin: string | null): NextResponse {
   const allowed =
@@ -11,6 +17,7 @@ function addCorsHeaders(response: NextResponse, origin: string | null): NextResp
     response.headers.set("Access-Control-Allow-Origin", origin);
   }
   response.headers.set("Access-Control-Allow-Methods", "GET, OPTIONS");
+  response.headers.set("Cache-Control", "public, s-maxage=3600, stale-while-revalidate=7200");
   return response;
 }
 
@@ -24,19 +31,46 @@ export async function GET(request: NextRequest) {
   const origin = request.headers.get("origin");
 
   try {
-    const [settings, totalSent, googleClicks, yelpClicks] = await Promise.all([
+    const [settings, totalSent] = await Promise.all([
       prisma.reviewSettings.findUnique({ where: { id: "default" } }),
       prisma.reviewRequest.count(),
-      prisma.reviewRequest.count({ where: { googleClickedAt: { not: null } } }),
-      prisma.reviewRequest.count({ where: { yelpClickedAt: { not: null } } }),
     ]);
+
+    const googleApiKey = getGooglePlacesApiKey();
+    const yelpApiKey = getYelpApiKey();
+
+    const [googleData, yelpData] = await Promise.all([
+      settings?.googlePlaceId && googleApiKey
+        ? fetchGooglePlaceData(settings.googlePlaceId, googleApiKey)
+        : null,
+      settings?.yelpReviewUrl && yelpApiKey
+        ? fetchYelpBusinessData(extractYelpAlias(settings.yelpReviewUrl) ?? "", yelpApiKey)
+        : null,
+    ]);
+
+    const featuredReviews = Array.isArray(settings?.featuredReviews)
+      ? settings.featuredReviews
+      : [];
 
     const res = NextResponse.json({
       totalSent,
-      googleClicks,
-      yelpClicks,
       googleReviewUrl: settings?.googleReviewUrl ?? null,
       yelpReviewUrl: settings?.yelpReviewUrl ?? null,
+      google: googleData
+        ? {
+            rating: googleData.rating,
+            reviewCount: googleData.reviewCount,
+            reviews: googleData.reviews,
+          }
+        : null,
+      yelp: yelpData
+        ? {
+            rating: yelpData.rating,
+            reviewCount: yelpData.reviewCount,
+            reviews: yelpData.reviews,
+          }
+        : null,
+      featuredReviews,
     });
     return addCorsHeaders(res, origin);
   } catch (error) {
