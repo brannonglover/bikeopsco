@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import type { ChatMessage, MessageSender } from "@/lib/types";
 import { formatChatTime } from "@/lib/format-chat-time";
 import { LinkifiedMessageBody } from "./LinkifiedMessageBody";
@@ -57,6 +58,7 @@ export function ChatMessageBubble({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(msg.body ?? "");
   const [busy, setBusy] = useState(false);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const autoResize = useCallback(() => {
@@ -147,7 +149,11 @@ export function ChatMessageBubble({
 
   const attachmentImageBlocks = attachments.map((att) => (
     <div key={att.id} className="relative group/att">
-      <a href={att.url} target="_blank" rel="noopener noreferrer" className="block">
+      <button
+        type="button"
+        onClick={() => setLightboxUrl(att.url)}
+        className="block w-full cursor-zoom-in"
+      >
         <Image
           src={att.url}
           alt={att.filename}
@@ -157,7 +163,7 @@ export function ChatMessageBubble({
           style={{ width: "100%", height: "auto" }}
           className="max-h-[min(70vh,560px)] object-contain"
         />
-      </a>
+      </button>
       {isOwn && onRemoveAttachment && !editing && (
         <button
           type="button"
@@ -435,5 +441,31 @@ export function ChatMessageBubble({
         )}
       </div>
     </div>
+
+    {lightboxUrl &&
+      createPortal(
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <button
+            type="button"
+            onClick={() => setLightboxUrl(null)}
+            className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/20 text-white text-xl hover:bg-white/40 transition-colors"
+            aria-label="Close"
+          >
+            ×
+          </button>
+          <img
+            src={lightboxUrl}
+            alt="Full size"
+            className="max-h-full max-w-full rounded-lg object-contain shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>,
+        document.body
+      )}
   );
 }
