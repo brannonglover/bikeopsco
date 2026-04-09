@@ -29,6 +29,8 @@ export async function GET(request: NextRequest) {
     process.env.SHOP_NOTIFY_EMAIL?.trim() || process.env.ADMIN_EMAIL?.trim();
 
   try {
+    // Fetch each conversation's most recent message (to determine who spoke last)
+    // and include customer + read timestamps on the conversation itself.
     const conversations = await prisma.conversation.findMany({
       where: { archived: false },
       include: {
@@ -46,17 +48,33 @@ export async function GET(request: NextRequest) {
 
     for (const conv of conversations) {
       const last = conv.messages[0];
-      if (!last || last.createdAt > cutoff) continue;
+      if (!last) continue;
 
       if (last.sender === "STAFF") {
         const email = conv.customer.email?.trim();
         if (!email || !customerChatUrl) continue;
 
+        // Find the earliest staff message the customer hasn't read yet.
+        // The reminder fires 10 minutes after this message, not the latest one,
+        // so that a quick follow-up from staff doesn't push the reminder window out.
+        const firstUnread = await prisma.message.findFirst({
+          where: {
+            conversationId: conv.id,
+            sender: "STAFF",
+            ...(conv.customerLastReadAt
+              ? { createdAt: { gt: conv.customerLastReadAt } }
+              : {}),
+          },
+          orderBy: { createdAt: "asc" },
+        });
+
+        if (!firstUnread || firstUnread.createdAt > cutoff) continue;
+
         const existing = await prisma.chatReminderEmail.findUnique({
           where: {
             conversationId_messageId_kind: {
               conversationId: conv.id,
-              messageId: last.id,
+              messageId: firstUnread.id,
               kind: ChatReminderKind.NUDGE_CUSTOMER,
             },
           },
@@ -75,7 +93,7 @@ export async function GET(request: NextRequest) {
           await prisma.chatReminderEmail.create({
             data: {
               conversationId: conv.id,
-              messageId: last.id,
+              messageId: firstUnread.id,
               kind: ChatReminderKind.NUDGE_CUSTOMER,
             },
           });
@@ -84,11 +102,25 @@ export async function GET(request: NextRequest) {
       } else {
         if (!staffEmail || !staffChatUrl) continue;
 
+        // Find the earliest customer message staff hasn't read yet.
+        const firstUnread = await prisma.message.findFirst({
+          where: {
+            conversationId: conv.id,
+            sender: "CUSTOMER",
+            ...(conv.staffLastReadAt
+              ? { createdAt: { gt: conv.staffLastReadAt } }
+              : {}),
+          },
+          orderBy: { createdAt: "asc" },
+        });
+
+        if (!firstUnread || firstUnread.createdAt > cutoff) continue;
+
         const existing = await prisma.chatReminderEmail.findUnique({
           where: {
             conversationId_messageId_kind: {
               conversationId: conv.id,
-              messageId: last.id,
+              messageId: firstUnread.id,
               kind: ChatReminderKind.NUDGE_STAFF,
             },
           },
@@ -109,7 +141,7 @@ export async function GET(request: NextRequest) {
           await prisma.chatReminderEmail.create({
             data: {
               conversationId: conv.id,
-              messageId: last.id,
+              messageId: firstUnread.id,
               kind: ChatReminderKind.NUDGE_STAFF,
             },
           });
