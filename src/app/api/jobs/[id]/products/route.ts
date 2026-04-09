@@ -59,6 +59,7 @@ const patchProductSchema = z.object({
   jobProductId: z.string().min(1),
   jobBikeId: z.string().nullable().optional(),
   quantity: z.number().int().min(1).optional(),
+  unitPrice: z.number().min(0).optional(),
 });
 
 export async function PATCH(
@@ -78,9 +79,10 @@ export async function PATCH(
       return NextResponse.json({ error: "Job product not found" }, { status: 404 });
     }
 
-    const updateData: { jobBikeId?: string | null; quantity?: number } = {};
+    const updateData: { jobBikeId?: string | null; quantity?: number; unitPrice?: number } = {};
     if ("jobBikeId" in data) updateData.jobBikeId = data.jobBikeId ?? null;
     if (data.quantity !== undefined) updateData.quantity = data.quantity;
+    if (data.unitPrice !== undefined) updateData.unitPrice = Math.round(data.unitPrice * 100) / 100;
 
     const updated = await prisma.jobProduct.update({
       where: { id: data.jobProductId },

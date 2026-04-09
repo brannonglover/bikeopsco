@@ -1772,6 +1772,7 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
   const [updatingServicePrice, setUpdatingServicePrice] = useState<string | null>(null);
   const [updatingServiceBike, setUpdatingServiceBike] = useState<string | null>(null);
   const [updatingProductBike, setUpdatingProductBike] = useState<string | null>(null);
+  const [updatingProductPrice, setUpdatingProductPrice] = useState<string | null>(null);
   const [servicesDropdownOpen, setServicesDropdownOpen] = useState(false);
   const [productsDropdownOpen, setProductsDropdownOpen] = useState(false);
   const [serviceSearch, setServiceSearch] = useState("");
@@ -1945,6 +1946,23 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
       }
     } finally {
       setUpdatingServicePrice(null);
+    }
+  };
+
+  const updateProductUnitPrice = async (jobProductId: string, unitPrice: number) => {
+    setUpdatingProductPrice(jobProductId);
+    try {
+      const res = await fetch(`/api/jobs/${job.id}/products`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobProductId, unitPrice }),
+      });
+      if (res.ok) {
+        const updatedJob = await fetch(`/api/jobs/${job.id}`).then((r) => r.json());
+        onJobUpdated?.(updatedJob);
+      }
+    } finally {
+      setUpdatingProductPrice(null);
     }
   };
 
@@ -2275,9 +2293,30 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                         <p className="text-xs text-slate-600 mt-2 whitespace-pre-line">{jp.product.description}</p>
                       )}
                       <dl className="mt-2 text-xs text-slate-500 space-y-1">
-                        <div className="flex justify-between gap-4">
-                          <dt>Unit price</dt>
-                          <dd><Price amount={price} variant="inline" /></dd>
+                        <div className="flex justify-between items-center gap-4">
+                          <dt className="shrink-0">Unit price</dt>
+                          <dd className="min-w-0 flex justify-end">
+                            <input
+                              key={`unit-${jp.id}-${price}`}
+                              type="number"
+                              min={0}
+                              step={0.01}
+                              disabled={updatingProductPrice === jp.id}
+                              defaultValue={Number.isFinite(price) ? String(price) : "0"}
+                              onClick={(e) => e.stopPropagation()}
+                              onBlur={(e) => {
+                                const raw = e.target.value.trim();
+                                const next = parseFloat(raw);
+                                if (!Number.isFinite(next) || next < 0) return;
+                                const rounded = Math.round(next * 100) / 100;
+                                const current = Math.round(price * 100) / 100;
+                                if (rounded === current) return;
+                                void updateProductUnitPrice(jp.id, rounded);
+                              }}
+                              className="w-28 max-w-full rounded border border-slate-200 bg-white px-2 py-1 text-right text-sm tabular-nums text-slate-800 disabled:opacity-50"
+                              aria-label="Unit price"
+                            />
+                          </dd>
                         </div>
                         <div className="flex justify-between gap-4">
                           <dt>Quantity</dt>
