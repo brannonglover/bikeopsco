@@ -122,7 +122,10 @@ export function JobCardContent({
           return null;
         }
         const hasWaitingBike = (job.jobBikes ?? []).some(
-          (b) => b.waitingOnPartsAt && !b.completedAt
+          (b) =>
+            b.waitingOnPartsAt &&
+            !b.completedAt &&
+            b.id !== job.workingOnJobBikeId
         );
         if (job.stage !== "WAITING_ON_PARTS" && !hasWaitingBike) return null;
         return (

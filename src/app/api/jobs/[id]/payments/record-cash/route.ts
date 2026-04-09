@@ -56,12 +56,22 @@ export async function POST(
           paymentMethod: "cash",
         },
       });
+
+      const jobBikes = await tx.jobBike.findMany({
+        where: { jobId },
+        select: { waitingOnPartsAt: true, completedAt: true },
+      });
+      const hasUnresolvedParts = jobBikes.some(
+        (b) => b.waitingOnPartsAt !== null && b.completedAt === null
+      );
+
       await tx.job.update({
         where: { id: jobId },
         data: {
           paymentStatus: "PAID",
-          stage: "COMPLETED",
-          completedAt: new Date(),
+          ...(hasUnresolvedParts
+            ? { stage: "WAITING_ON_PARTS" }
+            : { stage: "COMPLETED", completedAt: new Date() }),
         },
       });
     });
