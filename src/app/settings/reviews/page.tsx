@@ -18,6 +18,13 @@ interface ReviewRequest {
   job: { id: string; bikeMake: string; bikeModel: string } | null;
 }
 
+interface ReviewStats {
+  totalSent: number;
+  googleClicks: number;
+  yelpClicks: number;
+  anyClick: number;
+}
+
 function PlatformIcon({ platform }: { platform: "google" | "yelp" }) {
   if (platform === "google") {
     return (
@@ -69,6 +76,62 @@ function ClickBadge({ clicked }: { clicked: boolean }) {
   );
 }
 
+function StatCard({
+  label,
+  value,
+  sub,
+  accent,
+}: {
+  label: string;
+  value: string | number;
+  sub?: string;
+  accent?: "green" | "blue" | "red";
+}) {
+  const accentClass =
+    accent === "green"
+      ? "text-green-600 dark:text-green-400"
+      : accent === "blue"
+      ? "text-blue-600 dark:text-blue-400"
+      : accent === "red"
+      ? "text-red-500 dark:text-red-400"
+      : "text-foreground";
+
+  return (
+    <div className="rounded-xl border border-surface-border bg-surface p-4 flex flex-col gap-1">
+      <p className="text-xs font-medium text-text-secondary uppercase tracking-wide">{label}</p>
+      <p className={`text-2xl font-bold tabular-nums ${accentClass}`}>{value}</p>
+      {sub && <p className="text-xs text-text-muted">{sub}</p>}
+    </div>
+  );
+}
+
+function pct(clicks: number, sent: number): string {
+  if (sent === 0) return "—";
+  return `${Math.round((clicks / sent) * 100)}%`;
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // fallback: select the text
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary-600 text-white hover:bg-primary-700 transition-colors disabled:opacity-50"
+    >
+      {copied ? "Copied!" : "Copy"}
+    </button>
+  );
+}
+
 export default function ReviewsSettingsPage() {
   const [links, setLinks] = useState<ReviewLinks>({
     googleReviewUrl: "",
@@ -81,6 +144,15 @@ export default function ReviewsSettingsPage() {
 
   const [requests, setRequests] = useState<ReviewRequest[]>([]);
   const [loadingRequests, setLoadingRequests] = useState(true);
+
+  const [stats, setStats] = useState<ReviewStats | null>(null);
+  const [loadingStats, setLoadingStats] = useState(true);
+
+  const [widgetOrigin, setWidgetOrigin] = useState("");
+
+  useEffect(() => {
+    setWidgetOrigin(window.location.origin);
+  }, []);
 
   const fetchLinks = useCallback(async () => {
     try {
@@ -110,10 +182,25 @@ export default function ReviewsSettingsPage() {
     }
   }, []);
 
+  const fetchStats = useCallback(async () => {
+    try {
+      const res = await fetch("/api/review-requests/stats");
+      if (res.ok) {
+        const data = await res.json();
+        setStats(data);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoadingStats(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchLinks();
     fetchRequests();
-  }, [fetchLinks, fetchRequests]);
+    fetchStats();
+  }, [fetchLinks, fetchRequests, fetchStats]);
 
   const saveLinks = async () => {
     setSavingLinks(true);
@@ -143,6 +230,12 @@ export default function ReviewsSettingsPage() {
   const hasChanges =
     !loadingLinks &&
     (links.googleReviewUrl !== undefined || links.yelpReviewUrl !== undefined);
+
+  const iframeCode = widgetOrigin
+    ? `<iframe\n  src="${widgetOrigin}/widget/reviews"\n  width="380"\n  height="220"\n  frameborder="0"\n  style="border:none;border-radius:16px;"\n  title="Customer Reviews"\n></iframe>`
+    : "";
+
+  const apiUrl = widgetOrigin ? `${widgetOrigin}/api/widget/reviews` : "";
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -231,6 +324,116 @@ export default function ReviewsSettingsPage() {
             Add at least one review URL to start sending review requests.
           </p>
         )}
+      </section>
+
+      {/* Review Tally Stats */}
+      <section className="mb-8">
+        <h2 className="text-base font-semibold text-foreground mb-1">Review Tally</h2>
+        <p className="text-sm text-text-secondary mb-4">
+          All-time summary of review requests sent and customer engagement.
+        </p>
+
+        {loadingStats ? (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[1, 2, 3, 4].map((i) => (
+              <div
+                key={i}
+                className="rounded-xl border border-surface-border bg-surface p-4 h-20 animate-pulse"
+              />
+            ))}
+          </div>
+        ) : stats ? (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <StatCard
+              label="Requests Sent"
+              value={stats.totalSent}
+              sub="all time"
+            />
+            <StatCard
+              label="Google Clicks"
+              value={stats.googleClicks}
+              sub={`${pct(stats.googleClicks, stats.totalSent)} click-through`}
+              accent="blue"
+            />
+            <StatCard
+              label="Yelp Clicks"
+              value={stats.yelpClicks}
+              sub={`${pct(stats.yelpClicks, stats.totalSent)} click-through`}
+              accent="red"
+            />
+            <StatCard
+              label="Any Click"
+              value={stats.anyClick}
+              sub={`${pct(stats.anyClick, stats.totalSent)} engagement`}
+              accent="green"
+            />
+          </div>
+        ) : (
+          <p className="text-sm text-text-secondary">Could not load stats.</p>
+        )}
+      </section>
+
+      {/* Marketing Widget */}
+      <section className="rounded-xl border border-surface-border bg-surface p-6 mb-8">
+        <h2 className="text-base font-semibold text-foreground mb-1">Marketing Widget</h2>
+        <p className="text-sm text-text-secondary mb-5">
+          Embed a social proof badge on your marketing website. It automatically shows your
+          review links and how many customers you&apos;ve served.
+        </p>
+
+        {/* Live preview */}
+        <div className="mb-5">
+          <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-2">
+            Preview
+          </p>
+          <div className="rounded-xl border border-surface-border bg-subtle-bg p-4 flex justify-center">
+            {widgetOrigin ? (
+              <iframe
+                src={`${widgetOrigin}/widget/reviews`}
+                width={380}
+                height={220}
+                style={{ border: "none", borderRadius: "16px", display: "block" }}
+                title="Review Widget Preview"
+              />
+            ) : (
+              <div className="h-[220px] w-full max-w-[380px] rounded-xl bg-surface-border animate-pulse" />
+            )}
+          </div>
+        </div>
+
+        {/* iframe embed code */}
+        <div className="mb-4">
+          <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-2">
+            Embed code (iframe)
+          </p>
+          <div className="flex items-start gap-2">
+            <pre className="flex-1 min-w-0 rounded-lg bg-background border border-surface-border px-3 py-2.5 text-xs text-foreground font-mono whitespace-pre overflow-x-auto">
+              {iframeCode}
+            </pre>
+            {iframeCode && <CopyButton text={iframeCode} />}
+          </div>
+          <p className="mt-1.5 text-xs text-text-muted">
+            Paste this anywhere in your marketing site&apos;s HTML to show the badge.
+          </p>
+        </div>
+
+        {/* API endpoint */}
+        <div>
+          <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-2">
+            JSON API (for custom integrations)
+          </p>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 min-w-0 rounded-lg bg-background border border-surface-border px-3 py-2 text-xs text-foreground font-mono truncate">
+              {apiUrl}
+            </code>
+            {apiUrl && <CopyButton text={apiUrl} />}
+          </div>
+          <p className="mt-1.5 text-xs text-text-muted">
+            Returns <code className="font-mono">totalSent</code>,{" "}
+            <code className="font-mono">googleClicks</code>,{" "}
+            <code className="font-mono">yelpClicks</code>, and the configured review URLs. No auth required.
+          </p>
+        </div>
       </section>
 
       {/* Sent Review Requests */}

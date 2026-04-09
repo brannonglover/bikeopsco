@@ -13,6 +13,7 @@ import { initNotificationSound } from "@/lib/notificationSound";
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isLoginPage = pathname === "/login";
+  const isWidgetPage = pathname?.startsWith("/widget");
   const isPublicCustomerPage =
     pathname === "/book" ||
     pathname?.startsWith("/pay/") ||
@@ -41,7 +42,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     };
   }, [mobileMenuOpen]);
 
-  if (isLoginPage) {
+  if (isLoginPage || isWidgetPage) {
     return <>{children}</>;
   }
 
