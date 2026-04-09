@@ -179,7 +179,7 @@ const DEFAULT_TEMPLATES = [
     slug: "follow_up_review",
     name: "3-Day Follow-up Review",
     subject: "How was your Bike Ops experience?",
-    bodyHtml: `<p>Hi {{customerName}},</p><p>We hope you're enjoying your {{bikeMake}} {{bikeModel}} after its recent repair at {{shopName}}.</p><p style="margin: 20px 0;">{{statusButtonHtml}}</p><p>We'd love to hear how we did! Your feedback helps us improve our service.</p><p>Thanks,<br/>Basement Bike Mechanic</p>`,
+    bodyHtml: `<p>Hi {{customerName}},</p><p>Thank you for choosing {{shopName}}! We hope you're enjoying your {{bikeMake}} {{bikeModel}} after its recent repair and that it's riding perfectly.</p><p>If you have a moment, we'd love to hear what you think. Your review helps other cyclists find us and means the world to our small team.</p><p style="margin: 20px 0;">{{reviewButtonsHtml}}</p><p style="font-size:13px;color:#64748b">You can review on whichever platform you prefer — even a few words makes a big difference. Thank you!</p><p>Thanks,<br/>{{shopName}}</p>`,
     triggerType: "SCHEDULED",
     stage: null,
     deliveryType: null,
