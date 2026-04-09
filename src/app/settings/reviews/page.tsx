@@ -294,6 +294,53 @@ export default function ReviewsSettingsPage() {
         Configure your review links and embed a live social proof widget on your marketing site.
       </p>
 
+      {/* ── Review Tally ── */}
+      <section className="mb-8">
+        <h2 className="text-base font-semibold text-foreground mb-1">Review Tally</h2>
+        <p className="text-sm text-text-secondary mb-4">Live ratings from Google and Yelp, plus all-time summary of review request emails sent.</p>
+
+        {/* Live platform stats */}
+        {loadingLiveStats ? (
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            {[1, 2].map((i) => <div key={i} className="rounded-xl border border-surface-border bg-surface p-4 h-20 animate-pulse" />)}
+          </div>
+        ) : (liveReviewStats?.google || liveReviewStats?.yelp) ? (
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            {liveReviewStats.google && (
+              <StatCard
+                label="Google Reviews"
+                value={liveReviewStats.google.reviewCount.toLocaleString()}
+                sub={`${liveReviewStats.google.rating.toFixed(1)}★ avg rating`}
+                accent="blue"
+              />
+            )}
+            {liveReviewStats.yelp && (
+              <StatCard
+                label="Yelp Reviews"
+                value={liveReviewStats.yelp.reviewCount.toLocaleString()}
+                sub={`${liveReviewStats.yelp.rating.toFixed(1)}★ avg rating`}
+                accent="red"
+              />
+            )}
+          </div>
+        ) : null}
+
+        {loadingStats ? (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[1, 2, 3, 4].map((i) => <div key={i} className="rounded-xl border border-surface-border bg-surface p-4 h-20 animate-pulse" />)}
+          </div>
+        ) : stats ? (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <StatCard label="Requests Sent" value={stats.totalSent} sub="all time" />
+            <StatCard label="Google Clicks" value={stats.googleClicks} sub={`${pct(stats.googleClicks, stats.totalSent)} click-through`} accent="blue" />
+            <StatCard label="Yelp Clicks" value={stats.yelpClicks} sub={`${pct(stats.yelpClicks, stats.totalSent)} click-through`} accent="red" />
+            <StatCard label="Any Click" value={stats.anyClick} sub={`${pct(stats.anyClick, stats.totalSent)} engagement`} accent="green" />
+          </div>
+        ) : (
+          <p className="text-sm text-text-secondary">Could not load stats.</p>
+        )}
+      </section>
+
       {/* ── Live Review Fetching ── */}
       <section className="rounded-xl border border-surface-border bg-surface p-6 mb-8">
         <h2 className="text-base font-semibold text-foreground mb-1">Live Review Fetching</h2>
@@ -572,53 +619,6 @@ export default function ReviewsSettingsPage() {
             {apiUrl ? <CopyButton text={apiUrl} /> : null}
           </div>
         </div>
-      </section>
-
-      {/* ── Review Tally ── */}
-      <section className="mb-8">
-        <h2 className="text-base font-semibold text-foreground mb-1">Review Tally</h2>
-        <p className="text-sm text-text-secondary mb-4">Live ratings from Google and Yelp, plus all-time summary of review request emails sent.</p>
-
-        {/* Live platform stats */}
-        {loadingLiveStats ? (
-          <div className="grid grid-cols-2 gap-3 mb-3">
-            {[1, 2].map((i) => <div key={i} className="rounded-xl border border-surface-border bg-surface p-4 h-20 animate-pulse" />)}
-          </div>
-        ) : (liveReviewStats?.google || liveReviewStats?.yelp) ? (
-          <div className="grid grid-cols-2 gap-3 mb-3">
-            {liveReviewStats.google && (
-              <StatCard
-                label="Google Reviews"
-                value={liveReviewStats.google.reviewCount.toLocaleString()}
-                sub={`${liveReviewStats.google.rating.toFixed(1)}★ avg rating`}
-                accent="blue"
-              />
-            )}
-            {liveReviewStats.yelp && (
-              <StatCard
-                label="Yelp Reviews"
-                value={liveReviewStats.yelp.reviewCount.toLocaleString()}
-                sub={`${liveReviewStats.yelp.rating.toFixed(1)}★ avg rating`}
-                accent="red"
-              />
-            )}
-          </div>
-        ) : null}
-
-        {loadingStats ? (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {[1, 2, 3, 4].map((i) => <div key={i} className="rounded-xl border border-surface-border bg-surface p-4 h-20 animate-pulse" />)}
-          </div>
-        ) : stats ? (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <StatCard label="Requests Sent" value={stats.totalSent} sub="all time" />
-            <StatCard label="Google Clicks" value={stats.googleClicks} sub={`${pct(stats.googleClicks, stats.totalSent)} click-through`} accent="blue" />
-            <StatCard label="Yelp Clicks" value={stats.yelpClicks} sub={`${pct(stats.yelpClicks, stats.totalSent)} click-through`} accent="red" />
-            <StatCard label="Any Click" value={stats.anyClick} sub={`${pct(stats.anyClick, stats.totalSent)} engagement`} accent="green" />
-          </div>
-        ) : (
-          <p className="text-sm text-text-secondary">Could not load stats.</p>
-        )}
       </section>
 
       {/* ── Sent Requests ── */}
