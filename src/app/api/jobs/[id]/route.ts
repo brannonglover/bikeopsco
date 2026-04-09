@@ -49,8 +49,8 @@ export async function GET(
       include: {
         customer: { include: { bikes: true } },
         jobBikes: { include: { bike: true }, orderBy: { sortOrder: "asc" } },
-        jobServices: { include: { service: true } },
-        jobProducts: { include: { product: true } },
+        jobServices: { include: { service: true, jobBike: { select: { id: true, make: true, model: true, nickname: true } } } },
+        jobProducts: { include: { product: true, jobBike: { select: { id: true, make: true, model: true, nickname: true } } } },
       },
     });
     if (!job) {
@@ -266,8 +266,8 @@ export async function PATCH(
         include: {
           customer: { include: { bikes: true } },
           jobBikes: { include: { bike: true }, orderBy: { sortOrder: "asc" } },
-          jobServices: { include: { service: true } },
-          jobProducts: { include: { product: true } },
+          jobServices: { include: { service: true, jobBike: { select: { id: true, make: true, model: true, nickname: true } } } },
+          jobProducts: { include: { product: true, jobBike: { select: { id: true, make: true, model: true, nickname: true } } } },
         },
       });
       if (!result) throw new Error("Job not found");

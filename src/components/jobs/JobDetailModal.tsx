@@ -1586,7 +1586,7 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
                 {(job.jobServices ?? []).map((js) => (
                   <div
                     key={js.id}
-                    className="py-2 px-3 rounded-lg bg-slate-50 border border-slate-100 text-sm"
+                    className="flex items-center justify-between gap-2 py-2 px-3 rounded-lg bg-slate-50 border border-slate-100 text-sm"
                   >
                     <span className="font-medium text-slate-900">
                       {js.service?.name ?? js.customServiceName ?? "Unknown"}
@@ -1594,12 +1594,17 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
                         <span className="text-slate-500 font-normal"> × {js.quantity}</span>
                       )}
                     </span>
+                    {(job.jobBikes?.length ?? 0) > 1 && js.jobBike && (
+                      <span className="shrink-0 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-medium text-violet-700">
+                        {js.jobBike.nickname?.trim() || `${js.jobBike.make} ${js.jobBike.model}`}
+                      </span>
+                    )}
                   </div>
                 ))}
                 {(job.jobProducts ?? []).map((jp) => (
                   <div
                     key={jp.id}
-                    className="py-2 px-3 rounded-lg bg-slate-50 border border-slate-100 text-sm"
+                    className="flex items-center justify-between gap-2 py-2 px-3 rounded-lg bg-slate-50 border border-slate-100 text-sm"
                   >
                     <span className="font-medium text-slate-900">
                       {jp.product?.name ?? "Unknown"}
@@ -1607,6 +1612,11 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
                         <span className="text-slate-500 font-normal"> × {jp.quantity}</span>
                       )}
                     </span>
+                    {(job.jobBikes?.length ?? 0) > 1 && jp.jobBike && (
+                      <span className="shrink-0 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-medium text-sky-700">
+                        {jp.jobBike.nickname?.trim() || `${jp.jobBike.make} ${jp.jobBike.model}`}
+                      </span>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1760,6 +1770,8 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
   const [removingProduct, setRemovingProduct] = useState<string | null>(null);
   const [updatingServiceQty, setUpdatingServiceQty] = useState<string | null>(null);
   const [updatingServicePrice, setUpdatingServicePrice] = useState<string | null>(null);
+  const [updatingServiceBike, setUpdatingServiceBike] = useState<string | null>(null);
+  const [updatingProductBike, setUpdatingProductBike] = useState<string | null>(null);
   const [servicesDropdownOpen, setServicesDropdownOpen] = useState(false);
   const [productsDropdownOpen, setProductsDropdownOpen] = useState(false);
   const [serviceSearch, setServiceSearch] = useState("");
@@ -1936,6 +1948,40 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
     }
   };
 
+  const assignServiceBike = async (jobServiceId: string, jobBikeId: string | null) => {
+    setUpdatingServiceBike(jobServiceId);
+    try {
+      const res = await fetch(`/api/jobs/${job.id}/services`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobServiceId, jobBikeId }),
+      });
+      if (res.ok) {
+        const updatedJob = await fetch(`/api/jobs/${job.id}`).then((r) => r.json());
+        onJobUpdated?.(updatedJob);
+      }
+    } finally {
+      setUpdatingServiceBike(null);
+    }
+  };
+
+  const assignProductBike = async (jobProductId: string, jobBikeId: string | null) => {
+    setUpdatingProductBike(jobProductId);
+    try {
+      const res = await fetch(`/api/jobs/${job.id}/products`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobProductId, jobBikeId }),
+      });
+      if (res.ok) {
+        const updatedJob = await fetch(`/api/jobs/${job.id}`).then((r) => r.json());
+        onJobUpdated?.(updatedJob);
+      }
+    } finally {
+      setUpdatingProductBike(null);
+    }
+  };
+
   const handleAddProduct = async (productId: string) => {
     setAddingProduct(true);
     setProductsDropdownOpen(false);
@@ -2023,12 +2069,17 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                     <span className="shrink-0 rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-800">
                       Service
                     </span>
-                    <p className="font-medium text-slate-900 min-w-0">
+                    <p className="font-medium text-slate-900 min-w-0 truncate">
                       {js.service?.name ?? js.customServiceName ?? "Unknown service"}
                       {qty > 1 && (
                         <span className="text-slate-500 font-normal"> × {qty}</span>
                       )}
                     </p>
+                    {(job.jobBikes?.length ?? 0) > 1 && js.jobBike && (
+                      <span className="shrink-0 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-medium text-violet-700">
+                        {js.jobBike.nickname?.trim() || `${js.jobBike.make} ${js.jobBike.model}`}
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
                     {!isSystemLine && (
@@ -2119,6 +2170,44 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                           </div>
                         )}
                       </dl>
+                      {(job.jobBikes?.length ?? 0) > 1 && (
+                        <div className="mt-3 pt-2 border-t border-slate-100">
+                          <p className="text-xs text-slate-500 mb-1.5">Bike</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            <button
+                              type="button"
+                              disabled={updatingServiceBike === js.id}
+                              onClick={() => assignServiceBike(js.id, null)}
+                              className={`rounded-full px-2.5 py-0.5 text-xs font-medium border transition-colors ${
+                                !js.jobBikeId
+                                  ? "bg-slate-700 text-white border-slate-700"
+                                  : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
+                              }`}
+                            >
+                              All bikes
+                            </button>
+                            {(job.jobBikes ?? []).map((b) => {
+                              const label = b.nickname?.trim() || `${b.make} ${b.model}`;
+                              const isSelected = js.jobBikeId === b.id;
+                              return (
+                                <button
+                                  key={b.id}
+                                  type="button"
+                                  disabled={updatingServiceBike === js.id}
+                                  onClick={() => assignServiceBike(js.id, isSelected ? null : b.id)}
+                                  className={`rounded-full px-2.5 py-0.5 text-xs font-medium border transition-colors ${
+                                    isSelected
+                                      ? "bg-violet-600 text-white border-violet-600"
+                                      : "bg-white text-slate-600 border-slate-200 hover:border-violet-400"
+                                  }`}
+                                >
+                                  {label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -2150,12 +2239,17 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                     <span className="shrink-0 rounded bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-800">
                       Product
                     </span>
-                    <p className="font-medium text-slate-900 min-w-0">
+                    <p className="font-medium text-slate-900 min-w-0 truncate">
                       {jp.product?.name ?? "Unknown product"}
                       {jp.quantity > 1 && (
                         <span className="text-slate-500 font-normal"> × {jp.quantity}</span>
                       )}
                     </p>
+                    {(job.jobBikes?.length ?? 0) > 1 && jp.jobBike && (
+                      <span className="shrink-0 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-medium text-sky-700">
+                        {jp.jobBike.nickname?.trim() || `${jp.jobBike.make} ${jp.jobBike.model}`}
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
                     <Price amount={lineTotal} variant="inline" />
@@ -2196,6 +2290,44 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                           </div>
                         )}
                       </dl>
+                      {(job.jobBikes?.length ?? 0) > 1 && (
+                        <div className="mt-3 pt-2 border-t border-slate-100">
+                          <p className="text-xs text-slate-500 mb-1.5">Bike</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            <button
+                              type="button"
+                              disabled={updatingProductBike === jp.id}
+                              onClick={() => assignProductBike(jp.id, null)}
+                              className={`rounded-full px-2.5 py-0.5 text-xs font-medium border transition-colors ${
+                                !jp.jobBikeId
+                                  ? "bg-slate-700 text-white border-slate-700"
+                                  : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
+                              }`}
+                            >
+                              All bikes
+                            </button>
+                            {(job.jobBikes ?? []).map((b) => {
+                              const label = b.nickname?.trim() || `${b.make} ${b.model}`;
+                              const isSelected = jp.jobBikeId === b.id;
+                              return (
+                                <button
+                                  key={b.id}
+                                  type="button"
+                                  disabled={updatingProductBike === jp.id}
+                                  onClick={() => assignProductBike(jp.id, isSelected ? null : b.id)}
+                                  className={`rounded-full px-2.5 py-0.5 text-xs font-medium border transition-colors ${
+                                    isSelected
+                                      ? "bg-sky-600 text-white border-sky-600"
+                                      : "bg-white text-slate-600 border-slate-200 hover:border-sky-400"
+                                  }`}
+                                >
+                                  {label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

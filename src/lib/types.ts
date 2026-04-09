@@ -54,6 +54,8 @@ export interface JobService {
   quantity: number;
   unitPrice: number | string;
   notes: string | null;
+  jobBikeId?: string | null;
+  jobBike?: { id: string; make: string; model: string; nickname: string | null } | null;
 }
 
 export interface Product {
@@ -71,6 +73,8 @@ export interface JobProduct {
   quantity: number;
   unitPrice: number | string;
   notes: string | null;
+  jobBikeId?: string | null;
+  jobBike?: { id: string; make: string; model: string; nickname: string | null } | null;
 }
 
 export type PaymentStatus = "UNPAID" | "PENDING" | "PAID" | "REFUNDED";

@@ -5,6 +5,7 @@ import { z } from "zod";
 const addProductSchema = z.object({
   productId: z.string().min(1),
   quantity: z.number().int().min(1).optional().default(1),
+  jobBikeId: z.string().optional().nullable(),
 });
 
 export async function POST(
@@ -33,9 +34,11 @@ export async function POST(
         productId: data.productId,
         quantity: data.quantity,
         unitPrice: product.price,
+        jobBikeId: data.jobBikeId ?? null,
       },
       include: {
         product: true,
+        jobBike: { select: { id: true, make: true, model: true, nickname: true } },
       },
     });
 
@@ -49,6 +52,52 @@ export async function POST(
       { error: "Failed to add product to job" },
       { status: 500 }
     );
+  }
+}
+
+const patchProductSchema = z.object({
+  jobProductId: z.string().min(1),
+  jobBikeId: z.string().nullable().optional(),
+  quantity: z.number().int().min(1).optional(),
+});
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const { id: jobId } = params;
+    const body = await request.json();
+    const data = patchProductSchema.parse(body);
+
+    const existing = await prisma.jobProduct.findFirst({
+      where: { id: data.jobProductId, jobId },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ error: "Job product not found" }, { status: 404 });
+    }
+
+    const updateData: { jobBikeId?: string | null; quantity?: number } = {};
+    if ("jobBikeId" in data) updateData.jobBikeId = data.jobBikeId ?? null;
+    if (data.quantity !== undefined) updateData.quantity = data.quantity;
+
+    const updated = await prisma.jobProduct.update({
+      where: { id: data.jobProductId },
+      data: updateData,
+      include: {
+        product: true,
+        jobBike: { select: { id: true, make: true, model: true, nickname: true } },
+      },
+    });
+
+    return NextResponse.json(updated);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: error.flatten() }, { status: 400 });
+    }
+    console.error("PATCH /api/jobs/[id]/products error:", error);
+    return NextResponse.json({ error: "Failed to update product line" }, { status: 500 });
   }
 }
 

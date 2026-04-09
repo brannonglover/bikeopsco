@@ -6,11 +6,13 @@ const addServiceSchema = z.union([
   z.object({
     serviceId: z.string().min(1),
     quantity: z.number().int().min(1).optional().default(1),
+    jobBikeId: z.string().optional().nullable(),
   }),
   z.object({
     customServiceName: z.string().min(1),
     unitPrice: z.number().min(0).optional().default(0),
     quantity: z.number().int().min(1).optional().default(1),
+    jobBikeId: z.string().optional().nullable(),
   }),
 ]);
 
@@ -48,8 +50,9 @@ export async function POST(
           serviceId: data.serviceId,
           quantity: data.quantity,
           unitPrice: service.price,
+          jobBikeId: data.jobBikeId ?? null,
         },
-        include: { service: true },
+        include: { service: true, jobBike: { select: { id: true, make: true, model: true, nickname: true } } },
       });
 
       return NextResponse.json(jobService);
@@ -61,7 +64,9 @@ export async function POST(
         customServiceName: data.customServiceName,
         quantity: data.quantity,
         unitPrice: data.unitPrice,
+        jobBikeId: data.jobBikeId ?? null,
       },
+      include: { jobBike: { select: { id: true, make: true, model: true, nickname: true } } },
     });
 
     return NextResponse.json(jobService);
@@ -136,10 +141,15 @@ const patchServiceSchema = z
     jobServiceId: z.string().min(1),
     quantity: z.number().int().min(1).optional(),
     unitPrice: z.number().min(0).optional(),
+    jobBikeId: z.string().nullable().optional(),
   })
-  .refine((data) => data.quantity !== undefined || data.unitPrice !== undefined, {
-    message: "Provide quantity and/or unitPrice",
-  });
+  .refine(
+    (data) =>
+      data.quantity !== undefined ||
+      data.unitPrice !== undefined ||
+      "jobBikeId" in data,
+    { message: "Provide quantity, unitPrice, and/or jobBikeId" }
+  );
 
 export async function PATCH(
   request: NextRequest,
@@ -172,18 +182,21 @@ export async function PATCH(
       );
     }
 
-    const updateData: { quantity?: number; unitPrice?: number } = {};
+    const updateData: { quantity?: number; unitPrice?: number; jobBikeId?: string | null } = {};
     if (data.quantity !== undefined) {
       updateData.quantity = data.quantity;
     }
     if (data.unitPrice !== undefined) {
       updateData.unitPrice = Math.round(data.unitPrice * 100) / 100;
     }
+    if ("jobBikeId" in data) {
+      updateData.jobBikeId = data.jobBikeId ?? null;
+    }
 
     const updated = await prisma.jobService.update({
       where: { id: data.jobServiceId },
       data: updateData,
-      include: { service: true },
+      include: { service: true, jobBike: { select: { id: true, make: true, model: true, nickname: true } } },
     });
 
     return NextResponse.json(updated);

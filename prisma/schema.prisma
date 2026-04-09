@@ -60,6 +60,8 @@ model JobBike {
   waitingOnPartsAt DateTime?
   createdAt        DateTime  @default(now())
   workingOnJob Job?     @relation("WorkingOnBike")
+  jobServices  JobService[]
+  jobProducts  JobProduct[]
 
   @@index([jobId])
 }
@@ -145,6 +147,9 @@ model JobService {
   quantity          Int      @default(1)
   unitPrice         Decimal  @db.Decimal(10, 2)
   notes             String?
+  /// Optional: which bike in the job this service is for
+  jobBikeId         String?
+  jobBike           JobBike? @relation(fields: [jobBikeId], references: [id], onDelete: SetNull)
   createdAt         DateTime @default(now())
 }
 
@@ -218,6 +223,9 @@ model JobProduct {
   quantity  Int      @default(1)
   unitPrice Decimal  @db.Decimal(10, 2)
   notes     String?
+  /// Optional: which bike in the job this product is for
+  jobBikeId String?
+  jobBike   JobBike? @relation(fields: [jobBikeId], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
 }
 
