@@ -10,6 +10,48 @@ import { ReviewCarousel } from "./ReviewCarousel";
 
 export const dynamic = "force-dynamic";
 
+// ─── Theme CSS variable sets ───────────────────────────────────────────────────
+
+const LIGHT_VARS = `
+  --w-card-bg: #ffffff;
+  --w-card-border: #e5e7eb;
+  --w-card-shadow: 0 2px 20px rgba(0,0,0,0.10);
+  --w-tile-bg: #f9fafb;
+  --w-tile-border: #f0f0f0;
+  --w-text-heading: #111827;
+  --w-text-body: #4b5563;
+  --w-text-muted: #6b7280;
+  --w-text-time: #9ca3af;
+  --w-divider: #f3f4f6;
+  --w-chevron-bg: #ffffff;
+  --w-chevron-bg-off: #f9fafb;
+  --w-chevron-border: #e5e7eb;
+  --w-chevron-icon: #374151;
+  --w-dot-active: #6366f1;
+  --w-dot-inactive: #d1d5db;
+  --w-star-empty: #e5e7eb;
+`;
+
+const DARK_VARS = `
+  --w-card-bg: #1e293b;
+  --w-card-border: #334155;
+  --w-card-shadow: 0 2px 20px rgba(0,0,0,0.40);
+  --w-tile-bg: #0f172a;
+  --w-tile-border: #1e293b;
+  --w-text-heading: #f8fafc;
+  --w-text-body: #cbd5e1;
+  --w-text-muted: #94a3b8;
+  --w-text-time: #64748b;
+  --w-divider: #334155;
+  --w-chevron-bg: #1e293b;
+  --w-chevron-bg-off: #0f172a;
+  --w-chevron-border: #334155;
+  --w-chevron-icon: #94a3b8;
+  --w-dot-active: #818cf8;
+  --w-dot-inactive: #475569;
+  --w-star-empty: #475569;
+`;
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function StarsRow({ rating, size = 16 }: { rating: number; size?: number }) {
@@ -23,7 +65,7 @@ function StarsRow({ rating, size = 16 }: { rating: number; size?: number }) {
             ? "#f59e0b"
             : half && i === full + 1
             ? "#f59e0b"
-            : "#e5e7eb";
+            : "var(--w-star-empty)";
         const opacity = half && i === full + 1 ? 0.5 : 1;
         return (
           <svg key={i} width={size} height={size} viewBox="0 0 20 20" fill={color} style={{ opacity }}>
@@ -56,7 +98,11 @@ function YelpIcon({ size = 18 }: { size?: number }) {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default async function ReviewWidget() {
+export default async function ReviewWidget({
+  searchParams,
+}: {
+  searchParams: { theme?: string | string[] };
+}) {
   const settings = await prisma.reviewSettings.findUnique({ where: { id: "default" } });
 
   const googleApiKey = getGooglePlacesApiKey();
@@ -79,34 +125,50 @@ export default async function ReviewWidget() {
     Array.isArray(settings?.featuredReviews) ? settings.featuredReviews : []
   ) as unknown as ReviewEntry[];
 
-  // Merge live reviews: google first, then yelp, limit to 5 total
+  // Merge live reviews: google first, then yelp, up to 8 total (2 pages of 4)
   const liveReviews: ReviewEntry[] = [
     ...(googleData?.reviews ?? []),
     ...(yelpData?.reviews ?? []),
-  ].slice(0, 5);
+  ].slice(0, 8);
 
-  // Featured reviews shown if no live reviews (or always if explicitly pinned)
   const displayReviews = liveReviews.length > 0 ? liveReviews : featuredReviews;
 
   const hasGoogle = !!(googleData || settings?.googleReviewUrl);
   const hasYelp = !!(yelpData || settings?.yelpReviewUrl);
 
+  // Resolve theme: "light" | "dark" | "auto" (default: "light")
+  const rawTheme = Array.isArray(searchParams?.theme)
+    ? searchParams.theme[0]
+    : searchParams?.theme;
+  const theme = rawTheme === "dark" || rawTheme === "auto" ? rawTheme : "light";
+
+  const themeStyle =
+    theme === "auto"
+      ? `:root { ${LIGHT_VARS} } @media (prefers-color-scheme: dark) { :root { ${DARK_VARS} } }`
+      : theme === "dark"
+      ? `:root { ${DARK_VARS} }`
+      : `:root { ${LIGHT_VARS} }`;
+
   return (
     <>
       <style>{`
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { background: white !important; min-height: auto !important; font-family: 'Helvetica Neue', Arial, sans-serif; }
+        body { background: var(--w-card-bg) !important; min-height: auto !important; font-family: 'Helvetica Neue', Arial, sans-serif; }
         a { color: inherit; }
+        ${themeStyle}
       `}</style>
 
-      <div style={{ padding: "8px" }}>
+      {/* Auto-resize: report content height to parent iframe */}
+      <script dangerouslySetInnerHTML={{ __html: `(function(){function r(){window.parent.postMessage({type:'bikeops-widget-height',height:document.documentElement.scrollHeight},'*')}r();if(window.ResizeObserver){new ResizeObserver(r).observe(document.documentElement)}})();` }} />
+
+      <div style={{ padding: "12px" }}>
         <div
           style={{
-            background: "#ffffff",
+            background: "var(--w-card-bg)",
             borderRadius: "16px",
-            boxShadow: "0 2px 20px rgba(0,0,0,0.10)",
-            padding: "20px 22px",
-            border: "1px solid #e5e7eb",
+            boxShadow: "var(--w-card-shadow)",
+            padding: "20px 24px",
+            border: "1px solid var(--w-card-border)",
           }}
         >
           {/* ── Rating summary row ── */}
@@ -115,10 +177,10 @@ export default async function ReviewWidget() {
               <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
                 <GoogleIcon size={20} />
                 <StarsRow rating={googleData.rating} size={17} />
-                <span style={{ fontSize: "15px", fontWeight: 700, color: "#111827" }}>
+                <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--w-text-heading)" }}>
                   {googleData.rating.toFixed(1)}
                 </span>
-                <span style={{ fontSize: "13px", color: "#6b7280" }}>
+                <span style={{ fontSize: "13px", color: "var(--w-text-muted)" }}>
                   {googleData.reviewCount.toLocaleString()} review{googleData.reviewCount !== 1 ? "s" : ""}
                 </span>
                 {settings?.googleReviewUrl && (
@@ -151,10 +213,10 @@ export default async function ReviewWidget() {
               <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
                 <YelpIcon size={20} />
                 <StarsRow rating={yelpData.rating} size={17} />
-                <span style={{ fontSize: "15px", fontWeight: 700, color: "#111827" }}>
+                <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--w-text-heading)" }}>
                   {yelpData.rating.toFixed(1)}
                 </span>
-                <span style={{ fontSize: "13px", color: "#6b7280" }}>
+                <span style={{ fontSize: "13px", color: "var(--w-text-muted)" }}>
                   {yelpData.reviewCount.toLocaleString()} review{yelpData.reviewCount !== 1 ? "s" : ""}
                 </span>
                 {settings?.yelpReviewUrl && (
@@ -186,14 +248,14 @@ export default async function ReviewWidget() {
             {!hasGoogle && !hasYelp && (
               <>
                 <StarsRow rating={5} size={20} />
-                <p style={{ fontSize: "14px", color: "#6b7280" }}>Configure review links in settings.</p>
+                <p style={{ fontSize: "14px", color: "var(--w-text-muted)" }}>Configure review links in settings.</p>
               </>
             )}
           </div>
 
           {/* ── Divider ── */}
           {displayReviews.length > 0 && (
-            <hr style={{ border: "none", borderTop: "1px solid #f3f4f6", marginBottom: "14px" }} />
+            <hr style={{ border: "none", borderTop: "1px solid var(--w-divider)", marginBottom: "14px" }} />
           )}
 
           {/* ── Review carousel ── */}

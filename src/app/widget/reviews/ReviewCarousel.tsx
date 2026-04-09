@@ -18,7 +18,7 @@ function StarsRow({ rating, size = 13 }: { rating: number; size?: number }) {
       {[1, 2, 3, 4, 5].map((i) => {
         const filled = i <= full;
         const isHalf = half && i === full + 1;
-        const color = filled || isHalf ? "#f59e0b" : "#e5e7eb";
+        const color = filled || isHalf ? "#f59e0b" : "var(--w-star-empty)";
         const opacity = isHalf ? 0.5 : 1;
         return (
           <svg key={i} width={size} height={size} viewBox="0 0 20 20" fill={color} style={{ opacity }}>
@@ -68,7 +68,8 @@ function avatarColor(name: string) {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
-const TILES_PER_PAGE = 2;
+const TILES_PER_PAGE = 4;
+const MAX_CHARS = 120;
 
 export function ReviewCarousel({ reviews }: { reviews: ReviewEntry[] }) {
   const [page, setPage] = useState(0);
@@ -89,8 +90,8 @@ export function ReviewCarousel({ reviews }: { reviews: ReviewEntry[] }) {
     width: "28px",
     height: "28px",
     borderRadius: "50%",
-    border: "1px solid #e5e7eb",
-    background: enabled ? "#ffffff" : "#f9fafb",
+    border: "1px solid var(--w-chevron-border)",
+    background: enabled ? "var(--w-chevron-bg)" : "var(--w-chevron-bg-off)",
     cursor: enabled ? "pointer" : "default",
     opacity: enabled ? 1 : 0.35,
     flexShrink: 0,
@@ -110,7 +111,7 @@ export function ReviewCarousel({ reviews }: { reviews: ReviewEntry[] }) {
             aria-label="Previous reviews"
             disabled={!canPrev}
           >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#374151" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--w-chevron-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M10 12L6 8l4-4" />
             </svg>
           </button>
@@ -120,8 +121,8 @@ export function ReviewCarousel({ reviews }: { reviews: ReviewEntry[] }) {
         <div style={{ display: "flex", flex: 1, gap: "8px", overflow: "hidden" }}>
           {visible.map((review, i) => {
             const bg = avatarColor(review.author);
-            const truncated = review.text.length > 90
-              ? review.text.slice(0, 88).trimEnd() + "…"
+            const truncated = review.text.length > MAX_CHARS
+              ? review.text.slice(0, MAX_CHARS - 1).trimEnd() + "…"
               : review.text;
             return (
               <div
@@ -129,8 +130,8 @@ export function ReviewCarousel({ reviews }: { reviews: ReviewEntry[] }) {
                 style={{
                   flex: 1,
                   minWidth: 0,
-                  background: "#f9fafb",
-                  border: "1px solid #f0f0f0",
+                  background: "var(--w-tile-bg)",
+                  border: "1px solid var(--w-tile-border)",
                   borderRadius: "12px",
                   padding: "12px 12px 10px",
                   display: "flex",
@@ -163,7 +164,7 @@ export function ReviewCarousel({ reviews }: { reviews: ReviewEntry[] }) {
                       style={{
                         fontSize: "12px",
                         fontWeight: 600,
-                        color: "#111827",
+                        color: "var(--w-text-heading)",
                         margin: 0,
                         overflow: "hidden",
                         textOverflow: "ellipsis",
@@ -173,7 +174,7 @@ export function ReviewCarousel({ reviews }: { reviews: ReviewEntry[] }) {
                       {review.author}
                     </p>
                     {review.relativeTime ? (
-                      <p style={{ fontSize: "10px", color: "#9ca3af", margin: 0 }}>
+                      <p style={{ fontSize: "10px", color: "var(--w-text-time)", margin: 0 }}>
                         {review.relativeTime}
                       </p>
                     ) : null}
@@ -191,8 +192,8 @@ export function ReviewCarousel({ reviews }: { reviews: ReviewEntry[] }) {
                   <p
                     style={{
                       fontSize: "11.5px",
-                      color: "#4b5563",
-                      lineHeight: 1.5,
+                      color: "var(--w-text-body)",
+                      lineHeight: 1.55,
                       margin: 0,
                     }}
                   >
@@ -203,10 +204,10 @@ export function ReviewCarousel({ reviews }: { reviews: ReviewEntry[] }) {
             );
           })}
 
-          {/* Filler tile if odd number on last page */}
-          {visible.length < TILES_PER_PAGE && (
-            <div style={{ flex: 1 }} />
-          )}
+          {/* Filler tiles if the last page is not full */}
+          {Array.from({ length: TILES_PER_PAGE - visible.length }).map((_, i) => (
+            <div key={`filler-${i}`} style={{ flex: 1 }} />
+          ))}
         </div>
 
         {/* Right chevron */}
@@ -217,7 +218,7 @@ export function ReviewCarousel({ reviews }: { reviews: ReviewEntry[] }) {
             aria-label="Next reviews"
             disabled={!canNext}
           >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#374151" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--w-chevron-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M6 4l4 4-4 4" />
             </svg>
           </button>
@@ -236,7 +237,7 @@ export function ReviewCarousel({ reviews }: { reviews: ReviewEntry[] }) {
                 width: i === page ? "16px" : "6px",
                 height: "6px",
                 borderRadius: "3px",
-                background: i === page ? "#6366f1" : "#d1d5db",
+                background: i === page ? "var(--w-dot-active)" : "var(--w-dot-inactive)",
                 border: "none",
                 padding: 0,
                 cursor: "pointer",

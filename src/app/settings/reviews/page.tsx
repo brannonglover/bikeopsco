@@ -282,7 +282,7 @@ export default function ReviewsSettingsPage() {
   };
 
   const iframeCode = widgetOrigin
-    ? `<iframe\n  src="${widgetOrigin}/widget/reviews"\n  width="420"\n  height="auto"\n  frameborder="0"\n  style="border:none;border-radius:16px;width:100%;max-width:420px;"\n  title="Customer Reviews"\n></iframe>`
+    ? `<!-- Add ?theme=dark or ?theme=auto to the src URL to match your site's color scheme -->\n<iframe\n  id="bikeops-reviews"\n  src="${widgetOrigin}/widget/reviews"\n  width="100%"\n  height="240"\n  frameborder="0"\n  scrolling="no"\n  style="border:none;border-radius:16px;width:100%;display:block;"\n  title="Customer Reviews"\n></iframe>\n<script>\nwindow.addEventListener('message',function(e){\n  if(e.data&&e.data.type==='bikeops-widget-height'){\n    var f=document.getElementById('bikeops-reviews');\n    if(f)f.style.height=e.data.height+'px';\n  }\n});\n</script>`
     : "";
 
   const apiUrl = widgetOrigin ? `${widgetOrigin}/api/widget/reviews` : "";
@@ -591,15 +591,15 @@ export default function ReviewsSettingsPage() {
 
         <div className="mb-5">
           <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-2">Preview</p>
-          <div className="rounded-xl border border-surface-border bg-subtle-bg p-4 flex justify-center">
+          <div className="rounded-xl border border-surface-border bg-subtle-bg p-4">
             {widgetOrigin ? (
               <iframe
                 src={`${widgetOrigin}/widget/reviews`}
-                style={{ border: "none", borderRadius: "16px", display: "block", width: "100%", maxWidth: "420px", minHeight: "120px" }}
+                style={{ border: "none", borderRadius: "16px", display: "block", width: "100%", minHeight: "200px" }}
                 title="Review Widget Preview"
               />
             ) : (
-              <div className="h-32 w-full max-w-sm rounded-xl bg-surface-border animate-pulse" />
+              <div className="h-48 w-full rounded-xl bg-surface-border animate-pulse" />
             )}
           </div>
         </div>
