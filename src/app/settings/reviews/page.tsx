@@ -211,7 +211,7 @@ export default function ReviewsSettingsPage() {
 
   const fetchLiveReviewStats = useCallback(async () => {
     try {
-      const res = await fetch("/api/widget/reviews");
+      const res = await fetch("/api/widget/reviews", { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
         setLiveReviewStats({
