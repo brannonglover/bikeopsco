@@ -87,13 +87,13 @@ export function ReviewCarousel({ reviews }: { reviews: ReviewEntry[] }) {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    width: "28px",
-    height: "28px",
+    width: "32px",
+    height: "32px",
     borderRadius: "50%",
     border: "1px solid var(--w-chevron-border)",
     background: enabled ? "var(--w-chevron-bg)" : "var(--w-chevron-bg-off)",
     cursor: enabled ? "pointer" : "default",
-    opacity: enabled ? 1 : 0.35,
+    opacity: enabled ? 1 : 0.3,
     flexShrink: 0,
     padding: 0,
     outline: "none",
@@ -111,14 +111,14 @@ export function ReviewCarousel({ reviews }: { reviews: ReviewEntry[] }) {
             aria-label="Previous reviews"
             disabled={!canPrev}
           >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--w-chevron-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="var(--w-chevron-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M10 12L6 8l4-4" />
             </svg>
           </button>
         </div>
 
         {/* Tiles */}
-        <div style={{ display: "flex", flex: 1, gap: "8px", overflow: "hidden" }}>
+        <div className="w-tiles" style={{ flex: 1, minWidth: 0 }}>
           {visible.map((review, i) => {
             const bg = avatarColor(review.author);
             const truncated = review.text.length > MAX_CHARS
@@ -127,17 +127,7 @@ export function ReviewCarousel({ reviews }: { reviews: ReviewEntry[] }) {
             return (
               <div
                 key={start + i}
-                style={{
-                  flex: 1,
-                  minWidth: 0,
-                  background: "var(--w-tile-bg)",
-                  border: "1px solid var(--w-tile-border)",
-                  borderRadius: "12px",
-                  padding: "12px 12px 10px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "6px",
-                }}
+                className="w-tile"
               >
                 {/* Avatar + name */}
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -204,10 +194,6 @@ export function ReviewCarousel({ reviews }: { reviews: ReviewEntry[] }) {
             );
           })}
 
-          {/* Filler tiles if the last page is not full */}
-          {Array.from({ length: TILES_PER_PAGE - visible.length }).map((_, i) => (
-            <div key={`filler-${i}`} style={{ flex: 1 }} />
-          ))}
         </div>
 
         {/* Right chevron */}
@@ -218,7 +204,7 @@ export function ReviewCarousel({ reviews }: { reviews: ReviewEntry[] }) {
             aria-label="Next reviews"
             disabled={!canNext}
           >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--w-chevron-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="var(--w-chevron-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M6 4l4 4-4 4" />
             </svg>
           </button>

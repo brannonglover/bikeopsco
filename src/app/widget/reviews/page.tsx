@@ -15,9 +15,8 @@ export const dynamic = "force-dynamic";
 const LIGHT_VARS = `
   --w-card-bg: #ffffff;
   --w-card-border: #e5e7eb;
-  --w-card-shadow: 0 2px 20px rgba(0,0,0,0.10);
   --w-tile-bg: #f9fafb;
-  --w-tile-border: #f0f0f0;
+  --w-tile-border: #efefef;
   --w-text-heading: #111827;
   --w-text-body: #4b5563;
   --w-text-muted: #6b7280;
@@ -35,7 +34,6 @@ const LIGHT_VARS = `
 const DARK_VARS = `
   --w-card-bg: #1e293b;
   --w-card-border: #334155;
-  --w-card-shadow: 0 2px 20px rgba(0,0,0,0.40);
   --w-tile-bg: #0f172a;
   --w-tile-border: #1e293b;
   --w-text-heading: #f8fafc;
@@ -153,21 +151,37 @@ export default async function ReviewWidget({
     <>
       <style>{`
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { background: var(--w-card-bg) !important; min-height: auto !important; font-family: 'Helvetica Neue', Arial, sans-serif; }
+        html { -webkit-text-size-adjust: 100%; }
+        body { background: var(--w-card-bg) !important; min-height: auto !important; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; }
         a { color: inherit; }
         ${themeStyle}
+
+        /* Responsive tile grid */
+        .w-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+        @media (max-width: 620px) { .w-tiles { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 340px) { .w-tiles { grid-template-columns: 1fr; } }
+
+        /* Tile card */
+        .w-tile {
+          background: var(--w-tile-bg);
+          border: 1px solid var(--w-tile-border);
+          border-radius: 10px;
+          padding: 12px;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
       `}</style>
 
       {/* Auto-resize: report content height to parent iframe */}
       <script dangerouslySetInnerHTML={{ __html: `(function(){function r(){window.parent.postMessage({type:'bikeops-widget-height',height:document.documentElement.scrollHeight},'*')}r();if(window.ResizeObserver){new ResizeObserver(r).observe(document.documentElement)}})();` }} />
 
-      <div style={{ padding: "12px" }}>
+      <div style={{ padding: "10px" }}>
         <div
           style={{
             background: "var(--w-card-bg)",
-            borderRadius: "16px",
-            boxShadow: "var(--w-card-shadow)",
-            padding: "20px 24px",
+            borderRadius: "14px",
+            padding: "18px 20px",
             border: "1px solid var(--w-card-border)",
           }}
         >
