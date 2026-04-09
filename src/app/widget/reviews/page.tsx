@@ -6,6 +6,7 @@ import {
   type ReviewEntry,
 } from "@/lib/reviews";
 import { getGooglePlacesApiKey, getYelpApiKey } from "@/lib/env";
+import { ReviewCarousel } from "./ReviewCarousel";
 
 export const dynamic = "force-dynamic";
 
@@ -50,52 +51,6 @@ function YelpIcon({ size = 18 }: { size?: number }) {
     <svg width={size} height={size} viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
       <path fill="#d32323" d="M20.16 12.73l-4.703 1.01a.425.425 0 01-.43-.616l2.453-4.12a.425.425 0 01.72-.038 9.193 9.193 0 012.388 4.248.425.425 0 01-.428.516zm-8.56 5.852l-1.548 4.516a.425.425 0 01-.773.066A9.194 9.194 0 017.3 18.19a.425.425 0 01.434-.648l4.36.946a.425.425 0 01.507.484zm7.06-9.72a9.195 9.195 0 00-3.57-2.724.425.425 0 00-.572.42l.22 4.794a.425.425 0 00.698.305l3.35-2.07a.425.425 0 00-.126-.725zM6.522 6.21a9.194 9.194 0 00-2.338 4.156.425.425 0 00.546.502l4.578-1.608a.425.425 0 00.14-.724L6.522 6.21zm-.21 7.524l-4.64.79a.425.425 0 00-.282.64 9.2 9.2 0 002.743 3.107.425.425 0 00.626-.203l1.974-3.924a.425.425 0 00-.422-.41zM12 2.75a9.25 9.25 0 100 18.5A9.25 9.25 0 0012 2.75z" />
     </svg>
-  );
-}
-
-function ReviewCard({ review, reviewUrl }: { review: ReviewEntry; reviewUrl?: string | null }) {
-  const icon =
-    review.platform === "google" ? <GoogleIcon size={14} /> : <YelpIcon size={14} />;
-  const linkColor = review.platform === "google" ? "#4285F4" : "#d32323";
-  return (
-    <div
-      style={{
-        background: "#f9fafb",
-        border: "1px solid #f3f4f6",
-        borderRadius: "12px",
-        padding: "14px 16px",
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "8px", marginBottom: "8px" }}>
-        <div>
-          <p style={{ fontSize: "13px", fontWeight: 600, color: "#111827", margin: 0 }}>
-            {review.author}
-          </p>
-          {review.relativeTime && (
-            <p style={{ fontSize: "11px", color: "#9ca3af", margin: "1px 0 0 0" }}>
-              {review.relativeTime}
-            </p>
-          )}
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
-          <StarsRow rating={review.rating} size={12} />
-          {icon}
-        </div>
-      </div>
-      <p style={{ fontSize: "13px", color: "#374151", lineHeight: 1.55, margin: 0 }}>
-        &ldquo;{review.text}&rdquo;
-      </p>
-      {reviewUrl && (
-        <a
-          href={reviewUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{ display: "inline-block", marginTop: "8px", fontSize: "11px", color: linkColor, fontWeight: 600, textDecoration: "none" }}
-        >
-          See all reviews →
-        </a>
-      )}
-    </div>
   );
 }
 
@@ -241,23 +196,9 @@ export default async function ReviewWidget() {
             <hr style={{ border: "none", borderTop: "1px solid #f3f4f6", marginBottom: "14px" }} />
           )}
 
-          {/* ── Review cards ── */}
+          {/* ── Review carousel ── */}
           {displayReviews.length > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              {displayReviews.map((review, i) => (
-                <ReviewCard
-                  key={i}
-                  review={review}
-                  reviewUrl={
-                    i === displayReviews.length - 1
-                      ? (review.platform === "google"
-                          ? settings?.googleReviewUrl
-                          : settings?.yelpReviewUrl)
-                      : null
-                  }
-                />
-              ))}
-            </div>
+            <ReviewCarousel reviews={displayReviews} />
           )}
         </div>
       </div>

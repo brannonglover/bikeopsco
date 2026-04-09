@@ -391,21 +391,43 @@ export default function ReviewsSettingsPage() {
                 className={inputCls}
               />
             </div>
-            <p className="mt-1 text-xs text-text-secondary">
-              If auto-detection doesn&apos;t work, find your Place ID at{" "}
-              <a
-                href="https://developers.google.com/maps/documentation/places/web-service/place-id#find-id"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-primary-600 underline"
-              >
-                developers.google.com
-              </a>
-              .
-            </p>
-            {settings.googlePlaceId && (
+            {settings.googlePlaceId ? (
               <p className="mt-1 text-xs text-green-600 dark:text-green-400 font-medium">
-                ✓ Place ID detected — Google reviews will load automatically.
+                ✓ Place ID set — Google reviews will load automatically.
+              </p>
+            ) : settings.googleReviewUrl ? (
+              <div className="mt-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+                <p className="font-medium mb-1">Place ID not detected — Google reviews won&apos;t load.</p>
+                <p>
+                  Open your Google Review URL in a browser. It will redirect to a URL like{" "}
+                  <code className="font-mono bg-amber-100 dark:bg-amber-800/40 px-1 rounded">
+                    search.google.com/local/writereview?placeid=ChIJ...
+                  </code>
+                  {" "}— copy the value after <code className="font-mono bg-amber-100 dark:bg-amber-800/40 px-1 rounded">placeid=</code> and paste it in the field above.
+                  Or use the{" "}
+                  <a
+                    href="https://developers.google.com/maps/documentation/places/web-service/place-id#find-id"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline font-medium"
+                  >
+                    Place ID Finder
+                  </a>
+                  .
+                </p>
+              </div>
+            ) : (
+              <p className="mt-1 text-xs text-text-secondary">
+                If auto-detection doesn&apos;t work, find your Place ID at{" "}
+                <a
+                  href="https://developers.google.com/maps/documentation/places/web-service/place-id#find-id"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary-600 underline"
+                >
+                  developers.google.com
+                </a>
+                .
               </p>
             )}
           </div>
@@ -538,7 +560,7 @@ export default function ReviewsSettingsPage() {
         <div className="mb-4">
           <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-2">Embed code</p>
           <div className="flex items-start gap-2">
-            <pre className="flex-1 min-w-0 rounded-lg bg-background border border-surface-border px-3 py-2.5 text-xs text-foreground font-mono whitespace-pre overflow-x-auto">{iframeCode}</pre>
+            <pre className="flex-1 min-w-0 rounded-lg bg-background border border-surface-border px-3 py-2.5 text-xs text-foreground font-mono whitespace-pre overflow-x-auto" suppressHydrationWarning>{iframeCode || null}</pre>
             {iframeCode && <CopyButton text={iframeCode} />}
           </div>
         </div>
@@ -546,7 +568,7 @@ export default function ReviewsSettingsPage() {
         <div>
           <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-2">JSON API</p>
           <div className="flex items-center gap-2">
-            <code className="flex-1 min-w-0 rounded-lg bg-background border border-surface-border px-3 py-2 text-xs text-foreground font-mono truncate">{apiUrl}</code>
+            <code className="flex-1 min-w-0 rounded-lg bg-background border border-surface-border px-3 py-2 text-xs text-foreground font-mono truncate" suppressHydrationWarning>{apiUrl || null}</code>
             {apiUrl && <CopyButton text={apiUrl} />}
           </div>
         </div>
