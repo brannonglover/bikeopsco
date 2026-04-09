@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "crypto";
 import { put } from "@vercel/blob";
 import { BLOB_ACCESS, blobDisplayUrl } from "@/lib/blob";
 
@@ -43,21 +44,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const slug = file.name
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, "-")
-      .replace(/-+/g, "-")
-      .replace(/^-|-$/g, "");
     const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
-    const path = `bikes/${slug}-${Date.now()}.${ext}`;
+    const path = `bikes/${randomUUID()}.${ext}`;
 
     const blob = await put(path, file, {
       access: BLOB_ACCESS,
-      addRandomSuffix: true,
+      addRandomSuffix: false,
     });
 
     const url = blobDisplayUrl(blob.url, blob.pathname);
-    return NextResponse.json({ url });
+    return NextResponse.json({ url }, {
+      headers: { "Cache-Control": "no-store" },
+    });
   } catch (error) {
     console.error("Bike image upload error:", error);
     return NextResponse.json(

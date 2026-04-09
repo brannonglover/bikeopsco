@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "crypto";
 import { put } from "@vercel/blob";
 import { BLOB_ACCESS, blobDisplayUrl } from "@/lib/blob";
 import { prisma } from "@/lib/db";
@@ -44,15 +45,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const slug = file.name
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, "-")
-      .replace(/-+/g, "-")
-      .replace(/^-|-$/g, "");
     const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
-    const path = `chat/${slug}-${Date.now()}.${ext}`;
+    const path = `chat/${randomUUID()}.${ext}`;
 
-    const blob = await put(path, file, { access: BLOB_ACCESS, addRandomSuffix: true });
+    const blob = await put(path, file, { access: BLOB_ACCESS, addRandomSuffix: false });
     const url = blobDisplayUrl(blob.url, blob.pathname);
 
     const attachment = await prisma.messageAttachment.create({

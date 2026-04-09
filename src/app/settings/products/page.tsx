@@ -143,6 +143,7 @@ export default function ProductsPage() {
           )
         );
         setEditing(null);
+        setEditImageUrl("");
       } else {
         const err = await res.json();
         alert(err.error || "Failed to save");
@@ -533,6 +534,7 @@ export default function ProductsPage() {
                     <div className="w-16 h-16 rounded-lg overflow-hidden bg-slate-100 flex-shrink-0">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
+                        key={newImageUrl}
                         src={newImageUrl}
                         alt="Preview"
                         className="w-full h-full object-cover"
@@ -844,6 +846,7 @@ export default function ProductsPage() {
                 <div className="flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden bg-slate-100">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
+                    key={product.imageUrl}
                     src={product.imageUrl}
                     alt={product.name}
                     className="w-full h-full object-cover"
@@ -972,6 +975,7 @@ export default function ProductsPage() {
                             <div className="w-16 h-16 rounded-lg overflow-hidden bg-slate-100 flex-shrink-0">
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img
+                                key={editImageUrl}
                                 src={editImageUrl}
                                 alt="Preview"
                                 className="w-full h-full object-cover"
