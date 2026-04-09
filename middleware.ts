@@ -9,6 +9,6 @@ export const config = {
     /*
      * Protect staff routes. Public: login, pay, status, chat/c, api/auth, webhooks, jobs, chat, cron
      */
-    "/((?!_next|favicon|login|pay|status|chat/c|book|api/auth|api/webhooks|api/jobs|api/chat|api/cron|api/widget|api/og-preview|api/push-tokens).*)",
+    "/((?!_next|favicon|login|pay|status|chat/c|book|api/auth|api/webhooks|api/jobs|api/chat|api/cron|api/widget|api/og-preview|api/push-tokens|api/review-requests/.+/redirect).*)",
   ],
 };

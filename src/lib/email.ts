@@ -1164,3 +1164,61 @@ export async function sendPaymentReceiptEmail(
     return { ok: false, error: err };
   }
 }
+
+export interface ReviewRequestEmailParams {
+  recipientEmail: string;
+  recipientName?: string | null;
+  /** Tracking redirect URL for Google (already includes token + platform). Omit to hide the button. */
+  googleTrackUrl?: string | null;
+  /** Tracking redirect URL for Yelp. Omit to hide the button. */
+  yelpTrackUrl?: string | null;
+  shopName?: string;
+}
+
+/** Sends a review request email with Google and/or Yelp CTA buttons. */
+export async function sendReviewRequestEmail({
+  recipientEmail,
+  recipientName,
+  googleTrackUrl,
+  yelpTrackUrl,
+  shopName,
+}: ReviewRequestEmailParams): Promise<void> {
+  const resend = getResend();
+  if (!resend) throw new Error("Email sending is not configured (missing Resend API key).");
+
+  const branding = getCustomerEmailBrandingAssets();
+  const shop = shopName || process.env.SHOP_NAME?.trim() || "Basement Bike Mechanic";
+  const firstName = recipientName ? recipientName.split(" ")[0] : null;
+  const greeting = firstName ? `Hi ${firstName},` : "Hi there,";
+
+  const googleBtn = googleTrackUrl
+    ? buildCustomerEmailCtaButton(googleTrackUrl, "Review us on Google")
+    : "";
+
+  const yelpBtn = yelpTrackUrl
+    ? buildCustomerEmailCtaButton(yelpTrackUrl, "Review us on Yelp")
+    : "";
+
+  const innerHtml = `
+    <p style="margin:0 0 16px">${escapeHtml(greeting)}</p>
+    <p style="margin:0 0 16px">Thank you for choosing ${escapeHtml(shop)}! We hope your experience was great and your bike is riding perfectly.</p>
+    <p style="margin:0 0 8px">If you have a moment, we'd love to hear what you think. Your review helps other cyclists find us and means the world to our small team.</p>
+    ${googleBtn}
+    ${yelpBtn ? `<div style="margin-top:12px">${yelpBtn}</div>` : ""}
+    <p style="margin:24px 0 0;font-size:13px;color:#64748b">You can review on whichever platform you prefer — even a few words makes a big difference. Thank you!</p>
+  `;
+
+  const html = buildCustomerEmailHtml({
+    innerHtml,
+    headerLogoSrc: branding.headerLogoSrc,
+    heading: "How did we do?",
+  });
+
+  await resend.emails.send({
+    from: getFromEmail(),
+    to: recipientEmail,
+    subject: `How was your experience at ${shop}?`,
+    html,
+    ...(branding.attachments ? { attachments: branding.attachments } : {}),
+  });
+}

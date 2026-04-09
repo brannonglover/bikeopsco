@@ -1246,6 +1246,8 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
   const [cancelReason, setCancelReason] = useState("");
   const [cancelReasonOther, setCancelReasonOther] = useState("");
   const [job, setJob] = useState<Job | null>(jobProp);
+  const [sendingReview, setSendingReview] = useState(false);
+  const [reviewBanner, setReviewBanner] = useState<{ ok: boolean; text: string } | null>(null);
   const latestJobPropRef = useRef(jobProp);
   latestJobPropRef.current = jobProp;
 
@@ -1343,6 +1345,40 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
     }
   };
 
+  const handleSendReviewRequest = async () => {
+    if (!job) return;
+    const email = job.customer?.email?.trim();
+    if (!email) return;
+    setSendingReview(true);
+    setReviewBanner(null);
+    try {
+      const customerName = job.customer
+        ? [job.customer.firstName, job.customer.lastName].filter(Boolean).join(" ")
+        : undefined;
+      const res = await fetch("/api/review-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jobId: job.id,
+          customerId: job.customer?.id,
+          email,
+          customerName,
+        }),
+      });
+      const data = await res.json().catch(() => ({})) as { error?: string };
+      if (!res.ok) {
+        setReviewBanner({ ok: false, text: data.error ?? "Failed to send review request." });
+      } else {
+        setReviewBanner({ ok: true, text: `Review request sent to ${email}.` });
+        setTimeout(() => setReviewBanner(null), 5000);
+      }
+    } catch {
+      setReviewBanner({ ok: false, text: "Something went wrong. Please try again." });
+    } finally {
+      setSendingReview(false);
+    }
+  };
+
   useEffect(() => {
     if (job) {
       setActiveTab("details");
@@ -1350,6 +1386,7 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
       setShowDeleteConfirm(false);
       setCancelReason("");
       setCancelReasonOther("");
+      setReviewBanner(null);
     }
     // Only when switching jobs — same-id refreshes (invoice lines, refetch) must not reset tab or overlays.
   }, [job?.id]);
@@ -1556,6 +1593,38 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
                 >
                   {formatPhoneDisplay(job.customer.phone)}
                 </a>
+              )}
+              {job.customer.email && job.stage !== "CANCELLED" && (
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={handleSendReviewRequest}
+                    disabled={sendingReview}
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-indigo-600 hover:text-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors touch-manipulation"
+                  >
+                    {sendingReview ? (
+                      <>
+                        <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                        Sending…
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                        </svg>
+                        Send review request
+                      </>
+                    )}
+                  </button>
+                  {reviewBanner && (
+                    <p className={`mt-2 text-xs ${reviewBanner.ok ? "text-emerald-600" : "text-red-600"}`}>
+                      {reviewBanner.text}
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           )}
