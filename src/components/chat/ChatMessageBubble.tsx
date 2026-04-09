@@ -189,6 +189,7 @@ export function ChatMessageBubble({
   const hasReactions = Object.keys(aggregated).length > 0;
 
   return (
+    <>
     <div
       className={`flex w-full min-w-0 flex-col ${align === "end" ? "items-end" : "items-start"}`}
     >
@@ -467,5 +468,6 @@ export function ChatMessageBubble({
         </div>,
         document.body
       )}
+    </>
   );
 }
