@@ -40,11 +40,12 @@ export async function POST(request: NextRequest) {
     const magicLinkUrl = `${baseUrl}/chat/c#token=${encodeURIComponent(token)}`;
 
     const apiKey = getResendApiKey();
+    console.log("[request-login] apiKey present:", !!apiKey, "| baseUrl:", baseUrl || "(empty)");
     const resend = apiKey ? new Resend(apiKey) : null;
     const { ok, error } = await sendChatMagicLinkEmail(email.trim(), magicLinkUrl, resend);
 
     if (!ok) {
-      console.error("Chat magic link email failed:", error);
+      console.error("[request-login] sendChatMagicLinkEmail failed:", error);
       return NextResponse.json(
         { error: "Failed to send sign-in email. Please try again." },
         { status: 500 }

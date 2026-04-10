@@ -949,17 +949,24 @@ ${buildCustomerEmailCtaButton(magicLinkUrl, "Sign in to chat")}
   });
   const attachments = customerEmailBrandingAttachments(branding);
 
+  const fromEmail = getFromEmail();
+  console.log("[sendChatMagicLinkEmail] from:", fromEmail, "| to:", recipient);
   try {
-    const { error } = await resend.emails.send({
-      from: getFromEmail(),
+    const { data, error } = await resend.emails.send({
+      from: fromEmail,
       to: recipient,
       subject,
       html,
       ...(attachments && { attachments }),
     });
-    if (error) return { ok: false, error: error.message };
+    if (error) {
+      console.error("[sendChatMagicLinkEmail] Resend error:", error);
+      return { ok: false, error: error.message };
+    }
+    console.log("[sendChatMagicLinkEmail] sent ok, id:", data?.id);
     return { ok: true };
   } catch (e) {
+    console.error("[sendChatMagicLinkEmail] exception:", e);
     return { ok: false, error: e instanceof Error ? e.message : "Unknown error" };
   }
 }
