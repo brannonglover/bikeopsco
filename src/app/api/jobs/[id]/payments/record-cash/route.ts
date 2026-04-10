@@ -32,11 +32,11 @@ export async function POST(
     const amount =
       job.jobServices.reduce((sum, js) => {
         const price = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);
-        return sum + price * (js.quantity || 1);
+        return sum + (isNaN(price) ? 0 : price) * (js.quantity || 1);
       }, 0) +
       (job.jobProducts ?? []).reduce((sum, jp) => {
         const price = typeof jp.unitPrice === "string" ? parseFloat(jp.unitPrice) : Number(jp.unitPrice);
-        return sum + price * (jp.quantity || 1);
+        return sum + (isNaN(price) ? 0 : price) * (jp.quantity || 1);
       }, 0);
 
     if (amount <= 0) {
@@ -94,7 +94,7 @@ export async function POST(
         unitPrice: Number(js.unitPrice),
       })),
       jobProducts: (job.jobProducts ?? []).map((jp) => ({
-        product: { name: jp.product.name },
+        product: { name: jp.product?.name ?? "Product" },
         quantity: jp.quantity,
         unitPrice: Number(jp.unitPrice),
       })),
@@ -113,9 +113,10 @@ export async function POST(
       message: "Cash payment recorded",
     });
   } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
     console.error("POST /api/jobs/[id]/payments/record-cash error:", error);
     return NextResponse.json(
-      { error: "Failed to record cash payment" },
+      { error: "Failed to record cash payment", details: msg },
       { status: 500 }
     );
   }
