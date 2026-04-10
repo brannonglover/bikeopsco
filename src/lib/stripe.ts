@@ -39,13 +39,14 @@ const DEFAULT_SURCHARGE_FIXED_CENTS = 30;
 
 /**
  * Computes the amount to charge so that after Stripe fees you receive the job total.
- * Only applies for mode "online"; in-person and terminal payments use the base total.
+ * Applies for "online" and "in_person" (both use Stripe's standard card rate).
+ * Terminal (card_present hardware) has a different fee structure and uses the base total.
  */
 export function computeAmountWithSurcharge(
   total: number,
   mode: "online" | "in_person" | "terminal"
 ): number {
-  if (mode !== "online") return total;
+  if (mode === "terminal") return total;
 
   const percent = Number(process.env.CARD_SURCHARGE_PERCENT);
   const fixedCents = Number(process.env.CARD_SURCHARGE_FIXED_CENTS);
