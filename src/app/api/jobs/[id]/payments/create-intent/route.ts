@@ -68,7 +68,7 @@ export async function POST(
         : {
             amount: amountInCents,
             currency: "usd",
-            automatic_payment_methods: { enabled: true },
+            automatic_payment_methods: { enabled: true, allow_redirects: "never" },
             metadata: { jobId, mode },
           }
     );

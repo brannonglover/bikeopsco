@@ -24,11 +24,13 @@ function PaymentForm({
   const [stripeReady, setStripeReady] = useState(false);
   const [stripeError, setStripeError] = useState(false);
 
-  // If PaymentElement never fires onReady (key mismatch, network block, etc.),
-  // surface an error after 15 seconds instead of hanging forever.
+  // If PaymentElement never fires onReady, surface an error after 30 seconds.
+  // Stripe Link's session lookup (consumers/sessions/lookup) can cause delays
+  // on some accounts — allow_redirects:never on the intent mitigates this, but
+  // keep a generous timeout as a fallback.
   useEffect(() => {
     if (stripeReady) return;
-    const timeout = setTimeout(() => setStripeError(true), 15_000);
+    const timeout = setTimeout(() => setStripeError(true), 30_000);
     return () => clearTimeout(timeout);
   }, [stripeReady]);
 
@@ -81,9 +83,18 @@ function PaymentForm({
         <p className="text-center text-xs text-slate-400">Loading payment form…</p>
       )}
       {stripeError && !error && (
-        <p className="text-center text-sm text-red-600">
-          Payment form failed to load. Please refresh the page or try a different browser.
-        </p>
+        <div className="text-center space-y-2">
+          <p className="text-sm text-red-600">
+            Payment form failed to load.
+          </p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="text-sm text-emerald-700 underline hover:text-emerald-900"
+          >
+            Tap to retry
+          </button>
+        </div>
       )}
       <button
         type="submit"
