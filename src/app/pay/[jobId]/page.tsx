@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { Price } from "@/components/ui/Price";
@@ -12,15 +12,18 @@ function PaymentForm({
   jobId,
   total,
   customerEmail,
+  inPerson,
 }: {
   jobId: string;
   total: number;
   customerEmail?: string | null;
+  inPerson?: boolean;
 }) {
   const stripe = useStripe();
   const elements = useElements();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [stripeReady, setStripeReady] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,18 +48,20 @@ function PaymentForm({
 
   return (
     <form onSubmit={handleSubmit} className="w-full max-w-md space-y-6">
-      <div className=" rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <p className="mb-4 text-xs text-slate-500">Card, Apple Pay, and Google Pay accepted</p>
+      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <p className="mb-4 text-xs text-slate-500">
+          {inPerson ? "Enter card details below" : "Card, Apple Pay, and Google Pay accepted"}
+        </p>
         <PaymentElement
+          onReady={() => setStripeReady(true)}
           options={{
             layout: "tabs",
-            paymentMethodOrder: ["apple_pay", "google_pay", "card"],
-            wallets: {
-              applePay: "auto",
-              googlePay: "auto",
-            },
+            paymentMethodOrder: inPerson ? ["card"] : ["apple_pay", "google_pay", "card"],
+            wallets: inPerson
+              ? { applePay: "never", googlePay: "never" }
+              : { applePay: "auto", googlePay: "auto" },
             defaultValues: customerEmail ? { billingDetails: { email: customerEmail } } : undefined,
-            fields: { billingDetails: { email: "auto" } },
+            fields: { billingDetails: { email: inPerson ? "never" : "auto" } },
           }}
         />
       </div>
@@ -65,12 +70,15 @@ function PaymentForm({
           {error}
         </p>
       )}
+      {!stripeReady && !error && (
+        <p className="text-center text-xs text-slate-400">Loading payment form…</p>
+      )}
       <button
         type="submit"
-        disabled={!stripe || loading}
+        disabled={!stripe || !stripeReady || loading}
         className="w-full rounded-lg bg-emerald-600 px-4 py-3 font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {loading ? "Processing…" : `Pay ${total.toLocaleString("en-US", { style: "currency", currency: "USD" })}`}
+        {loading ? "Processing…" : `Charge ${total.toLocaleString("en-US", { style: "currency", currency: "USD" })}`}
       </button>
     </form>
   );
@@ -78,7 +86,9 @@ function PaymentForm({
 
 export default function PayPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const jobId = params?.jobId as string;
+  const inPerson = searchParams?.get("mode") === "in_person";
   const [job, setJob] = useState<{
     id: string;
     bikeMake: string;
@@ -106,7 +116,7 @@ export default function PayPage() {
           fetch(`/api/jobs/${jobId}/payments/create-intent`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ mode: "online" }),
+            body: JSON.stringify({ mode: inPerson ? "in_person" : "online" }),
           }),
         ]);
 
@@ -156,7 +166,7 @@ export default function PayPage() {
     }
 
     init();
-  }, [jobId]);
+  }, [jobId, inPerson]);
 
   if (loading) {
     return (
@@ -198,13 +208,15 @@ export default function PayPage() {
   return (
     <div className="w-full max-w-md space-y-6">
       <div className="text-center">
-        <h1 className="text-xl font-bold text-slate-900">Complete your payment</h1>
+        <h1 className="text-xl font-bold text-slate-900">
+          {inPerson ? "Collect payment" : "Complete your payment"}
+        </h1>
         <p className="mt-1 text-slate-500">
           {job.bikeMake} {job.bikeModel}
           {customerName && ` · ${customerName}`}
         </p>
         <div className="mt-2">
-          {hasSurcharge ? (
+          {!inPerson && hasSurcharge ? (
             <div className="space-y-0.5 text-sm">
               <p className="text-slate-600">
                 Subtotal <Price amount={subtotal} variant="inline" />
@@ -227,14 +239,16 @@ export default function PayPage() {
             <Price amount={total} variant="total" />
           )}
         </div>
-        {hasReceiptEmail ? (
-          <p className="mt-3 text-sm text-emerald-600">
-            Receipt will be sent to {job.customer!.email}
-          </p>
-        ) : (
-          <p className="mt-3 text-sm text-amber-600">
-            Link a customer with an email to this job to receive a receipt, or enter your email when paying by card.
-          </p>
+        {!inPerson && (
+          hasReceiptEmail ? (
+            <p className="mt-3 text-sm text-emerald-600">
+              Receipt will be sent to {job.customer!.email}
+            </p>
+          ) : (
+            <p className="mt-3 text-sm text-amber-600">
+              Link a customer with an email to this job to receive a receipt, or enter your email when paying by card.
+            </p>
+          )
         )}
       </div>
 
@@ -249,7 +263,7 @@ export default function PayPage() {
             },
           }}
         >
-          <PaymentForm jobId={jobId} total={total} customerEmail={job.customer?.email} />
+          <PaymentForm jobId={jobId} total={total} customerEmail={job.customer?.email} inPerson={inPerson} />
         </Elements>
       ) : null}
     </div>
