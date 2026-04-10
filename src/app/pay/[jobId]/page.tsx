@@ -6,8 +6,6 @@ import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { Price } from "@/components/ui/Price";
 
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
-
 function PaymentForm({
   jobId,
   total,
@@ -24,6 +22,15 @@ function PaymentForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stripeReady, setStripeReady] = useState(false);
+  const [stripeError, setStripeError] = useState(false);
+
+  // If PaymentElement never fires onReady (key mismatch, network block, etc.),
+  // surface an error after 15 seconds instead of hanging forever.
+  useEffect(() => {
+    if (stripeReady) return;
+    const timeout = setTimeout(() => setStripeError(true), 15_000);
+    return () => clearTimeout(timeout);
+  }, [stripeReady]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,8 +77,13 @@ function PaymentForm({
           {error}
         </p>
       )}
-      {!stripeReady && !error && (
+      {!stripeReady && !error && !stripeError && (
         <p className="text-center text-xs text-slate-400">Loading payment form…</p>
+      )}
+      {stripeError && !error && (
+        <p className="text-center text-sm text-red-600">
+          Payment form failed to load. Please refresh the page or try a different browser.
+        </p>
       )}
       <button
         type="submit"
@@ -98,6 +110,7 @@ export default function PayPage() {
     jobProducts?: { product: { name: string }; quantity: number; unitPrice: string | number }[];
     paymentStatus: string;
   } | null>(null);
+  const [stripePromise, setStripePromise] = useState<ReturnType<typeof loadStripe> | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [paymentAmount, setPaymentAmount] = useState<{
     subtotal: number;
@@ -152,7 +165,8 @@ export default function PayPage() {
           return;
         }
 
-        const { clientSecret: secret, amount, subtotal: intentSubtotal } = await intentRes.json();
+        const { clientSecret: secret, publishableKey, amount, subtotal: intentSubtotal } = await intentRes.json();
+        setStripePromise(loadStripe(publishableKey ?? process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!));
         setClientSecret(secret);
         setPaymentAmount({
           subtotal: intentSubtotal ?? subtotal,
@@ -252,7 +266,7 @@ export default function PayPage() {
         )}
       </div>
 
-      {clientSecret ? (
+      {clientSecret && stripePromise ? (
         <Elements
           stripe={stripePromise}
           options={{
