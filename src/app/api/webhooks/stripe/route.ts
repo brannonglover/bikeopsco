@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
             unitPrice: Number(js.unitPrice),
           })),
           jobProducts: (job.jobProducts ?? []).map((jp) => ({
-            product: { name: jp.product.name },
+            product: { name: jp.product?.name ?? "Product" },
             quantity: jp.quantity,
             unitPrice: Number(jp.unitPrice),
           })),
