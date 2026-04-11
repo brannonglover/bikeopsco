@@ -290,6 +290,7 @@ function JobBikeSection({
   const [savingComplete, setSavingComplete] = useState<string | null>(null);
   const [savingWaiting, setSavingWaiting] = useState<string | null>(null);
   const [addingBike, setAddingBike] = useState(false);
+  const [addBikeSelectValue, setAddBikeSelectValue] = useState("");
 
   // Customer bikes not yet on this job
   const existingBikeIds = new Set(jobBikes.map((jb) => jb.bikeId).filter(Boolean));
@@ -719,12 +720,15 @@ function JobBikeSection({
       {onJobUpdated && availableToAdd.length > 0 && (
         <div className="mt-3">
           <select
-            defaultValue=""
+            value={addBikeSelectValue}
             disabled={addingBike}
             onChange={(e) => {
-              const bike = availableToAdd.find((b) => b.id === e.target.value);
-              if (bike) handleAddSavedBike(bike);
-              e.target.value = "";
+              const id = e.target.value;
+              const bike = availableToAdd.find((b) => b.id === id);
+              if (bike) {
+                setAddBikeSelectValue("");
+                handleAddSavedBike(bike);
+              }
             }}
             className="text-sm rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-slate-600 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 cursor-pointer"
           >
