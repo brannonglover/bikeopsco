@@ -128,7 +128,12 @@ function buildCustomerEmailHeaderBlock(headerLogoSrc: string): string {
   const src = headerLogoSrc.startsWith("cid:") ? headerLogoSrc : escapeHtml(headerLogoSrc);
   const h = EMAIL_HEADER_LOGO_MAX_HEIGHT_PX;
   const w = EMAIL_HEADER_LOGO_MAX_WIDTH_PX;
-  return `<img src="${src}" alt="Basement Bike Mechanic" height="${h}" style="display:block;margin:0 auto;border:0;height:${h}px;max-height:${h}px;width:auto;max-width:${w}px;object-fit:contain;outline:none;text-decoration:none" />`;
+  const img = `<img src="${src}" alt="Basement Bike Mechanic" height="${h}" style="display:block;margin:0 auto;border:0;height:${h}px;max-height:${h}px;width:auto;max-width:${w}px;object-fit:contain;outline:none;text-decoration:none" />`;
+  const websiteUrl = process.env.SHOP_WEBSITE_URL?.trim();
+  if (websiteUrl) {
+    return `<a href="${escapeHtml(websiteUrl)}" target="_blank" rel="noopener noreferrer" style="display:block;text-decoration:none;border:0">${img}</a>`;
+  }
+  return img;
 }
 
 /**

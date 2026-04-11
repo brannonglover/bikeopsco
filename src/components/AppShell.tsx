@@ -2,9 +2,9 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Suspense, useState, useEffect } from "react";
-import { signOut } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 import { SidebarNav } from "@/components/SidebarNav";
 import { CustomerMobileNav } from "@/components/CustomerMobileNav";
 import { StaffChatAttentionProvider } from "@/contexts/StaffChatAttentionContext";
@@ -12,6 +12,7 @@ import { initNotificationSound } from "@/lib/notificationSound";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const isLoginPage = pathname === "/login";
   const isWidgetPage = pathname?.startsWith("/widget");
   const isPublicCustomerPage =
@@ -19,7 +20,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     pathname?.startsWith("/pay/") ||
     pathname?.startsWith("/status/") ||
     pathname?.startsWith("/chat/c");
+  const isStaffPage = !isLoginPage && !isWidgetPage && !isPublicCustomerPage;
+  const { status } = useSession();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (isStaffPage && status === "unauthenticated") {
+      router.replace(`/login?callbackUrl=${encodeURIComponent(pathname ?? "/")}`);
+    }
+  }, [isStaffPage, status, router, pathname]);
 
   useEffect(() => {
     initNotificationSound();
@@ -59,11 +68,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </Suspense>
             )}
           </div>
-          <Link href="/" className="flex-1 flex justify-center min-w-0">
+          <div className="flex-1 flex justify-center min-w-0">
             <Image src="/bbm-logo-wo.png" alt="Bike Ops" width={320} height={120} className="h-14 w-auto sm:h-16 md:h-24" priority />
-          </Link>
+          </div>
           <div className="w-10 flex-shrink-0 flex items-center justify-end">
-            {pathname?.startsWith("/pay/") && (
+            {pathname?.startsWith("/pay/") && status === "authenticated" && (
               <Link
                 href="/calendar"
                 className="p-2 -mr-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors"
