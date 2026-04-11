@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Stage } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
+import { getToken } from "next-auth/jwt";
 import { sendJobEmail, getTemplateForStage } from "@/lib/email";
 import { syncCollectionJobService } from "@/lib/collection-fee";
 import { sendPushToAllStaff } from "@/lib/push";
@@ -33,6 +34,11 @@ const createJobSchema = z.object({
 });
 
 export async function GET(request: NextRequest) {
+  const token = await getToken({ req: request });
+  if (!token) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const { searchParams } = new URL(request.url);
     const weekStart = searchParams.get("weekStart");
@@ -104,6 +110,11 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const token = await getToken({ req: request });
+  if (!token) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     let body: unknown;
     try {
