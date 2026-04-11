@@ -5,8 +5,8 @@ const SERPER_API_KEY = process.env.SERPER_API_KEY;
 const UNSPLASH_ACCESS_KEY = process.env.UNSPLASH_ACCESS_KEY;
 
 /** Serper Google Images - make/model-specific from web (2,500 free queries, no credit card at serper.dev) */
-async function searchSerper(make: string, model: string) {
-  const query = `${make} ${model} bicycle`.trim();
+async function searchSerper(make: string, model: string, q?: string) {
+  const query = q?.trim() || `${make} ${model} bicycle`.trim();
 
   const res = await fetch("https://google.serper.dev/images", {
     method: "POST",
@@ -59,8 +59,8 @@ async function searchSerper(make: string, model: string) {
 }
 
 /** Unsplash - generic cycling/bike photos (fallback) */
-async function searchUnsplash(make: string, model: string) {
-  const query = encodeURIComponent(`${make} ${model} bicycle bike`.trim());
+async function searchUnsplash(make: string, model: string, q?: string) {
+  const query = encodeURIComponent(q?.trim() || `${make} ${model} bicycle bike`.trim());
   const url = `https://api.unsplash.com/search/photos?query=${query}&per_page=8&orientation=landscape`;
 
   const res = await fetch(url, {
@@ -108,8 +108,10 @@ export async function GET(request: NextRequest) {
   try {
     const make = request.nextUrl.searchParams.get("make")?.trim() ?? "";
     const model = request.nextUrl.searchParams.get("model")?.trim() ?? "";
+    // Optional custom query override (e.g. refined terms from the UI search input)
+    const q = request.nextUrl.searchParams.get("q")?.trim() ?? "";
 
-    if (!make && !model) {
+    if (!make && !model && !q) {
       return NextResponse.json(
         { error: "Enter make and/or model to search" },
         { status: 400 }
@@ -127,13 +129,13 @@ export async function GET(request: NextRequest) {
     let provider: "serper" | "unsplash" = "unsplash";
 
     if (hasSerper) {
-      results = (await searchSerper(make, model)) ?? [];
+      results = (await searchSerper(make, model, q || undefined)) ?? [];
       if (results.length > 0) provider = "serper";
       if (results.length === 0 && hasUnsplash) {
-        results = (await searchUnsplash(make, model)) ?? [];
+        results = (await searchUnsplash(make, model, q || undefined)) ?? [];
       }
     } else {
-      results = (await searchUnsplash(make, model)) ?? [];
+      results = (await searchUnsplash(make, model, q || undefined)) ?? [];
     }
 
     if (results.length === 0) {

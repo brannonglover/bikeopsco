@@ -289,6 +289,38 @@ function JobBikeSection({
   const [savingWorkingOn, setSavingWorkingOn] = useState(false);
   const [savingComplete, setSavingComplete] = useState<string | null>(null);
   const [savingWaiting, setSavingWaiting] = useState<string | null>(null);
+  const [addingBike, setAddingBike] = useState(false);
+
+  // Customer bikes not yet on this job
+  const existingBikeIds = new Set(jobBikes.map((jb) => jb.bikeId).filter(Boolean));
+  const availableToAdd = (customerBikes ?? []).filter((cb) => !existingBikeIds.has(cb.id));
+
+  const handleAddSavedBike = async (bike: NonNullable<typeof customerBikes>[number]) => {
+    if (!onJobUpdated) return;
+    setAddingBike(true);
+    try {
+      const res = await fetch(`/api/jobs/${job.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          addBike: {
+            make: bike.make,
+            model: bike.model,
+            nickname: bike.nickname ?? null,
+            imageUrl: bike.imageUrl ?? null,
+            bikeId: bike.id,
+            bikeType: bike.bikeType ?? undefined,
+          },
+        }),
+      });
+      if (res.ok) {
+        const updatedJob = (await res.json()) as Job;
+        onJobUpdated(updatedJob);
+      }
+    } finally {
+      setAddingBike(false);
+    }
+  };
 
   useEffect(() => {
     setEditingBikeIndex(null);
@@ -684,6 +716,29 @@ function JobBikeSection({
           );
         })}
       </div>
+      {onJobUpdated && availableToAdd.length > 0 && (
+        <div className="mt-3">
+          <select
+            defaultValue=""
+            disabled={addingBike}
+            onChange={(e) => {
+              const bike = availableToAdd.find((b) => b.id === e.target.value);
+              if (bike) handleAddSavedBike(bike);
+              e.target.value = "";
+            }}
+            className="text-sm rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-slate-600 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 cursor-pointer"
+          >
+            <option value="" disabled>
+              {addingBike ? "Adding…" : "+ Add saved bike"}
+            </option>
+            {availableToAdd.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.nickname ? `${b.nickname} (${b.make} ${b.model})` : `${b.make} ${b.model}`}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
     </div>
   );
 }

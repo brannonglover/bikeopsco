@@ -23,6 +23,8 @@ const updateJobSchema = z.object({
   bikeMake: z.string().min(1).optional(),
   bikeModel: z.string().min(1).optional(),
   bikes: z.array(bikeSchema).optional(),
+  /** Append a single bike to the job without touching existing JobBike workflow state. */
+  addBike: bikeSchema.optional(),
   workingOnJobBikeId: z.string().optional().nullable(),
   completeJobBikeId: z.string().optional(),
   uncompleteJobBikeId: z.string().optional(),
@@ -146,6 +148,18 @@ export async function PATCH(
       updateData.bikeModel = bikes.length === 1 ? bikes[0].model : `${bikes.length} bikes`;
     }
 
+    if (data.addBike !== undefined) {
+      const existingCount = existingJob.jobBikes?.length ?? 0;
+      const totalCount = existingCount + 1;
+      if (totalCount === 1) {
+        updateData.bikeMake = data.addBike.make;
+        updateData.bikeModel = data.addBike.model;
+      } else {
+        updateData.bikeMake = "Multiple";
+        updateData.bikeModel = `${totalCount} bikes`;
+      }
+    }
+
     const job = await prisma.$transaction(async (tx) => {
       await tx.job.update({
         where: { id },
@@ -212,6 +226,50 @@ export async function PATCH(
           })),
         });
       }
+      if (data.addBike !== undefined) {
+        const b = data.addBike;
+        const effectiveCustomerId =
+          data.customerId !== undefined ? data.customerId : existingJob.customerId;
+        let bikeId: string | null = b.bikeId ?? null;
+        if (!bikeId && effectiveCustomerId) {
+          const found = await tx.bike.findFirst({
+            where: {
+              customerId: effectiveCustomerId,
+              make: { equals: b.make.trim(), mode: "insensitive" },
+              model: { equals: b.model.trim(), mode: "insensitive" },
+            },
+          });
+          if (found) {
+            bikeId = found.id;
+          } else {
+            const created = await tx.bike.create({
+              data: {
+                customerId: effectiveCustomerId,
+                make: b.make.trim(),
+                model: b.model.trim(),
+                bikeType: b.bikeType ?? null,
+                nickname: b.nickname ?? null,
+                imageUrl: b.imageUrl ?? null,
+              },
+            });
+            bikeId = created.id;
+          }
+        }
+        const nextSortOrder = (existingJob.jobBikes?.length ?? 0);
+        await tx.jobBike.create({
+          data: {
+            jobId: id,
+            make: b.make,
+            model: b.model,
+            nickname: b.nickname ?? null,
+            imageUrl: b.imageUrl ?? null,
+            bikeId,
+            bikeType: b.bikeType ?? null,
+            sortOrder: nextSortOrder,
+          },
+        });
+      }
+
       if (data.completeJobBikeId) {
         await tx.jobBike.update({
           where: { id: data.completeJobBikeId, jobId: id },
