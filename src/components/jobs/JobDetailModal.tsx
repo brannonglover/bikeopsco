@@ -2069,13 +2069,11 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
 
   const jobServices: JobService[] = job.jobServices ?? [];
   const jobProductsList: JobProduct[] = job.jobProducts ?? [];
-  const attachedServiceIds = new Set(jobServices.map((js) => js.serviceId));
   const attachedProductIds = new Set(jobProductsList.map((jp) => jp.productId));
-  const availableServices = services.filter((s) => !attachedServiceIds.has(s.id));
   const availableProducts = products.filter((p) => !attachedProductIds.has(p.id));
   const filteredServices = serviceSearch.trim()
-    ? availableServices.filter((s) => s.name.toLowerCase().includes(serviceSearch.trim().toLowerCase()))
-    : availableServices;
+    ? services.filter((s) => s.name.toLowerCase().includes(serviceSearch.trim().toLowerCase()))
+    : services;
   const filteredProducts = productSearch.trim()
     ? availableProducts.filter((p) => p.name.toLowerCase().includes(productSearch.trim().toLowerCase()))
     : availableProducts;
