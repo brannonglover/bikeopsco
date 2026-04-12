@@ -123,11 +123,11 @@ export default async function ReviewWidget({
     Array.isArray(settings?.featuredReviews) ? settings.featuredReviews : []
   ) as unknown as ReviewEntry[];
 
-  // Merge live reviews: google first, then yelp, up to 8 total (2 pages of 4)
+  // Merge live reviews: google first, then yelp, up to 15 total
   const liveReviews: ReviewEntry[] = [
     ...(googleData?.reviews ?? []),
     ...(yelpData?.reviews ?? []),
-  ].slice(0, 8);
+  ].slice(0, 15);
 
   const displayReviews = liveReviews.length > 0 ? liveReviews : featuredReviews;
 
@@ -275,6 +275,67 @@ export default async function ReviewWidget({
           {/* ── Review carousel ── */}
           {displayReviews.length > 0 && (
             <ReviewCarousel reviews={displayReviews} />
+          )}
+
+          {/* ── View all reviews footer ── */}
+          {(settings?.googleReviewUrl || settings?.yelpReviewUrl) && (
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                gap: "16px",
+                marginTop: "14px",
+                paddingTop: "12px",
+                borderTop: displayReviews.length > 0 ? "1px solid var(--w-divider)" : "none",
+                flexWrap: "wrap",
+              }}
+            >
+              <span style={{ fontSize: "12px", color: "var(--w-text-muted)" }}>View all reviews on</span>
+              <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+                {settings.googleReviewUrl && (
+                  <a
+                    href={settings.googleReviewUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "5px",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      color: "#4285F4",
+                      textDecoration: "none",
+                    }}
+                  >
+                    <GoogleIcon size={14} />
+                    Google
+                  </a>
+                )}
+                {settings.googleReviewUrl && settings.yelpReviewUrl && (
+                  <span style={{ color: "var(--w-divider)", fontSize: "14px" }}>|</span>
+                )}
+                {settings.yelpReviewUrl && (
+                  <a
+                    href={settings.yelpReviewUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "5px",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      color: "#d32323",
+                      textDecoration: "none",
+                    }}
+                  >
+                    <YelpIcon size={14} />
+                    Yelp
+                  </a>
+                )}
+              </div>
+            </div>
           )}
         </div>
       </div>

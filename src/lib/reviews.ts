@@ -134,7 +134,7 @@ export async function fetchYelpBusinessData(
         headers: { Authorization: `Bearer ${apiKey}` },
         next: { revalidate: 3600 },
       }),
-      fetch(`https://api.yelp.com/v3/businesses/${alias}/reviews?limit=3`, {
+      fetch(`https://api.yelp.com/v3/businesses/${alias}/reviews?limit=20`, {
         headers: { Authorization: `Bearer ${apiKey}` },
         next: { revalidate: 3600 },
       }),
