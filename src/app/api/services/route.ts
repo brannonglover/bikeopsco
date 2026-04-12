@@ -8,9 +8,20 @@ const createServiceSchema = z.object({
   price: z.number().min(0, "Price must be 0 or greater"),
 });
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url);
+    const q = searchParams.get("q") ?? "";
+
     const services = await prisma.service.findMany({
+      where: q
+        ? {
+            OR: [
+              { name: { contains: q, mode: "insensitive" } },
+              { description: { contains: q, mode: "insensitive" } },
+            ],
+          }
+        : {},
       orderBy: { name: "asc" },
     });
     return NextResponse.json(services);

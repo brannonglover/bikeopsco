@@ -41,6 +41,7 @@ export default function ServicesPage() {
   });
   const [firstRowIsHeader, setFirstRowIsHeader] = useState(true);
   const [expandedServiceIds, setExpandedServiceIds] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState("");
   const [actionsOpen, setActionsOpen] = useState(false);
   const actionsRef = useRef<HTMLDivElement>(null);
 
@@ -64,7 +65,10 @@ export default function ServicesPage() {
   };
 
   useEffect(() => {
-    fetch("/api/services")
+    const url = searchQuery
+      ? `/api/services?q=${encodeURIComponent(searchQuery)}`
+      : "/api/services";
+    fetch(url)
       .then((res) => res.json())
       .then((data) => {
         const normalized = (Array.isArray(data) ? data : []).map((s: Service & { price?: unknown }) => ({
@@ -74,7 +78,7 @@ export default function ServicesPage() {
         setServices(normalized);
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [searchQuery]);
 
   const startEdit = (s: Service) => {
     setEditing(s.id);
@@ -286,6 +290,13 @@ export default function ServicesPage() {
             >
               + Add Service
             </button>
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by name or description..."
+              className="w-48 sm:w-56 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none"
+            />
             <div className="ml-auto relative" ref={actionsRef}>
               <button
                 type="button"
@@ -581,7 +592,9 @@ export default function ServicesPage() {
 
       <div className="space-y-4">
         {services.length === 0 && !showAddForm ? (
-          <p className="text-slate-500 py-8">No services yet. Add one to get started.</p>
+          <p className="text-slate-500 py-8">
+            {searchQuery ? `No services match "${searchQuery}".` : "No services yet. Add one to get started."}
+          </p>
         ) : (
           services.map((s) => (
             <div
