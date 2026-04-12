@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import { formatCustomerName } from "@/lib/customer";
 
 // ── Types for job history ──────────────────────────────────────────────────
@@ -480,12 +481,14 @@ function BikeImageSearch({
                     onClick={() => handlePick(r.fullUrl)}
                     disabled={importing}
                     title={r.source}
-                    className="aspect-square rounded overflow-hidden border-2 border-transparent hover:border-indigo-500 focus:border-indigo-500 transition-colors disabled:opacity-60"
+                    className="relative aspect-square rounded overflow-hidden border-2 border-transparent hover:border-indigo-500 focus:border-indigo-500 transition-colors disabled:opacity-60"
                   >
-                    <img
+                    <Image
                       src={r.thumbUrl}
                       alt=""
-                      className="w-full h-full object-cover"
+                      fill
+                      unoptimized
+                      className="object-cover"
                     />
                   </button>
                 ))}
@@ -584,9 +587,11 @@ function AddBikeForm({
         <div className="flex-shrink-0">
           {imageUrl ? (
             <div className="relative">
-              <img
+              <Image
                 src={imageUrl}
                 alt="Bike"
+                width={80}
+                height={80}
                 className="w-20 h-20 object-cover rounded-lg border border-slate-200"
               />
               <button
@@ -757,9 +762,11 @@ function EditBikeForm({
         <div className="flex-shrink-0">
           {imageUrl ? (
             <div className="relative">
-              <img
+              <Image
                 src={imageUrl}
                 alt="Bike"
+                width={80}
+                height={80}
                 className="w-20 h-20 object-cover rounded-lg border border-slate-200"
               />
               <button
@@ -1274,9 +1281,11 @@ export function CustomerDetailModal({
                         className="flex items-center gap-3 py-2 px-3 bg-slate-50 rounded-lg"
                       >
                         {bike.imageUrl ? (
-                          <img
+                          <Image
                             src={bike.imageUrl}
                             alt={`${bike.make} ${bike.model}`}
+                            width={48}
+                            height={48}
                             className="w-12 h-12 object-cover rounded-lg flex-shrink-0"
                           />
                         ) : (

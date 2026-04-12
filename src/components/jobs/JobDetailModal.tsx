@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useState, useRef } from "react";
 import type { Job, JobBike, JobProduct, JobService, Stage } from "@/lib/types";
 import { Price } from "@/components/ui/Price";
@@ -503,11 +504,14 @@ function JobBikeSection({
               } ${hasMultiple ? "" : "flex-1"}`}
             >
               {imageUrl ? (
-                <img
-                  src={imageUrl}
-                  alt={displayName}
-                  className={`${size} flex-shrink-0 object-cover rounded-lg border border-slate-100`}
-                />
+                <div className={`${size} flex-shrink-0 relative rounded-lg overflow-hidden border border-slate-100`}>
+                  <Image
+                    src={imageUrl}
+                    alt={displayName}
+                    fill
+                    className="object-cover"
+                  />
+                </div>
               ) : (
                 <div className={`${size} flex-shrink-0 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center`}>
                   <BikePlaceholderIcon className="w-8 h-8 text-slate-400" />
@@ -747,59 +751,6 @@ function JobBikeSection({
   );
 }
 
-function JobBikesInvoiceSection({ job }: { job: Job }) {
-  const jobBikes: JobBike[] = job.jobBikes ?? [];
-  const hasMultiple = jobBikes.length > 1;
-  const bikes = hasMultiple || jobBikes.length === 1
-    ? jobBikes
-    : [{ id: "legacy", make: job.bikeMake, model: job.bikeModel, nickname: null, imageUrl: null, bikeId: null, sortOrder: 0, bikeType: null } as JobBike];
-  const customerBikes = job.customer?.bikes;
-
-  return (
-    <div className="mb-6 pb-4 border-b border-slate-200">
-      <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">
-        Bikes in this job
-      </h3>
-      <div className={`flex flex-wrap gap-2 ${hasMultiple ? "" : ""}`}>
-        {bikes.map((b) => {
-          const dp = getDisplayPartsForJobBikeRow(job, b);
-          const imageUrl =
-            dp.imageUrl ?? resolveBikeImageUrl({ ...b, make: dp.make, model: dp.model }, customerBikes);
-          const eff = resolveEffectiveBikeType({
-            bikeType: b.bikeType,
-            make: dp.make,
-            model: dp.model,
-            bikeId: b.bikeId,
-            bike: b.bike,
-          });
-          return (
-          <div
-            key={b.id}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 text-sm"
-          >
-            {imageUrl ? (
-              <img src={imageUrl} alt="" className="w-10 h-10 object-cover rounded border border-slate-200" />
-            ) : (
-              <div className="w-10 h-10 rounded bg-slate-200 flex items-center justify-center">
-                <BikePlaceholderIcon className="w-5 h-5 text-slate-500" />
-              </div>
-            )}
-            <span className="font-medium text-slate-900">
-              {dp.nickname?.trim() ? dp.nickname : `${dp.make} ${dp.model}`}
-            </span>
-            {dp.nickname?.trim() && (
-              <span className="text-slate-500">({dp.make} {dp.model})</span>
-            )}
-            <span className="text-xs text-slate-500 border-l border-slate-200 pl-2 ml-1">
-              {eff === "E_BIKE" ? "E-bike" : "Standard"}
-            </span>
-          </div>
-        );
-        })}
-      </div>
-    </div>
-  );
-}
 
 const STAGE_LABELS: Record<Stage, string> = {
   PENDING_APPROVAL: "Pending approval",
@@ -1585,6 +1536,7 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
       setReviewBanner(null);
     }
     // Only when switching jobs — same-id refreshes (invoice lines, refetch) must not reset tab or overlays.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [job?.id]);
 
   useEffect(() => {
@@ -2428,7 +2380,7 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                   </span>
                   {group.bike && (
                     bikeImageUrl ? (
-                      <img src={bikeImageUrl} alt="" className="w-8 h-8 object-cover rounded border border-slate-200 flex-shrink-0" />
+                      <Image src={bikeImageUrl} alt="" width={32} height={32} className="w-8 h-8 object-cover rounded border border-slate-200 flex-shrink-0" />
                     ) : (
                       <div className="w-8 h-8 rounded bg-slate-200 flex items-center justify-center flex-shrink-0">
                         <BikePlaceholderIcon className="w-4 h-4 text-slate-500" />

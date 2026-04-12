@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { Price } from "@/components/ui/Price";
 import { BikePlaceholderIcon } from "@/components/ui/BikePlaceholderIcon";
 
@@ -261,9 +262,11 @@ export default function StatusPage() {
                     }`}
                   >
                     {imageUrl ? (
-                      <img
+                      <Image
                         src={imageUrl}
                         alt={name}
+                        width={56}
+                        height={56}
                         className="w-14 h-14 flex-shrink-0 object-cover rounded-lg border border-slate-200"
                       />
                     ) : (

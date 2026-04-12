@@ -459,6 +459,7 @@ export function ChatMessageBubble({
           >
             ×
           </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={lightboxUrl}
             alt="Full size"
