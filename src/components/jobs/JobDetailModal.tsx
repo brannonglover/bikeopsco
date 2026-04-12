@@ -1237,6 +1237,143 @@ function RecordCashButton({
   );
 }
 
+function ReprocessStripeButton({
+  jobId,
+  onReprocessed,
+}: {
+  jobId: string;
+  onReprocessed?: (job: Job) => void;
+}) {
+  const [showModal, setShowModal] = useState(false);
+  const [piId, setPiId] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!showModal) return;
+    setTimeout(() => inputRef.current?.focus(), 50);
+    const fn = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !loading) {
+        e.stopImmediatePropagation();
+        setShowModal(false);
+      }
+    };
+    document.addEventListener("keydown", fn, true);
+    return () => document.removeEventListener("keydown", fn, true);
+  }, [showModal, loading]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/payments/reprocess-stripe`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paymentIntentId: piId.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        const updatedJob = await fetch(`/api/jobs/${jobId}`).then((r) => r.json());
+        onReprocessed?.(updatedJob);
+        setShowModal(false);
+        setPiId("");
+      } else {
+        setError(data.error ?? "Failed to reprocess payment");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => { setShowModal(true); setError(null); setPiId(""); }}
+        className="inline-flex items-center gap-1.5 self-start text-sm text-slate-400 hover:text-slate-600"
+      >
+        <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+        Reprocess Stripe payment
+      </button>
+
+      {showModal && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm"
+          onClick={(e) => e.target === e.currentTarget && !loading && setShowModal(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="reprocess-stripe-modal-title"
+        >
+          <div
+            className="w-full max-w-sm rounded-xl border border-slate-200/80 bg-white p-6 shadow-soft-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100">
+                <svg className="h-5 w-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </div>
+              <div>
+                <h2 id="reprocess-stripe-modal-title" className="text-lg font-semibold text-slate-900">
+                  Reprocess Stripe payment
+                </h2>
+                <p className="text-sm text-slate-500">
+                  Paste the Payment Intent ID from Stripe Dashboard to manually apply a succeeded payment.
+                </p>
+              </div>
+            </div>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label htmlFor="pi-id-input" className="block text-sm font-medium text-slate-700 mb-1">
+                  Payment Intent ID
+                </label>
+                <input
+                  ref={inputRef}
+                  id="pi-id-input"
+                  type="text"
+                  value={piId}
+                  onChange={(e) => setPiId(e.target.value)}
+                  placeholder="pi_3ABC..."
+                  disabled={loading}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
+                />
+                <p className="mt-1 text-xs text-slate-400">
+                  Find this in Stripe Dashboard → Payments → click the payment → copy the ID starting with <span className="font-mono">pi_</span>
+                </p>
+              </div>
+              {error && (
+                <p className="text-sm text-red-600" role="alert">{error}</p>
+              )}
+              <div className="flex gap-3 justify-end">
+                <button
+                  type="button"
+                  onClick={() => !loading && setShowModal(false)}
+                  disabled={loading}
+                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading || !piId.trim().startsWith("pi_")}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition-colors shadow-soft"
+                >
+                  {loading ? "Processing…" : "Apply payment"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 function CopyPaymentLinkButton({ jobId }: { jobId: string }) {
   const [copied, setCopied] = useState(false);
   const url = typeof window !== "undefined" ? `${window.location.origin}/pay/${jobId}` : "";
@@ -1907,6 +2044,17 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
   const [productSearch, setProductSearch] = useState("");
   const [expandedServiceIds, setExpandedServiceIds] = useState<Set<string>>(new Set());
   const [expandedProductIds, setExpandedProductIds] = useState<Set<string>>(new Set());
+  const [expandedBikeIds, setExpandedBikeIds] = useState<Set<string>>(() => {
+    const bikes = job.jobBikes ?? [];
+    const ids = new Set<string>();
+    if (bikes.length === 0) {
+      ids.add("__legacy__");
+    } else {
+      bikes.forEach((b) => ids.add(b.id));
+    }
+    ids.add("__unassigned__");
+    return ids;
+  });
   const servicesDropdownRef = useRef<HTMLDivElement>(null);
   const productsDropdownRef = useRef<HTMLDivElement>(null);
   const serviceSearchRef = useRef<HTMLInputElement>(null);
@@ -1926,6 +2074,15 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleBikeExpanded = (key: string) => {
+    setExpandedBikeIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   };
@@ -1970,6 +2127,60 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
   const filteredProducts = productSearch.trim()
     ? availableProducts.filter((p) => p.name.toLowerCase().includes(productSearch.trim().toLowerCase()))
     : availableProducts;
+
+  const jobBikesList: JobBike[] = job.jobBikes ?? [];
+  const isMultiBike = jobBikesList.length > 1;
+  const invoiceCustomerBikes = job.customer?.bikes;
+
+  const calcGroupSubtotal = (svcs: JobService[], prods: JobProduct[]) =>
+    svcs.reduce((s, js) => {
+      const p = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);
+      return s + p * (js.quantity || 1);
+    }, 0) +
+    prods.reduce((s, jp) => {
+      const p = typeof jp.unitPrice === "string" ? parseFloat(jp.unitPrice) : Number(jp.unitPrice);
+      return s + p * (jp.quantity || 1);
+    }, 0);
+
+  const bikeGroups: Array<{
+    key: string;
+    bike: JobBike | null;
+    services: JobService[];
+    products: JobProduct[];
+    subtotal: number;
+  }> = (() => {
+    if (jobBikesList.length === 0) {
+      const legacyBike: JobBike = {
+        id: "__legacy__",
+        jobId: job.id,
+        make: job.bikeMake,
+        model: job.bikeModel,
+        bikeType: null,
+        nickname: null,
+        imageUrl: null,
+        bikeId: null,
+        sortOrder: 0,
+        completedAt: null,
+        waitingOnPartsAt: null,
+      };
+      return [{ key: "__legacy__", bike: legacyBike, services: jobServices, products: jobProductsList, subtotal: calcGroupSubtotal(jobServices, jobProductsList) }];
+    } else if (!isMultiBike) {
+      const bike = jobBikesList[0];
+      return [{ key: bike.id, bike, services: jobServices, products: jobProductsList, subtotal: calcGroupSubtotal(jobServices, jobProductsList) }];
+    } else {
+      const groups = jobBikesList.map((bike) => {
+        const svcs = jobServices.filter((js) => js.jobBikeId === bike.id);
+        const prods = jobProductsList.filter((jp) => jp.jobBikeId === bike.id);
+        return { key: bike.id, bike, services: svcs, products: prods, subtotal: calcGroupSubtotal(svcs, prods) };
+      });
+      const unassignedSvcs = jobServices.filter((js) => !js.jobBikeId);
+      const unassignedProds = jobProductsList.filter((jp) => !jp.jobBikeId);
+      if (unassignedSvcs.length > 0 || unassignedProds.length > 0) {
+        groups.push({ key: "__unassigned__", bike: null, services: unassignedSvcs, products: unassignedProds, subtotal: calcGroupSubtotal(unassignedSvcs, unassignedProds) });
+      }
+      return groups;
+    }
+  })();
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -2173,336 +2384,395 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
       return sum + price * (jp.quantity || 1);
     }, 0);
 
-  const hasLineItems = jobServices.length > 0 || jobProductsList.length > 0;
-
   return (
     <div>
-      <JobBikesInvoiceSection job={job} />
-      <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">
-        Line items
-      </h3>
-      {!hasLineItems ? (
-        <p className="text-slate-500 mb-3">
-          No services or products on this job yet. Add line items below.
-        </p>
-      ) : (
-        <div className="space-y-2 mb-3">
-          {jobServices.map((js) => {
-            const price = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);
-            const qty = js.quantity || 1;
-            const lineTotal = price * qty;
-            const isExpanded = expandedServiceIds.has(js.id);
-            const isSystemLine = Boolean(js.service?.isSystem);
-            const qtyBusy = updatingServiceQty === js.id;
-            return (
-              <div
-                key={`service-${js.id}`}
-                className="border border-slate-200 rounded-lg overflow-hidden"
+      <div className="space-y-3 mb-3">
+        {bikeGroups.map((group) => {
+          const isBikeOpen = expandedBikeIds.has(group.key);
+          const itemCount = group.services.length + group.products.length;
+
+          let bikeLabel = "Not assigned to a bike";
+          let bikeImageUrl: string | null = null;
+          let bikeTypeLabel = "";
+          let bikeSubLabel = "";
+          if (group.bike) {
+            const dp = getDisplayPartsForJobBikeRow(job, group.bike);
+            bikeLabel = dp.nickname?.trim() ? dp.nickname : `${dp.make} ${dp.model}`;
+            bikeSubLabel = dp.nickname?.trim() ? `${dp.make} ${dp.model}` : "";
+            bikeImageUrl = dp.imageUrl ?? resolveBikeImageUrl({ ...group.bike, make: dp.make, model: dp.model }, invoiceCustomerBikes);
+            const eff = resolveEffectiveBikeType({
+              bikeType: group.bike.bikeType,
+              make: dp.make,
+              model: dp.model,
+              bikeId: group.bike.bikeId,
+              bike: group.bike.bike,
+            });
+            bikeTypeLabel = eff === "E_BIKE" ? "E-bike" : "Standard";
+          }
+
+          return (
+            <div key={group.key} className="border border-slate-200 rounded-xl overflow-hidden">
+              <button
+                type="button"
+                onClick={() => toggleBikeExpanded(group.key)}
+                className="w-full flex items-center justify-between gap-3 px-3 py-2.5 bg-slate-50 hover:bg-slate-100 transition-colors text-left"
               >
-                <div
-                  className="flex justify-between items-center py-2 px-3 group cursor-pointer hover:bg-slate-50"
-                  onClick={() => toggleServiceExpanded(js.id)}
-                >
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <span
-                      className={`text-slate-400 transition-transform flex-shrink-0 ${isExpanded ? "rotate-90" : ""}`}
-                      aria-hidden
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </span>
-                    <span className="shrink-0 rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-800">
-                      Service
-                    </span>
-                    <p className="font-medium text-slate-900 min-w-0 truncate">
-                      {js.service?.name ?? js.customServiceName ?? "Unknown service"}
-                      {qty > 1 && (
-                        <span className="text-slate-500 font-normal"> × {qty}</span>
-                      )}
-                    </p>
-                    {(job.jobBikes?.length ?? 0) > 1 && js.jobBike && (
-                      <span className="shrink-0 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-medium text-violet-700">
-                        {js.jobBike.nickname?.trim() || `${js.jobBike.make} ${js.jobBike.model}`}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                    {!isSystemLine && (
-                      <div className="flex items-center rounded-md border border-slate-200 bg-white">
-                        <button
-                          type="button"
-                          aria-label="Decrease quantity"
-                          disabled={qty <= 1 || qtyBusy}
-                          onClick={() => adjustServiceQuantity(js.id, qty - 1)}
-                          className="px-2 py-1 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-transparent rounded-l-md text-sm leading-none"
-                        >
-                          −
-                        </button>
-                        <span className="min-w-[1.75rem] text-center text-sm tabular-nums text-slate-800 px-0.5">
-                          {qtyBusy ? "…" : qty}
-                        </span>
-                        <button
-                          type="button"
-                          aria-label="Increase quantity"
-                          disabled={qtyBusy}
-                          onClick={() => adjustServiceQuantity(js.id, qty + 1)}
-                          className="px-2 py-1 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-transparent rounded-r-md text-sm leading-none"
-                        >
-                          +
-                        </button>
+                <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                  <span
+                    className={`text-slate-400 transition-transform flex-shrink-0 ${isBikeOpen ? "rotate-90" : ""}`}
+                    aria-hidden
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </span>
+                  {group.bike && (
+                    bikeImageUrl ? (
+                      <img src={bikeImageUrl} alt="" className="w-8 h-8 object-cover rounded border border-slate-200 flex-shrink-0" />
+                    ) : (
+                      <div className="w-8 h-8 rounded bg-slate-200 flex items-center justify-center flex-shrink-0">
+                        <BikePlaceholderIcon className="w-4 h-4 text-slate-500" />
                       </div>
-                    )}
-                    <Price amount={lineTotal} variant="inline" />
-                    <button
-                      onClick={() => handleRemoveService(js.id)}
-                      disabled={removing === js.id}
-                      className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity"
-                      aria-label="Remove service"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-                <div
-                  className="grid transition-[grid-template-rows] duration-300 ease-out"
-                  style={{ gridTemplateRows: isExpanded ? "1fr" : "0fr" }}
-                >
-                  <div className="min-h-0 overflow-hidden">
-                    <div className="px-3 pb-3 pt-0 border-t border-slate-100 bg-slate-50/50">
-                      {js.service?.description && (
-                        <p className="text-xs text-slate-600 mt-2 whitespace-pre-line">{js.service.description}</p>
-                      )}
-                      <dl className="mt-2 text-xs text-slate-500 space-y-1">
-                        <div className="flex justify-between items-center gap-4">
-                          <dt className="shrink-0">Unit price</dt>
-                          <dd className="min-w-0 flex justify-end">
-                            {isSystemLine ? (
-                              <Price amount={price} variant="inline" />
-                            ) : (
-                              <input
-                                key={`unit-${js.id}-${price}`}
-                                type="number"
-                                min={0}
-                                step={0.01}
-                                disabled={updatingServicePrice === js.id}
-                                defaultValue={Number.isFinite(price) ? String(price) : "0"}
-                                onClick={(e) => e.stopPropagation()}
-                                onBlur={(e) => {
-                                  const raw = e.target.value.trim();
-                                  const next = parseFloat(raw);
-                                  if (!Number.isFinite(next) || next < 0) return;
-                                  const rounded = Math.round(next * 100) / 100;
-                                  const current = Math.round(price * 100) / 100;
-                                  if (rounded === current) return;
-                                  void updateServiceUnitPrice(js.id, rounded);
-                                }}
-                                className="w-28 max-w-full rounded border border-slate-200 bg-white px-2 py-1 text-right text-sm tabular-nums text-slate-800 disabled:opacity-50"
-                                aria-label="Unit price"
-                              />
-                            )}
-                          </dd>
-                        </div>
-                        <div className="flex justify-between gap-4">
-                          <dt>Quantity</dt>
-                          <dd>{js.quantity}</dd>
-                        </div>
-                        {js.notes && (
-                          <div>
-                            <dt className="text-slate-500">Notes</dt>
-                            <dd className="text-slate-600 mt-0.5">{js.notes}</dd>
-                          </div>
-                        )}
-                      </dl>
-                      {(job.jobBikes?.length ?? 0) > 1 && (
-                        <div className="mt-3 pt-2 border-t border-slate-100">
-                          <p className="text-xs text-slate-500 mb-1.5">Bike</p>
-                          <div className="flex flex-wrap gap-1.5">
-                            <button
-                              type="button"
-                              disabled={updatingServiceBike === js.id}
-                              onClick={() => assignServiceBike(js.id, null)}
-                              className={`rounded-full px-2.5 py-0.5 text-xs font-medium border transition-colors ${
-                                !js.jobBikeId
-                                  ? "bg-slate-700 text-white border-slate-700"
-                                  : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
-                              }`}
-                            >
-                              All bikes
-                            </button>
-                            {(job.jobBikes ?? []).map((b) => {
-                              const label = b.nickname?.trim() || `${b.make} ${b.model}`;
-                              const isSelected = js.jobBikeId === b.id;
-                              return (
-                                <button
-                                  key={b.id}
-                                  type="button"
-                                  disabled={updatingServiceBike === js.id}
-                                  onClick={() => assignServiceBike(js.id, isSelected ? null : b.id)}
-                                  className={`rounded-full px-2.5 py-0.5 text-xs font-medium border transition-colors ${
-                                    isSelected
-                                      ? "bg-violet-600 text-white border-violet-600"
-                                      : "bg-white text-slate-600 border-slate-200 hover:border-violet-400"
-                                  }`}
-                                >
-                                  {label}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-          {jobProductsList.map((jp) => {
-            const price = typeof jp.unitPrice === "string" ? parseFloat(jp.unitPrice) : Number(jp.unitPrice);
-            const lineTotal = price * (jp.quantity || 1);
-            const isExpanded = expandedProductIds.has(jp.id);
-            return (
-              <div
-                key={`product-${jp.id}`}
-                className="border border-slate-200 rounded-lg overflow-hidden"
-              >
-                <div
-                  className="flex justify-between items-center py-2 px-3 group cursor-pointer hover:bg-slate-50"
-                  onClick={() => toggleProductExpanded(jp.id)}
-                >
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <span
-                      className={`text-slate-400 transition-transform flex-shrink-0 ${isExpanded ? "rotate-90" : ""}`}
-                      aria-hidden
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </span>
-                    <span className="shrink-0 rounded bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-800">
-                      Product
-                    </span>
-                    <p className="font-medium text-slate-900 min-w-0 truncate">
-                      {jp.product?.name ?? "Unknown product"}
-                      {jp.quantity > 1 && (
-                        <span className="text-slate-500 font-normal"> × {jp.quantity}</span>
-                      )}
-                    </p>
-                    {(job.jobBikes?.length ?? 0) > 1 && jp.jobBike && (
-                      <span className="shrink-0 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-medium text-sky-700">
-                        {jp.jobBike.nickname?.trim() || `${jp.jobBike.make} ${jp.jobBike.model}`}
+                    )
+                  )}
+                  <div className="min-w-0">
+                    <span className="font-semibold text-slate-900 text-sm truncate block">{bikeLabel}</span>
+                    {(bikeSubLabel || bikeTypeLabel) && (
+                      <span className="text-xs text-slate-500 truncate block">
+                        {bikeSubLabel ? `${bikeSubLabel} · ` : ""}{bikeTypeLabel}
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                    <Price amount={lineTotal} variant="inline" />
-                    <button
-                      onClick={() => handleRemoveProduct(jp.id)}
-                      disabled={removingProduct === jp.id}
-                      className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity"
-                      aria-label="Remove product"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
                 </div>
-                <div
-                  className="grid transition-[grid-template-rows] duration-300 ease-out"
-                  style={{ gridTemplateRows: isExpanded ? "1fr" : "0fr" }}
-                >
-                  <div className="min-h-0 overflow-hidden">
-                    <div className="px-3 pb-3 pt-0 border-t border-slate-100 bg-slate-50/50">
-                      {jp.product?.description && (
-                        <p className="text-xs text-slate-600 mt-2 whitespace-pre-line">{jp.product.description}</p>
-                      )}
-                      <dl className="mt-2 text-xs text-slate-500 space-y-1">
-                        <div className="flex justify-between items-center gap-4">
-                          <dt className="shrink-0">Unit price</dt>
-                          <dd className="min-w-0 flex justify-end">
-                            <input
-                              key={`unit-${jp.id}-${price}`}
-                              type="number"
-                              min={0}
-                              step={0.01}
-                              disabled={updatingProductPrice === jp.id}
-                              defaultValue={Number.isFinite(price) ? String(price) : "0"}
-                              onClick={(e) => e.stopPropagation()}
-                              onBlur={(e) => {
-                                const raw = e.target.value.trim();
-                                const next = parseFloat(raw);
-                                if (!Number.isFinite(next) || next < 0) return;
-                                const rounded = Math.round(next * 100) / 100;
-                                const current = Math.round(price * 100) / 100;
-                                if (rounded === current) return;
-                                void updateProductUnitPrice(jp.id, rounded);
-                              }}
-                              className="w-28 max-w-full rounded border border-slate-200 bg-white px-2 py-1 text-right text-sm tabular-nums text-slate-800 disabled:opacity-50"
-                              aria-label="Unit price"
-                            />
-                          </dd>
-                        </div>
-                        <div className="flex justify-between gap-4">
-                          <dt>Quantity</dt>
-                          <dd>{jp.quantity}</dd>
-                        </div>
-                        {jp.notes && (
-                          <div>
-                            <dt className="text-slate-500">Notes</dt>
-                            <dd className="text-slate-600 mt-0.5">{jp.notes}</dd>
-                          </div>
-                        )}
-                      </dl>
-                      {(job.jobBikes?.length ?? 0) > 1 && (
-                        <div className="mt-3 pt-2 border-t border-slate-100">
-                          <p className="text-xs text-slate-500 mb-1.5">Bike</p>
-                          <div className="flex flex-wrap gap-1.5">
-                            <button
-                              type="button"
-                              disabled={updatingProductBike === jp.id}
-                              onClick={() => assignProductBike(jp.id, null)}
-                              className={`rounded-full px-2.5 py-0.5 text-xs font-medium border transition-colors ${
-                                !jp.jobBikeId
-                                  ? "bg-slate-700 text-white border-slate-700"
-                                  : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
-                              }`}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <span className="text-xs text-slate-400 tabular-nums">
+                    {itemCount} {itemCount === 1 ? "item" : "items"}
+                  </span>
+                  <Price amount={group.subtotal} variant="inline" />
+                </div>
+              </button>
+
+              <div
+                className="grid transition-[grid-template-rows] duration-300 ease-out"
+                style={{ gridTemplateRows: isBikeOpen ? "1fr" : "0fr" }}
+              >
+                <div className="min-h-0 overflow-hidden">
+                  {itemCount === 0 ? (
+                    <p className="text-slate-400 text-sm px-3 py-3">No services or products assigned to this bike yet.</p>
+                  ) : (
+                    <div className="space-y-px bg-slate-100 border-t border-slate-200">
+                      {group.services.map((js) => {
+                        const price = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);
+                        const qty = js.quantity || 1;
+                        const lineTotal = price * qty;
+                        const isExpanded = expandedServiceIds.has(js.id);
+                        const isSystemLine = Boolean(js.service?.isSystem);
+                        const qtyBusy = updatingServiceQty === js.id;
+                        return (
+                          <div
+                            key={`service-${js.id}`}
+                            className="bg-white overflow-hidden"
+                          >
+                            <div
+                              className="flex justify-between items-center py-2 px-3 group cursor-pointer hover:bg-slate-50"
+                              onClick={() => toggleServiceExpanded(js.id)}
                             >
-                              All bikes
-                            </button>
-                            {(job.jobBikes ?? []).map((b) => {
-                              const label = b.nickname?.trim() || `${b.make} ${b.model}`;
-                              const isSelected = jp.jobBikeId === b.id;
-                              return (
-                                <button
-                                  key={b.id}
-                                  type="button"
-                                  disabled={updatingProductBike === jp.id}
-                                  onClick={() => assignProductBike(jp.id, isSelected ? null : b.id)}
-                                  className={`rounded-full px-2.5 py-0.5 text-xs font-medium border transition-colors ${
-                                    isSelected
-                                      ? "bg-sky-600 text-white border-sky-600"
-                                      : "bg-white text-slate-600 border-slate-200 hover:border-sky-400"
-                                  }`}
+                              <div className="flex items-center gap-2 flex-1 min-w-0">
+                                <span
+                                  className={`text-slate-400 transition-transform flex-shrink-0 ${isExpanded ? "rotate-90" : ""}`}
+                                  aria-hidden
                                 >
-                                  {label}
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                  </svg>
+                                </span>
+                                <span className="shrink-0 rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-800">
+                                  Service
+                                </span>
+                                <p className="font-medium text-slate-900 min-w-0 truncate">
+                                  {js.service?.name ?? js.customServiceName ?? "Unknown service"}
+                                  {qty > 1 && (
+                                    <span className="text-slate-500 font-normal"> × {qty}</span>
+                                  )}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                                {!isSystemLine && (
+                                  <div className="flex items-center rounded-md border border-slate-200 bg-white">
+                                    <button
+                                      type="button"
+                                      aria-label="Decrease quantity"
+                                      disabled={qty <= 1 || qtyBusy}
+                                      onClick={() => adjustServiceQuantity(js.id, qty - 1)}
+                                      className="px-2 py-1 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-transparent rounded-l-md text-sm leading-none"
+                                    >
+                                      −
+                                    </button>
+                                    <span className="min-w-[1.75rem] text-center text-sm tabular-nums text-slate-800 px-0.5">
+                                      {qtyBusy ? "…" : qty}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      aria-label="Increase quantity"
+                                      disabled={qtyBusy}
+                                      onClick={() => adjustServiceQuantity(js.id, qty + 1)}
+                                      className="px-2 py-1 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-transparent rounded-r-md text-sm leading-none"
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+                                )}
+                                <Price amount={lineTotal} variant="inline" />
+                                <button
+                                  onClick={() => handleRemoveService(js.id)}
+                                  disabled={removing === js.id}
+                                  className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                                  aria-label="Remove service"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
                                 </button>
-                              );
-                            })}
+                              </div>
+                            </div>
+                            <div
+                              className="grid transition-[grid-template-rows] duration-300 ease-out"
+                              style={{ gridTemplateRows: isExpanded ? "1fr" : "0fr" }}
+                            >
+                              <div className="min-h-0 overflow-hidden">
+                                <div className="px-3 pb-3 pt-0 border-t border-slate-100 bg-slate-50/50">
+                                  {js.service?.description && (
+                                    <p className="text-xs text-slate-600 mt-2 whitespace-pre-line">{js.service.description}</p>
+                                  )}
+                                  <dl className="mt-2 text-xs text-slate-500 space-y-1">
+                                    <div className="flex justify-between items-center gap-4">
+                                      <dt className="shrink-0">Unit price</dt>
+                                      <dd className="min-w-0 flex justify-end">
+                                        {isSystemLine ? (
+                                          <Price amount={price} variant="inline" />
+                                        ) : (
+                                          <input
+                                            key={`unit-${js.id}-${price}`}
+                                            type="number"
+                                            min={0}
+                                            step={0.01}
+                                            disabled={updatingServicePrice === js.id}
+                                            defaultValue={Number.isFinite(price) ? String(price) : "0"}
+                                            onClick={(e) => e.stopPropagation()}
+                                            onBlur={(e) => {
+                                              const raw = e.target.value.trim();
+                                              const next = parseFloat(raw);
+                                              if (!Number.isFinite(next) || next < 0) return;
+                                              const rounded = Math.round(next * 100) / 100;
+                                              const current = Math.round(price * 100) / 100;
+                                              if (rounded === current) return;
+                                              void updateServiceUnitPrice(js.id, rounded);
+                                            }}
+                                            className="w-28 max-w-full rounded border border-slate-200 bg-white px-2 py-1 text-right text-sm tabular-nums text-slate-800 disabled:opacity-50"
+                                            aria-label="Unit price"
+                                          />
+                                        )}
+                                      </dd>
+                                    </div>
+                                    <div className="flex justify-between gap-4">
+                                      <dt>Quantity</dt>
+                                      <dd>{js.quantity}</dd>
+                                    </div>
+                                    {js.notes && (
+                                      <div>
+                                        <dt className="text-slate-500">Notes</dt>
+                                        <dd className="text-slate-600 mt-0.5">{js.notes}</dd>
+                                      </div>
+                                    )}
+                                  </dl>
+                                  {isMultiBike && (
+                                    <div className="mt-3 pt-2 border-t border-slate-100">
+                                      <p className="text-xs text-slate-500 mb-1.5">Reassign bike</p>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        <button
+                                          type="button"
+                                          disabled={updatingServiceBike === js.id}
+                                          onClick={() => assignServiceBike(js.id, null)}
+                                          className={`rounded-full px-2.5 py-0.5 text-xs font-medium border transition-colors ${
+                                            !js.jobBikeId
+                                              ? "bg-slate-700 text-white border-slate-700"
+                                              : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
+                                          }`}
+                                        >
+                                          All bikes
+                                        </button>
+                                        {(job.jobBikes ?? []).map((b) => {
+                                          const label = b.nickname?.trim() || `${b.make} ${b.model}`;
+                                          const isSelected = js.jobBikeId === b.id;
+                                          return (
+                                            <button
+                                              key={b.id}
+                                              type="button"
+                                              disabled={updatingServiceBike === js.id}
+                                              onClick={() => assignServiceBike(js.id, isSelected ? null : b.id)}
+                                              className={`rounded-full px-2.5 py-0.5 text-xs font-medium border transition-colors ${
+                                                isSelected
+                                                  ? "bg-violet-600 text-white border-violet-600"
+                                                  : "bg-white text-slate-600 border-slate-200 hover:border-violet-400"
+                                              }`}
+                                            >
+                                              {label}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        );
+                      })}
+                      {group.products.map((jp) => {
+                        const price = typeof jp.unitPrice === "string" ? parseFloat(jp.unitPrice) : Number(jp.unitPrice);
+                        const lineTotal = price * (jp.quantity || 1);
+                        const isExpanded = expandedProductIds.has(jp.id);
+                        return (
+                          <div
+                            key={`product-${jp.id}`}
+                            className="bg-white overflow-hidden"
+                          >
+                            <div
+                              className="flex justify-between items-center py-2 px-3 group cursor-pointer hover:bg-slate-50"
+                              onClick={() => toggleProductExpanded(jp.id)}
+                            >
+                              <div className="flex items-center gap-2 flex-1 min-w-0">
+                                <span
+                                  className={`text-slate-400 transition-transform flex-shrink-0 ${isExpanded ? "rotate-90" : ""}`}
+                                  aria-hidden
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                  </svg>
+                                </span>
+                                <span className="shrink-0 rounded bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-800">
+                                  Product
+                                </span>
+                                <p className="font-medium text-slate-900 min-w-0 truncate">
+                                  {jp.product?.name ?? "Unknown product"}
+                                  {jp.quantity > 1 && (
+                                    <span className="text-slate-500 font-normal"> × {jp.quantity}</span>
+                                  )}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                                <Price amount={lineTotal} variant="inline" />
+                                <button
+                                  onClick={() => handleRemoveProduct(jp.id)}
+                                  disabled={removingProduct === jp.id}
+                                  className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                                  aria-label="Remove product"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                            <div
+                              className="grid transition-[grid-template-rows] duration-300 ease-out"
+                              style={{ gridTemplateRows: isExpanded ? "1fr" : "0fr" }}
+                            >
+                              <div className="min-h-0 overflow-hidden">
+                                <div className="px-3 pb-3 pt-0 border-t border-slate-100 bg-slate-50/50">
+                                  {jp.product?.description && (
+                                    <p className="text-xs text-slate-600 mt-2 whitespace-pre-line">{jp.product.description}</p>
+                                  )}
+                                  <dl className="mt-2 text-xs text-slate-500 space-y-1">
+                                    <div className="flex justify-between items-center gap-4">
+                                      <dt className="shrink-0">Unit price</dt>
+                                      <dd className="min-w-0 flex justify-end">
+                                        <input
+                                          key={`unit-${jp.id}-${price}`}
+                                          type="number"
+                                          min={0}
+                                          step={0.01}
+                                          disabled={updatingProductPrice === jp.id}
+                                          defaultValue={Number.isFinite(price) ? String(price) : "0"}
+                                          onClick={(e) => e.stopPropagation()}
+                                          onBlur={(e) => {
+                                            const raw = e.target.value.trim();
+                                            const next = parseFloat(raw);
+                                            if (!Number.isFinite(next) || next < 0) return;
+                                            const rounded = Math.round(next * 100) / 100;
+                                            const current = Math.round(price * 100) / 100;
+                                            if (rounded === current) return;
+                                            void updateProductUnitPrice(jp.id, rounded);
+                                          }}
+                                          className="w-28 max-w-full rounded border border-slate-200 bg-white px-2 py-1 text-right text-sm tabular-nums text-slate-800 disabled:opacity-50"
+                                          aria-label="Unit price"
+                                        />
+                                      </dd>
+                                    </div>
+                                    <div className="flex justify-between gap-4">
+                                      <dt>Quantity</dt>
+                                      <dd>{jp.quantity}</dd>
+                                    </div>
+                                    {jp.notes && (
+                                      <div>
+                                        <dt className="text-slate-500">Notes</dt>
+                                        <dd className="text-slate-600 mt-0.5">{jp.notes}</dd>
+                                      </div>
+                                    )}
+                                  </dl>
+                                  {isMultiBike && (
+                                    <div className="mt-3 pt-2 border-t border-slate-100">
+                                      <p className="text-xs text-slate-500 mb-1.5">Reassign bike</p>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        <button
+                                          type="button"
+                                          disabled={updatingProductBike === jp.id}
+                                          onClick={() => assignProductBike(jp.id, null)}
+                                          className={`rounded-full px-2.5 py-0.5 text-xs font-medium border transition-colors ${
+                                            !jp.jobBikeId
+                                              ? "bg-slate-700 text-white border-slate-700"
+                                              : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
+                                          }`}
+                                        >
+                                          All bikes
+                                        </button>
+                                        {(job.jobBikes ?? []).map((b) => {
+                                          const label = b.nickname?.trim() || `${b.make} ${b.model}`;
+                                          const isSelected = jp.jobBikeId === b.id;
+                                          return (
+                                            <button
+                                              key={b.id}
+                                              type="button"
+                                              disabled={updatingProductBike === jp.id}
+                                              onClick={() => assignProductBike(jp.id, isSelected ? null : b.id)}
+                                              className={`rounded-full px-2.5 py-0.5 text-xs font-medium border transition-colors ${
+                                                isSelected
+                                                  ? "bg-sky-600 text-white border-sky-600"
+                                                  : "bg-white text-slate-600 border-slate-200 hover:border-sky-400"
+                                              }`}
+                                            >
+                                              {label}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
-            );
-          })}
-        </div>
-      )}
+            </div>
+          );
+        })}
+      </div>
       <div className="flex flex-col sm:flex-row flex-wrap gap-2 pt-1 pb-1 border-t border-slate-100">
           <div ref={servicesDropdownRef} className="relative flex-1 min-w-[140px] max-w-sm">
             <button
@@ -2660,7 +2930,10 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
             </a>
             <RecordCashButton jobId={job.id} onRecorded={onJobUpdated} total={total} />
           </div>
-          <CopyPaymentLinkButton jobId={job.id} />
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <CopyPaymentLinkButton jobId={job.id} />
+            <ReprocessStripeButton jobId={job.id} onReprocessed={onJobUpdated} />
+          </div>
         </div>
       )}
     </div>

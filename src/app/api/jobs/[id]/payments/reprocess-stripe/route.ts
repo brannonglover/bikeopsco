@@ -1,0 +1,175 @@
+import { NextRequest, NextResponse } from "next/server";
+import Stripe from "stripe";
+import { getStripe } from "@/lib/stripe";
+import { prisma } from "@/lib/db";
+import { sendPaymentReceiptEmail } from "@/lib/email";
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const { id: jobId } = params;
+
+  let paymentIntentId: string;
+  try {
+    const body = await request.json();
+    paymentIntentId = (body.paymentIntentId ?? "").trim();
+  } catch {
+    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+  }
+
+  if (!paymentIntentId || !paymentIntentId.startsWith("pi_")) {
+    return NextResponse.json(
+      { error: "A valid Stripe Payment Intent ID (starting with pi_) is required" },
+      { status: 400 }
+    );
+  }
+
+  const job = await prisma.job.findUnique({
+    where: { id: jobId },
+    include: {
+      customer: true,
+      jobServices: { include: { service: true } },
+      jobProducts: { include: { product: true } },
+    },
+  });
+
+  if (!job) {
+    return NextResponse.json({ error: "Job not found" }, { status: 404 });
+  }
+
+  if (job.paymentStatus === "PAID") {
+    return NextResponse.json({ error: "Job is already marked as paid" }, { status: 400 });
+  }
+
+  const stripe = getStripe();
+  let paymentIntent;
+  try {
+    paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId, {
+      expand: ["payment_method"],
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return NextResponse.json(
+      { error: `Could not retrieve Payment Intent from Stripe: ${msg}` },
+      { status: 400 }
+    );
+  }
+
+  if (paymentIntent.metadata?.jobId !== jobId) {
+    return NextResponse.json(
+      { error: "This Payment Intent does not belong to this job" },
+      { status: 400 }
+    );
+  }
+
+  if (paymentIntent.status !== "succeeded") {
+    return NextResponse.json(
+      { error: `Payment Intent status is "${paymentIntent.status}", not "succeeded". Only succeeded payments can be applied.` },
+      { status: 400 }
+    );
+  }
+
+  // Check if already recorded (idempotent)
+  const existing = await prisma.payment.findUnique({
+    where: { stripePaymentIntentId: paymentIntentId },
+  });
+  if (existing) {
+    return NextResponse.json(
+      { error: "This Payment Intent has already been recorded. Refresh the page to see the updated status." },
+      { status: 400 }
+    );
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const amount = (paymentIntent.amount / 100).toFixed(2);
+      const pm = paymentIntent.payment_method;
+      await tx.payment.create({
+        data: {
+          jobId,
+          stripePaymentIntentId: paymentIntent.id,
+          amount,
+          currency: paymentIntent.currency ?? "usd",
+          status: paymentIntent.status,
+          paymentMethod: pm
+            ? typeof pm === "string"
+              ? pm
+              : pm.type
+            : null,
+        },
+      });
+
+      const jobBikes = await tx.jobBike.findMany({
+        where: { jobId },
+        select: { waitingOnPartsAt: true, completedAt: true },
+      });
+      const hasUnresolvedParts = jobBikes.some(
+        (b) => b.waitingOnPartsAt !== null && b.completedAt === null
+      );
+
+      await tx.job.update({
+        where: { id: jobId },
+        data: {
+          paymentStatus: "PAID",
+          ...(hasUnresolvedParts
+            ? { stage: "WAITING_ON_PARTS" }
+            : { stage: "COMPLETED", completedAt: new Date() }),
+        },
+      });
+    });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error("Failed to reprocess Stripe payment:", error);
+    return NextResponse.json(
+      { error: "Failed to record payment", details: msg },
+      { status: 500 }
+    );
+  }
+
+  // Send receipt email (non-fatal)
+  let recipientEmail = job.customer?.email?.trim() || null;
+  if (!recipientEmail && paymentIntent.payment_method) {
+    try {
+      const pm =
+        typeof paymentIntent.payment_method === "string"
+          ? await stripe.paymentMethods.retrieve(paymentIntent.payment_method)
+          : (paymentIntent.payment_method as Stripe.PaymentMethod);
+      recipientEmail = pm.billing_details?.email?.trim() || null;
+    } catch {
+      // ignore
+    }
+  }
+
+  if (recipientEmail) {
+    const jobForEmail = {
+      id: job.id,
+      bikeMake: job.bikeMake,
+      bikeModel: job.bikeModel,
+      customer: job.customer
+        ? {
+            firstName: job.customer.firstName,
+            lastName: job.customer.lastName,
+            email: recipientEmail,
+          }
+        : { firstName: "", lastName: null, email: recipientEmail },
+      jobServices: job.jobServices.map((js) => ({
+        service: js.service ? { name: js.service.name } : null,
+        customServiceName: js.customServiceName,
+        quantity: js.quantity,
+        unitPrice: Number(js.unitPrice),
+      })),
+      jobProducts: (job.jobProducts ?? []).map((jp) => ({
+        product: { name: jp.product?.name ?? "Product" },
+        quantity: jp.quantity,
+        unitPrice: Number(jp.unitPrice),
+      })),
+    };
+    const result = await sendPaymentReceiptEmail(jobForEmail, paymentIntent.amount / 100);
+    if (!result.ok) {
+      console.error("Receipt email failed after reprocess:", result.error);
+    }
+  }
+
+  return NextResponse.json({ success: true, message: "Payment recorded successfully" });
+}
