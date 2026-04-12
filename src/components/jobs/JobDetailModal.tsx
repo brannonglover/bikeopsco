@@ -2120,7 +2120,7 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
       const bike = jobBikesList[0];
       return [{ key: bike.id, bike, services: jobServices, products: jobProductsList, subtotal: calcGroupSubtotal(jobServices, jobProductsList) }];
     } else {
-      const groups = jobBikesList.map((bike) => {
+      const groups: Array<{ key: string; bike: JobBike | null; services: JobService[]; products: JobProduct[]; subtotal: number }> = jobBikesList.map((bike) => {
         const svcs = jobServices.filter((js) => js.jobBikeId === bike.id);
         const prods = jobProductsList.filter((jp) => jp.jobBikeId === bike.id);
         return { key: bike.id, bike, services: svcs, products: prods, subtotal: calcGroupSubtotal(svcs, prods) };
