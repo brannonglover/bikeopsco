@@ -96,7 +96,13 @@ export async function GET(request: NextRequest) {
         },
         jobProducts: { include: { product: true } },
       },
-      orderBy: archived ? { archivedAt: "desc" } : { createdAt: "desc" },
+      orderBy: archived
+        ? { archivedAt: "desc" }
+        : [
+            { columnSortOrder: { sort: "asc", nulls: "last" } },
+            { dropOffDate: { sort: "asc", nulls: "last" } },
+            { createdAt: "asc" },
+          ],
     });
 
     return NextResponse.json(jobs);

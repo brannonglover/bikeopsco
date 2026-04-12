@@ -167,6 +167,7 @@ export interface Job {
   cancellationReason?: string | null;
   completedAt: string | null;
   archivedAt?: string | null;
+  columnSortOrder?: number | null;
   paymentStatus?: PaymentStatus;
   jobServices?: JobService[];
   jobProducts?: JobProduct[];

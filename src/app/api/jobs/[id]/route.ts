@@ -139,6 +139,12 @@ export async function PATCH(
       updateData.completedAt = new Date();
     }
 
+    // Reset column sort order when moving between stages so the job falls back
+    // to dropOffDate ordering in its new column.
+    if (data.stage !== undefined && data.stage !== existingJob.stage) {
+      updateData.columnSortOrder = null;
+    }
+
     if (data.bikes !== undefined) {
       const bikes =
         data.bikes.length > 0

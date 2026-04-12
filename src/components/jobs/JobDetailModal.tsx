@@ -1811,11 +1811,16 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
                         <span className="text-slate-500 font-normal"> × {js.quantity}</span>
                       )}
                     </span>
-                    {(job.jobBikes?.length ?? 0) > 1 && js.jobBike && (
-                      <span className="shrink-0 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-medium text-violet-700">
-                        {js.jobBike.nickname?.trim() || `${js.jobBike.make} ${js.jobBike.model}`}
-                      </span>
-                    )}
+                    {(job.jobBikes?.length ?? 0) > 1 && js.jobBikeId && (() => {
+                      const jb = (job.jobBikes ?? []).find((b) => b.id === js.jobBikeId);
+                      if (!jb) return null;
+                      const dp = getDisplayPartsForJobBikeRow(job, jb);
+                      return (
+                        <span className="shrink-0 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-medium text-violet-700">
+                          {dp.nickname?.trim() || `${dp.make} ${dp.model}`}
+                        </span>
+                      );
+                    })()}
                   </div>
                 ))}
                 {(job.jobProducts ?? []).map((jp) => (
@@ -1829,11 +1834,16 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
                         <span className="text-slate-500 font-normal"> × {jp.quantity}</span>
                       )}
                     </span>
-                    {(job.jobBikes?.length ?? 0) > 1 && jp.jobBike && (
-                      <span className="shrink-0 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-medium text-sky-700">
-                        {jp.jobBike.nickname?.trim() || `${jp.jobBike.make} ${jp.jobBike.model}`}
-                      </span>
-                    )}
+                    {(job.jobBikes?.length ?? 0) > 1 && jp.jobBikeId && (() => {
+                      const jb = (job.jobBikes ?? []).find((b) => b.id === jp.jobBikeId);
+                      if (!jb) return null;
+                      const dp = getDisplayPartsForJobBikeRow(job, jb);
+                      return (
+                        <span className="shrink-0 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-medium text-sky-700">
+                          {dp.nickname?.trim() || `${dp.make} ${dp.model}`}
+                        </span>
+                      );
+                    })()}
                   </div>
                 ))}
               </div>
@@ -2552,7 +2562,8 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                                           All bikes
                                         </button>
                                         {(job.jobBikes ?? []).map((b) => {
-                                          const label = b.nickname?.trim() || `${b.make} ${b.model}`;
+                                          const dp = getDisplayPartsForJobBikeRow(job, b);
+                                          const label = dp.nickname?.trim() || `${dp.make} ${dp.model}`;
                                           const isSelected = js.jobBikeId === b.id;
                                           return (
                                             <button
@@ -2688,7 +2699,8 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                                           All bikes
                                         </button>
                                         {(job.jobBikes ?? []).map((b) => {
-                                          const label = b.nickname?.trim() || `${b.make} ${b.model}`;
+                                          const dp = getDisplayPartsForJobBikeRow(job, b);
+                                          const label = dp.nickname?.trim() || `${dp.make} ${dp.model}`;
                                           const isSelected = jp.jobBikeId === b.id;
                                           return (
                                             <button

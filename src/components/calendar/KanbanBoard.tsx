@@ -12,6 +12,7 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
+import { arrayMove } from "@dnd-kit/sortable";
 import { StageColumn } from "./StageColumn";
 import { MobileJobQueue } from "./MobileJobQueue";
 import { JobCardContent } from "./JobCard";
@@ -239,6 +240,21 @@ export function KanbanBoard() {
     setActiveJobId(event.active.id as string);
   };
 
+  const reorderColumnJobs = useCallback(
+    async (updates: { id: string; columnSortOrder: number }[]) => {
+      try {
+        await fetch("/api/jobs/reorder", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ updates }),
+        });
+      } catch (e) {
+        console.error("Failed to persist job reorder", e);
+      }
+    },
+    []
+  );
+
   const patchJobStage = useCallback(
     async (jobId: string, newStage: Stage, opts?: { endDrag?: boolean }) => {
       const endDrag = opts?.endDrag ?? false;
@@ -306,12 +322,53 @@ export function KanbanBoard() {
     }
 
     const jobId = active.id as string;
+    const activeJob = jobs.find((j) => j.id === jobId);
+
     let newStage: Stage;
     if (STAGES.includes(over.id as Stage)) {
       newStage = over.id as Stage;
     } else {
       const targetJob = jobs.find((j) => j.id === over.id);
       newStage = targetJob ? targetJob.stage : (over.id as Stage);
+    }
+
+    // Within-column reorder: same stage and dropped on a card (not a column background)
+    if (
+      activeJob &&
+      newStage === activeJob.stage &&
+      !STAGES.includes(over.id as Stage)
+    ) {
+      const columnJobs = jobsByStage[newStage] ?? [];
+      const oldIndex = columnJobs.findIndex((j) => j.id === jobId);
+      const newIndex = columnJobs.findIndex((j) => j.id === over.id);
+
+      if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
+        const reordered = arrayMove(columnJobs, oldIndex, newIndex);
+        const updates = reordered.map((j, i) => ({
+          id: j.id,
+          columnSortOrder: i * 1000,
+        }));
+
+        flushSync(() => {
+          setActiveJobId(null);
+          setJobs((prev) => {
+            const orderMap = new Map(
+              updates.map((u) => [u.id, u.columnSortOrder])
+            );
+            return prev.map((j) =>
+              orderMap.has(j.id)
+                ? { ...j, columnSortOrder: orderMap.get(j.id)! }
+                : j
+            );
+          });
+        });
+
+        void reorderColumnJobs(updates);
+        return;
+      }
+
+      setActiveJobId(null);
+      return;
     }
 
     void patchJobStage(jobId, newStage, { endDrag: true });
@@ -325,10 +382,20 @@ export function KanbanBoard() {
     })
   );
 
-  const jobsByStage = STAGES.reduce(
-    (acc, stage) => ({ ...acc, [stage]: jobs.filter((j) => j.stage === stage) }),
-    {} as Record<Stage, Job[]>
-  );
+  const jobsByStage = STAGES.reduce((acc, stage) => {
+    const stageJobs = jobs
+      .filter((j) => j.stage === stage)
+      .sort((a, b) => {
+        const aOrder = a.columnSortOrder ?? Infinity;
+        const bOrder = b.columnSortOrder ?? Infinity;
+        if (aOrder !== bOrder) return aOrder - bOrder;
+        if (!a.dropOffDate && !b.dropOffDate) return 0;
+        if (!a.dropOffDate) return 1;
+        if (!b.dropOffDate) return -1;
+        return new Date(a.dropOffDate).getTime() - new Date(b.dropOffDate).getTime();
+      });
+    return { ...acc, [stage]: stageJobs };
+  }, {} as Record<Stage, Job[]>);
 
   const completedCount = jobs.filter((j) => j.stage === "COMPLETED").length;
 
