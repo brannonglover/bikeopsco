@@ -36,6 +36,14 @@ export async function POST(request: NextRequest) {
     }
 
     try {
+      const existing = await prisma.payment.findUnique({
+        where: { stripePaymentIntentId: paymentIntent.id },
+      });
+      if (existing) {
+        console.log(`Webhook idempotency: payment for ${paymentIntent.id} already recorded, skipping.`);
+        return NextResponse.json({ received: true });
+      }
+
       await prisma.$transaction(async (tx) => {
         const amount = (paymentIntent.amount / 100).toFixed(2);
         await tx.payment.create({
@@ -129,9 +137,10 @@ export async function POST(request: NextRequest) {
         console.warn(`No email for payment receipt: job ${jobId} has no customer email and Stripe billing_details has no email. Link a customer with email to the job, or the Payment Element will collect email when configured.`);
       }
     } catch (error) {
-      console.error("Failed to process payment webhook:", error);
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error("Failed to process payment webhook:", msg, error);
       return NextResponse.json(
-        { error: "Failed to process payment" },
+        { error: "Failed to process payment", detail: msg },
         { status: 500 }
       );
     }

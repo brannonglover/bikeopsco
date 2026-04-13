@@ -26,20 +26,70 @@ export async function PATCH(
       return NextResponse.json({ error: "Bike not found" }, { status: 404 });
     }
 
-    const updated = await prisma.bike.update({
-      where: { id: bikeId },
-      data: {
-        ...(data.make !== undefined && { make: data.make.trim() }),
-        ...(data.model !== undefined && { model: data.model.trim() }),
-        ...(data.bikeType !== undefined && { bikeType: data.bikeType }),
-        ...(data.nickname !== undefined && {
-          nickname: data.nickname?.trim() || null,
-        }),
-        ...(data.imageUrl !== undefined && {
-          imageUrl: data.imageUrl?.trim() || null,
-        }),
-      },
+    const updated = await prisma.$transaction(async (tx) => {
+      const updatedBike = await tx.bike.update({
+        where: { id: bikeId },
+        data: {
+          ...(data.make !== undefined && { make: data.make.trim() }),
+          ...(data.model !== undefined && { model: data.model.trim() }),
+          ...(data.bikeType !== undefined && { bikeType: data.bikeType }),
+          ...(data.nickname !== undefined && {
+            nickname: data.nickname?.trim() || null,
+          }),
+          ...(data.imageUrl !== undefined && {
+            imageUrl: data.imageUrl?.trim() || null,
+          }),
+        },
+      });
+
+      // Propagate changes to all JobBike snapshots linked to this bike
+      const jobBikeUpdateData = {
+        ...(data.make !== undefined && { make: updatedBike.make }),
+        ...(data.model !== undefined && { model: updatedBike.model }),
+        ...(data.bikeType !== undefined && { bikeType: updatedBike.bikeType }),
+        ...(data.nickname !== undefined && { nickname: updatedBike.nickname }),
+        ...(data.imageUrl !== undefined && { imageUrl: updatedBike.imageUrl }),
+      };
+
+      if (Object.keys(jobBikeUpdateData).length > 0) {
+        await tx.jobBike.updateMany({
+          where: { bikeId },
+          data: jobBikeUpdateData,
+        });
+
+        // Refresh Job.bikeMake / Job.bikeModel summary for jobs where this
+        // bike is the first (lowest sortOrder) JobBike
+        if (data.make !== undefined || data.model !== undefined) {
+          const affectedJobBikes = await tx.jobBike.findMany({
+            where: { bikeId },
+            select: { jobId: true, sortOrder: true },
+          });
+
+          const jobIds = [...new Set(affectedJobBikes.map((jb) => jb.jobId))];
+
+          for (const jobId of jobIds) {
+            const firstJobBike = await tx.jobBike.findFirst({
+              where: { jobId },
+              orderBy: { sortOrder: "asc" },
+              select: { bikeId: true, make: true, model: true },
+            });
+
+            if (firstJobBike?.bikeId === bikeId) {
+              await tx.job.update({
+                where: { id: jobId },
+                data: {
+                  bikeMake: updatedBike.make,
+                  bikeModel: updatedBike.model,
+                },
+              });
+            }
+          }
+        }
+      }
+
+      return updatedBike;
     });
+
     return NextResponse.json(updated);
   } catch (error) {
     if (error instanceof z.ZodError) {
