@@ -305,6 +305,9 @@ html.dark .text-red-800 {
 html.dark .text-red-900 {
   color: #fecaca;
 }
+html.dark .text-blue-600 {
+  color: var(--foreground);
+}
 html.dark .text-blue-700 {
   color: #93c5fd;
 }
