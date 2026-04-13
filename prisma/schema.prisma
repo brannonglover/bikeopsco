@@ -30,7 +30,7 @@ model Customer {
 model Bike {
   id          String     @id @default(cuid())
   make        String
-  model       String
+  model       String?
   /// null = infer regular vs e-bike from make/model when needed
   bikeType    BikeType?
   nickname    String?
@@ -49,7 +49,7 @@ model JobBike {
   jobId     String
   job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
   make      String
-  model     String
+  model     String?
   /// null = use linked customer bike or infer from make/model
   bikeType  BikeType?
   nickname  String?

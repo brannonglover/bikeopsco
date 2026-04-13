@@ -15,7 +15,7 @@ interface Service {
 
 type BikeEntry = {
   make: string;
-  model: string;
+  model: string; // kept as string in local state; sent as null when empty
   bikeType: "AUTO" | "REGULAR" | "E_BIKE";
 };
 
@@ -115,7 +115,7 @@ function BookForm() {
           address: form.address.trim() || null,
           bikes: bikes.map((b) => ({
             make: b.make.trim(),
-            model: b.model.trim(),
+            model: b.model.trim() || null,
             bikeType: b.bikeType === "AUTO" ? undefined : b.bikeType,
           })),
           deliveryType: form.deliveryType,
@@ -298,14 +298,13 @@ function BookForm() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">Model *</label>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Model</label>
                   <input
                     type="text"
-                    required
                     value={bike.model}
                     onChange={(e) => updateBike(i, "model", e.target.value)}
                     className="input-book"
-                    placeholder="Domane SL 6"
+                    placeholder="Domane SL 6 (optional)"
                   />
                 </div>
               </div>

@@ -80,7 +80,7 @@ function resolveBikeDisplay(b: StatusJobBike): { name: string; imageUrl: string 
   const nickname = b.nickname?.trim() || linked?.nickname?.trim() || null;
   const imageUrl = b.imageUrl ?? linked?.imageUrl ?? null;
   return {
-    name: nickname || `${make} ${model}`,
+    name: nickname || [make, model].filter(Boolean).join(" "),
     imageUrl,
   };
 }

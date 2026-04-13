@@ -79,7 +79,7 @@ export async function PATCH(
                 where: { id: jobId },
                 data: {
                   bikeMake: updatedBike.make,
-                  bikeModel: updatedBike.model,
+                  bikeModel: updatedBike.model ?? "",
                 },
               });
             }

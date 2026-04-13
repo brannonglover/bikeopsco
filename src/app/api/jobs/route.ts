@@ -9,7 +9,7 @@ import { sendPushToAllStaff } from "@/lib/push";
 
 const bikeSchema = z.object({
   make: z.string().min(1),
-  model: z.string().min(1),
+  model: z.string().min(1).optional().nullable(),
   nickname: z.string().optional().nullable(),
   imageUrl: z.string().optional().nullable(),
   bikeId: z.string().optional().nullable(),
@@ -18,7 +18,7 @@ const bikeSchema = z.object({
 
 const createJobSchema = z.object({
   bikeMake: z.string().min(1),
-  bikeModel: z.string().min(1),
+  bikeModel: z.string().optional().nullable(),
   bikes: z.array(bikeSchema).optional(),
   customerId: z.string().optional().nullable(),
   deliveryType: z.enum(["DROP_OFF_AT_SHOP", "COLLECTION_SERVICE"]).default("DROP_OFF_AT_SHOP"),
@@ -139,7 +139,7 @@ export async function POST(request: NextRequest) {
         data: {
           stage: Stage.BOOKED_IN,
           bikeMake: bikes.length === 1 ? bikes[0].make : "Multiple",
-          bikeModel: bikes.length === 1 ? bikes[0].model : `${bikes.length} bikes`,
+          bikeModel: bikes.length === 1 ? (bikes[0].model ?? "") : `${bikes.length} bikes`,
           customerId: data.customerId,
           deliveryType: data.deliveryType as "DROP_OFF_AT_SHOP" | "COLLECTION_SERVICE",
           dropOffDate: data.dropOffDate ? new Date(data.dropOffDate) : null,
@@ -158,11 +158,12 @@ export async function POST(request: NextRequest) {
       for (const b of bikes) {
         let bikeId: string | null = b.bikeId ?? null;
         if (!bikeId && data.customerId) {
+          const trimmedModel = b.model?.trim() || null;
           const existing = await tx.bike.findFirst({
             where: {
               customerId: data.customerId,
               make: { equals: b.make.trim(), mode: "insensitive" },
-              model: { equals: b.model.trim(), mode: "insensitive" },
+              model: trimmedModel ? { equals: trimmedModel, mode: "insensitive" } : null,
             },
           });
           if (existing) {
@@ -172,7 +173,7 @@ export async function POST(request: NextRequest) {
               data: {
                 customerId: data.customerId,
                 make: b.make.trim(),
-                model: b.model.trim(),
+                model: trimmedModel,
                 bikeType: b.bikeType ?? null,
                 nickname: b.nickname ?? null,
                 imageUrl: b.imageUrl ?? null,

@@ -9,7 +9,7 @@ import { coerceCustomerPhone } from "@/lib/phone";
 
 const bikeItemSchema = z.object({
   make: z.string().min(1, "Bike make is required"),
-  model: z.string().min(1, "Bike model is required"),
+  model: z.string().min(1).optional().nullable(),
   bikeType: z.enum(["REGULAR", "E_BIKE"]).optional(),
 });
 
@@ -132,7 +132,7 @@ export async function POST(request: NextRequest) {
       const bikeMakeSummary =
         bikesInput.length === 1 ? bikesInput[0].make.trim() : "Multiple";
       const bikeModelSummary =
-        bikesInput.length === 1 ? bikesInput[0].model.trim() : `${bikesInput.length} bikes`;
+        bikesInput.length === 1 ? (bikesInput[0].model?.trim() ?? "") : `${bikesInput.length} bikes`;
 
       const newJob = await tx.job.create({
         data: {
@@ -154,13 +154,13 @@ export async function POST(request: NextRequest) {
       for (let i = 0; i < bikesInput.length; i++) {
         const b = bikesInput[i];
         const makeNormalized = b.make.trim();
-        const modelNormalized = b.model.trim();
+        const modelNormalized = b.model?.trim() || null;
 
         let bike = await tx.bike.findFirst({
           where: {
             customerId: customer.id,
             make: { equals: makeNormalized, mode: "insensitive" },
-            model: { equals: modelNormalized, mode: "insensitive" },
+            model: modelNormalized ? { equals: modelNormalized, mode: "insensitive" } : null,
           },
         });
         if (!bike) {

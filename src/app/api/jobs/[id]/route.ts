@@ -8,7 +8,7 @@ import { syncCollectionJobService } from "@/lib/collection-fee";
 
 const bikeSchema = z.object({
   make: z.string().min(1),
-  model: z.string().min(1),
+  model: z.string().min(1).optional().nullable(),
   nickname: z.string().optional().nullable(),
   imageUrl: z.string().optional().nullable(),
   bikeId: z.string().optional().nullable(),
@@ -193,11 +193,12 @@ export async function PATCH(
         for (const b of bikes) {
           let bikeId: string | null = ("bikeId" in b ? b.bikeId : null) ?? null;
           if (!bikeId && effectiveCustomerId) {
+            const trimmedModel = b.model?.trim() || null;
             const existing = await tx.bike.findFirst({
               where: {
                 customerId: effectiveCustomerId,
                 make: { equals: b.make.trim(), mode: "insensitive" },
-                model: { equals: b.model.trim(), mode: "insensitive" },
+                model: trimmedModel ? { equals: trimmedModel, mode: "insensitive" } : null,
               },
             });
             if (existing) {
@@ -207,7 +208,7 @@ export async function PATCH(
                 data: {
                   customerId: effectiveCustomerId,
                   make: b.make.trim(),
-                  model: b.model.trim(),
+                  model: trimmedModel,
                   bikeType: ("bikeType" in b ? b.bikeType : null) ?? null,
                   nickname: ("nickname" in b ? b.nickname : null) ?? null,
                   imageUrl: ("imageUrl" in b ? b.imageUrl : null) ?? null,
@@ -238,11 +239,12 @@ export async function PATCH(
           data.customerId !== undefined ? data.customerId : existingJob.customerId;
         let bikeId: string | null = b.bikeId ?? null;
         if (!bikeId && effectiveCustomerId) {
+          const trimmedModel = b.model?.trim() || null;
           const found = await tx.bike.findFirst({
             where: {
               customerId: effectiveCustomerId,
               make: { equals: b.make.trim(), mode: "insensitive" },
-              model: { equals: b.model.trim(), mode: "insensitive" },
+              model: trimmedModel ? { equals: trimmedModel, mode: "insensitive" } : null,
             },
           });
           if (found) {
@@ -252,7 +254,7 @@ export async function PATCH(
               data: {
                 customerId: effectiveCustomerId,
                 make: b.make.trim(),
-                model: b.model.trim(),
+                model: trimmedModel,
                 bikeType: b.bikeType ?? null,
                 nickname: b.nickname ?? null,
                 imageUrl: b.imageUrl ?? null,

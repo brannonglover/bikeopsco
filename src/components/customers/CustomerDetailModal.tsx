@@ -91,7 +91,8 @@ function bikeSummary(job: HistoryJob): string {
   if (job.jobBikes.length === 0) return `${job.bikeMake} ${job.bikeModel}`;
   if (job.jobBikes.length === 1) {
     const b = job.jobBikes[0];
-    return b.nickname ? `${b.nickname} (${b.make} ${b.model})` : `${b.make} ${b.model}`;
+    const makeModel = [b.make, b.model].filter(Boolean).join(" ");
+    return b.nickname ? `${b.nickname} (${makeModel})` : makeModel;
   }
   return `${job.jobBikes.length} bikes`;
 }
@@ -555,7 +556,7 @@ function AddBikeForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!make.trim() || !model.trim()) return;
+    if (!make.trim()) return;
     setSaving(true);
     try {
       const res = await fetch(`/api/customers/${customerId}/bikes`, {
@@ -563,7 +564,7 @@ function AddBikeForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           make: make.trim(),
-          model: model.trim(),
+          model: model.trim() || null,
           bikeType: bikeType === "AUTO" ? null : bikeType,
           nickname: nickname.trim() || null,
           imageUrl: imageUrl.trim() || null,
@@ -640,9 +641,8 @@ function AddBikeForm({
             type="text"
             value={model}
             onChange={(e) => setModel(e.target.value)}
-            placeholder="Model (e.g. Domane SL 6)"
+            placeholder="Model (optional)"
             className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
-            required
           />
           <input
             type="text"
@@ -668,7 +668,7 @@ function AddBikeForm({
       <div className="flex gap-2 pt-2">
         <button
           type="submit"
-          disabled={saving || imageBusy || !make.trim() || !model.trim()}
+          disabled={saving || imageBusy || !make.trim()}
           className="px-3 py-1.5 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-50"
         >
           {saving ? "Adding..." : imageBusy ? "Uploading image..." : "Add"}
@@ -695,7 +695,7 @@ function EditBikeForm({
   onCancel: () => void;
 }) {
   const [make, setMake] = useState(bike.make);
-  const [model, setModel] = useState(bike.model);
+  const [model, setModel] = useState(bike.model ?? "");
   const [nickname, setNickname] = useState(bike.nickname ?? "");
   const [imageUrl, setImageUrl] = useState(bike.imageUrl ?? "");
   const [bikeType, setBikeType] = useState<"AUTO" | "REGULAR" | "E_BIKE">(
@@ -727,7 +727,7 @@ function EditBikeForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!make.trim() || !model.trim()) return;
+    if (!make.trim()) return;
     setSaving(true);
     try {
       const res = await fetch(
@@ -737,7 +737,7 @@ function EditBikeForm({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             make: make.trim(),
-            model: model.trim(),
+            model: model.trim() || null,
             bikeType: bikeType === "AUTO" ? null : bikeType,
             nickname: nickname.trim() || null,
             imageUrl: imageUrl.trim() || null,
@@ -816,9 +816,8 @@ function EditBikeForm({
             type="text"
             value={model}
             onChange={(e) => setModel(e.target.value)}
-            placeholder="Model"
+            placeholder="Model (optional)"
             className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
-            required
           />
           <input
             type="text"
@@ -844,7 +843,7 @@ function EditBikeForm({
       <div className="flex gap-2 pt-2">
         <button
           type="submit"
-          disabled={saving || imageBusy || !make.trim() || !model.trim()}
+          disabled={saving || imageBusy || !make.trim()}
           className="px-3 py-1.5 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-50"
         >
           {saving ? "Saving..." : imageBusy ? "Uploading image..." : "Save"}
@@ -1283,7 +1282,7 @@ export function CustomerDetailModal({
                         {bike.imageUrl ? (
                           <Image
                             src={bike.imageUrl}
-                            alt={`${bike.make} ${bike.model}`}
+                            alt={[bike.make, bike.model].filter(Boolean).join(" ")}
                             width={48}
                             height={48}
                             className="w-12 h-12 object-cover rounded-lg flex-shrink-0"
@@ -1296,10 +1295,10 @@ export function CustomerDetailModal({
                         <span className="font-medium text-slate-900 flex-1 min-w-0">
                           {bike.nickname
                             ? `${bike.nickname}`
-                            : `${bike.make} ${bike.model}`}
+                            : [bike.make, bike.model].filter(Boolean).join(" ")}
                           {bike.nickname && (
                             <span className="text-slate-500 font-normal ml-1">
-                              ({bike.make} {bike.model})
+                              ({[bike.make, bike.model].filter(Boolean).join(" ")})
                             </span>
                           )}
                         </span>

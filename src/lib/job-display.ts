@@ -8,7 +8,7 @@ function isJobBikeUnlinkedFromProfile(jb: JobBike): boolean {
 
 export type JobBikeDisplayParts = {
   make: string;
-  model: string;
+  model: string | null;
   nickname: string | null;
   imageUrl: string | null;
 };
@@ -105,11 +105,11 @@ export function getJobBikeDisplayTitle(job: Job): string {
       return job.bikeModel;
     }
     const leg = resolveLegacyJobBikeDisplayParts(job);
-    return `${leg.make} ${leg.model}`.trim();
+    return [leg.make, leg.model].filter(Boolean).join(" ");
   }
   if (rows.length === 1) {
     const dp = resolveJobBikeDisplayParts(job, rows[0]);
-    return `${dp.make} ${dp.model}`.trim();
+    return [dp.make, dp.model].filter(Boolean).join(" ");
   }
   if (job.bikeMake === "Multiple") {
     return job.bikeModel;

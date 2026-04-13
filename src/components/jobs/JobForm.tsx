@@ -15,7 +15,7 @@ interface JobFormProps {
 
 const bikeSchema = z.object({
   make: z.string(),
-  model: z.string(),
+  model: z.string().optional().nullable(),
   nickname: z.string().optional(),
   bikeId: z.string().optional(),
   imageUrl: z.string().optional().nullable(),
@@ -34,8 +34,8 @@ const schema = z.object({
   internalNotes: z.string().optional(),
   customerNotes: z.string().optional(),
   serviceIds: z.array(z.string()).optional(),
-}).refine((data) => data.bikes.some((b) => b.make?.trim() && b.model?.trim()), {
-  message: "At least one bike must have make and model",
+}).refine((data) => data.bikes.some((b) => b.make?.trim()), {
+  message: "At least one bike must have a make",
   path: ["bikes"],
 });
 
@@ -288,9 +288,9 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
       }
     }
 
-    const validBikes = data.bikes.filter((b) => b.make?.trim() && b.model?.trim());
+    const validBikes = data.bikes.filter((b) => b.make?.trim());
     const bikeMake = validBikes.length === 1 ? validBikes[0].make : "Multiple";
-    const bikeModel = validBikes.length === 1 ? validBikes[0].model : `${validBikes.length} bikes`;
+    const bikeModel = validBikes.length === 1 ? (validBikes[0].model ?? "") : `${validBikes.length} bikes`;
 
     const res = await fetch("/api/jobs", {
       method: "POST",
@@ -466,7 +466,7 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
                   <option value="">+ Add saved bike</option>
                   {customerBikes.map((b) => (
                     <option key={b.id} value={b.id}>
-                      {b.nickname ? `${b.nickname} (${b.make} ${b.model})` : `${b.make} ${b.model}`}
+                      {b.nickname ? `${b.nickname} (${[b.make, b.model].filter(Boolean).join(" ")})` : [b.make, b.model].filter(Boolean).join(" ")}
                     </option>
                   ))}
                 </select>
@@ -511,7 +511,7 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
                     )}
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">Model</label>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Model (optional)</label>
                     <input
                       {...register(`bikes.${i}.model`)}
                       placeholder="e.g. Domane SL 6"

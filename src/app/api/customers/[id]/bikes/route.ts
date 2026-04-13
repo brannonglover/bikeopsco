@@ -4,7 +4,7 @@ import { z } from "zod";
 
 const createBikeSchema = z.object({
   make: z.string().min(1, "Make is required"),
-  model: z.string().min(1, "Model is required"),
+  model: z.string().min(1).optional().nullable(),
   bikeType: z.enum(["REGULAR", "E_BIKE"]).optional().nullable(),
   nickname: z.string().optional().nullable(),
   imageUrl: z.string().optional().nullable(),
@@ -43,7 +43,7 @@ export async function POST(
       data: {
         customerId: id,
         make: data.make.trim(),
-        model: data.model.trim(),
+        model: data.model?.trim() || null,
         bikeType: data.bikeType ?? null,
         nickname: data.nickname?.trim() || null,
         imageUrl: data.imageUrl?.trim() || null,

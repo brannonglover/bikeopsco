@@ -109,7 +109,7 @@ function CustomerChatSection({ customerId }: { customerId: string }) {
   );
 }
 
-function resolveBikeImageUrl(b: JobBike, customerBikes?: { make: string; model: string; imageUrl: string | null }[]): string | null {
+function resolveBikeImageUrl(b: JobBike, customerBikes?: { make: string; model: string | null; imageUrl: string | null }[]): string | null {
   const url = b.imageUrl ?? b.bike?.imageUrl ?? null;
   if (url) return url;
   if (!customerBikes?.length) return null;
@@ -137,7 +137,7 @@ function toPatchBikeRow(
   bikeType: BikeTypeForm
 ): {
   make: string;
-  model: string;
+  model: string | null;
   nickname: string | null;
   imageUrl: string | null;
   bikeId: string | null;
@@ -741,7 +741,7 @@ function JobBikeSection({
             </option>
             {availableToAdd.map((b) => (
               <option key={b.id} value={b.id}>
-                {b.nickname ? `${b.nickname} (${b.make} ${b.model})` : `${b.make} ${b.model}`}
+                {b.nickname ? `${b.nickname} (${[b.make, b.model].filter(Boolean).join(" ")})` : [b.make, b.model].filter(Boolean).join(" ")}
               </option>
             ))}
           </select>
