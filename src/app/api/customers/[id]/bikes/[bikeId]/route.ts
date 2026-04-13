@@ -65,7 +65,7 @@ export async function PATCH(
             select: { jobId: true, sortOrder: true },
           });
 
-          const jobIds = [...new Set(affectedJobBikes.map((jb) => jb.jobId))];
+          const jobIds = Array.from(new Set(affectedJobBikes.map((jb) => jb.jobId)));
 
           for (const jobId of jobIds) {
             const firstJobBike = await tx.jobBike.findFirst({
