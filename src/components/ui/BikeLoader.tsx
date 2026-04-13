@@ -17,7 +17,7 @@ export function BikeLoader({ label = "Loading" }: { label?: string }) {
         >
           {/* Rear wheel + spokes */}
           <g transform="translate(20, 36)">
-            <g className="origin-center animate-[spin_0.55s_linear_infinite]">
+            <g className="[transform-box:fill-box] origin-center animate-[spin_0.55s_linear_infinite]">
               <circle r="10" strokeWidth="2.5" />
               <g strokeWidth="1.75" opacity={0.95}>
                 <line x1="-7" y1="0" x2="7" y2="0" />
@@ -30,7 +30,7 @@ export function BikeLoader({ label = "Loading" }: { label?: string }) {
           </g>
           {/* Front wheel + spokes */}
           <g transform="translate(68, 36)">
-            <g className="origin-center animate-[spin_0.55s_linear_infinite]">
+            <g className="[transform-box:fill-box] origin-center animate-[spin_0.55s_linear_infinite]">
               <circle r="10" strokeWidth="2.5" />
               <g strokeWidth="1.75" opacity={0.95}>
                 <line x1="-7" y1="0" x2="7" y2="0" />
