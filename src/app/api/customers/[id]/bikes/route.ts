@@ -52,8 +52,13 @@ export async function POST(
     return NextResponse.json(bike);
   } catch (error) {
     if (error instanceof z.ZodError) {
+      const messages = Object.entries(error.flatten().fieldErrors)
+        .flatMap(([field, msgs]) =>
+          (Array.isArray(msgs) ? msgs : [msgs]).filter(Boolean).map((m) => `${field}: ${m}`)
+        )
+        .join("; ");
       return NextResponse.json(
-        { error: error.flatten().fieldErrors },
+        { error: messages || "Invalid bike data" },
         { status: 400 }
       );
     }

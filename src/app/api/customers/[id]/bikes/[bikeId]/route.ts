@@ -4,7 +4,7 @@ import { z } from "zod";
 
 const updateBikeSchema = z.object({
   make: z.string().min(1).optional(),
-  model: z.string().min(1).optional(),
+  model: z.string().min(1).optional().nullable(),
   bikeType: z.enum(["REGULAR", "E_BIKE"]).optional().nullable(),
   nickname: z.string().optional().nullable(),
   imageUrl: z.string().optional().nullable(),
@@ -93,8 +93,13 @@ export async function PATCH(
     return NextResponse.json(updated);
   } catch (error) {
     if (error instanceof z.ZodError) {
+      const messages = Object.entries(error.flatten().fieldErrors)
+        .flatMap(([field, msgs]) =>
+          (Array.isArray(msgs) ? msgs : [msgs]).filter(Boolean).map((m) => `${field}: ${m}`)
+        )
+        .join("; ");
       return NextResponse.json(
-        { error: error.flatten().fieldErrors },
+        { error: messages || "Invalid bike data" },
         { status: 400 }
       );
     }
