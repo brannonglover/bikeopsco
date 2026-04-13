@@ -31,7 +31,7 @@ export async function PATCH(
         where: { id: bikeId },
         data: {
           ...(data.make !== undefined && { make: data.make.trim() }),
-          ...(data.model !== undefined && { model: data.model.trim() }),
+          ...(data.model !== undefined && { model: data.model?.trim() ?? null }),
           ...(data.bikeType !== undefined && { bikeType: data.bikeType }),
           ...(data.nickname !== undefined && {
             nickname: data.nickname?.trim() || null,

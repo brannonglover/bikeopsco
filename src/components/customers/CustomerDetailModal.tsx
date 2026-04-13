@@ -1118,7 +1118,7 @@ export function CustomerDetailModal({
                       <input
                         value={editFirstName}
                         onChange={(e) => setEditFirstName(e.target.value)}
-                        className="w-full px-4 py-2 border border-slate-300 rounded-lg"
+                        className="w-full px-4 py-2 border border-slate-300 rounded-lg text-slate-900"
                         required
                       />
                     </div>
@@ -1129,7 +1129,7 @@ export function CustomerDetailModal({
                       <input
                         value={editLastName}
                         onChange={(e) => setEditLastName(e.target.value)}
-                        className="w-full px-4 py-2 border border-slate-300 rounded-lg"
+                        className="w-full px-4 py-2 border border-slate-300 rounded-lg text-slate-900"
                       />
                     </div>
                     <div>
@@ -1140,7 +1140,7 @@ export function CustomerDetailModal({
                         type="email"
                         value={editEmail}
                         onChange={(e) => setEditEmail(e.target.value)}
-                        className="w-full px-4 py-2 border border-slate-300 rounded-lg"
+                        className="w-full px-4 py-2 border border-slate-300 rounded-lg text-slate-900"
                       />
                     </div>
                     <div>
@@ -1154,7 +1154,7 @@ export function CustomerDetailModal({
                         onChange={(e) =>
                           setEditPhone(formatPhoneInputUS(e.target.value))
                         }
-                        className="w-full px-4 py-2 border border-slate-300 rounded-lg"
+                        className="w-full px-4 py-2 border border-slate-300 rounded-lg text-slate-900"
                         placeholder="(555) 123-4567"
                       />
                     </div>
@@ -1165,7 +1165,7 @@ export function CustomerDetailModal({
                       <input
                         value={editAddress}
                         onChange={(e) => setEditAddress(e.target.value)}
-                        className="w-full px-4 py-2 border border-slate-300 rounded-lg"
+                        className="w-full px-4 py-2 border border-slate-300 rounded-lg text-slate-900"
                       />
                     </div>
                     {editAddress.trim() && (
@@ -1181,7 +1181,7 @@ export function CustomerDetailModal({
                         value={editNotes}
                         onChange={(e) => setEditNotes(e.target.value)}
                         rows={2}
-                        className="w-full px-4 py-2 border border-slate-300 rounded-lg"
+                        className="w-full px-4 py-2 border border-slate-300 rounded-lg text-slate-900"
                       />
                     </div>
                   </div>
