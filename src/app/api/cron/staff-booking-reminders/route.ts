@@ -34,8 +34,63 @@ function escapeHtml(str: string): string {
     .replace(/'/g, "&#39;");
 }
 
-function formatDate(d: Date): string {
+/**
+ * Returns the UTC start and end timestamps that correspond to midnight→23:59:59
+ * on the date that is `daysOffset` days from today in the given IANA timezone.
+ *
+ * Works correctly across DST transitions for all US timezones.
+ */
+function getLocalDayBounds(
+  timezone: string,
+  daysOffset: number = 0
+): { gte: Date; lte: Date } {
+  const now = new Date();
+
+  // Today's date string (YYYY-MM-DD) in the shop's local timezone
+  const localDateStr = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+
+  // Shift by daysOffset by nudging noon-UTC of the local date forward/back
+  const baseNoon = new Date(localDateStr + "T12:00:00Z");
+  baseNoon.setUTCDate(baseNoon.getUTCDate() + daysOffset);
+
+  // Re-derive the target date string after the shift
+  const targetDateStr = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(baseNoon);
+
+  // Compute the UTC offset for this timezone on the target date.
+  // Noon UTC → local hour; offset = localHour − 12 (whole hours; fine for all US zones).
+  const noonUtc = new Date(targetDateStr + "T12:00:00Z");
+  const localNoonHour = Number(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      hour: "numeric",
+      hour12: false,
+    }).format(noonUtc)
+  );
+  const offsetHours = localNoonHour - 12;
+
+  // Midnight local = midnight UTC shifted by the inverse of the offset
+  const [y, m, d] = targetDateStr.split("-").map(Number);
+  const midnightUtc = new Date(
+    Date.UTC(y, m - 1, d, 0, 0, 0) - offsetHours * 3600_000
+  );
+  const endUtc = new Date(midnightUtc.getTime() + 86_400_000 - 1);
+
+  return { gte: midnightUtc, lte: endUtc };
+}
+
+function formatDate(d: Date, timezone: string): string {
   return d.toLocaleDateString("en-US", {
+    timeZone: timezone,
     weekday: "long",
     month: "long",
     day: "numeric",
@@ -43,8 +98,9 @@ function formatDate(d: Date): string {
   });
 }
 
-function formatShortDate(d: Date): string {
+function formatShortDate(d: Date, timezone: string): string {
   return d.toLocaleDateString("en-US", {
+    timeZone: timezone,
     weekday: "short",
     month: "short",
     day: "numeric",
@@ -151,18 +207,11 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const now = new Date();
+    const timezone =
+      process.env.SHOP_TIMEZONE?.trim() || "America/New_York";
 
-    const todayStart = new Date(now);
-    todayStart.setHours(0, 0, 0, 0);
-    const todayEnd = new Date(now);
-    todayEnd.setHours(23, 59, 59, 999);
-
-    const tomorrowStart = new Date(todayEnd);
-    tomorrowStart.setDate(tomorrowStart.getDate() + 1);
-    tomorrowStart.setHours(0, 0, 0, 0);
-    const tomorrowEnd = new Date(tomorrowStart);
-    tomorrowEnd.setHours(23, 59, 59, 999);
+    const { gte: todayStart, lte: todayEnd } = getLocalDayBounds(timezone, 0);
+    const { gte: tomorrowStart, lte: tomorrowEnd } = getLocalDayBounds(timezone, 1);
 
     const [todayJobs, tomorrowJobs] = await Promise.all([
       prisma.job.findMany({
@@ -240,13 +289,13 @@ export async function GET(request: NextRequest) {
 
     const baseUrl = getAppUrl();
     const calendarUrl = baseUrl ? `${baseUrl}/calendar` : "";
-    const todayLabel = formatDate(todayStart);
-    const tomorrowLabel = formatDate(tomorrowStart);
+    const todayLabel = formatDate(todayStart, timezone);
+    const tomorrowLabel = formatDate(tomorrowStart, timezone);
 
     let innerHtml = "";
 
     if (totalJobs === 0) {
-      innerHtml = `<p style="margin:0 0 16px;color:#64748b">No customers are booked in for today (${escapeHtml(formatShortDate(todayStart))}) or tomorrow (${escapeHtml(formatShortDate(tomorrowStart))}).</p>`;
+      innerHtml = `<p style="margin:0 0 16px;color:#64748b">No customers are booked in for today (${escapeHtml(formatShortDate(todayStart, timezone))}) or tomorrow (${escapeHtml(formatShortDate(tomorrowStart, timezone))}).</p>`;
     } else {
       if (todayJobs.length > 0) {
         innerHtml += `
@@ -287,7 +336,7 @@ ${buildJobTableRows(tomorrowJobs)}`;
 
     const subject =
       totalJobs === 0
-        ? `No upcoming bookings for ${formatShortDate(todayStart)} or ${formatShortDate(tomorrowStart)}`
+        ? `No upcoming bookings for ${formatShortDate(todayStart, timezone)} or ${formatShortDate(tomorrowStart, timezone)}`
         : `Upcoming bookings: ${subjectParts.join(", ")}`;
 
     const { error } = await resend.emails.send({
