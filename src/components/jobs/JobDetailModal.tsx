@@ -474,8 +474,9 @@ function JobBikeSection({
       <div className={`grid gap-3 ${hasMultiple ? "grid-cols-1 sm:grid-cols-2" : ""}`}>
         {bikes.map((b, i) => {
           const dp = getDisplayPartsForJobBikeRow(job, b);
-          const displayName = dp.nickname?.trim() ? dp.nickname : `${dp.make} ${dp.model}`;
-          const subtitle = dp.nickname?.trim() ? `${dp.make} ${dp.model}` : null;
+          const makeModel = [dp.make, dp.model].filter(Boolean).join(" ");
+          const displayName = dp.nickname?.trim() ? dp.nickname : makeModel;
+          const subtitle = dp.nickname?.trim() ? makeModel : null;
           const imageUrl =
             dp.imageUrl ?? resolveBikeImageUrl({ ...b, make: dp.make, model: dp.model }, customerBikes);
           const size = hasMultiple ? "w-16 h-16" : "w-24 h-24";
@@ -1817,7 +1818,7 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
                       const dp = getDisplayPartsForJobBikeRow(job, jb);
                       return (
                         <span className="shrink-0 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-medium text-violet-700">
-                          {dp.nickname?.trim() || `${dp.make} ${dp.model}`}
+                          {dp.nickname?.trim() || [dp.make, dp.model].filter(Boolean).join(" ")}
                         </span>
                       );
                     })()}
@@ -1840,7 +1841,7 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
                       const dp = getDisplayPartsForJobBikeRow(job, jb);
                       return (
                         <span className="shrink-0 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-medium text-sky-700">
-                          {dp.nickname?.trim() || `${dp.make} ${dp.model}`}
+                          {dp.nickname?.trim() || [dp.make, dp.model].filter(Boolean).join(" ")}
                         </span>
                       );
                     })()}
@@ -2357,8 +2358,9 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
           let bikeSubLabel = "";
           if (group.bike) {
             const dp = getDisplayPartsForJobBikeRow(job, group.bike);
-            bikeLabel = dp.nickname?.trim() ? dp.nickname : `${dp.make} ${dp.model}`;
-            bikeSubLabel = dp.nickname?.trim() ? `${dp.make} ${dp.model}` : "";
+            const bikeMakeModel = [dp.make, dp.model].filter(Boolean).join(" ");
+            bikeLabel = dp.nickname?.trim() ? dp.nickname : bikeMakeModel;
+            bikeSubLabel = dp.nickname?.trim() ? bikeMakeModel : "";
             bikeImageUrl = dp.imageUrl ?? resolveBikeImageUrl({ ...group.bike, make: dp.make, model: dp.model }, invoiceCustomerBikes);
             const eff = resolveEffectiveBikeType({
               bikeType: group.bike.bikeType,
@@ -2563,7 +2565,7 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                                         </button>
                                         {(job.jobBikes ?? []).map((b) => {
                                           const dp = getDisplayPartsForJobBikeRow(job, b);
-                                          const label = dp.nickname?.trim() || `${dp.make} ${dp.model}`;
+                                          const label = dp.nickname?.trim() || [dp.make, dp.model].filter(Boolean).join(" ");
                                           const isSelected = js.jobBikeId === b.id;
                                           return (
                                             <button
@@ -2700,7 +2702,7 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                                         </button>
                                         {(job.jobBikes ?? []).map((b) => {
                                           const dp = getDisplayPartsForJobBikeRow(job, b);
-                                          const label = dp.nickname?.trim() || `${dp.make} ${dp.model}`;
+                                          const label = dp.nickname?.trim() || [dp.make, dp.model].filter(Boolean).join(" ");
                                           const isSelected = jp.jobBikeId === b.id;
                                           return (
                                             <button

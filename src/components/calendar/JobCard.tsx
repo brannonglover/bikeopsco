@@ -145,7 +145,7 @@ export function JobCardContent({
         const activeBike = (job.jobBikes ?? []).find((b) => b.id === job.workingOnJobBikeId);
         if (!activeBike) return null;
         const dp = getDisplayPartsForJobBikeRow(job, activeBike);
-        const bikeName = dp.nickname?.trim() || `${dp.make} ${dp.model}`;
+        const bikeName = dp.nickname?.trim() || [dp.make, dp.model].filter(Boolean).join(" ");
         return (
           <p className="flex items-center gap-1 text-[11px] font-semibold text-amber-700 mt-0.5">
             <span className="relative flex h-2 w-2 flex-shrink-0">
