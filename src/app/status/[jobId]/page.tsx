@@ -59,7 +59,8 @@ type StatusJobBike = {
 };
 
 type StatusJobService = {
-  service?: { name: string } | null;
+  id: string;
+  service?: { name: string; description?: string | null } | null;
   customServiceName?: string | null;
   quantity: number;
   unitPrice: string | number;
@@ -155,9 +156,19 @@ export default function StatusPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedBikes, setExpandedBikes] = useState<Set<string>>(new Set());
+  const [expandedServices, setExpandedServices] = useState<Set<string>>(new Set());
 
   function toggleBike(id: string) {
     setExpandedBikes((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleService(id: string) {
+    setExpandedServices((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -342,19 +353,45 @@ export default function StatusPage() {
                         className={`overflow-hidden transition-all duration-200 ${isExpanded ? "max-h-96 opacity-100" : "max-h-0 opacity-0"}`}
                       >
                         <div className="px-3 pb-3 border-t border-slate-200/70 dark:border-slate-700/50 pt-2.5">
-                          <ul className="space-y-1">
-                            {bikeServices.map((js, i) => (
-                              <li key={i} className="flex items-center justify-between text-sm">
-                                <span className="text-slate-600">
-                                  {js.service?.name ?? js.customServiceName ?? "Service"}
-                                  {js.quantity > 1 && <span className="text-slate-400"> × {js.quantity}</span>}
-                                </span>
-                                <Price
-                                  amount={(typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice)) * (js.quantity || 1)}
-                                  variant="total"
-                                />
-                              </li>
-                            ))}
+                          <ul className="space-y-0.5">
+                            {bikeServices.map((js) => {
+                              const desc = js.service?.description?.trim() || null;
+                              const isServiceOpen = expandedServices.has(js.id);
+                              return (
+                                <li key={js.id}>
+                                  <div
+                                    className={`flex items-center justify-between text-sm gap-2 rounded-lg px-2 py-1.5 -mx-2 ${desc ? "cursor-pointer hover:bg-black/[0.03] dark:hover:bg-white/[0.04]" : ""}`}
+                                    onClick={() => desc && toggleService(js.id)}
+                                    role={desc ? "button" : undefined}
+                                    aria-expanded={desc ? isServiceOpen : undefined}
+                                  >
+                                    <span className="flex items-center gap-1.5 min-w-0">
+                                      {desc && (
+                                        <svg
+                                          className={`w-3.5 h-3.5 flex-shrink-0 text-slate-400 transition-transform duration-150 ${isServiceOpen ? "rotate-180" : ""}`}
+                                          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden
+                                        >
+                                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                                        </svg>
+                                      )}
+                                      <span className="text-slate-600 truncate">
+                                        {js.service?.name ?? js.customServiceName ?? "Service"}
+                                        {js.quantity > 1 && <span className="text-slate-400"> × {js.quantity}</span>}
+                                      </span>
+                                    </span>
+                                    <Price
+                                      amount={(typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice)) * (js.quantity || 1)}
+                                      variant="total"
+                                    />
+                                  </div>
+                                  {desc && (
+                                    <div className={`overflow-hidden transition-all duration-200 ${isServiceOpen ? "max-h-48 opacity-100" : "max-h-0 opacity-0"}`}>
+                                      <p className="text-xs text-slate-500 px-2 pb-1.5 leading-relaxed">{desc}</p>
+                                    </div>
+                                  )}
+                                </li>
+                              );
+                            })}
                           </ul>
                         </div>
                       </div>
@@ -389,19 +426,45 @@ export default function StatusPage() {
             <h2 className="text-sm font-semibold text-slate-700 mb-2">
               {hasBikes && unassignedServices.length > 0 ? "Other services" : "Services"}
             </h2>
-            <ul className="space-y-1">
-              {(hasBikes ? unassignedServices : job.jobServices).map((js, i) => (
-                <li key={i} className="flex items-center justify-between text-sm">
-                  <span className="text-slate-600">
-                    {js.service?.name ?? js.customServiceName ?? "Service"}
-                    {js.quantity > 1 && <span className="text-slate-400"> × {js.quantity}</span>}
-                  </span>
-                  <Price
-                    amount={(typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice)) * (js.quantity || 1)}
-                    variant="total"
-                  />
-                </li>
-              ))}
+            <ul className="space-y-0.5">
+              {(hasBikes ? unassignedServices : job.jobServices).map((js) => {
+                const desc = js.service?.description?.trim() || null;
+                const isServiceOpen = expandedServices.has(js.id);
+                return (
+                  <li key={js.id}>
+                    <div
+                      className={`flex items-center justify-between text-sm gap-2 rounded-lg px-2 py-1.5 -mx-2 ${desc ? "cursor-pointer hover:bg-black/[0.03] dark:hover:bg-white/[0.04]" : ""}`}
+                      onClick={() => desc && toggleService(js.id)}
+                      role={desc ? "button" : undefined}
+                      aria-expanded={desc ? isServiceOpen : undefined}
+                    >
+                      <span className="flex items-center gap-1.5 min-w-0">
+                        {desc && (
+                          <svg
+                            className={`w-3.5 h-3.5 flex-shrink-0 text-slate-400 transition-transform duration-150 ${isServiceOpen ? "rotate-180" : ""}`}
+                            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                          </svg>
+                        )}
+                        <span className="text-slate-600 truncate">
+                          {js.service?.name ?? js.customServiceName ?? "Service"}
+                          {js.quantity > 1 && <span className="text-slate-400"> × {js.quantity}</span>}
+                        </span>
+                      </span>
+                      <Price
+                        amount={(typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice)) * (js.quantity || 1)}
+                        variant="total"
+                      />
+                    </div>
+                    {desc && (
+                      <div className={`overflow-hidden transition-all duration-200 ${isServiceOpen ? "max-h-48 opacity-100" : "max-h-0 opacity-0"}`}>
+                        <p className="text-xs text-slate-500 px-2 pb-1.5 leading-relaxed">{desc}</p>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           </div>
         )}
