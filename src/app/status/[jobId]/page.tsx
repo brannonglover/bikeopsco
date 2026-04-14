@@ -93,8 +93,8 @@ function ServiceDescription({ text }: { text: string }) {
   return (
     <ul className="text-xs text-slate-500 px-2 pb-1.5 space-y-0.5 list-none">
       {lines.map((line, i) => (
-        <li key={i} className="flex items-start gap-1.5">
-          <span className="mt-[3px] w-1 h-1 rounded-full bg-slate-400 flex-shrink-0" aria-hidden />
+        <li key={i} className="flex items-center gap-1.5">
+          <span className="w-1 h-1 rounded-full bg-slate-400 flex-shrink-0" aria-hidden />
           <span className="leading-relaxed">{line}</span>
         </li>
       ))}
