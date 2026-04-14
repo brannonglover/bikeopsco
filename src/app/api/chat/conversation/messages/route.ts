@@ -78,37 +78,38 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const message = await prisma.message.create({
-    data: {
-      conversationId: conversation.id,
-      sender: "CUSTOMER",
-      body: bodyText?.trim() || null,
-      attachments:
-        attachmentIds?.length
-          ? { connect: attachmentIds.map((id) => ({ id })) }
-          : undefined,
-    },
-    include: { attachments: true, reactions: true },
-  });
-
-  await prisma.conversation.update({
-    where: { id: conversation.id },
-    data: { updatedAt: new Date(), customerTypingAt: null },
-  });
-
-  const customer = await prisma.customer.findUnique({
-    where: { id: customerId },
-    select: { firstName: true, lastName: true },
-  });
-  const customerName = customer
-    ? [customer.firstName, customer.lastName].filter(Boolean).join(" ")
-    : "Customer";
-  const pushBody = bodyText?.trim() || "Sent a photo";
-  sendPushToAllStaff({
-    title: `New message from ${customerName}`,
-    body: pushBody,
-    data: { type: "new_message", conversationId: conversation.id },
-  }).catch((err) => console.error("Push notify staff:", err));
+  const [message] = await Promise.all([
+    prisma.message.create({
+      data: {
+        conversationId: conversation.id,
+        sender: "CUSTOMER",
+        body: bodyText?.trim() || null,
+        attachments:
+          attachmentIds?.length
+            ? { connect: attachmentIds.map((id) => ({ id })) }
+            : undefined,
+      },
+      include: { attachments: true, reactions: true },
+    }),
+    prisma.conversation.update({
+      where: { id: conversation.id },
+      data: { updatedAt: new Date(), customerTypingAt: null },
+    }),
+    prisma.customer.findUnique({
+      where: { id: customerId },
+      select: { firstName: true, lastName: true },
+    }).then((customer) => {
+      const customerName = customer
+        ? [customer.firstName, customer.lastName].filter(Boolean).join(" ")
+        : "Customer";
+      const pushBody = bodyText?.trim() || "Sent a photo";
+      sendPushToAllStaff({
+        title: `New message from ${customerName}`,
+        body: pushBody,
+        data: { type: "new_message", conversationId: conversation.id },
+      }).catch((err) => console.error("Push notify staff:", err));
+    }),
+  ]);
 
   return NextResponse.json(message);
 }

@@ -320,30 +320,57 @@ export default function CustomerChatPage() {
   );
 
   const handleSend = async () => {
-    const hasText = inputText.trim().length > 0;
-    const hasImages = pendingImages.length > 0;
+    const textToSend = inputText.trim();
+    const imagesToSend = [...pendingImages];
+    const hasText = textToSend.length > 0;
+    const hasImages = imagesToSend.length > 0;
     if (!hasText && !hasImages) return;
 
     stopTypingPing();
+
+    // Optimistically append the message immediately so the UI feels instant
+    const tempId = `temp-${Date.now()}`;
+    const optimisticMsg: ChatMessage = {
+      id: tempId,
+      conversationId: "",
+      sender: "CUSTOMER",
+      body: textToSend || null,
+      attachments: imagesToSend.map((img) => ({
+        id: img.id,
+        url: img.url,
+        filename: img.filename,
+        mimeType: "",
+        createdAt: new Date().toISOString(),
+      })),
+      reactions: [],
+      createdAt: new Date().toISOString(),
+    };
+
+    setMessages((prev) => [...prev, optimisticMsg]);
+    setInputText("");
+    setPendingImages([]);
+    if (composerTextareaRef.current) {
+      composerTextareaRef.current.style.height = "auto";
+    }
     setSending(true);
+
     try {
       const res = await fetch("/api/chat/conversation/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
-          body: inputText.trim() || null,
-          attachmentIds: pendingImages.map((p) => p.id),
+          body: textToSend || null,
+          attachmentIds: imagesToSend.map((p) => p.id),
         }),
       });
       if (res.ok) {
         const newMsg = await res.json();
-        setMessages((prev) => [...prev, newMsg]);
-        setInputText("");
-        setPendingImages([]);
-        if (composerTextareaRef.current) {
-          composerTextareaRef.current.style.height = "auto";
-        }
+        // Replace the optimistic placeholder with the confirmed server message
+        setMessages((prev) => prev.map((m) => (m.id === tempId ? newMsg : m)));
+      } else {
+        // Roll back the optimistic message on failure
+        setMessages((prev) => prev.filter((m) => m.id !== tempId));
       }
     } finally {
       setSending(false);

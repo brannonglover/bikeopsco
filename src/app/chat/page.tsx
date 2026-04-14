@@ -626,33 +626,58 @@ function ChatPageContent() {
 
   const handleSend = async () => {
     if (!selectedId) return;
-    const hasText = inputText.trim().length > 0;
-    const hasImages = pendingImages.length > 0;
+    const textToSend = inputText.trim();
+    const imagesToSend = [...pendingImages];
+    const hasText = textToSend.length > 0;
+    const hasImages = imagesToSend.length > 0;
     if (!hasText && !hasImages) return;
 
+    // Optimistically append the message immediately so the UI feels instant
+    const tempId = `temp-${Date.now()}`;
+    const optimisticMsg: ChatMessage = {
+      id: tempId,
+      conversationId: selectedId,
+      sender: "STAFF",
+      body: textToSend || null,
+      attachments: imagesToSend.map((img) => ({
+        id: img.id,
+        url: img.url,
+        filename: img.filename,
+        mimeType: "",
+        createdAt: new Date().toISOString(),
+      })),
+      reactions: [],
+      createdAt: new Date().toISOString(),
+    };
+
+    setMessages((prev) => [...prev, optimisticMsg]);
+    saveChatDraft(selectedId, { text: "", pendingImages: [] });
+    setInputText("");
+    setPendingImages([]);
+    if (composerTextareaRef.current) {
+      composerTextareaRef.current.style.height = "auto";
+    }
     setSending(true);
+
     try {
       const res = await fetch(`/api/conversations/${selectedId}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sender: "STAFF",
-          body: inputText.trim() || null,
-          attachmentIds: pendingImages.map((p) => p.id),
+          body: textToSend || null,
+          attachmentIds: imagesToSend.map((p) => p.id),
         }),
       });
       if (res.ok) {
         const newMsg = await res.json();
-        setMessages((prev) => [...prev, newMsg]);
-        saveChatDraft(selectedId, { text: "", pendingImages: [] });
-        setInputText("");
-        setPendingImages([]);
-        if (composerTextareaRef.current) {
-          composerTextareaRef.current.style.height = "auto";
-        }
+        // Replace the optimistic placeholder with the confirmed server message
+        setMessages((prev) => prev.map((m) => (m.id === tempId ? newMsg : m)));
         fetchConversations();
       } else {
         const data = await res.json();
+        // Roll back the optimistic message on failure
+        setMessages((prev) => prev.filter((m) => m.id !== tempId));
         alert(data.error ?? "Failed to send");
       }
     } finally {
