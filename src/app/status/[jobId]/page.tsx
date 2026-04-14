@@ -58,6 +58,14 @@ type StatusJobBike = {
   bike?: { imageUrl: string | null; nickname?: string | null; make: string; model: string } | null;
 };
 
+type StatusJobService = {
+  service?: { name: string } | null;
+  customServiceName?: string | null;
+  quantity: number;
+  unitPrice: string | number;
+  jobBike?: { id: string } | null;
+};
+
 type StatusJob = {
   id: string;
   bikeMake: string;
@@ -70,7 +78,7 @@ type StatusJob = {
   pickupDate: string | null;
   paymentStatus: string;
   cancellationReason?: string | null;
-  jobServices: { service?: { name: string } | null; customServiceName?: string | null; quantity: number; unitPrice: string | number }[];
+  jobServices: StatusJobService[];
 };
 
 function resolveBikeDisplay(b: StatusJobBike): { name: string; imageUrl: string | null } {
@@ -185,6 +193,19 @@ export default function StatusPage() {
     0
   );
 
+  const servicesByBikeId = (job.jobServices ?? []).reduce<Map<string | null, StatusJobService[]>>(
+    (map, js) => {
+      const key = js.jobBike?.id ?? null;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(js);
+      return map;
+    },
+    new Map()
+  );
+
+  const unassignedServices = servicesByBikeId.get(null) ?? [];
+  const hasAssignedServices = [...servicesByBikeId.keys()].some((k) => k !== null);
+
   const stageLabel = STAGE_LABELS[job.stage] ?? job.stage;
   const stageDesc = STAGE_DESCRIPTIONS[job.stage] ?? "";
 
@@ -248,38 +269,59 @@ export default function StatusPage() {
                 const isWorkingOn = !!job.workingOnJobBikeId && job.workingOnJobBikeId === b.id;
                 const isCompleted = !!b.completedAt;
                 const isWaitingOnParts = !!b.waitingOnPartsAt && !isCompleted;
+                const bikeServices = servicesByBikeId.get(b.id) ?? [];
                 return (
                   <div
                     key={b.id}
-                    className={`flex items-center gap-3 rounded-xl border p-3 transition-colors ${
+                    className={`rounded-xl border transition-colors ${
                       isCompleted
-                        ? "border-emerald-200 bg-emerald-50/40"
+                        ? "border-emerald-200 dark:border-emerald-500/25 bg-emerald-50/40 dark:bg-emerald-500/10"
                         : isWaitingOnParts
-                          ? "border-red-200 bg-red-50/40"
+                          ? "border-red-200 dark:border-red-500/25 bg-red-50/40 dark:bg-red-500/10"
                           : isWorkingOn
-                            ? "border-amber-300 bg-amber-50/50"
+                            ? "border-amber-300 dark:border-amber-500/30 bg-amber-50/50 dark:bg-amber-500/10"
                             : "border-slate-200 bg-slate-50/50"
                     }`}
                   >
-                    {imageUrl ? (
-                      <Image
-                        src={imageUrl}
-                        alt={name}
-                        width={56}
-                        height={56}
-                        className="w-14 h-14 flex-shrink-0 object-cover rounded-lg border border-slate-200"
-                      />
-                    ) : (
-                      <div className="w-14 h-14 flex-shrink-0 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center">
-                        <BikePlaceholderIcon className="w-6 h-6 text-slate-400" />
-                      </div>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <p className={`font-medium truncate ${isCompleted || isWaitingOnParts ? "text-slate-500" : "text-slate-900"}`}>{name}</p>
-                      <div className="mt-1">
-                        <BikeStatusBadge stage={job.stage} isWorkingOn={isWorkingOn} isCompleted={isCompleted} isWaitingOnParts={isWaitingOnParts} />
+                    <div className="flex items-center gap-3 p-3">
+                      {imageUrl ? (
+                        <Image
+                          src={imageUrl}
+                          alt={name}
+                          width={56}
+                          height={56}
+                          className="w-14 h-14 flex-shrink-0 object-cover rounded-lg border border-slate-200"
+                        />
+                      ) : (
+                        <div className="w-14 h-14 flex-shrink-0 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center">
+                          <BikePlaceholderIcon className="w-6 h-6 text-slate-400" />
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className={`font-medium truncate ${isCompleted || isWaitingOnParts ? "text-slate-500" : "text-slate-900"}`}>{name}</p>
+                        <div className="mt-1">
+                          <BikeStatusBadge stage={job.stage} isWorkingOn={isWorkingOn} isCompleted={isCompleted} isWaitingOnParts={isWaitingOnParts} />
+                        </div>
                       </div>
                     </div>
+                    {bikeServices.length > 0 && (
+                      <div className="px-3 pb-3 border-t border-slate-200/70 dark:border-slate-700/50 mt-0 pt-2.5">
+                        <ul className="space-y-1">
+                          {bikeServices.map((js, i) => (
+                            <li key={i} className="flex items-center justify-between text-sm">
+                              <span className="text-slate-600">
+                                {js.service?.name ?? js.customServiceName ?? "Service"}
+                                {js.quantity > 1 && <span className="text-slate-400"> × {js.quantity}</span>}
+                              </span>
+                              <Price
+                                amount={(typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice)) * (js.quantity || 1)}
+                                variant="total"
+                              />
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -304,17 +346,33 @@ export default function StatusPage() {
           </dl>
         )}
 
-        {job.jobServices && job.jobServices.length > 0 && (
+        {((!hasBikes && job.jobServices && job.jobServices.length > 0) ||
+          (hasBikes && (unassignedServices.length > 0 || !hasAssignedServices) && job.jobServices && job.jobServices.length > 0)) && (
           <div className="mt-4 pt-4 border-t border-slate-200">
-            <h2 className="text-sm font-semibold text-slate-700 mb-2">Services</h2>
-            <ul className="space-y-1 text-sm text-slate-600">
-              {job.jobServices.map((js, i) => (
-                <li key={i}>
-                  {js.service?.name ?? js.customServiceName ?? "Service"} {js.quantity > 1 ? `× ${js.quantity}` : ""}
+            <h2 className="text-sm font-semibold text-slate-700 mb-2">
+              {hasBikes && unassignedServices.length > 0 ? "Other services" : "Services"}
+            </h2>
+            <ul className="space-y-1">
+              {(hasBikes ? unassignedServices : job.jobServices).map((js, i) => (
+                <li key={i} className="flex items-center justify-between text-sm">
+                  <span className="text-slate-600">
+                    {js.service?.name ?? js.customServiceName ?? "Service"}
+                    {js.quantity > 1 && <span className="text-slate-400"> × {js.quantity}</span>}
+                  </span>
+                  <Price
+                    amount={(typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice)) * (js.quantity || 1)}
+                    variant="total"
+                  />
                 </li>
               ))}
             </ul>
-            <p className="mt-2 text-sm font-semibold text-slate-900">
+          </div>
+        )}
+
+        {job.jobServices && job.jobServices.length > 0 && (
+          <div className="mt-3 pt-3 border-t border-slate-200 flex items-center justify-between">
+            <span className="text-sm font-semibold text-slate-700">Total</span>
+            <p className="text-sm font-semibold text-slate-900">
               <Price amount={total} variant="total" />
             </p>
           </div>
