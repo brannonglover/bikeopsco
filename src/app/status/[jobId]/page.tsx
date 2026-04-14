@@ -82,6 +82,26 @@ type StatusJob = {
   jobServices: StatusJobService[];
 };
 
+function ServiceDescription({ text }: { text: string }) {
+  const lines = text
+    .split("\n")
+    .map((l) => l.replace(/^[\s]*[-•*]\s+/, "").trim())
+    .filter(Boolean);
+  if (lines.length <= 1) {
+    return <p className="text-xs text-slate-500 px-2 pb-1.5 leading-relaxed">{lines[0] ?? text}</p>;
+  }
+  return (
+    <ul className="text-xs text-slate-500 px-2 pb-1.5 space-y-0.5 list-none">
+      {lines.map((line, i) => (
+        <li key={i} className="flex items-start gap-1.5">
+          <span className="mt-[3px] w-1 h-1 rounded-full bg-slate-400 flex-shrink-0" aria-hidden />
+          <span className="leading-relaxed">{line}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function resolveBikeDisplay(b: StatusJobBike): { name: string; imageUrl: string | null } {
   const linked = b.bikeId && b.bike ? b.bike : null;
   const make = linked?.make ?? b.make;
@@ -386,7 +406,7 @@ export default function StatusPage() {
                                   </div>
                                   {desc && (
                                     <div className={`overflow-hidden transition-all duration-200 ${isServiceOpen ? "max-h-48 opacity-100" : "max-h-0 opacity-0"}`}>
-                                      <p className="text-xs text-slate-500 px-2 pb-1.5 leading-relaxed">{desc}</p>
+                                      <ServiceDescription text={desc} />
                                     </div>
                                   )}
                                 </li>
@@ -459,7 +479,7 @@ export default function StatusPage() {
                     </div>
                     {desc && (
                       <div className={`overflow-hidden transition-all duration-200 ${isServiceOpen ? "max-h-48 opacity-100" : "max-h-0 opacity-0"}`}>
-                        <p className="text-xs text-slate-500 px-2 pb-1.5 leading-relaxed">{desc}</p>
+                        <ServiceDescription text={desc} />
                       </div>
                     )}
                   </li>
