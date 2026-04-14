@@ -154,6 +154,16 @@ export default function StatusPage() {
   const [job, setJob] = useState<StatusJob | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [expandedBikes, setExpandedBikes] = useState<Set<string>>(new Set());
+
+  function toggleBike(id: string) {
+    setExpandedBikes((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   useEffect(() => {
     if (!jobId) return;
@@ -270,6 +280,7 @@ export default function StatusPage() {
                 const isCompleted = !!b.completedAt;
                 const isWaitingOnParts = !!b.waitingOnPartsAt && !isCompleted;
                 const bikeServices = servicesByBikeId.get(b.id) ?? [];
+                const isExpanded = expandedBikes.has(b.id);
                 return (
                   <div
                     key={b.id}
@@ -283,7 +294,12 @@ export default function StatusPage() {
                             : "border-slate-200 bg-slate-50/50"
                     }`}
                   >
-                    <div className="flex items-center gap-3 p-3">
+                    <div
+                      className={`flex items-center gap-3 p-3 ${bikeServices.length > 0 ? "cursor-pointer select-none" : ""}`}
+                      onClick={() => bikeServices.length > 0 && toggleBike(b.id)}
+                      role={bikeServices.length > 0 ? "button" : undefined}
+                      aria-expanded={bikeServices.length > 0 ? isExpanded : undefined}
+                    >
                       {imageUrl ? (
                         <Image
                           src={imageUrl}
@@ -299,27 +315,48 @@ export default function StatusPage() {
                       )}
                       <div className="min-w-0 flex-1">
                         <p className={`font-medium truncate ${isCompleted || isWaitingOnParts ? "text-slate-500" : "text-slate-900"}`}>{name}</p>
-                        <div className="mt-1">
+                        <div className="mt-1 flex items-center gap-2">
                           <BikeStatusBadge stage={job.stage} isWorkingOn={isWorkingOn} isCompleted={isCompleted} isWaitingOnParts={isWaitingOnParts} />
+                          {bikeServices.length > 0 && !isExpanded && (
+                            <span className="text-xs text-slate-400">
+                              {bikeServices.length} {bikeServices.length === 1 ? "service" : "services"}
+                            </span>
+                          )}
                         </div>
                       </div>
+                      {bikeServices.length > 0 && (
+                        <svg
+                          className={`w-4 h-4 flex-shrink-0 text-slate-400 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth={2}
+                          aria-hidden
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                        </svg>
+                      )}
                     </div>
                     {bikeServices.length > 0 && (
-                      <div className="px-3 pb-3 border-t border-slate-200/70 dark:border-slate-700/50 mt-0 pt-2.5">
-                        <ul className="space-y-1">
-                          {bikeServices.map((js, i) => (
-                            <li key={i} className="flex items-center justify-between text-sm">
-                              <span className="text-slate-600">
-                                {js.service?.name ?? js.customServiceName ?? "Service"}
-                                {js.quantity > 1 && <span className="text-slate-400"> × {js.quantity}</span>}
-                              </span>
-                              <Price
-                                amount={(typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice)) * (js.quantity || 1)}
-                                variant="total"
-                              />
-                            </li>
-                          ))}
-                        </ul>
+                      <div
+                        className={`overflow-hidden transition-all duration-200 ${isExpanded ? "max-h-96 opacity-100" : "max-h-0 opacity-0"}`}
+                      >
+                        <div className="px-3 pb-3 border-t border-slate-200/70 dark:border-slate-700/50 pt-2.5">
+                          <ul className="space-y-1">
+                            {bikeServices.map((js, i) => (
+                              <li key={i} className="flex items-center justify-between text-sm">
+                                <span className="text-slate-600">
+                                  {js.service?.name ?? js.customServiceName ?? "Service"}
+                                  {js.quantity > 1 && <span className="text-slate-400"> × {js.quantity}</span>}
+                                </span>
+                                <Price
+                                  amount={(typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice)) * (js.quantity || 1)}
+                                  variant="total"
+                                />
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
                       </div>
                     )}
                   </div>
