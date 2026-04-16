@@ -11,6 +11,60 @@ import { isCustomerTypingRecently } from "@/lib/chat-typing";
 
 const POLL_INTERVAL_MS = 3000;
 
+// Vercel's serverless body limit is ~4.5 MB. Compress phone photos client-side
+// so they always come in under the wire, and convert HEIC → JPEG along the way.
+const UPLOAD_MAX_MB = 4;
+
+async function compressImage(file: File): Promise<File> {
+  const maxBytes = UPLOAD_MAX_MB * 1024 * 1024;
+  const isHeic = /^image\/(heic|heif)$/i.test(file.type);
+  if (file.size <= maxBytes && !isHeic) return file;
+
+  return new Promise((resolve, reject) => {
+    const img = new window.Image();
+    const objectUrl = URL.createObjectURL(file);
+
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      const canvas = document.createElement("canvas");
+      const MAX_DIM = 2048;
+      let { width, height } = img;
+      if (width > MAX_DIM || height > MAX_DIM) {
+        const ratio = Math.min(MAX_DIM / width, MAX_DIM / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { reject(new Error("Canvas unavailable")); return; }
+      ctx.drawImage(img, 0, 0, width, height);
+
+      let quality = 0.85;
+      const tryExport = () => {
+        canvas.toBlob((blob) => {
+          if (!blob) { reject(new Error("Compression failed")); return; }
+          if (blob.size <= maxBytes || quality <= 0.3) {
+            const safeName = file.name.replace(/\.(heic|heif)$/i, ".jpg");
+            resolve(new File([blob], safeName, { type: "image/jpeg" }));
+          } else {
+            quality = Math.round((quality - 0.1) * 10) / 10;
+            tryExport();
+          }
+        }, "image/jpeg", quality);
+      };
+      tryExport();
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("Image load failed"));
+    };
+
+    img.src = objectUrl;
+  });
+}
+
 const CHAT_DRAFT_STORAGE_PREFIX = "bikeops:chat-draft:";
 
 type ChatComposerDraft = {
@@ -504,8 +558,17 @@ function ChatPageContent() {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = "";
+
+    let uploadFile: File;
+    try {
+      uploadFile = await compressImage(file);
+    } catch {
+      alert("Failed to process image. Please try a different photo.");
+      return;
+    }
+
     const formData = new FormData();
-    formData.append("file", file);
+    formData.append("file", uploadFile);
     try {
       const res = await fetch("/api/chat/upload", { method: "POST", body: formData });
       if (res.ok) {
@@ -895,7 +958,7 @@ function ChatPageContent() {
                   <input
                     type="file"
                     ref={fileInputRef}
-                    accept="image/jpeg,image/png,image/gif,image/webp"
+                    accept="image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif"
                     className="hidden"
                     onChange={handleFileChange}
                   />
