@@ -36,7 +36,7 @@ async function compressImage(file: File): Promise<File> {
 
   if (sourceFile.size <= maxBytes) return sourceFile;
 
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const img = new window.Image();
     const objectUrl = URL.createObjectURL(sourceFile);
 
@@ -53,13 +53,13 @@ async function compressImage(file: File): Promise<File> {
       canvas.width = width;
       canvas.height = height;
       const ctx = canvas.getContext("2d");
-      if (!ctx) { reject(new Error("Canvas unavailable")); return; }
+      if (!ctx) { resolve(sourceFile); return; }
       ctx.drawImage(img, 0, 0, width, height);
 
       let quality = 0.85;
       const tryExport = () => {
         canvas.toBlob((blob) => {
-          if (!blob) { reject(new Error("Compression failed")); return; }
+          if (!blob) { resolve(sourceFile); return; }
           if (blob.size <= maxBytes || quality <= 0.3) {
             resolve(new File([blob], sourceFile.name, { type: "image/jpeg" }));
           } else {
@@ -73,7 +73,10 @@ async function compressImage(file: File): Promise<File> {
 
     img.onerror = () => {
       URL.revokeObjectURL(objectUrl);
-      reject(new Error("Image load failed"));
+      // Can't decode in canvas — resolve with the source file and let the
+      // server validate; the upload may still succeed if it's within limits.
+      console.warn("compressImage: canvas decode failed, uploading original");
+      resolve(sourceFile);
     };
 
     img.src = objectUrl;
@@ -574,12 +577,18 @@ function ChatPageContent() {
     if (!file) return;
     e.target.value = "";
 
+    const isHeicFile = /^image\/(heic|heif)$/i.test(file.type) || /\.(heic|heif)$/i.test(file.name);
     let uploadFile: File;
     try {
       uploadFile = await compressImage(file);
-    } catch {
-      alert("Failed to process image. Please try a different photo.");
-      return;
+    } catch (err) {
+      console.error("compressImage failed:", err);
+      if (isHeicFile) {
+        alert("Failed to process image. Please convert it to JPEG first and try again.");
+        return;
+      }
+      // For non-HEIC files, fall back to uploading the original
+      uploadFile = file;
     }
 
     const formData = new FormData();

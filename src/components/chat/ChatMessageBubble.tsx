@@ -161,7 +161,7 @@ export function ChatMessageBubble({
           height={1200}
           sizes="(max-width: 768px) 85vw, 42vw"
           style={{ width: "100%", height: "auto" }}
-          className="max-h-[min(70vh,560px)] object-contain"
+          className={`max-h-[min(70vh,560px)] object-contain ${align === "end" ? "object-right" : "object-left"}`}
         />
       </button>
       {isOwn && onRemoveAttachment && !editing && (
