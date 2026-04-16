@@ -321,6 +321,15 @@ export async function PATCH(
         });
         await tx.job.update({ where: { id }, data: { workingOnJobBikeId: null } });
       }
+      /** Clear the active-bike pointer whenever the job leaves WORKING_ON (WAITING_ON_PARTS already handles its own branch above). */
+      if (
+        data.stage !== undefined &&
+        data.stage !== "WORKING_ON" &&
+        data.stage !== "WAITING_ON_PARTS" &&
+        existingJob.workingOnJobBikeId
+      ) {
+        await tx.job.update({ where: { id }, data: { workingOnJobBikeId: null } });
+      }
       /** Dragging the card out of Waiting on parts (or any other column) must drop bike-level flags; only staying in WAITING_ON_PARTS keeps them. */
       if (data.stage !== undefined && data.stage !== "WAITING_ON_PARTS") {
         await tx.jobBike.updateMany({

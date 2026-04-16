@@ -70,6 +70,8 @@ function withOptimisticStageChange(job: Job, newStage: Stage): Job {
 
   if (newStage === "WORKING_ON" && incomplete.length === 1) {
     next = { ...next, workingOnJobBikeId: incomplete[0].id };
+  } else if (newStage !== "WORKING_ON") {
+    next = { ...next, workingOnJobBikeId: null };
   }
 
   if (newStage === "COMPLETED") {
