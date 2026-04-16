@@ -20,9 +20,14 @@ async function compressImage(file: File): Promise<File> {
   const isHeic = /^image\/(heic|heif)$/i.test(file.type);
 
   // HEIC cannot be decoded by non-Safari browsers natively; use heic2any first.
+  // Also detect by extension because iOS sometimes sets an empty MIME type.
+  const isHeicByExt = /\.(heic|heif)$/i.test(file.name);
   let sourceFile = file;
-  if (isHeic) {
-    const heic2any = (await import("heic2any")).default;
+  if (isHeic || isHeicByExt) {
+    // heic2any is a UMD module — the function is the export, not under .default
+    const mod = await import("heic2any");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const heic2any = (mod as any).default ?? mod;
     const converted = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.85 });
     const blob = Array.isArray(converted) ? converted[0] : converted;
     const safeName = file.name.replace(/\.(heic|heif)$/i, ".jpg");
