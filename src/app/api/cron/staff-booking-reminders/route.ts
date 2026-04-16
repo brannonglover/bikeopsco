@@ -302,7 +302,7 @@ export async function GET(request: NextRequest) {
 <h2 style="margin:0 0 12px;font-size:17px;font-weight:700;color:#0f172a">Today — ${escapeHtml(todayLabel)}</h2>
 ${buildJobTableRows(todayJobs)}`;
       } else {
-        innerHtml += `<p style="margin:0 0 20px;color:#64748b">No customers booked for today (${escapeHtml(formatShortDate(todayStart))}).</p>`;
+        innerHtml += `<p style="margin:0 0 20px;color:#64748b">No customers booked for today (${escapeHtml(formatShortDate(todayStart, timezone))}).</p>`;
       }
 
       if (tomorrowJobs.length > 0) {
@@ -310,7 +310,7 @@ ${buildJobTableRows(todayJobs)}`;
 <h2 style="margin:${todayJobs.length > 0 ? "8px" : "0"} 0 12px;font-size:17px;font-weight:700;color:#0f172a">Tomorrow — ${escapeHtml(tomorrowLabel)}</h2>
 ${buildJobTableRows(tomorrowJobs)}`;
       } else {
-        innerHtml += `<p style="margin:0 0 20px;color:#64748b">No customers booked for tomorrow (${escapeHtml(formatShortDate(tomorrowStart))}).</p>`;
+        innerHtml += `<p style="margin:0 0 20px;color:#64748b">No customers booked for tomorrow (${escapeHtml(formatShortDate(tomorrowStart, timezone))}).</p>`;
       }
     }
 
