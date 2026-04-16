@@ -18,11 +18,22 @@ const UPLOAD_MAX_MB = 4;
 async function compressImage(file: File): Promise<File> {
   const maxBytes = UPLOAD_MAX_MB * 1024 * 1024;
   const isHeic = /^image\/(heic|heif)$/i.test(file.type);
-  if (file.size <= maxBytes && !isHeic) return file;
+
+  // HEIC cannot be decoded by non-Safari browsers natively; use heic2any first.
+  let sourceFile = file;
+  if (isHeic) {
+    const heic2any = (await import("heic2any")).default;
+    const converted = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.85 });
+    const blob = Array.isArray(converted) ? converted[0] : converted;
+    const safeName = file.name.replace(/\.(heic|heif)$/i, ".jpg");
+    sourceFile = new File([blob], safeName, { type: "image/jpeg" });
+  }
+
+  if (sourceFile.size <= maxBytes) return sourceFile;
 
   return new Promise((resolve, reject) => {
     const img = new window.Image();
-    const objectUrl = URL.createObjectURL(file);
+    const objectUrl = URL.createObjectURL(sourceFile);
 
     img.onload = () => {
       URL.revokeObjectURL(objectUrl);
@@ -45,8 +56,7 @@ async function compressImage(file: File): Promise<File> {
         canvas.toBlob((blob) => {
           if (!blob) { reject(new Error("Compression failed")); return; }
           if (blob.size <= maxBytes || quality <= 0.3) {
-            const safeName = file.name.replace(/\.(heic|heif)$/i, ".jpg");
-            resolve(new File([blob], safeName, { type: "image/jpeg" }));
+            resolve(new File([blob], sourceFile.name, { type: "image/jpeg" }));
           } else {
             quality = Math.round((quality - 0.1) * 10) / 10;
             tryExport();
