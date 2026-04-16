@@ -427,10 +427,10 @@ export function ChatMessageBubble({
                   key={emoji}
                   type="button"
                   onClick={() => onToggleReaction?.(msg.id, emoji)}
-                  className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-sm border shadow-sm transition-colors ${
+                  className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-sm shadow-sm transition-colors ${
                     isMine
-                      ? "bg-emerald-50 border-emerald-300 text-emerald-800"
-                      : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                      ? "bg-emerald-50 text-emerald-800"
+                      : "bg-white text-slate-600 hover:bg-slate-50"
                   }`}
                 >
                   <span>{emoji}</span>
