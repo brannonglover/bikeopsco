@@ -60,7 +60,7 @@ export default function EmailTemplatesPage() {
     if (!isLikelyEmail(to)) {
       setTestBanner({
         variant: "error",
-        text: "Enter a valid email in “Send test emails to” above.",
+        text: "Enter a valid email address to send a test.",
       });
       return;
     }
@@ -82,7 +82,7 @@ export default function EmailTemplatesPage() {
       }
       setTestBanner({
         variant: "ok",
-        text: `Test email sent to ${to}. The subject includes “[test]”. Check inbox and spam.`,
+        text: `Test email sent to ${to}. The subject includes "[test]". Check inbox and spam.`,
       });
     } finally {
       setSendingTestSlug(null);
@@ -179,28 +179,6 @@ export default function EmailTemplatesPage() {
         sample names and a demo status link). The stored template is only the message body; the shell is
         added automatically when emails send.
       </p>
-      <div className="mb-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <label
-          htmlFor="email-templates-test-to"
-          className="block text-sm font-medium text-slate-800 mb-1"
-        >
-          Send test emails to
-        </label>
-        <input
-          id="email-templates-test-to"
-          type="email"
-          autoComplete="email"
-          placeholder="you@example.com"
-          value={testToEmail}
-          onChange={(e) => setTestToEmail(e.target.value)}
-          onBlur={persistTestToEmail}
-          className="w-full max-w-md px-3 py-2 text-sm border border-slate-300 rounded-lg"
-        />
-        <p className="mt-2 text-xs text-slate-500">
-          Saved in this browser. Each template’s <strong>Send test email</strong> uses the saved template
-          from the database (save your edits first). Sample merge data matches the on-page preview.
-        </p>
-      </div>
 
       {testBanner && (
         <div
@@ -246,9 +224,18 @@ export default function EmailTemplatesPage() {
                     </p>
                   )}
                 </div>
-                <div className="flex shrink-0 flex-wrap gap-2">
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
                   {!isEditing ? (
                     <>
+                      <input
+                        type="email"
+                        autoComplete="email"
+                        placeholder="you@example.com"
+                        value={testToEmail}
+                        onChange={(e) => setTestToEmail(e.target.value)}
+                        onBlur={persistTestToEmail}
+                        className="px-3 py-2 text-sm border border-slate-300 rounded-lg w-52"
+                      />
                       <button
                         type="button"
                         onClick={() => sendTestEmail(t.slug)}
@@ -257,7 +244,7 @@ export default function EmailTemplatesPage() {
                         }
                         title={
                           !isLikelyEmail(testToEmail)
-                            ? "Add a valid email above"
+                            ? "Enter a valid email to send a test"
                             : "Sends the saved template with sample data and full layout"
                         }
                         className="text-sm px-4 py-2 rounded-lg border border-slate-300 bg-white text-slate-800 font-medium hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"

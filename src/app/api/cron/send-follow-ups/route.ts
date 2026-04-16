@@ -3,7 +3,19 @@ import { prisma } from "@/lib/db";
 import { sendReviewRequestEmail } from "@/lib/email";
 import { getAppUrl } from "@/lib/env";
 
-const TEMPLATE_SLUG = "follow_up_review";
+const WAVES = [
+  { slug: "follow_up_review", delayDays: 3, followUpNumber: 1 as const },
+  { slug: "follow_up_review_2", delayDays: 7, followUpNumber: 2 as const },
+  { slug: "follow_up_review_3", delayDays: 14, followUpNumber: 3 as const },
+];
+
+/** Returns midnight UTC N days ago. */
+function daysAgoMidnight(n: number): Date {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
@@ -12,19 +24,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const threeDaysAgo = new Date();
-    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
-    threeDaysAgo.setHours(0, 0, 0, 0);
-
-    const [jobs, reviewSettings] = await Promise.all([
-      prisma.job.findMany({
-        where: {
-          stage: "COMPLETED",
-          completedAt: { lte: threeDaysAgo },
-          customer: { email: { not: null } },
-        },
-        include: { customer: true },
-      }),
+    const [reviewSettings] = await Promise.all([
       prisma.reviewSettings.findUnique({ where: { id: "default" } }),
     ]);
 
@@ -32,61 +32,91 @@ export async function GET(request: NextRequest) {
     const googleReviewUrl = reviewSettings?.googleReviewUrl ?? null;
     const yelpReviewUrl = reviewSettings?.yelpReviewUrl ?? null;
 
-    let sent = 0;
-    for (const job of jobs) {
-      const email = job.customer?.email;
-      if (!email) continue;
+    const results: Record<string, { sent: number; skipped: number }> = {};
 
-      const alreadySent = await prisma.jobEmail.findFirst({
-        where: { jobId: job.id, templateSlug: TEMPLATE_SLUG },
-      });
-      if (alreadySent) continue;
+    for (const wave of WAVES) {
+      const threshold = daysAgoMidnight(wave.delayDays);
 
-      // Create a ReviewRequest record for click tracking
-      const reviewRequest = await prisma.reviewRequest.create({
-        data: {
-          recipientEmail: email,
-          recipientName: job.customer
-            ? [job.customer.firstName, job.customer.lastName].filter(Boolean).join(" ") || null
-            : null,
-          jobId: job.id,
-          customerId: job.customer?.id ?? null,
+      const jobs = await prisma.job.findMany({
+        where: {
+          stage: "COMPLETED",
+          completedAt: { lte: threshold },
+          customer: { email: { not: null } },
+        },
+        include: {
+          customer: true,
+          sentEmails: { select: { templateSlug: true } },
+          reviewRequests: {
+            select: { googleClickedAt: true, yelpClickedAt: true },
+          },
         },
       });
 
-      const base = appUrl
-        ? `${appUrl}/api/review-requests/${reviewRequest.token}/redirect`
-        : null;
-      const googleTrackUrl = base && googleReviewUrl ? `${base}?platform=google` : null;
-      const yelpTrackUrl = base && yelpReviewUrl ? `${base}?platform=yelp` : null;
+      let sent = 0;
+      let skipped = 0;
 
-      try {
-        await sendReviewRequestEmail({
-          recipientEmail: email,
-          recipientName: reviewRequest.recipientName,
-          googleTrackUrl,
-          yelpTrackUrl,
+      for (const job of jobs) {
+        const email = job.customer?.email;
+        if (!email) continue;
+
+        // Skip if this wave was already sent for this job.
+        if (job.sentEmails.some((e) => e.templateSlug === wave.slug)) {
+          skipped++;
+          continue;
+        }
+
+        // Skip if the customer has already clicked a review link for this job.
+        const alreadyReviewed = job.reviewRequests.some(
+          (r) => r.googleClickedAt || r.yelpClickedAt
+        );
+        if (alreadyReviewed) {
+          skipped++;
+          continue;
+        }
+
+        const reviewRequest = await prisma.reviewRequest.create({
+          data: {
+            recipientEmail: email,
+            recipientName: job.customer
+              ? [job.customer.firstName, job.customer.lastName].filter(Boolean).join(" ") || null
+              : null,
+            jobId: job.id,
+            customerId: job.customer?.id ?? null,
+          },
         });
 
-        // Record the send for deduplication
-        await prisma.jobEmail.create({
-          data: { jobId: job.id, templateSlug: TEMPLATE_SLUG, recipient: email },
-        });
+        const base = appUrl
+          ? `${appUrl}/api/review-requests/${reviewRequest.token}/redirect`
+          : null;
+        const googleTrackUrl = base && googleReviewUrl ? `${base}?platform=google` : null;
+        const yelpTrackUrl = base && yelpReviewUrl ? `${base}?platform=yelp` : null;
 
-        sent++;
-      } catch (emailError) {
-        // Clean up the ReviewRequest if the send failed so it can be retried
-        await prisma.reviewRequest.delete({ where: { id: reviewRequest.id } });
-        console.error(`Failed to send follow-up for job ${job.id}:`, emailError);
+        try {
+          await sendReviewRequestEmail({
+            recipientEmail: email,
+            recipientName: reviewRequest.recipientName,
+            googleTrackUrl,
+            yelpTrackUrl,
+            followUpNumber: wave.followUpNumber,
+          });
+
+          await prisma.jobEmail.create({
+            data: { jobId: job.id, templateSlug: wave.slug, recipient: email },
+          });
+
+          sent++;
+        } catch (emailError) {
+          await prisma.reviewRequest.delete({ where: { id: reviewRequest.id } });
+          console.error(`[${wave.slug}] Failed to send for job ${job.id}:`, emailError);
+        }
       }
+
+      results[wave.slug] = { sent, skipped };
     }
 
-    return NextResponse.json({ sent, total: jobs.length });
+    return NextResponse.json({ results });
   } catch (error) {
     console.error("Cron send-follow-ups error:", error);
-    return NextResponse.json(
-      { error: "Failed to send follow-ups" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to send follow-ups" }, { status: 500 });
   }
 }

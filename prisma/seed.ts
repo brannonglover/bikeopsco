@@ -185,6 +185,26 @@ const DEFAULT_TEMPLATES = [
     deliveryType: null,
     delayDays: 3,
   },
+  {
+    slug: "follow_up_review_2",
+    name: "7-Day Follow-up Review",
+    subject: "Still enjoying your bike? We'd love a quick review",
+    bodyHtml: `<p>Hi {{customerName}},</p><p>Just a quick follow-up — if you haven't had a chance yet, sharing your experience with {{shopName}} would really mean a lot to us and helps future customers find a shop they can trust.</p><p style="margin: 20px 0;">{{reviewButtonsHtml}}</p><p style="font-size:13px;color:#64748b">You can review on whichever platform you prefer — even a few words makes a big difference. Thank you!</p><p>Thanks,<br/>{{shopName}}</p>`,
+    triggerType: "SCHEDULED",
+    stage: null,
+    deliveryType: null,
+    delayDays: 7,
+  },
+  {
+    slug: "follow_up_review_3",
+    name: "14-Day Follow-up Review",
+    subject: "One last ask — how was your recent service at {{shopName}}?",
+    bodyHtml: `<p>Hi {{customerName}},</p><p>This is our last message about this, and we completely understand if now isn't the right time. But if you ever do have a spare moment, even a few words about your recent service makes a huge difference for our small team.</p><p style="margin: 20px 0;">{{reviewButtonsHtml}}</p><p style="font-size:13px;color:#64748b">You can review on whichever platform you prefer — even a few words makes a big difference. Thank you!</p><p>Thanks,<br/>{{shopName}}</p>`,
+    triggerType: "SCHEDULED",
+    stage: null,
+    deliveryType: null,
+    delayDays: 14,
+  },
 ];
 
 async function main() {

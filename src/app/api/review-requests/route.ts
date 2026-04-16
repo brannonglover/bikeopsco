@@ -74,6 +74,17 @@ export async function POST(request: NextRequest) {
       yelpTrackUrl,
     });
 
+    // Prevent the day-3 cron wave from double-sending to this customer.
+    if (data.jobId) {
+      await prisma.jobEmail.create({
+        data: {
+          jobId: data.jobId,
+          templateSlug: "follow_up_review",
+          recipient: data.email,
+        },
+      });
+    }
+
     return NextResponse.json({ id: reviewRequest.id });
   } catch (error) {
     if (error instanceof z.ZodError) {

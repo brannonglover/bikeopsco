@@ -1185,6 +1185,8 @@ export interface ReviewRequestEmailParams {
   /** Tracking redirect URL for Yelp. Omit to hide the button. */
   yelpTrackUrl?: string | null;
   shopName?: string;
+  /** Which follow-up wave this is (1 = initial/day-3, 2 = day-7, 3 = day-14). Defaults to 1. */
+  followUpNumber?: 1 | 2 | 3;
 }
 
 /** Sends a review request email with Google and/or Yelp CTA buttons. */
@@ -1194,6 +1196,7 @@ export async function sendReviewRequestEmail({
   googleTrackUrl,
   yelpTrackUrl,
   shopName,
+  followUpNumber = 1,
 }: ReviewRequestEmailParams): Promise<void> {
   const resend = getResend();
   if (!resend) throw new Error("Email sending is not configured (missing Resend API key).");
@@ -1211,10 +1214,21 @@ export async function sendReviewRequestEmail({
     ? buildCustomerEmailCtaButton(yelpTrackUrl, "Review us on Yelp")
     : "";
 
+  const subjectByWave: Record<1 | 2 | 3, string> = {
+    1: `How was your experience at ${shop}?`,
+    2: `Still enjoying your bike? We'd love a quick review`,
+    3: `One last ask — how was your recent service at ${shop}?`,
+  };
+
+  const bodyByWave: Record<1 | 2 | 3, string> = {
+    1: `Thank you for choosing ${escapeHtml(shop)}! We hope your experience was great and your bike is riding perfectly. If you have a moment, we'd love to hear what you think. Your review helps other cyclists find us and means the world to our small team.`,
+    2: `Just a quick follow-up — if you haven't had a chance yet, sharing your experience with ${escapeHtml(shop)} would really mean a lot to us and helps future customers find a shop they can trust.`,
+    3: `This is our last message about this, and we completely understand if now isn't the right time. But if you ever do have a spare moment, even a few words about your recent service makes a huge difference for our small team.`,
+  };
+
   const innerHtml = `
     <p style="margin:0 0 16px">${escapeHtml(greeting)}</p>
-    <p style="margin:0 0 16px">Thank you for choosing ${escapeHtml(shop)}! We hope your experience was great and your bike is riding perfectly.</p>
-    <p style="margin:0 0 8px">If you have a moment, we'd love to hear what you think. Your review helps other cyclists find us and means the world to our small team.</p>
+    <p style="margin:0 0 16px">${bodyByWave[followUpNumber]}</p>
     ${googleBtn}
     ${yelpBtn ? `<div style="margin-top:12px">${yelpBtn}</div>` : ""}
     <p style="margin:24px 0 0;font-size:13px;color:#64748b">You can review on whichever platform you prefer — even a few words makes a big difference. Thank you!</p>
@@ -1229,7 +1243,7 @@ export async function sendReviewRequestEmail({
   await resend.emails.send({
     from: getFromEmail(),
     to: recipientEmail,
-    subject: `How was your experience at ${shop}?`,
+    subject: subjectByWave[followUpNumber],
     html,
     ...(branding.attachments ? { attachments: branding.attachments } : {}),
   });
