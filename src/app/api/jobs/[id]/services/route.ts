@@ -153,12 +153,14 @@ const patchServiceSchema = z
     quantity: z.number().int().min(1).optional(),
     unitPrice: z.number().min(0).optional(),
     jobBikeId: z.string().nullable().optional(),
+    applyToAllBikes: z.boolean().optional(),
   })
   .refine(
     (data) =>
       data.quantity !== undefined ||
       data.unitPrice !== undefined ||
-      "jobBikeId" in data,
+      "jobBikeId" in data ||
+      data.applyToAllBikes === true,
     { message: "Provide quantity, unitPrice, and/or jobBikeId" }
   );
 
@@ -196,6 +198,89 @@ export async function PATCH(
         },
         { status: 400 }
       );
+    }
+
+    if (data.applyToAllBikes) {
+      const jobBikes = await prisma.jobBike.findMany({
+        where: { jobId },
+        select: { id: true },
+        orderBy: { sortOrder: "asc" },
+      });
+
+      // Legacy / single-bike jobs don't need fan-out; keep the existing line as-is.
+      if (jobBikes.length <= 1) {
+        const updated = await prisma.jobService.update({
+          where: { id: data.jobServiceId },
+          data: {},
+          include: {
+            service: true,
+            jobBike: { select: { id: true, make: true, model: true, nickname: true } },
+          },
+        });
+        return NextResponse.json({ updated, createdCount: 0 });
+      }
+
+      const bikeIds = jobBikes.map((b) => b.id);
+      const baseBikeId =
+        existing.jobBikeId && bikeIds.includes(existing.jobBikeId) ? existing.jobBikeId : bikeIds[0];
+
+      const identityWhere = existing.serviceId
+        ? { serviceId: existing.serviceId }
+        : { serviceId: null as const, customServiceName: existing.customServiceName ?? null };
+
+      const { updated, createdIds } = await prisma.$transaction(async (tx) => {
+        const updated = await tx.jobService.update({
+          where: { id: existing.id },
+          data: { jobBikeId: baseBikeId },
+          include: {
+            service: true,
+            jobBike: { select: { id: true, make: true, model: true, nickname: true } },
+          },
+        });
+
+        const existingMatches = await tx.jobService.findMany({
+          where: {
+            jobId,
+            id: { not: existing.id },
+            jobBikeId: { in: bikeIds },
+            ...identityWhere,
+            quantity: existing.quantity,
+            unitPrice: existing.unitPrice,
+            notes: existing.notes,
+          },
+          select: { id: true, jobBikeId: true },
+        });
+
+        const bikesWithLine = new Set<string>(
+          [baseBikeId, ...existingMatches.map((m) => m.jobBikeId).filter(Boolean)] as string[]
+        );
+
+        const createdIds: string[] = [];
+        for (const bikeId of bikeIds) {
+          if (bikesWithLine.has(bikeId)) continue;
+          const created = await tx.jobService.create({
+            data: {
+              jobId,
+              serviceId: existing.serviceId,
+              customServiceName: existing.customServiceName,
+              quantity: existing.quantity,
+              unitPrice: existing.unitPrice,
+              notes: existing.notes,
+              jobBikeId: bikeId,
+            },
+            select: { id: true },
+          });
+          createdIds.push(created.id);
+        }
+
+        return { updated, createdIds };
+      });
+
+      return NextResponse.json({
+        updated,
+        createdCount: createdIds.length,
+        createdIds,
+      });
     }
 
     const updateData: { quantity?: number; unitPrice?: number; jobBikeId?: string | null } = {};

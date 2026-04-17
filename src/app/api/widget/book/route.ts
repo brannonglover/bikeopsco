@@ -60,17 +60,19 @@ function addCorsHeaders(response: NextResponse, origin: string | null): NextResp
     (origin.endsWith("basementbikemechanic.com") ||
       origin.endsWith(".basementbikemechanic.com") ||
       origin.includes("localhost"));
+  response.headers.set("Vary", "Origin");
   if (allowed && origin) {
     response.headers.set("Access-Control-Allow-Origin", origin);
   }
   response.headers.set("Access-Control-Allow-Methods", "POST, OPTIONS");
-  response.headers.set("Access-Control-Allow-Headers", "Content-Type");
+  response.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  response.headers.set("Access-Control-Max-Age", "86400");
   return response;
 }
 
 export async function OPTIONS(request: NextRequest) {
   const origin = request.headers.get("origin");
-  const res = NextResponse.json({}, { status: 204 });
+  const res = new NextResponse(null, { status: 204 });
   return addCorsHeaders(res, origin);
 }
 
