@@ -16,6 +16,7 @@ const bikeItemSchema = z.object({
 const bookSchema = z
   .object({
     // Customer
+    customerId: z.string().optional().nullable(),
     firstName: z.string().min(1, "First name is required"),
     lastName: z.string().min(1, "Last name is required"),
     email: z.string().email("Valid email is required"),
@@ -100,11 +101,21 @@ export async function POST(request: NextRequest) {
     const phoneStored = coerceCustomerPhone(data.phone);
 
     const job = await prisma.$transaction(async (tx) => {
-      let customer = await tx.customer.findFirst({
-        where: {
-          email: { equals: emailNormalized, mode: "insensitive" },
-        },
-      });
+      let customer = null;
+
+      if (data.customerId) {
+        customer = await tx.customer.findUnique({
+          where: { id: data.customerId },
+        });
+      }
+
+      if (!customer) {
+        customer = await tx.customer.findFirst({
+          where: {
+            email: { equals: emailNormalized, mode: "insensitive" },
+          },
+        });
+      }
 
       if (!customer) {
         customer = await tx.customer.create({

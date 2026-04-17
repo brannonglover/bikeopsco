@@ -1395,6 +1395,10 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
   const [cancelReasonOther, setCancelReasonOther] = useState("");
   const [job, setJob] = useState<Job | null>(jobProp);
   const [sendingReview, setSendingReview] = useState(false);
+  const [accepting, setAccepting] = useState(false);
+  const [showRejectReason, setShowRejectReason] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
+  const [rejectSubmitting, setRejectSubmitting] = useState(false);
   const [reviewBanner, setReviewBanner] = useState<{ ok: boolean; text: string } | null>(null);
   const latestJobPropRef = useRef(jobProp);
   latestJobPropRef.current = jobProp;
@@ -1470,6 +1474,49 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
     setCancelReasonOther("");
   };
 
+  const handleAcceptBooking = async () => {
+    if (!job) return;
+    setAccepting(true);
+    try {
+      const res = await fetch(`/api/jobs/${job.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stage: "BOOKED_IN" }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setJob(updated);
+        onJobUpdated?.(updated);
+      }
+    } finally {
+      setAccepting(false);
+    }
+  };
+
+  const handleRejectBookingConfirm = async () => {
+    if (!job || !rejectReason.trim()) return;
+    setRejectSubmitting(true);
+    try {
+      const res = await fetch(`/api/jobs/${job.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          stage: "CANCELLED",
+          cancellationReason: rejectReason.trim(),
+        }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setJob(updated);
+        onJobUpdated?.(updated);
+        setShowRejectReason(false);
+        setRejectReason("");
+      }
+    } finally {
+      setRejectSubmitting(false);
+    }
+  };
+
   const canConfirmCancellation =
     cancelReason &&
     (cancelReason !== "Other" || cancelReasonOther.trim().length > 0);
@@ -1535,6 +1582,8 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
       setCancelReason("");
       setCancelReasonOther("");
       setReviewBanner(null);
+      setShowRejectReason(false);
+      setRejectReason("");
     }
     // Only when switching jobs — same-id refreshes (invoice lines, refetch) must not reset tab or overlays.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1636,6 +1685,40 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
             </div>
           </div>
         )}
+        {showRejectReason && (
+          <div className="absolute inset-0 z-10 flex flex-col bg-white/95 rounded-xl p-6 overflow-hidden">
+            <h3 className="text-lg font-semibold text-slate-900 flex-shrink-0 mb-1">
+              Reject Booking
+            </h3>
+            <p className="text-sm text-slate-500 mb-4 flex-shrink-0">
+              The customer will see this reason on the status page and by email.
+            </p>
+            <textarea
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              placeholder="Reason for rejection…"
+              rows={4}
+              autoFocus
+              className="w-full flex-1 min-h-0 px-3 py-2 border border-slate-300 rounded-lg text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none"
+            />
+            <div className="flex gap-2 justify-end pt-4 flex-shrink-0 border-t border-slate-200 mt-4">
+              <button
+                onClick={() => { setShowRejectReason(false); setRejectReason(""); }}
+                disabled={rejectSubmitting}
+                className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors disabled:opacity-50"
+              >
+                Back
+              </button>
+              <button
+                onClick={handleRejectBookingConfirm}
+                disabled={rejectSubmitting || !rejectReason.trim()}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {rejectSubmitting ? "Rejecting…" : "Reject booking"}
+              </button>
+            </div>
+          </div>
+        )}
         <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-slate-200 flex-shrink-0">
           <h2 className="text-lg sm:text-xl font-bold text-slate-900 truncate pr-2">
             {getJobBikeDisplayTitle(job)}
@@ -1685,6 +1768,37 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
             />
           ) : (
             <>
+          {job.stage === "PENDING_APPROVAL" && (
+            <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-amber-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <p className="text-sm font-bold text-amber-800">New Booking Request</p>
+              </div>
+              <p className="text-sm text-amber-700">
+                Review this request and accept or reject it. The customer will be notified by email and SMS.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleAcceptBooking}
+                  disabled={accepting}
+                  className="flex-1 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {accepting ? "Accepting…" : "Accept"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setRejectReason(""); setShowRejectReason(true); }}
+                  disabled={accepting}
+                  className="flex-1 rounded-lg border border-red-300 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Reject
+                </button>
+              </div>
+            </div>
+          )}
           <div className="flex flex-wrap gap-2">
             <span
               className={`text-xs font-medium px-2 py-1 rounded ${

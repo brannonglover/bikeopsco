@@ -112,10 +112,13 @@ export default function PayPage() {
   const searchParams = useSearchParams();
   const jobId = params?.jobId as string;
   const inPerson = searchParams?.get("mode") === "in_person";
+  const PAYABLE_STAGES = ["RECEIVED", "WORKING_ON", "WAITING_ON_PARTS", "BIKE_READY", "COMPLETED"];
+
   const [job, setJob] = useState<{
     id: string;
     bikeMake: string;
     bikeModel: string;
+    stage: string;
     customer?: { firstName: string; lastName?: string | null; email?: string | null } | null;
     jobServices: { service?: { name: string } | null; customServiceName?: string | null; quantity: number; unitPrice: string | number }[];
     jobProducts?: { product: { name: string }; quantity: number; unitPrice: string | number }[];
@@ -154,6 +157,11 @@ export default function PayPage() {
 
         if (jobData.paymentStatus === "PAID") {
           setError("This job is already paid");
+          return;
+        }
+
+        if (!inPerson && !PAYABLE_STAGES.includes(jobData.stage)) {
+          setError("Payment is not available until the shop has confirmed your booking and received your bike.");
           return;
         }
 

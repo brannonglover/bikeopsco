@@ -35,6 +35,14 @@ export async function POST(
       );
     }
 
+    const PAYABLE_STAGES = ["RECEIVED", "WORKING_ON", "WAITING_ON_PARTS", "BIKE_READY", "COMPLETED"];
+    if (mode === "online" && !PAYABLE_STAGES.includes(job.stage)) {
+      return NextResponse.json(
+        { error: "Payment is not available until the booking has been confirmed and the bike received" },
+        { status: 400 }
+      );
+    }
+
     const subtotal =
       job.jobServices.reduce((sum, js) => {
         const price = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);

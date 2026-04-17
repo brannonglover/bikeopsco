@@ -499,7 +499,8 @@ export default function StatusPage() {
         )}
       </div>
 
-      {job.paymentStatus !== "PAID" && total > 0 && (
+      {job.paymentStatus !== "PAID" && total > 0 &&
+        ["RECEIVED", "WORKING_ON", "WAITING_ON_PARTS", "BIKE_READY", "COMPLETED"].includes(job.stage) && (
         <Link
           href={`/pay/${job.id}`}
           className="block w-full rounded-lg bg-emerald-600 px-4 py-3 text-center font-semibold text-white hover:bg-emerald-700"
