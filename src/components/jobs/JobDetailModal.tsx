@@ -2397,6 +2397,23 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
     }
   };
 
+  const applyServiceToAllBikes = async (jobServiceId: string) => {
+    setUpdatingServiceBike(jobServiceId);
+    try {
+      const res = await fetch(`/api/jobs/${job.id}/services`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobServiceId, applyToAllBikes: true }),
+      });
+      if (res.ok) {
+        const updatedJob = await fetch(`/api/jobs/${job.id}`).then((r) => r.json());
+        onJobUpdated?.(updatedJob);
+      }
+    } finally {
+      setUpdatingServiceBike(null);
+    }
+  };
+
   const assignProductBike = async (jobProductId: string, jobBikeId: string | null) => {
     setUpdatingProductBike(jobProductId);
     try {
@@ -2668,7 +2685,7 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                                         <button
                                           type="button"
                                           disabled={updatingServiceBike === js.id}
-                                          onClick={() => assignServiceBike(js.id, null)}
+                                          onClick={() => applyServiceToAllBikes(js.id)}
                                           className={`rounded-full px-2.5 py-0.5 text-xs font-medium border transition-colors ${
                                             !js.jobBikeId
                                               ? "bg-slate-700 text-white border-slate-700"

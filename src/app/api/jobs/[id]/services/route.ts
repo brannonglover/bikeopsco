@@ -224,9 +224,10 @@ export async function PATCH(
       const baseBikeId =
         existing.jobBikeId && bikeIds.includes(existing.jobBikeId) ? existing.jobBikeId : bikeIds[0];
 
-      const identityWhere = existing.serviceId
-        ? { serviceId: existing.serviceId }
-        : { serviceId: null as const, customServiceName: existing.customServiceName ?? null };
+      const identityWhere: { serviceId: string | null; customServiceName?: string | null } =
+        existing.serviceId
+          ? { serviceId: existing.serviceId }
+          : { serviceId: null, customServiceName: existing.customServiceName ?? null };
 
       const { updated, createdIds } = await prisma.$transaction(async (tx) => {
         const updated = await tx.jobService.update({
