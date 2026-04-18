@@ -9,6 +9,8 @@ export type AppFeatures = {
   reviewsEnabled: boolean;
 };
 
+const APP_FEATURES_UPDATED_EVENT = "bikeops:app-features-updated";
+
 const DEFAULTS: AppFeatures = {
   collectionServiceEnabled: true,
   notifyCustomerEnabled: true,
@@ -17,6 +19,11 @@ const DEFAULTS: AppFeatures = {
 };
 
 const AppFeaturesContext = createContext<AppFeatures>(DEFAULTS);
+
+export function broadcastAppFeaturesUpdated(features: Partial<AppFeatures>) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(APP_FEATURES_UPDATED_EVENT, { detail: features }));
+}
 
 export function AppFeaturesProvider({ children }: { children: React.ReactNode }) {
   const [features, setFeatures] = useState<AppFeatures>(DEFAULTS);
@@ -35,6 +42,16 @@ export function AppFeaturesProvider({ children }: { children: React.ReactNode })
     };
   }, []);
 
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const custom = event as CustomEvent<Partial<AppFeatures>>;
+      const next = custom.detail ?? {};
+      setFeatures((prev) => ({ ...prev, ...next }));
+    };
+    window.addEventListener(APP_FEATURES_UPDATED_EVENT, handler);
+    return () => window.removeEventListener(APP_FEATURES_UPDATED_EVENT, handler);
+  }, []);
+
   const value = useMemo(() => features, [features]);
   return <AppFeaturesContext.Provider value={value}>{children}</AppFeaturesContext.Provider>;
 }
@@ -42,4 +59,3 @@ export function AppFeaturesProvider({ children }: { children: React.ReactNode })
 export function useAppFeatures(): AppFeatures {
   return useContext(AppFeaturesContext);
 }
-

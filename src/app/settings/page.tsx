@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useTheme, type ThemeMode } from "@/contexts/ThemeContext";
+import { broadcastAppFeaturesUpdated } from "@/contexts/AppFeaturesContext";
 
 type AppFeatures = {
   collectionServiceEnabled: boolean;
@@ -137,7 +138,9 @@ export default function SettingsPage() {
         setFeaturesError(typeof data?.error === "string" ? data.error : "Failed to save.");
         return;
       }
-      setFeatures({ ...DEFAULT_FEATURES, ...(data as AppFeatures) });
+      const updated = { ...DEFAULT_FEATURES, ...(data as AppFeatures) };
+      setFeatures(updated);
+      broadcastAppFeaturesUpdated(updated);
       setFeaturesSaved(true);
       window.setTimeout(() => setFeaturesSaved(false), 1500);
     } catch {
@@ -269,4 +272,3 @@ export default function SettingsPage() {
     </div>
   );
 }
-
