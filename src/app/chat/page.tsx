@@ -258,6 +258,32 @@ function ChatPageContent() {
   const [customerSearch, setCustomerSearch] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const composerTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const sendingRef = useRef(false);
+  const hasPendingOptimisticRef = useRef(false);
+
+  useEffect(() => {
+    sendingRef.current = sending;
+  }, [sending]);
+
+  useEffect(() => {
+    hasPendingOptimisticRef.current = messages.some((m) => m.id.startsWith("temp-"));
+  }, [messages]);
+
+  const mergeServerMessages = useCallback((serverMessages: ChatMessage[]) => {
+    setMessages((prev) => {
+      const optimistic = prev.filter((m) => m.id.startsWith("temp-"));
+      const byId = new Map<string, ChatMessage>();
+      for (const msg of [...serverMessages, ...optimistic]) {
+        byId.set(msg.id, msg);
+      }
+      return [...byId.values()].sort((a, b) => {
+        const ta = new Date(a.createdAt).getTime();
+        const tb = new Date(b.createdAt).getTime();
+        if (ta !== tb) return ta - tb;
+        return a.id.localeCompare(b.id);
+      });
+    });
+  }, []);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const editingCountRef = useRef(0);
   const [showScrollDown, setShowScrollDown] = useState(false);
@@ -336,10 +362,10 @@ function ChatPageContent() {
     const data = await res.json();
     if (selectedIdRef.current !== convId) return;
     if (Array.isArray(data)) {
-      setMessages(data);
+      mergeServerMessages(data);
       setCustomerTypingAt(null);
     } else {
-      setMessages(data.messages ?? []);
+      mergeServerMessages(data.messages ?? []);
       setCustomerTypingAt(data.customerTypingAt ?? null);
       setCustomerLastReadAt(data.customerLastReadAt ?? null);
       if (typeof data.staffLastReadAt === "string") {
@@ -353,7 +379,7 @@ function ChatPageContent() {
         });
       }
     }
-  }, []);
+  }, [mergeServerMessages]);
 
   useEffect(() => {
     setLoading(true);
@@ -426,7 +452,11 @@ function ChatPageContent() {
 
   useEffect(() => {
     if (!selectedId) return;
-    const id = setInterval(() => fetchMessages(selectedId), POLL_INTERVAL_MS);
+    const id = setInterval(() => {
+      if (sendingRef.current) return;
+      if (hasPendingOptimisticRef.current) return;
+      void fetchMessages(selectedId);
+    }, POLL_INTERVAL_MS);
     return () => clearInterval(id);
   }, [selectedId, fetchMessages]);
 
@@ -759,7 +789,17 @@ function ChatPageContent() {
       if (res.ok) {
         const newMsg = await res.json();
         // Replace the optimistic placeholder with the confirmed server message
-        setMessages((prev) => prev.map((m) => (m.id === tempId ? newMsg : m)));
+        setMessages((prev) => {
+          const replaced = prev.map((m) => (m.id === tempId ? newMsg : m));
+          const byId = new Map<string, ChatMessage>();
+          for (const msg of replaced) byId.set(msg.id, msg);
+          return [...byId.values()].sort((a, b) => {
+            const ta = new Date(a.createdAt).getTime();
+            const tb = new Date(b.createdAt).getTime();
+            if (ta !== tb) return ta - tb;
+            return a.id.localeCompare(b.id);
+          });
+        });
         fetchConversations();
       } else {
         const data = await res.json();

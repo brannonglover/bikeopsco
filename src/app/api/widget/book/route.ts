@@ -6,6 +6,7 @@ import { sendBookingRequestNotification, sendBookingReceivedEmail } from "@/lib/
 import { sendPushToAllStaff } from "@/lib/push";
 import { syncCollectionJobService } from "@/lib/collection-fee";
 import { coerceCustomerPhone } from "@/lib/phone";
+import { checkCollectionEligibility } from "@/lib/collection-radius";
 
 const bikeItemSchema = z.object({
   make: z.string().min(1, "Bike make is required"),
@@ -92,6 +93,25 @@ export async function POST(request: NextRequest) {
     }
 
     const data = bookSchema.parse(body);
+
+    if (data.deliveryType === "COLLECTION_SERVICE") {
+      const addr = (data.collectionAddress ?? "").trim();
+      const eligibility = await checkCollectionEligibility(addr);
+      if (eligibility.ok && eligibility.enabled && !eligibility.eligible) {
+        const res = NextResponse.json(
+          { error: `Collection is only available within ${eligibility.radiusMiles} miles of the shop.` },
+          { status: 400 }
+        );
+        return addCorsHeaders(res, origin);
+      }
+      if (!eligibility.ok && eligibility.enabled) {
+        const res = NextResponse.json(
+          { error: eligibility.error },
+          { status: 400 }
+        );
+        return addCorsHeaders(res, origin);
+      }
+    }
 
     // Normalize to a bikes array (support both new array format and legacy single-bike fields)
     const bikesInput =

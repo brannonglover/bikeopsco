@@ -7,6 +7,7 @@ import {
 } from "@/lib/reviews";
 import { getGooglePlacesApiKey, getYelpApiKey } from "@/lib/env";
 import { ReviewCarousel } from "./ReviewCarousel";
+import { AutoResize } from "./AutoResize";
 
 export const dynamic = "force-dynamic";
 
@@ -173,8 +174,7 @@ export default async function ReviewWidget({
         }
       `}</style>
 
-      {/* Auto-resize: report content height to parent iframe */}
-      <script dangerouslySetInnerHTML={{ __html: `(function(){function r(){window.parent.postMessage({type:'bikeops-widget-height',height:document.documentElement.scrollHeight},'*')}r();if(window.ResizeObserver){new ResizeObserver(r).observe(document.documentElement)}})();` }} />
+      <AutoResize />
 
       <div style={{ padding: "10px" }}>
         <div

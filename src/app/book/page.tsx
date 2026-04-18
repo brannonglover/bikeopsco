@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { BikeLoader } from "@/components/ui/BikeLoader";
 import { Price } from "@/components/ui/Price";
 import { formatPhoneInputUS } from "@/lib/phone";
+import type { CollectionEligibility } from "@/lib/collection-radius";
 
 interface Service {
   id: string;
@@ -41,6 +42,8 @@ function BookForm() {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState<{ id: string; statusUrl: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [collectionEligibility, setCollectionEligibility] = useState<CollectionEligibility | null>(null);
+  const [checkingCollection, setCheckingCollection] = useState(false);
 
   const [serviceSearch, setServiceSearch] = useState("");
   const [bikes, setBikes] = useState<BikeEntry[]>([{ make: "", model: "", bikeType: "AUTO" }]);
@@ -74,6 +77,42 @@ function BookForm() {
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    if (form.deliveryType !== "COLLECTION_SERVICE") {
+      setCollectionEligibility(null);
+      setCheckingCollection(false);
+      return;
+    }
+    const addr = form.collectionAddress.trim();
+    if (addr.length < 6) {
+      setCollectionEligibility(null);
+      setCheckingCollection(false);
+      return;
+    }
+
+    const ac = new AbortController();
+    const t = window.setTimeout(() => {
+      setCheckingCollection(true);
+      fetch(`${BASE}/api/widget/collection-eligibility?address=${encodeURIComponent(addr)}`, {
+        signal: ac.signal,
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          setCollectionEligibility(data as CollectionEligibility);
+        })
+        .catch((e: unknown) => {
+          if (e && typeof e === "object" && "name" in e && (e as { name: string }).name === "AbortError") return;
+          setCollectionEligibility({ ok: false, enabled: true, error: "Failed to check address. Please try again." });
+        })
+        .finally(() => setCheckingCollection(false));
+    }, 650);
+
+    return () => {
+      ac.abort();
+      window.clearTimeout(t);
+    };
+  }, [form.deliveryType, form.collectionAddress]);
+
   const filteredServices = useMemo(() => {
     const q = serviceSearch.trim().toLowerCase();
     if (!q) return services;
@@ -98,6 +137,15 @@ function BookForm() {
     setError(null);
     if (!form.smsConsent) {
       setError("Please agree to SMS notifications to continue.");
+      return;
+    }
+    if (
+      form.deliveryType === "COLLECTION_SERVICE" &&
+      collectionEligibility?.ok === true &&
+      collectionEligibility.enabled === true &&
+      collectionEligibility.eligible === false
+    ) {
+      setError(`Collection is only available within ${collectionEligibility.radiusMiles} miles of the shop. Please switch to drop-off.`);
       return;
     }
     setSubmitting(true);
@@ -400,6 +448,21 @@ function BookForm() {
               className="input-book"
               placeholder="Street, city, postal code"
             />
+            {checkingCollection && (
+              <p className="mt-2 text-xs text-slate-500">Checking address…</p>
+            )}
+            {!checkingCollection &&
+              collectionEligibility?.ok === true &&
+              collectionEligibility.enabled === true &&
+              collectionEligibility.eligible === false && (
+                <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                  Collection isn&apos;t available for this address (outside {collectionEligibility.radiusMiles} miles).
+                  Please switch to drop-off at the shop.
+                </div>
+              )}
+            {!checkingCollection && collectionEligibility?.ok === false && (
+              <p className="mt-2 text-xs text-amber-700">{collectionEligibility.error}</p>
+            )}
             <p className="mt-2 text-xs text-slate-500">
               Pickup/dropoff within 5 miles of the shop; fee is added automatically when your booking is accepted.
             </p>
@@ -480,7 +543,14 @@ function BookForm() {
 
         <button
           type="submit"
-          disabled={submitting || !form.smsConsent}
+          disabled={
+            submitting ||
+            !form.smsConsent ||
+            (form.deliveryType === "COLLECTION_SERVICE" &&
+              collectionEligibility?.ok === true &&
+              collectionEligibility.enabled === true &&
+              collectionEligibility.eligible === false)
+          }
           className="w-full rounded-xl bg-amber-500 py-3 font-semibold text-white hover:bg-amber-600 disabled:opacity-50 transition-colors"
         >
           {submitting ? "Booking..." : "Book repair"}
