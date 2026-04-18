@@ -7,6 +7,7 @@ import { z } from "zod";
 import { getAppFeatures } from "@/lib/app-settings";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 const EXPIRY_MINUTES = 15;
 
 const schema = z.object({ email: z.string().email() });

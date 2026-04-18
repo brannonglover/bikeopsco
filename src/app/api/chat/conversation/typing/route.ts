@@ -4,6 +4,8 @@ import { prisma } from "@/lib/db";
 import { getCustomerFromSession } from "@/lib/chat-session";
 import { getAppFeatures } from "@/lib/app-settings";
 
+export const dynamic = "force-dynamic";
+
 const bodySchema = z.object({
   active: z.boolean(),
 });

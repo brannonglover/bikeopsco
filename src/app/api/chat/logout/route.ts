@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getSessionCookieName } from "@/lib/chat-session";
 import { getAppFeatures } from "@/lib/app-settings";
 
+export const dynamic = "force-dynamic";
+
 export async function POST() {
   const features = await getAppFeatures();
   if (!features.chatEnabled) {

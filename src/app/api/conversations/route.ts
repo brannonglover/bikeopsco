@@ -3,6 +3,8 @@ import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { getAppFeatures } from "@/lib/app-settings";
 
+export const dynamic = "force-dynamic";
+
 const createSchema = z.object({
   customerId: z.string().min(1),
   jobId: z.string().optional().nullable(),

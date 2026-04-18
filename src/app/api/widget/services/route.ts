@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+
 function addCorsHeaders(response: NextResponse, origin: string | null): NextResponse {
   const allowed =
     origin &&

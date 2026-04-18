@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getAppFeatures } from "@/lib/app-settings";
 
+export const dynamic = "force-dynamic";
+
 /**
  * Staff: preview of the customer's general chat thread (jobId null) for job detail / links.
  */

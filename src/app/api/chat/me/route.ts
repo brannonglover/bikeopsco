@@ -3,6 +3,8 @@ import { prisma } from "@/lib/db";
 import { getCustomerFromSession } from "@/lib/chat-session";
 import { getAppFeatures } from "@/lib/app-settings";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   const features = await getAppFeatures();
   if (!features.chatEnabled) {

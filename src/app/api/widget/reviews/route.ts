@@ -8,6 +8,8 @@ import {
 import { getGooglePlacesApiKey, getYelpApiKey } from "@/lib/env";
 import { getAppFeatures } from "@/lib/app-settings";
 
+export const dynamic = "force-dynamic";
+
 function addCorsHeaders(response: NextResponse, origin: string | null): NextResponse {
   const allowed =
     origin &&
