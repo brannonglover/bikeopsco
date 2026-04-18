@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCustomerFromSession } from "@/lib/chat-session";
 
+export const dynamic = "force-dynamic";
+
 export async function DELETE(
   _request: NextRequest,
   {

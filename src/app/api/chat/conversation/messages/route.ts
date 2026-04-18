@@ -5,6 +5,8 @@ import { sendPushToAllStaff } from "@/lib/push";
 import { z } from "zod";
 import { getAppFeatures } from "@/lib/app-settings";
 
+export const dynamic = "force-dynamic";
+
 const createSchema = z.object({
   body: z.string().optional().nullable(),
   attachmentIds: z.array(z.string()).optional().default([]),

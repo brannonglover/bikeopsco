@@ -4,6 +4,8 @@ import { getCustomerFromSession } from "@/lib/chat-session";
 import { z } from "zod";
 import { getAppFeatures } from "@/lib/app-settings";
 
+export const dynamic = "force-dynamic";
+
 const patchSchema = z.object({
   body: z.string().optional().nullable(),
 });

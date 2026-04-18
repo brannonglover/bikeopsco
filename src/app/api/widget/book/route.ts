@@ -9,6 +9,8 @@ import { coerceCustomerPhone } from "@/lib/phone";
 import { checkCollectionEligibility } from "@/lib/collection-radius";
 import { getAppFeatures } from "@/lib/app-settings";
 
+export const dynamic = "force-dynamic";
+
 const bikeItemSchema = z.object({
   make: z.string().min(1, "Bike make is required"),
   model: z.string().min(1).optional().nullable(),

@@ -4,6 +4,8 @@ import { createSession, getSessionCookieName } from "@/lib/chat-session";
 import { z } from "zod";
 import { getAppFeatures } from "@/lib/app-settings";
 
+export const dynamic = "force-dynamic";
+
 const postBodySchema = z.object({ token: z.string().min(1) });
 
 function setSessionCookie(response: NextResponse, sessionToken: string) {

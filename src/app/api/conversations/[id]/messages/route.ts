@@ -5,6 +5,8 @@ import { sendPushToCustomer, sendPushToAllStaff } from "@/lib/push";
 import { z } from "zod";
 import { getAppFeatures } from "@/lib/app-settings";
 
+export const dynamic = "force-dynamic";
+
 const createSchema = z.object({
   sender: z.enum(["STAFF", "CUSTOMER"]),
   body: z.string().optional().nullable(),
