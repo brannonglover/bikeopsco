@@ -38,6 +38,7 @@ function BookForm() {
   const embed = searchParams?.get("embed") === "1";
 
   const [services, setServices] = useState<Service[]>([]);
+  const [collectionServiceEnabled, setCollectionServiceEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState<{ id: string; statusUrl: string } | null>(null);
@@ -76,6 +77,29 @@ function BookForm() {
       .catch(() => setServices([]))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    fetch(`${BASE}/api/widget/features`)
+      .then((res) => res.json())
+      .then((data: unknown) => {
+        if (typeof data === "object" && data !== null && "collectionServiceEnabled" in data) {
+          setCollectionServiceEnabled(Boolean((data as { collectionServiceEnabled?: unknown }).collectionServiceEnabled));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (collectionServiceEnabled) return;
+    if (form.deliveryType !== "COLLECTION_SERVICE") return;
+    setForm((p) => ({
+      ...p,
+      deliveryType: "DROP_OFF_AT_SHOP",
+      collectionAddress: "",
+      collectionWindowStart: "",
+      collectionWindowEnd: "",
+    }));
+  }, [collectionServiceEnabled, form.deliveryType]);
 
   useEffect(() => {
     if (form.deliveryType !== "COLLECTION_SERVICE") {
@@ -140,6 +164,7 @@ function BookForm() {
       return;
     }
     if (
+      collectionServiceEnabled &&
       form.deliveryType === "COLLECTION_SERVICE" &&
       collectionEligibility?.ok === true &&
       collectionEligibility.enabled === true &&
@@ -432,11 +457,13 @@ function BookForm() {
             className="input-book"
           >
             <option value="DROP_OFF_AT_SHOP">Drop-off at shop</option>
-            <option value="COLLECTION_SERVICE">Collection service</option>
+            {collectionServiceEnabled && (
+              <option value="COLLECTION_SERVICE">Collection service</option>
+            )}
           </select>
         </div>
 
-        {form.deliveryType === "COLLECTION_SERVICE" && (
+        {collectionServiceEnabled && form.deliveryType === "COLLECTION_SERVICE" && (
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">
               Collection address
@@ -546,7 +573,8 @@ function BookForm() {
           disabled={
             submitting ||
             !form.smsConsent ||
-            (form.deliveryType === "COLLECTION_SERVICE" &&
+            (collectionServiceEnabled &&
+              form.deliveryType === "COLLECTION_SERVICE" &&
               collectionEligibility?.ok === true &&
               collectionEligibility.enabled === true &&
               collectionEligibility.eligible === false)

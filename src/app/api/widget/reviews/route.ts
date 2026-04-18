@@ -6,6 +6,7 @@ import {
   extractYelpAlias,
 } from "@/lib/reviews";
 import { getGooglePlacesApiKey, getYelpApiKey } from "@/lib/env";
+import { getAppFeatures } from "@/lib/app-settings";
 
 function addCorsHeaders(response: NextResponse, origin: string | null): NextResponse {
   const allowed =
@@ -31,6 +32,11 @@ export async function GET(request: NextRequest) {
   const origin = request.headers.get("origin");
 
   try {
+    const features = await getAppFeatures();
+    if (!features.reviewsEnabled) {
+      const res = NextResponse.json({ error: "Reviews are disabled" }, { status: 404 });
+      return addCorsHeaders(res, origin);
+    }
     const [settings, totalSent] = await Promise.all([
       prisma.reviewSettings.findUnique({ where: { id: "default" } }),
       prisma.reviewRequest.count(),

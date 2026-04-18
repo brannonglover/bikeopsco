@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useStaffChatWaitingCount } from "@/contexts/StaffChatAttentionContext";
+import { useAppFeatures } from "@/contexts/AppFeaturesContext";
 
 const NAV_LINKS = [
   { href: "/calendar", label: "Job Board" },
@@ -14,6 +15,7 @@ const NAV_LINKS = [
   { href: "/settings/products", label: "Products" },
   { href: "/settings/email-templates", label: "Email Templates" },
   { href: "/settings/reviews", label: "Reviews" },
+  { href: "/settings/features", label: "Features" },
 ] as const;
 
 interface SidebarNavProps {
@@ -23,10 +25,17 @@ interface SidebarNavProps {
 export function SidebarNav({ onNavigate }: SidebarNavProps) {
   const pathname = usePathname();
   const chatWaitingCount = useStaffChatWaitingCount();
+  const features = useAppFeatures();
+
+  const visibleLinks = NAV_LINKS.filter((l) => {
+    if (l.href === "/chat" && !features.chatEnabled) return false;
+    if (l.href === "/settings/reviews" && !features.reviewsEnabled) return false;
+    return true;
+  });
 
   return (
     <nav className="flex-1 p-4 flex flex-col gap-1">
-      {NAV_LINKS.map(({ href, label }) => {
+      {visibleLinks.map(({ href, label }) => {
         const isActive =
           href === "/calendar"
             ? pathname === "/calendar"

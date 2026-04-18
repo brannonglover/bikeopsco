@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { getCustomerFromSession } from "@/lib/chat-session";
+import { getAppFeatures } from "@/lib/app-settings";
 
 const bodySchema = z.object({
   active: z.boolean(),
@@ -11,6 +12,10 @@ const bodySchema = z.object({
  * Customer-only: heartbeat while composing so staff can show a typing indicator.
  */
 export async function POST(request: NextRequest) {
+  const features = await getAppFeatures();
+  if (!features.chatEnabled) {
+    return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
+  }
   const customerId = await getCustomerFromSession();
   if (!customerId) {
     return NextResponse.json({ error: "Not signed in" }, { status: 401 });

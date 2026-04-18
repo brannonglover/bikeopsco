@@ -7,6 +7,7 @@ import { sendPushToAllStaff } from "@/lib/push";
 import { syncCollectionJobService } from "@/lib/collection-fee";
 import { coerceCustomerPhone } from "@/lib/phone";
 import { checkCollectionEligibility } from "@/lib/collection-radius";
+import { getAppFeatures } from "@/lib/app-settings";
 
 const bikeItemSchema = z.object({
   make: z.string().min(1, "Bike make is required"),
@@ -93,8 +94,16 @@ export async function POST(request: NextRequest) {
     }
 
     const data = bookSchema.parse(body);
+    const features = await getAppFeatures();
 
     if (data.deliveryType === "COLLECTION_SERVICE") {
+      if (!features.collectionServiceEnabled) {
+        const res = NextResponse.json(
+          { error: "Collection service is currently unavailable." },
+          { status: 400 }
+        );
+        return addCorsHeaders(res, origin);
+      }
       const addr = (data.collectionAddress ?? "").trim();
       const eligibility = await checkCollectionEligibility(addr);
       if (eligibility.ok && eligibility.enabled && !eligibility.eligible) {
@@ -233,7 +242,9 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      await syncCollectionJobService(tx, newJob.id);
+      if (features.collectionServiceEnabled) {
+        await syncCollectionJobService(tx, newJob.id);
+      }
 
       return tx.job.findUnique({
         where: { id: newJob.id },

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { getCustomerFromSession } from "@/lib/chat-session";
 import { sendPushToAllStaff } from "@/lib/push";
 import { z } from "zod";
+import { getAppFeatures } from "@/lib/app-settings";
 
 const createSchema = z.object({
   body: z.string().optional().nullable(),
@@ -13,6 +14,10 @@ const createSchema = z.object({
  * Customer-only: GET messages for their conversation.
  */
 export async function GET() {
+  const features = await getAppFeatures();
+  if (!features.chatEnabled) {
+    return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
+  }
   const customerId = await getCustomerFromSession();
   if (!customerId) {
     return NextResponse.json({ error: "Not signed in" }, { status: 401 });
@@ -53,6 +58,10 @@ export async function GET() {
  * Customer-only: POST a new message (always as CUSTOMER).
  */
 export async function POST(request: NextRequest) {
+  const features = await getAppFeatures();
+  if (!features.chatEnabled) {
+    return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
+  }
   const customerId = await getCustomerFromSession();
   if (!customerId) {
     return NextResponse.json({ error: "Not signed in" }, { status: 401 });

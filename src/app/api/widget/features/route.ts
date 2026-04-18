@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checkCollectionEligibility } from "@/lib/collection-radius";
 import { getAppFeatures } from "@/lib/app-settings";
+
+export const dynamic = "force-dynamic";
 
 function addCorsHeaders(response: NextResponse, origin: string | null): NextResponse {
   const allowed =
@@ -13,7 +14,6 @@ function addCorsHeaders(response: NextResponse, origin: string | null): NextResp
     response.headers.set("Access-Control-Allow-Origin", origin);
   }
   response.headers.set("Access-Control-Allow-Methods", "GET, OPTIONS");
-  response.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
   response.headers.set("Access-Control-Max-Age", "86400");
   return response;
 }
@@ -26,25 +26,21 @@ export async function OPTIONS(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   const origin = request.headers.get("origin");
-
   try {
     const features = await getAppFeatures();
-    if (!features.collectionServiceEnabled) {
-      const res = NextResponse.json({ ok: true, enabled: false });
-      return addCorsHeaders(res, origin);
-    }
-    const { searchParams } = new URL(request.url);
-    const address = searchParams.get("address") || "";
-    const result = await checkCollectionEligibility(address);
-
-    const res = NextResponse.json(result);
+    const res = NextResponse.json({
+      collectionServiceEnabled: features.collectionServiceEnabled,
+      chatEnabled: features.chatEnabled,
+      reviewsEnabled: features.reviewsEnabled,
+    });
     return addCorsHeaders(res, origin);
   } catch (error) {
-    console.error("GET /api/widget/collection-eligibility error:", error);
+    console.error("GET /api/widget/features error:", error);
     const res = NextResponse.json(
-      { ok: false, enabled: true, error: "Failed to check address" },
+      { error: "Failed to fetch widget features" },
       { status: 500 }
     );
     return addCorsHeaders(res, origin);
   }
 }
+

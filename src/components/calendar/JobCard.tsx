@@ -5,6 +5,7 @@ import { CSS } from "@dnd-kit/utilities";
 import type { Job, Stage } from "@/lib/types";
 import { getJobBikeDisplayTitle, getDisplayPartsForJobBikeRow } from "@/lib/job-display";
 import { useUnreadChatCustomerIds } from "@/contexts/StaffChatAttentionContext";
+import { useAppFeatures } from "@/contexts/AppFeaturesContext";
 
 const STAGE_LABELS: Record<Stage, string> = {
   PENDING_APPROVAL: "Pending approval",
@@ -72,8 +73,10 @@ export function JobCardContent({
   notifyCustomer?: boolean;
   onNotifyCustomerChange?: (notify: boolean) => void;
 }) {
+  const features = useAppFeatures();
   const unreadChatCustomerIds = useUnreadChatCustomerIds();
   const hasPendingChat = !!job.customerId && unreadChatCustomerIds.has(job.customerId);
+  const effectiveNotifyCustomer = features.notifyCustomerEnabled ? notifyCustomer : false;
   const address =
     job.deliveryType === "COLLECTION_SERVICE"
       ? job.collectionAddress || job.customer?.address
@@ -83,6 +86,7 @@ export function JobCardContent({
     : null;
 
   const showNotifyToggle =
+    features.notifyCustomerEnabled &&
     !!onNotifyCustomerChange &&
     !!job.customer &&
     !!(job.customer.email || job.customer.phone) &&
@@ -276,7 +280,7 @@ export function JobCardContent({
           <label className="flex items-start gap-2.5 cursor-pointer select-none touch-manipulation">
             <input
               type="checkbox"
-              checked={notifyCustomer}
+              checked={effectiveNotifyCustomer}
               onChange={(e) => onNotifyCustomerChange(e.target.checked)}
               className="mt-0.5 h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500"
               aria-describedby={`job-notify-hint-${job.id}`}

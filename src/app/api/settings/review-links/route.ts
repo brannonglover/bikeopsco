@@ -6,6 +6,7 @@ import {
   resolveGoogleShortUrl,
   extractYelpAlias,
 } from "@/lib/reviews";
+import { getAppFeatures } from "@/lib/app-settings";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +42,10 @@ function serializeSettings(settings: {
 
 export async function GET() {
   try {
+    const features = await getAppFeatures();
+    if (!features.reviewsEnabled) {
+      return NextResponse.json({ error: "Reviews are disabled" }, { status: 404 });
+    }
     const settings = await prisma.reviewSettings.findUnique({
       where: { id: "default" },
     });
@@ -65,6 +70,10 @@ export async function GET() {
 
 export async function PUT(request: NextRequest) {
   try {
+    const features = await getAppFeatures();
+    if (!features.reviewsEnabled) {
+      return NextResponse.json({ error: "Reviews are disabled" }, { status: 404 });
+    }
     const body = await request.json();
     const data = updateSchema.parse(body);
 

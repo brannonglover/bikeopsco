@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCustomerFromSession } from "@/lib/chat-session";
+import { getAppFeatures } from "@/lib/app-settings";
 
 export async function GET() {
+  const features = await getAppFeatures();
+  if (!features.chatEnabled) {
+    return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
+  }
   const customerId = await getCustomerFromSession();
   if (!customerId) {
     return NextResponse.json({ error: "Not signed in" }, { status: 401 });

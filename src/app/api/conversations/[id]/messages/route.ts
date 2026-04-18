@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { sendChatStaffSms } from "@/lib/sms";
 import { sendPushToCustomer, sendPushToAllStaff } from "@/lib/push";
 import { z } from "zod";
+import { getAppFeatures } from "@/lib/app-settings";
 
 const createSchema = z.object({
   sender: z.enum(["STAFF", "CUSTOMER"]),
@@ -15,6 +16,10 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const features = await getAppFeatures();
+    if (!features.chatEnabled) {
+      return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
+    }
     const { id: conversationId } = await params;
 
     const [conversation, messages] = await Promise.all([
@@ -63,6 +68,10 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const features = await getAppFeatures();
+    if (!features.chatEnabled) {
+      return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
+    }
     const { id: conversationId } = await params;
     const body = await request.json();
     const { sender, body: bodyText, attachmentIds } = createSchema.parse(body);

@@ -8,6 +8,8 @@ import {
 import { getGooglePlacesApiKey, getYelpApiKey } from "@/lib/env";
 import { ReviewCarousel } from "./ReviewCarousel";
 import { AutoResize } from "./AutoResize";
+import { getAppFeatures } from "@/lib/app-settings";
+import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -102,6 +104,8 @@ export default async function ReviewWidget({
 }: {
   searchParams: { theme?: string | string[] };
 }) {
+  const features = await getAppFeatures();
+  if (!features.reviewsEnabled) notFound();
   const settings = await prisma.reviewSettings.findUnique({ where: { id: "default" } });
 
   const googleApiKey = getGooglePlacesApiKey();

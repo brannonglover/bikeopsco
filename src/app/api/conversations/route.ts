@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
+import { getAppFeatures } from "@/lib/app-settings";
 
 const createSchema = z.object({
   customerId: z.string().min(1),
@@ -9,6 +10,10 @@ const createSchema = z.object({
 
 export async function GET() {
   try {
+    const features = await getAppFeatures();
+    if (!features.chatEnabled) {
+      return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
+    }
     const conversations = await prisma.conversation.findMany({
       where: { archived: false },
       orderBy: { updatedAt: "desc" },
@@ -35,6 +40,10 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const features = await getAppFeatures();
+    if (!features.chatEnabled) {
+      return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
+    }
     const body = await request.json();
     const { customerId, jobId } = createSchema.parse(body);
 

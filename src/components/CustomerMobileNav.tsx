@@ -16,11 +16,23 @@ export function CustomerMobileNav() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [jobsLoading, setJobsLoading] = useState(false);
+  const [chatEnabled, setChatEnabled] = useState(true);
 
   const isStatusPage = pathname?.startsWith("/status/");
   const isPayPage = pathname?.startsWith("/pay/");
   const isChatPage = pathname?.startsWith("/chat/c");
   const jobId = jobIdFromUrl ?? jobIdFromQuery;
+
+  useEffect(() => {
+    fetch("/api/widget/features", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: unknown) => {
+        if (data && typeof data === "object" && "chatEnabled" in data) {
+          setChatEnabled(Boolean((data as { chatEnabled?: unknown }).chatEnabled));
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Fetch customer's jobs when on chat without jobId
   useEffect(() => {
@@ -94,7 +106,7 @@ export function CustomerMobileNav() {
           </button>
         </div>
         <nav className="p-4 space-y-1">
-          {(isStatusPage || isPayPage) && (
+          {chatEnabled && (isStatusPage || isPayPage) && (
             <Link
               href={chatUrl}
               onClick={() => setMenuOpen(false)}

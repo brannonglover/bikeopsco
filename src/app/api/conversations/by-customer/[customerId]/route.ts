@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { getAppFeatures } from "@/lib/app-settings";
 
 /**
  * Staff: preview of the customer's general chat thread (jobId null) for job detail / links.
@@ -9,6 +10,10 @@ export async function GET(
   { params }: { params: Promise<{ customerId: string }> }
 ) {
   try {
+    const features = await getAppFeatures();
+    if (!features.chatEnabled) {
+      return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
+    }
     const { customerId } = await params;
 
     const conversation = await prisma.conversation.findFirst({

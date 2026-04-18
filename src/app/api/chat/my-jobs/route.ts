@@ -1,12 +1,17 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCustomerFromSession } from "@/lib/chat-session";
+import { getAppFeatures } from "@/lib/app-settings";
 
 /**
  * Returns the customer's jobs when signed in via chat session.
  * Used to link from chat back to job status.
  */
 export async function GET() {
+  const features = await getAppFeatures();
+  if (!features.chatEnabled) {
+    return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
+  }
   const customerId = await getCustomerFromSession();
   if (!customerId) {
     return NextResponse.json({ error: "Not signed in" }, { status: 401 });

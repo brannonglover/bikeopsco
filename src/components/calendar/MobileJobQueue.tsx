@@ -1,6 +1,7 @@
 "use client";
 
 import type { Job } from "@/lib/types";
+import { useAppFeatures } from "@/contexts/AppFeaturesContext";
 import { getJobBikeDisplayTitle } from "@/lib/job-display";
 
 function formatShortDate(d: Date | string | null) {
@@ -38,6 +39,7 @@ export function MobileJobQueue({
   jobNotifyCustomer,
   onJobNotifyCustomerChange,
 }: MobileJobQueueProps) {
+  const features = useAppFeatures();
   if (pendingJobs.length === 0 && bookedInJobs.length === 0) {
     return null;
   }
@@ -120,7 +122,8 @@ export function MobileJobQueue({
                       Reject
                     </button>
                   </div>
-                  {jobNotifyCustomer &&
+                  {features.notifyCustomerEnabled &&
+                    jobNotifyCustomer &&
                     onJobNotifyCustomerChange &&
                     job.customer &&
                     (job.customer.email || job.customer.phone) && (

@@ -5,6 +5,7 @@ import { getToken } from "next-auth/jwt";
 import { sendJobEmail, getTemplateForStage, sendBookingDeclinedEmail } from "@/lib/email";
 import { sendJobSms, getTemplateSlugForStage } from "@/lib/sms";
 import { syncCollectionJobService } from "@/lib/collection-fee";
+import { getAppFeatures } from "@/lib/app-settings";
 
 const bikeSchema = z.object({
   make: z.string().min(1),
@@ -79,9 +80,17 @@ export async function PATCH(
   }
 
   try {
+    const features = await getAppFeatures();
     const { id } = params;
     const body = await request.json();
     const data = updateJobSchema.parse(body);
+
+    if (data.deliveryType === "COLLECTION_SERVICE" && !features.collectionServiceEnabled) {
+      return NextResponse.json(
+        { error: "Collection service is currently disabled." },
+        { status: 400 }
+      );
+    }
 
     if (data.stage === "CANCELLED" && (!data.cancellationReason || data.cancellationReason.trim() === "")) {
       return NextResponse.json(
@@ -341,7 +350,9 @@ export async function PATCH(
           data: { waitingOnPartsAt: null },
         });
       }
-      await syncCollectionJobService(tx, id);
+      if (features.collectionServiceEnabled) {
+        await syncCollectionJobService(tx, id);
+      }
       const result = await tx.job.findUnique({
         where: { id },
         include: {
@@ -360,6 +371,7 @@ export async function PATCH(
       data.stage === "CANCELLED" &&
       existingJob?.stage === "PENDING_APPROVAL" &&
       job.customer?.email &&
+      features.notifyCustomerEnabled &&
       data.notifyCustomer !== false
     ) {
       const reason = (data.cancellationReason ?? job.cancellationReason ?? "").trim();
@@ -373,6 +385,7 @@ export async function PATCH(
 
     // Dedup checks + sends run after the response is built so the board PATCH returns as soon as the DB work finishes.
     if (
+      features.notifyCustomerEnabled &&
       data.notifyCustomer !== false &&
       data.stage &&
       data.stage !== "CANCELLED" &&

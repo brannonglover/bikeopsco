@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { put } from "@vercel/blob";
 import { BLOB_ACCESS, blobDisplayUrl } from "@/lib/blob";
 import { prisma } from "@/lib/db";
+import { getAppFeatures } from "@/lib/app-settings";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +11,10 @@ const MAX_SIZE_MB = 5;
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp", "image/heic", "image/heif"];
 
 export async function POST(request: NextRequest) {
+  const features = await getAppFeatures();
+  if (!features.chatEnabled) {
+    return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
+  }
   if (!process.env.BLOB_READ_WRITE_TOKEN) {
     return NextResponse.json(
       {

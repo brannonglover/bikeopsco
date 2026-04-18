@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { getAppUrl, getResendApiKey } from "@/lib/env";
 import { sendChatMagicLinkEmail } from "@/lib/email";
 import { z } from "zod";
+import { getAppFeatures } from "@/lib/app-settings";
 
 export const runtime = "nodejs";
 
@@ -15,6 +16,10 @@ const schema = z.object({ customerId: z.string().min(1) });
  */
 export async function POST(request: NextRequest) {
   try {
+    const features = await getAppFeatures();
+    if (!features.chatEnabled) {
+      return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
+    }
     const body = await request.json();
     const { customerId } = schema.parse(body);
 

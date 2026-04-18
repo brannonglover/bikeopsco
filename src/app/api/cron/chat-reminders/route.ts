@@ -7,6 +7,7 @@ import {
   sendChatStaffReplyReminder,
 } from "@/lib/email";
 import { getAppUrl } from "@/lib/env";
+import { getAppFeatures } from "@/lib/app-settings";
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
@@ -15,6 +16,11 @@ export async function GET(request: NextRequest) {
     authHeader !== `Bearer ${process.env.CRON_SECRET}`
   ) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const features = await getAppFeatures();
+  if (!features.chatEnabled) {
+    return NextResponse.json({ ok: true, skipped: "chat_disabled" });
   }
 
   const reminderMs = getChatReminderMs();

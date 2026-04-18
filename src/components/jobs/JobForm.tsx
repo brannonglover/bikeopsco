@@ -7,6 +7,7 @@ import { z } from "zod";
 import { useRouter } from "next/navigation";
 import type { Job } from "@/lib/types";
 import { Price } from "@/components/ui/Price";
+import { useAppFeatures } from "@/contexts/AppFeaturesContext";
 
 interface JobFormProps {
   onSuccess?: (job: Job) => void;
@@ -86,6 +87,7 @@ interface Service {
 }
 
 export function JobForm({ onSuccess, embedded }: JobFormProps) {
+  const features = useAppFeatures();
   const router = useRouter();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [services, setServices] = useState<Service[]>([]);
@@ -106,6 +108,7 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
     watch,
     control,
     getValues,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -128,6 +131,15 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
   });
 
   const deliveryType = watch("deliveryType");
+
+  useEffect(() => {
+    if (features.collectionServiceEnabled) return;
+    if (deliveryType !== "COLLECTION_SERVICE") return;
+    setValue("deliveryType", "DROP_OFF_AT_SHOP");
+    setValue("collectionAddress", "");
+    setValue("collectionWindowStart", "");
+    setValue("collectionWindowEnd", "");
+  }, [features.collectionServiceEnabled, deliveryType, setValue]);
   const customerId = watch("customerId");
   const selectedCustomer = customers.find((c) => c.id === customerId);
   const customerDisplayName = (c: Customer) =>
@@ -616,11 +628,13 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
             className="w-full min-w-0 px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20"
           >
             <option value="DROP_OFF_AT_SHOP">Drop-off at shop</option>
-            <option value="COLLECTION_SERVICE">Collection service</option>
+            {features.collectionServiceEnabled && (
+              <option value="COLLECTION_SERVICE">Collection service</option>
+            )}
           </select>
         </div>
 
-        {deliveryType === "COLLECTION_SERVICE" && (
+        {features.collectionServiceEnabled && deliveryType === "COLLECTION_SERVICE" && (
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">
               Collection Address (if different from customer)

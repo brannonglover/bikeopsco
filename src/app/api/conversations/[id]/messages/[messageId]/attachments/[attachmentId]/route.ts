@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { getAppFeatures } from "@/lib/app-settings";
 
 export async function DELETE(
   _request: NextRequest,
@@ -10,6 +11,10 @@ export async function DELETE(
   }
 ) {
   try {
+    const features = await getAppFeatures();
+    if (!features.chatEnabled) {
+      return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
+    }
     const { id: conversationId, messageId, attachmentId } = await params;
 
     const message = await prisma.message.findFirst({

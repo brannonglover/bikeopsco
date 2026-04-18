@@ -6,6 +6,7 @@ import { useEffect, useState, useRef } from "react";
 import type { Job, JobBike, JobProduct, JobService, Stage } from "@/lib/types";
 import { Price } from "@/components/ui/Price";
 import { BikePlaceholderIcon } from "@/components/ui/BikePlaceholderIcon";
+import { useAppFeatures } from "@/contexts/AppFeaturesContext";
 import { resolveEffectiveBikeType } from "@/lib/bike-type";
 import {
   formatBikeTypeDisplayLineForJob,
@@ -38,10 +39,16 @@ type CustomerChatPreviewPayload = {
 };
 
 function CustomerChatSection({ customerId }: { customerId: string }) {
+  const features = useAppFeatures();
   const [status, setStatus] = useState<"loading" | "error" | "ready">("loading");
   const [conversation, setConversation] = useState<CustomerChatPreviewPayload | null>(null);
 
   useEffect(() => {
+    if (!features.chatEnabled) {
+      setStatus("ready");
+      setConversation(null);
+      return;
+    }
     let cancelled = false;
     setStatus("loading");
     fetch(`/api/conversations/by-customer/${encodeURIComponent(customerId)}`)
@@ -57,7 +64,9 @@ function CustomerChatSection({ customerId }: { customerId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [customerId]);
+  }, [customerId, features.chatEnabled]);
+
+  if (!features.chatEnabled) return null;
 
   const chatHref = `/chat?customer=${encodeURIComponent(customerId)}`;
 

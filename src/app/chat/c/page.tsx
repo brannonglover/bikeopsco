@@ -9,7 +9,7 @@ import { ChatMessageBubble } from "@/components/chat/ChatMessageBubble";
 const POLL_INTERVAL_MS = 3000;
 
 export default function CustomerChatPage() {
-  const [status, setStatus] = useState<"loading" | "login" | "chat">("loading");
+  const [status, setStatus] = useState<"loading" | "login" | "chat" | "disabled">("loading");
   const [loginEmail, setLoginEmail] = useState("");
   const [loginSending, setLoginSending] = useState(false);
   const [loginMessage, setLoginMessage] = useState<string | null>(null);
@@ -71,6 +71,19 @@ export default function CustomerChatPage() {
     let cancelled = false;
 
     async function init() {
+      try {
+        const res = await fetch("/api/widget/features", { cache: "no-store" });
+        if (res.ok) {
+          const data = (await res.json()) as { chatEnabled?: unknown };
+          if (data && data.chatEnabled === false) {
+            if (!cancelled) setStatus("disabled");
+            return;
+          }
+        }
+      } catch {
+        // ignore
+      }
+
       const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
       const error = params.get("error");
       if (error === "expired") {
@@ -376,6 +389,17 @@ export default function CustomerChatPage() {
       setSending(false);
     }
   };
+
+  if (status === "disabled") {
+    return (
+      <div className="w-full max-w-md mx-auto rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h1 className="text-lg font-bold text-slate-900">Chat unavailable</h1>
+        <p className="mt-2 text-sm text-slate-600">
+          Chat is currently disabled for this shop. Please contact us by phone or email instead.
+        </p>
+      </div>
+    );
+  }
 
   if (status === "loading") {
     return (

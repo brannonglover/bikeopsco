@@ -286,6 +286,19 @@ async function main() {
     },
   });
   console.log("Seeded collection pickup services");
+
+  await prisma.appSettings.upsert({
+    where: { id: "default" },
+    create: {
+      id: "default",
+      collectionServiceEnabled: true,
+      notifyCustomerEnabled: true,
+      chatEnabled: true,
+      reviewsEnabled: true,
+    },
+    update: {},
+  });
+  console.log("Seeded app settings");
 }
 
 main()

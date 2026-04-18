@@ -22,6 +22,7 @@ import { JobDetailModal } from "@/components/jobs/JobDetailModal";
 import { useJobNotifications } from "@/hooks/useJobNotifications";
 import { useIsMobileBoard } from "@/hooks/useIsMobileBoard";
 import type { Job, Stage } from "@/lib/types";
+import { useAppFeatures } from "@/contexts/AppFeaturesContext";
 
 const STAGES: Stage[] = [
   "PENDING_APPROVAL",
@@ -91,6 +92,7 @@ function cloneJobForRevert(job: Job): Job {
 export function KanbanBoard() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const features = useAppFeatures();
   const paidJobId = searchParams.get("paid");
   const openJobId = searchParams.get("openJob");
   const [showPaidBanner, setShowPaidBanner] = useState(!!paidJobId);
@@ -109,12 +111,13 @@ export function KanbanBoard() {
   const isMobileBoard = useIsMobileBoard();
 
   const jobNotifyCustomer = useCallback(
-    (jobId: string) => !jobsSkippingCustomerNotify.has(jobId),
-    [jobsSkippingCustomerNotify]
+    (jobId: string) => (features.notifyCustomerEnabled ? !jobsSkippingCustomerNotify.has(jobId) : false),
+    [features.notifyCustomerEnabled, jobsSkippingCustomerNotify]
   );
 
   const onJobNotifyCustomerChange = useCallback(
     (jobId: string, notify: boolean) => {
+      if (!features.notifyCustomerEnabled) return;
       setJobsSkippingCustomerNotify((prev) => {
         const next = new Set(prev);
         if (notify) next.delete(jobId);
@@ -122,7 +125,7 @@ export function KanbanBoard() {
         return next;
       });
     },
-    []
+    [features.notifyCustomerEnabled]
   );
 
   const fetchJobs = useCallback((opts?: { silent?: boolean }) => {
@@ -147,7 +150,7 @@ export function KanbanBoard() {
     async (jobId: string) => {
       try {
         const body: Record<string, unknown> = { stage: "BOOKED_IN" };
-        if (jobsSkippingCustomerNotify.has(jobId)) {
+        if (!features.notifyCustomerEnabled || jobsSkippingCustomerNotify.has(jobId)) {
           body.notifyCustomer = false;
         }
         const res = await fetch(`/api/jobs/${jobId}`, {
@@ -168,7 +171,7 @@ export function KanbanBoard() {
         console.error("Failed to accept job", e);
       }
     },
-    [jobsSkippingCustomerNotify, selectedJob?.id]
+    [features.notifyCustomerEnabled, jobsSkippingCustomerNotify, selectedJob?.id]
   );
 
   const handleRejectClick = useCallback((job: Job) => {
@@ -182,7 +185,7 @@ export function KanbanBoard() {
           stage: "CANCELLED",
           cancellationReason: reason.trim(),
         };
-        if (jobsSkippingCustomerNotify.has(jobId)) {
+        if (!features.notifyCustomerEnabled || jobsSkippingCustomerNotify.has(jobId)) {
           body.notifyCustomer = false;
         }
         const res = await fetch(`/api/jobs/${jobId}`, {
@@ -201,7 +204,7 @@ export function KanbanBoard() {
         console.error("Failed to reject job", e);
       }
     },
-    [jobsSkippingCustomerNotify, selectedJob?.id]
+    [features.notifyCustomerEnabled, jobsSkippingCustomerNotify, selectedJob?.id]
   );
 
   const handleArchiveCompleted = useCallback(async () => {
@@ -293,7 +296,7 @@ export function KanbanBoard() {
 
       try {
         const body: Record<string, unknown> = { stage: newStage };
-        if (jobsSkippingCustomerNotify.has(jobId)) {
+        if (!features.notifyCustomerEnabled || jobsSkippingCustomerNotify.has(jobId)) {
           body.notifyCustomer = false;
         }
         const res = await fetch(`/api/jobs/${jobId}`, {
@@ -313,7 +316,7 @@ export function KanbanBoard() {
         revert();
       }
     },
-    [jobsSkippingCustomerNotify]
+    [features.notifyCustomerEnabled, jobsSkippingCustomerNotify]
   );
 
   const handleDragEnd = (event: DragEndEvent) => {

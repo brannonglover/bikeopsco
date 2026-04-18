@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { createSession, getSessionCookieName } from "@/lib/chat-session";
 import { z } from "zod";
+import { getAppFeatures } from "@/lib/app-settings";
 
 const postBodySchema = z.object({ token: z.string().min(1) });
 
@@ -43,6 +44,10 @@ async function consumeMagicLink(token: string): Promise<ConsumeResult> {
  * Kept so old emails still work.
  */
 export async function GET(request: NextRequest) {
+  const features = await getAppFeatures();
+  if (!features.chatEnabled) {
+    return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
+  }
   const { searchParams } = new URL(request.url);
   const token = searchParams.get("token");
 
@@ -66,6 +71,10 @@ export async function GET(request: NextRequest) {
  * to the server, so the token isn't consumed until the user opens the page and JS runs.
  */
 export async function POST(request: NextRequest) {
+  const features = await getAppFeatures();
+  if (!features.chatEnabled) {
+    return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
+  }
   try {
     const body = await request.json();
     const { token } = postBodySchema.parse(body);

@@ -6,6 +6,7 @@ import { getToken } from "next-auth/jwt";
 import { sendJobEmail, getTemplateForStage } from "@/lib/email";
 import { syncCollectionJobService } from "@/lib/collection-fee";
 import { sendPushToAllStaff } from "@/lib/push";
+import { getAppFeatures } from "@/lib/app-settings";
 
 const bikeSchema = z.object({
   make: z.string().min(1),
@@ -122,6 +123,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const features = await getAppFeatures();
     let body: unknown;
     try {
       body = await request.json();
@@ -132,6 +134,12 @@ export async function POST(request: NextRequest) {
       );
     }
     const data = createJobSchema.parse(body);
+    if (data.deliveryType === "COLLECTION_SERVICE" && !features.collectionServiceEnabled) {
+      return NextResponse.json(
+        { error: "Collection service is currently disabled." },
+        { status: 400 }
+      );
+    }
     const bikes = data.bikes && data.bikes.length > 0 ? data.bikes : [{ make: data.bikeMake, model: data.bikeModel }];
 
     const job = await prisma.$transaction(async (tx) => {
@@ -212,7 +220,9 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      await syncCollectionJobService(tx, newJob.id);
+      if (features.collectionServiceEnabled) {
+        await syncCollectionJobService(tx, newJob.id);
+      }
 
       return tx.job.findUnique({
         where: { id: newJob.id },

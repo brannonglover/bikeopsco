@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
+import { getAppFeatures } from "@/lib/app-settings";
 
 const patchSchema = z.object({
   archived: z.boolean(),
@@ -11,6 +12,10 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const features = await getAppFeatures();
+    if (!features.chatEnabled) {
+      return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
+    }
     const { id } = await params;
     const body = await request.json();
     const { archived } = patchSchema.parse(body);

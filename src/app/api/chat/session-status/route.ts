@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { unstable_noStore as noStore } from "next/cache";
 import { prisma } from "@/lib/db";
+import { getAppFeatures } from "@/lib/app-settings";
 
 /** Query params + DB — must run per request, not at build/static time. */
 export const dynamic = "force-dynamic";
@@ -11,6 +12,10 @@ export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   noStore();
   try {
+    const features = await getAppFeatures();
+    if (!features.chatEnabled) {
+      return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
+    }
     const customerId = request.nextUrl.searchParams.get("customerId");
     if (!customerId) {
       return NextResponse.json({ error: "customerId required" }, { status: 400 });
