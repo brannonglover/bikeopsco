@@ -252,17 +252,17 @@ async function main() {
   await prisma.service.upsert({
     where: { slug: COLLECTION_SERVICE_SLUGS.regular },
     create: {
-      name: "Pickup/dropoff (within 5 mi) – standard bike",
+      name: "Pickup/dropoff – standard bike",
       description:
-        "Pickup and return within 5 miles of the shop. Added automatically for collection jobs.",
+        "Pickup and return within the configured collection radius. Added automatically for collection jobs.",
       price: 20,
       slug: COLLECTION_SERVICE_SLUGS.regular,
       isSystem: true,
     },
     update: {
-      name: "Pickup/dropoff (within 5 mi) – standard bike",
+      name: "Pickup/dropoff – standard bike",
       description:
-        "Pickup and return within 5 miles of the shop. Added automatically for collection jobs.",
+        "Pickup and return within the configured collection radius. Added automatically for collection jobs.",
       price: 20,
       isSystem: true,
     },
@@ -270,17 +270,17 @@ async function main() {
   await prisma.service.upsert({
     where: { slug: COLLECTION_SERVICE_SLUGS.ebike },
     create: {
-      name: "Pickup/dropoff (within 5 mi) – e-bike",
+      name: "Pickup/dropoff – e-bike",
       description:
-        "Pickup and return within 5 miles for e-bikes. Added automatically for collection jobs.",
+        "Pickup and return within the configured collection radius (e-bike). Added automatically for collection jobs.",
       price: 30,
       slug: COLLECTION_SERVICE_SLUGS.ebike,
       isSystem: true,
     },
     update: {
-      name: "Pickup/dropoff (within 5 mi) – e-bike",
+      name: "Pickup/dropoff – e-bike",
       description:
-        "Pickup and return within 5 miles for e-bikes. Added automatically for collection jobs.",
+        "Pickup and return within the configured collection radius (e-bike). Added automatically for collection jobs.",
       price: 30,
       isSystem: true,
     },
@@ -292,6 +292,9 @@ async function main() {
     create: {
       id: "default",
       collectionServiceEnabled: true,
+      collectionRadiusMiles: 5,
+      collectionFeeRegular: 20,
+      collectionFeeEbike: 30,
       notifyCustomerEnabled: true,
       chatEnabled: true,
       reviewsEnabled: true,

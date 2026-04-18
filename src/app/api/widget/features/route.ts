@@ -30,6 +30,9 @@ export async function GET(request: NextRequest) {
     const features = await getAppFeatures();
     const res = NextResponse.json({
       collectionServiceEnabled: features.collectionServiceEnabled,
+      collectionRadiusMiles: features.collectionRadiusMiles,
+      collectionFeeRegular: features.collectionFeeRegular,
+      collectionFeeEbike: features.collectionFeeEbike,
       chatEnabled: features.chatEnabled,
       reviewsEnabled: features.reviewsEnabled,
     });
@@ -43,4 +46,3 @@ export async function GET(request: NextRequest) {
     return addCorsHeaders(res, origin);
   }
 }
-

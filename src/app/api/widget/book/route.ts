@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
         return addCorsHeaders(res, origin);
       }
       const addr = (data.collectionAddress ?? "").trim();
-      const eligibility = await checkCollectionEligibility(addr);
+      const eligibility = await checkCollectionEligibility(addr, features.collectionRadiusMiles);
       if (eligibility.ok && eligibility.enabled && !eligibility.eligible) {
         const res = NextResponse.json(
           { error: `Collection is only available within ${eligibility.radiusMiles} miles of the shop.` },

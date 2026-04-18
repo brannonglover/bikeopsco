@@ -6,6 +6,9 @@ import { broadcastAppFeaturesUpdated } from "@/contexts/AppFeaturesContext";
 
 type AppFeatures = {
   collectionServiceEnabled: boolean;
+  collectionRadiusMiles: number;
+  collectionFeeRegular: number;
+  collectionFeeEbike: number;
   notifyCustomerEnabled: boolean;
   chatEnabled: boolean;
   reviewsEnabled: boolean;
@@ -13,6 +16,9 @@ type AppFeatures = {
 
 const DEFAULT_FEATURES: AppFeatures = {
   collectionServiceEnabled: true,
+  collectionRadiusMiles: 5,
+  collectionFeeRegular: 20,
+  collectionFeeEbike: 30,
   notifyCustomerEnabled: true,
   chatEnabled: true,
   reviewsEnabled: true,
@@ -103,6 +109,10 @@ export default function SettingsPage() {
   const [featuresSaving, setFeaturesSaving] = useState(false);
   const [featuresError, setFeaturesError] = useState<string | null>(null);
   const [featuresSaved, setFeaturesSaved] = useState(false);
+  const [collectionRadiusInput, setCollectionRadiusInput] = useState(String(DEFAULT_FEATURES.collectionRadiusMiles));
+  const [collectionFeeRegularInput, setCollectionFeeRegularInput] = useState(String(DEFAULT_FEATURES.collectionFeeRegular));
+  const [collectionFeeEbikeInput, setCollectionFeeEbikeInput] = useState(String(DEFAULT_FEATURES.collectionFeeEbike));
+  const [collectionDirty, setCollectionDirty] = useState(false);
 
   const fetchFeatures = useCallback(async () => {
     setFeaturesError(null);
@@ -111,7 +121,12 @@ export default function SettingsPage() {
       const res = await fetch("/api/settings/app-features", { cache: "no-store" });
       if (!res.ok) throw new Error("Failed");
       const data = (await res.json()) as Partial<AppFeatures>;
-      setFeatures({ ...DEFAULT_FEATURES, ...data });
+      const next = { ...DEFAULT_FEATURES, ...data };
+      setFeatures(next);
+      setCollectionRadiusInput(String(next.collectionRadiusMiles));
+      setCollectionFeeRegularInput(String(next.collectionFeeRegular));
+      setCollectionFeeEbikeInput(String(next.collectionFeeEbike));
+      setCollectionDirty(false);
     } catch {
       setFeaturesError("Failed to load settings.");
     } finally {
@@ -141,6 +156,10 @@ export default function SettingsPage() {
       const updated = { ...DEFAULT_FEATURES, ...(data as AppFeatures) };
       setFeatures(updated);
       broadcastAppFeaturesUpdated(updated);
+      setCollectionRadiusInput(String(updated.collectionRadiusMiles));
+      setCollectionFeeRegularInput(String(updated.collectionFeeRegular));
+      setCollectionFeeEbikeInput(String(updated.collectionFeeEbike));
+      setCollectionDirty(false);
       setFeaturesSaved(true);
       window.setTimeout(() => setFeaturesSaved(false), 1500);
     } catch {
@@ -153,6 +172,34 @@ export default function SettingsPage() {
   const setFeatureFlag = (key: keyof AppFeatures, value: boolean) => {
     const next = { ...features, [key]: value };
     setFeatures(next);
+    void saveFeatures(next);
+  };
+
+  const saveCollectionSettings = () => {
+    const radius = Number(collectionRadiusInput);
+    const feeRegular = Number(collectionFeeRegularInput);
+    const feeEbike = Number(collectionFeeEbikeInput);
+    if (!Number.isFinite(radius) || radius < 0.1 || radius > 100) {
+      setFeaturesError("Collection radius must be between 0.1 and 100 miles.");
+      return;
+    }
+    if (!Number.isFinite(feeRegular) || feeRegular < 0 || feeRegular > 10000) {
+      setFeaturesError("Collection fee (standard) must be between $0 and $10,000.");
+      return;
+    }
+    if (!Number.isFinite(feeEbike) || feeEbike < 0 || feeEbike > 10000) {
+      setFeaturesError("Collection fee (e-bike) must be between $0 and $10,000.");
+      return;
+    }
+
+    const next: AppFeatures = {
+      ...features,
+      collectionRadiusMiles: radius,
+      collectionFeeRegular: feeRegular,
+      collectionFeeEbike: feeEbike,
+    };
+    setFeatures(next);
+    setCollectionDirty(false);
     void saveFeatures(next);
   };
 
@@ -230,6 +277,78 @@ export default function SettingsPage() {
               disabled={featuresSaving}
               onChange={(v) => setFeatureFlag("collectionServiceEnabled", v)}
             />
+            <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-700">Collection radius (miles)</label>
+                  <input
+                    type="number"
+                    min={0.1}
+                    max={100}
+                    step={0.1}
+                    value={collectionRadiusInput}
+                    disabled={featuresSaving}
+                    onChange={(e) => {
+                      setCollectionRadiusInput(e.target.value);
+                      setCollectionDirty(true);
+                      const n = Number(e.target.value);
+                      if (Number.isFinite(n)) setFeatures((p) => ({ ...p, collectionRadiusMiles: n }));
+                    }}
+                    className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700">Collection fee (standard, $)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={10000}
+                    step={0.01}
+                    value={collectionFeeRegularInput}
+                    disabled={featuresSaving}
+                    onChange={(e) => {
+                      setCollectionFeeRegularInput(e.target.value);
+                      setCollectionDirty(true);
+                      const n = Number(e.target.value);
+                      if (Number.isFinite(n)) setFeatures((p) => ({ ...p, collectionFeeRegular: n }));
+                    }}
+                    className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700">Collection fee (e-bike, $)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={10000}
+                    step={0.01}
+                    value={collectionFeeEbikeInput}
+                    disabled={featuresSaving}
+                    onChange={(e) => {
+                      setCollectionFeeEbikeInput(e.target.value);
+                      setCollectionDirty(true);
+                      const n = Number(e.target.value);
+                      if (Number.isFinite(n)) setFeatures((p) => ({ ...p, collectionFeeEbike: n }));
+                    }}
+                    className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+                  />
+                </div>
+              </div>
+              <div className="mt-3 flex items-center justify-end">
+                <button
+                  type="button"
+                  onClick={saveCollectionSettings}
+                  disabled={featuresSaving || !collectionDirty}
+                  className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+                    featuresSaving || !collectionDirty
+                      ? "bg-slate-200 text-slate-500 cursor-not-allowed"
+                      : "bg-amber-600 text-white hover:bg-amber-700"
+                  }`}
+                >
+                  Save collection settings
+                </button>
+              </div>
+            </div>
             <ToggleRow
               title="Notify customer toggle"
               description="Show the 'Notify customer' checkbox on the job board and allow email/SMS sends."

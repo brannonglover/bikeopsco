@@ -50,12 +50,20 @@ export async function syncCollectionJobService(
   const needsEbike = job.jobBikes.some((jb) => resolveEffectiveBikeType(jb) === "E_BIKE");
   const chosen = needsEbike ? ebike : regular;
 
+  const settings = await tx.appSettings.findUnique({ where: { id: "default" } }).catch(() => null);
+  const fee =
+    settings && needsEbike
+      ? Number(settings.collectionFeeEbike)
+      : settings
+        ? Number(settings.collectionFeeRegular)
+        : chosen.price;
+
   await tx.jobService.create({
     data: {
       jobId,
       serviceId: chosen.id,
       quantity: 1,
-      unitPrice: chosen.price,
+      unitPrice: fee,
     },
   });
 }

@@ -370,6 +370,12 @@ model ReviewSettings {
 model AppSettings {
   id                       String   @id @default("default")
   collectionServiceEnabled Boolean  @default(true)
+  /// Collection eligibility radius, in miles
+  collectionRadiusMiles    Float    @default(5)
+  /// Collection fee (standard bike), USD
+  collectionFeeRegular     Decimal  @db.Decimal(10, 2) @default(20)
+  /// Collection fee (e-bike), USD
+  collectionFeeEbike       Decimal  @db.Decimal(10, 2) @default(30)
   notifyCustomerEnabled    Boolean  @default(true)
   chatEnabled              Boolean  @default(true)
   reviewsEnabled           Boolean  @default(true)

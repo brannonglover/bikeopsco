@@ -26,6 +26,13 @@ export function getCollectionRadiusMiles(): number {
   return Math.max(0.1, Math.min(100, raw));
 }
 
+function normalizeRadiusMiles(raw: number | null | undefined): number {
+  if (raw == null) return getCollectionRadiusMiles();
+  const val = Number(raw);
+  if (!Number.isFinite(val)) return getCollectionRadiusMiles();
+  return Math.max(0.1, Math.min(100, val));
+}
+
 function haversineMiles(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
   const toRad = (deg: number) => (deg * Math.PI) / 180;
   const R = 3958.7613; // Earth radius in miles
@@ -81,7 +88,10 @@ async function geocodeAddress(address: string, apiKey: string): Promise<{
  * - `SHOP_LAT` and `SHOP_LNG` are set
  * - `GOOGLE_PLACES_API_KEY` is set (used for geocoding)
  */
-export async function checkCollectionEligibility(addressRaw: string): Promise<CollectionEligibility> {
+export async function checkCollectionEligibility(
+  addressRaw: string,
+  radiusMilesOverride?: number
+): Promise<CollectionEligibility> {
   const origin = getShopOrigin();
   const apiKey = getGooglePlacesApiKey();
   if (!origin || !apiKey) return { ok: true, enabled: false };
@@ -97,7 +107,7 @@ export async function checkCollectionEligibility(addressRaw: string): Promise<Co
   }
 
   const distanceMiles = haversineMiles(origin, geo.location);
-  const radiusMiles = getCollectionRadiusMiles();
+  const radiusMiles = normalizeRadiusMiles(radiusMilesOverride);
   const eligible = distanceMiles <= radiusMiles;
   return { ok: true, enabled: true, radiusMiles, distanceMiles, eligible, formattedAddress: geo.formattedAddress };
 }

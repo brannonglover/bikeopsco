@@ -33,12 +33,20 @@ function getDefaultDropOffDateTime(): string {
   return `${year}-${month}-${day}T09:00`;
 }
 
+function formatUsd(amount: number): string {
+  if (!Number.isFinite(amount)) return "$0.00";
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount);
+}
+
 function BookForm() {
   const searchParams = useSearchParams();
   const embed = searchParams?.get("embed") === "1";
 
   const [services, setServices] = useState<Service[]>([]);
   const [collectionServiceEnabled, setCollectionServiceEnabled] = useState(true);
+  const [collectionRadiusMiles, setCollectionRadiusMiles] = useState(5);
+  const [collectionFeeRegular, setCollectionFeeRegular] = useState(20);
+  const [collectionFeeEbike, setCollectionFeeEbike] = useState(30);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState<{ id: string; statusUrl: string } | null>(null);
@@ -82,8 +90,20 @@ function BookForm() {
     fetch(`${BASE}/api/widget/features`)
       .then((res) => res.json())
       .then((data: unknown) => {
-        if (typeof data === "object" && data !== null && "collectionServiceEnabled" in data) {
-          setCollectionServiceEnabled(Boolean((data as { collectionServiceEnabled?: unknown }).collectionServiceEnabled));
+        if (typeof data === "object" && data !== null) {
+          const obj = data as Record<string, unknown>;
+          if ("collectionServiceEnabled" in obj) {
+            setCollectionServiceEnabled(Boolean(obj.collectionServiceEnabled));
+          }
+          if (typeof obj.collectionRadiusMiles === "number" && Number.isFinite(obj.collectionRadiusMiles)) {
+            setCollectionRadiusMiles(obj.collectionRadiusMiles);
+          }
+          if (typeof obj.collectionFeeRegular === "number" && Number.isFinite(obj.collectionFeeRegular)) {
+            setCollectionFeeRegular(obj.collectionFeeRegular);
+          }
+          if (typeof obj.collectionFeeEbike === "number" && Number.isFinite(obj.collectionFeeEbike)) {
+            setCollectionFeeEbike(obj.collectionFeeEbike);
+          }
         }
       })
       .catch(() => {});
@@ -402,9 +422,12 @@ function BookForm() {
           >
             + Add another bike
           </button>
-          <p className="text-xs text-slate-500">
-            For collection service, we charge $20 pickup/dropoff within 5 mi for a standard bike and $30 for an e-bike. Auto uses your make/model to guess.
-          </p>
+          {collectionServiceEnabled && (
+            <p className="text-xs text-slate-500">
+              For collection service, we charge {formatUsd(collectionFeeRegular)} pickup/dropoff within {collectionRadiusMiles} mi for a standard bike and{" "}
+              {formatUsd(collectionFeeEbike)} for an e-bike. Auto uses your make/model to guess.
+            </p>
+          )}
         </div>
 
         {services.length > 0 && (
@@ -491,7 +514,7 @@ function BookForm() {
               <p className="mt-2 text-xs text-amber-700">{collectionEligibility.error}</p>
             )}
             <p className="mt-2 text-xs text-slate-500">
-              Pickup/dropoff within 5 miles of the shop; fee is added automatically when your booking is accepted.
+              Pickup/dropoff within {collectionRadiusMiles} miles of the shop; fee is added automatically when your booking is accepted.
             </p>
             <div className="mt-3">
               <label className="mb-1 block text-sm font-medium text-slate-700">

@@ -4,6 +4,9 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
 export type AppFeatures = {
   collectionServiceEnabled: boolean;
+  collectionRadiusMiles: number;
+  collectionFeeRegular: number;
+  collectionFeeEbike: number;
   notifyCustomerEnabled: boolean;
   chatEnabled: boolean;
   reviewsEnabled: boolean;
@@ -13,6 +16,9 @@ const APP_FEATURES_UPDATED_EVENT = "bikeops:app-features-updated";
 
 const DEFAULTS: AppFeatures = {
   collectionServiceEnabled: true,
+  collectionRadiusMiles: 5,
+  collectionFeeRegular: 20,
+  collectionFeeEbike: 30,
   notifyCustomerEnabled: true,
   chatEnabled: true,
   reviewsEnabled: true,

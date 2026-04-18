@@ -2,6 +2,9 @@ import { prisma } from "@/lib/db";
 
 export type AppFeatures = {
   collectionServiceEnabled: boolean;
+  collectionRadiusMiles: number;
+  collectionFeeRegular: number;
+  collectionFeeEbike: number;
   notifyCustomerEnabled: boolean;
   chatEnabled: boolean;
   reviewsEnabled: boolean;
@@ -9,6 +12,9 @@ export type AppFeatures = {
 
 const DEFAULT_FEATURES: AppFeatures = {
   collectionServiceEnabled: true,
+  collectionRadiusMiles: 5,
+  collectionFeeRegular: 20,
+  collectionFeeEbike: 30,
   notifyCustomerEnabled: true,
   chatEnabled: true,
   reviewsEnabled: true,
@@ -20,6 +26,9 @@ export async function getAppFeatures(): Promise<AppFeatures> {
     if (!row) return DEFAULT_FEATURES;
     return {
       collectionServiceEnabled: row.collectionServiceEnabled,
+      collectionRadiusMiles: row.collectionRadiusMiles,
+      collectionFeeRegular: Number(row.collectionFeeRegular),
+      collectionFeeEbike: Number(row.collectionFeeEbike),
       notifyCustomerEnabled: row.notifyCustomerEnabled,
       chatEnabled: row.chatEnabled,
       reviewsEnabled: row.reviewsEnabled,
@@ -43,6 +52,9 @@ export async function upsertAppFeatures(next: Partial<AppFeatures>): Promise<App
   });
   return {
     collectionServiceEnabled: updated.collectionServiceEnabled,
+    collectionRadiusMiles: updated.collectionRadiusMiles,
+    collectionFeeRegular: Number(updated.collectionFeeRegular),
+    collectionFeeEbike: Number(updated.collectionFeeEbike),
     notifyCustomerEnabled: updated.notifyCustomerEnabled,
     chatEnabled: updated.chatEnabled,
     reviewsEnabled: updated.reviewsEnabled,

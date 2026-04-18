@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
     }
     const { searchParams } = new URL(request.url);
     const address = searchParams.get("address") || "";
-    const result = await checkCollectionEligibility(address);
+    const result = await checkCollectionEligibility(address, features.collectionRadiusMiles);
 
     const res = NextResponse.json(result);
     return addCorsHeaders(res, origin);

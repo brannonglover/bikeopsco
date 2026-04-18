@@ -7,6 +7,9 @@ export const dynamic = "force-dynamic";
 
 const updateSchema = z.object({
   collectionServiceEnabled: z.boolean().optional(),
+  collectionRadiusMiles: z.number().min(0.1).max(100).optional(),
+  collectionFeeRegular: z.number().min(0).max(10000).optional(),
+  collectionFeeEbike: z.number().min(0).max(10000).optional(),
   notifyCustomerEnabled: z.boolean().optional(),
   chatEnabled: z.boolean().optional(),
   reviewsEnabled: z.boolean().optional(),
@@ -34,4 +37,3 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: "Failed to update settings" }, { status: 500 });
   }
 }
-
