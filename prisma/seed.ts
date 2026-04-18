@@ -263,7 +263,6 @@ async function main() {
       name: "Pickup/dropoff – standard bike",
       description:
         "Pickup and return within the configured collection radius. Added automatically for collection jobs.",
-      price: 20,
       isSystem: true,
     },
   });
@@ -281,11 +280,21 @@ async function main() {
       name: "Pickup/dropoff – e-bike",
       description:
         "Pickup and return within the configured collection radius (e-bike). Added automatically for collection jobs.",
-      price: 30,
       isSystem: true,
     },
   });
   console.log("Seeded collection pickup services");
+
+  const [regularFee, ebikeFee] = await Promise.all([
+    prisma.service
+      .findUnique({ where: { slug: COLLECTION_SERVICE_SLUGS.regular } })
+      .then((s) => Number(s?.price ?? 20))
+      .catch(() => 20),
+    prisma.service
+      .findUnique({ where: { slug: COLLECTION_SERVICE_SLUGS.ebike } })
+      .then((s) => Number(s?.price ?? 30))
+      .catch(() => 30),
+  ]);
 
   await prisma.appSettings.upsert({
     where: { id: "default" },
@@ -293,8 +302,8 @@ async function main() {
       id: "default",
       collectionServiceEnabled: true,
       collectionRadiusMiles: 5,
-      collectionFeeRegular: 20,
-      collectionFeeEbike: 30,
+      collectionFeeRegular: regularFee,
+      collectionFeeEbike: ebikeFee,
       notifyCustomerEnabled: true,
       chatEnabled: true,
       reviewsEnabled: true,
