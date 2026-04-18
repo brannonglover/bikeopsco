@@ -15,7 +15,6 @@ const NAV_LINKS = [
   { href: "/settings/products", label: "Products" },
   { href: "/settings/email-templates", label: "Email Templates" },
   { href: "/settings/reviews", label: "Reviews" },
-  { href: "/settings/features", label: "Features" },
 ] as const;
 
 interface SidebarNavProps {
