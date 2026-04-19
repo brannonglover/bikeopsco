@@ -8,6 +8,8 @@ export interface ReviewEntry {
   rating: number;
   text: string;
   relativeTime: string;
+  /** ISO timestamp if available (used for sorting "latest") */
+  createdAt?: string | null;
   platform: "google" | "yelp";
 }
 
@@ -93,12 +95,14 @@ export async function fetchGooglePlaceData(
         text?: { text?: string };
         authorAttribution?: { displayName?: string };
         relativePublishTimeDescription?: string;
+        publishTime?: string;
       }) => ({
         platform: "google" as const,
         author: r.authorAttribution?.displayName ?? "Anonymous",
         rating: r.rating ?? 5,
         text: r.text?.text ?? "",
         relativeTime: r.relativePublishTimeDescription ?? "",
+        createdAt: typeof r.publishTime === "string" ? r.publishTime : null,
       })
     );
     return {
@@ -167,6 +171,7 @@ export async function fetchYelpBusinessData(
                 year: "numeric",
               })
             : "",
+          createdAt: r.time_created ?? null,
         })
       );
     }

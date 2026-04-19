@@ -4,6 +4,7 @@ import {
   fetchGooglePlaceData,
   fetchYelpBusinessData,
   extractYelpAlias,
+  type ReviewEntry,
 } from "@/lib/reviews";
 import { getGooglePlacesApiKey, getYelpApiKey } from "@/lib/env";
 import { getAppFeatures } from "@/lib/app-settings";
@@ -60,6 +61,19 @@ export async function GET(request: NextRequest) {
       ? settings.featuredReviews
       : [];
 
+    const mergedLive: ReviewEntry[] = [
+      ...(googleData?.reviews ?? []),
+      ...(yelpData?.reviews ?? []),
+    ];
+    const latestReviews = mergedLive
+      .slice()
+      .sort((a, b) => {
+        const ta = a.createdAt ? Date.parse(a.createdAt) : 0;
+        const tb = b.createdAt ? Date.parse(b.createdAt) : 0;
+        return (Number.isFinite(tb) ? tb : 0) - (Number.isFinite(ta) ? ta : 0);
+      })
+      .slice(0, 15);
+
     const res = NextResponse.json({
       totalSent,
       googleReviewUrl: settings?.googleReviewUrl ?? null,
@@ -78,6 +92,7 @@ export async function GET(request: NextRequest) {
             reviews: yelpData.reviews,
           }
         : null,
+      latestReviews,
       featuredReviews,
     });
     return addCorsHeaders(res, origin);
