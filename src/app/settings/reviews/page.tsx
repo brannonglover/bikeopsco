@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { YelpBurstIcon } from "@/components/icons/YelpBurstIcon";
 
 interface FeaturedReview {
   id: string;
@@ -28,6 +29,18 @@ interface ReviewRequest {
   customer: { firstName: string; lastName: string | null } | null;
   job: { id: string; bikeMake: string; bikeModel: string } | null;
 }
+
+type ConsolidatedRequestRow = {
+  key: string;
+  name: string;
+  email: string;
+  jobLabel: string | null;
+  lastSentAtMs: number;
+  firstSentAtMs: number;
+  sends: number;
+  googleClicked: boolean;
+  yelpClicked: boolean;
+};
 
 interface ReviewStats {
   totalSent: number;
@@ -63,9 +76,7 @@ function PlatformIcon({ platform }: { platform: "google" | "yelp" }) {
     );
   }
   return (
-    <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden>
-      <path fill="#d32323" d="M20.16 12.73l-4.703 1.01a.425.425 0 01-.43-.616l2.453-4.12a.425.425 0 01.72-.038 9.193 9.193 0 012.388 4.248.425.425 0 01-.428.516zm-8.56 5.852l-1.548 4.516a.425.425 0 01-.773.066A9.194 9.194 0 017.3 18.19a.425.425 0 01.434-.648l4.36.946a.425.425 0 01.507.484zm7.06-9.72a9.195 9.195 0 00-3.57-2.724.425.425 0 00-.572.42l.22 4.794a.425.425 0 00.698.305l3.35-2.07a.425.425 0 00-.126-.725zM6.522 6.21a9.194 9.194 0 00-2.338 4.156.425.425 0 00.546.502l4.578-1.608a.425.425 0 00.14-.724L6.522 6.21zm-.21 7.524l-4.64.79a.425.425 0 00-.282.64 9.2 9.2 0 002.743 3.107.425.425 0 00.626-.203l1.974-3.924a.425.425 0 00-.422-.41zM12 2.75a9.25 9.25 0 100 18.5A9.25 9.25 0 0012 2.75z" />
-    </svg>
+    <YelpBurstIcon size={20} className="w-5 h-5" />
   );
 }
 
@@ -229,6 +240,48 @@ export default function ReviewsSettingsPage() {
     fetchApiStatus();
     fetchLiveReviewStats();
   }, [fetchSettings, fetchRequests, fetchStats, fetchApiStatus, fetchLiveReviewStats]);
+
+  const consolidatedRequests = useMemo((): ConsolidatedRequestRow[] => {
+    const map = new Map<string, ConsolidatedRequestRow>();
+    for (const req of requests) {
+      const key = req.job?.id ?? req.recipientEmail;
+      const sentAtMs = Date.parse(req.sentAt);
+      const safeSentAtMs = Number.isFinite(sentAtMs) ? sentAtMs : 0;
+      const name = req.customer
+        ? [req.customer.firstName, req.customer.lastName].filter(Boolean).join(" ")
+        : req.recipientName || req.recipientEmail;
+      const jobLabel = req.job ? `${req.job.bikeMake} ${req.job.bikeModel}`.trim() : null;
+
+      const prev = map.get(key);
+      if (!prev) {
+        map.set(key, {
+          key,
+          name,
+          email: req.recipientEmail,
+          jobLabel,
+          lastSentAtMs: safeSentAtMs,
+          firstSentAtMs: safeSentAtMs,
+          sends: 1,
+          googleClicked: !!req.googleClickedAt,
+          yelpClicked: !!req.yelpClickedAt,
+        });
+        continue;
+      }
+
+      map.set(key, {
+        ...prev,
+        name: prev.name || name,
+        email: prev.email || req.recipientEmail,
+        jobLabel: prev.jobLabel ?? jobLabel,
+        sends: prev.sends + 1,
+        googleClicked: prev.googleClicked || !!req.googleClickedAt,
+        yelpClicked: prev.yelpClicked || !!req.yelpClickedAt,
+        lastSentAtMs: Math.max(prev.lastSentAtMs, safeSentAtMs),
+        firstSentAtMs: prev.firstSentAtMs === 0 ? safeSentAtMs : Math.min(prev.firstSentAtMs, safeSentAtMs),
+      });
+    }
+    return Array.from(map.values()).sort((a, b) => b.lastSentAtMs - a.lastSentAtMs);
+  }, [requests]);
 
   const save = async () => {
     setSaving(true);
@@ -628,7 +681,7 @@ export default function ReviewsSettingsPage() {
 
         {loadingRequests ? (
           <div className="rounded-xl border border-surface-border bg-surface p-8 text-center text-sm text-text-secondary">Loading…</div>
-        ) : requests.length === 0 ? (
+        ) : consolidatedRequests.length === 0 ? (
           <div className="rounded-xl border border-surface-border bg-surface p-8 text-center text-sm text-text-secondary">
             No review requests sent yet. Send one from a job using the &quot;Send Review Request&quot; button.
           </div>
@@ -638,28 +691,32 @@ export default function ReviewsSettingsPage() {
               <thead>
                 <tr className="border-b border-surface-border bg-subtle-bg">
                   <th className="text-left px-4 py-3 font-medium text-text-secondary">Customer</th>
-                  <th className="text-left px-4 py-3 font-medium text-text-secondary hidden sm:table-cell">Sent</th>
+                  <th className="text-left px-4 py-3 font-medium text-text-secondary hidden sm:table-cell">Last sent</th>
+                  <th className="text-left px-4 py-3 font-medium text-text-secondary hidden sm:table-cell">Sends</th>
                   <th className="text-center px-3 py-3 font-medium text-text-secondary"><PlatformIcon platform="google" /><span className="sr-only">Google</span></th>
                   <th className="text-center px-3 py-3 font-medium text-text-secondary"><PlatformIcon platform="yelp" /><span className="sr-only">Yelp</span></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-border">
-                {requests.map((req) => {
-                  const name = req.customer
-                    ? [req.customer.firstName, req.customer.lastName].filter(Boolean).join(" ")
-                    : req.recipientName || req.recipientEmail;
-                  const sentDate = new Date(req.sentAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+                {consolidatedRequests.map((row) => {
+                  const sentDate = new Date(row.lastSentAtMs).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
                   return (
-                    <tr key={req.id} className="bg-surface hover:bg-subtle-bg transition-colors">
+                    <tr key={row.key} className="bg-surface hover:bg-subtle-bg transition-colors">
                       <td className="px-4 py-3">
-                        <div className="font-medium text-foreground truncate max-w-[200px]">{name}</div>
-                        <div className="text-xs text-text-secondary truncate max-w-[200px]">{req.recipientEmail}</div>
-                        {req.job && <div className="text-xs text-text-muted mt-0.5">{req.job.bikeMake} {req.job.bikeModel}</div>}
+                        <div className="font-medium text-foreground truncate max-w-[200px]">{row.name}</div>
+                        <div className="text-xs text-text-secondary truncate max-w-[200px]">{row.email}</div>
+                        {row.jobLabel && <div className="text-xs text-text-muted mt-0.5">{row.jobLabel}</div>}
                         <div className="sm:hidden text-xs text-text-secondary mt-0.5">{sentDate}</div>
+                        {row.sends > 1 && (
+                          <div className="sm:hidden text-xs text-text-muted mt-0.5">
+                            Sent {row.sends} times
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-text-secondary hidden sm:table-cell whitespace-nowrap">{sentDate}</td>
-                      <td className="px-3 py-3 text-center"><ClickBadge clicked={!!req.googleClickedAt} /></td>
-                      <td className="px-3 py-3 text-center"><ClickBadge clicked={!!req.yelpClickedAt} /></td>
+                      <td className="px-4 py-3 text-text-secondary hidden sm:table-cell whitespace-nowrap tabular-nums">{row.sends}</td>
+                      <td className="px-3 py-3 text-center"><ClickBadge clicked={row.googleClicked} /></td>
+                      <td className="px-3 py-3 text-center"><ClickBadge clicked={row.yelpClicked} /></td>
                     </tr>
                   );
                 })}

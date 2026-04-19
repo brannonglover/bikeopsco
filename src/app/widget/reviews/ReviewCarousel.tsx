@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { YelpBurstIcon } from "@/components/icons/YelpBurstIcon";
 
 interface ReviewEntry {
   author: string;
@@ -42,13 +43,7 @@ function PlatformDot({ platform }: { platform: "google" | "yelp" }) {
     );
   }
   return (
-    <svg width={12} height={12} viewBox="0 0 24 24" style={{ flexShrink: 0 }} aria-label="Yelp">
-      <path
-        fill="#d32323"
-        d="M12 2.3c.9 0 1.7.6 1.9 1.5l.5 2.2c.1.4.4.7.8.8l2.2.5c.9.2 1.5 1 1.5 1.9 0 .3-.1.7-.3 1l-1.2 1.9c-.2.4-.2.8 0 1.1l1.2 1.9c.2.3.3.7.3 1 0 .9-.6 1.7-1.5 1.9l-2.2.5c-.4.1-.7.4-.8.8l-.5 2.2c-.2.9-1 1.5-1.9 1.5s-1.7-.6-1.9-1.5l-.5-2.2c-.1-.4-.4-.7-.8-.8l-2.2-.5c-.9-.2-1.5-1-1.5-1.9 0-.3.1-.7.3-1l1.2-1.9c.2-.4.2-.8 0-1.1L5.3 9.7C5.1 9.4 5 9 5 8.7c0-.9.6-1.7 1.5-1.9l2.2-.5c.4-.1.7-.4.8-.8l.5-2.2c.2-.9 1-1.5 1.9-1.5Z"
-      />
-      <circle cx="12" cy="12" r="3.2" fill="var(--w-tile-bg)" opacity="0.95" />
-    </svg>
+    <YelpBurstIcon size={12} />
   );
 }
 
