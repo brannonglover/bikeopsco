@@ -74,6 +74,20 @@ export async function GET(request: NextRequest) {
       })
       .slice(0, 15);
 
+    const featuredList = featuredReviews as unknown as ReviewEntry[];
+    const displayReviews = (() => {
+      if (latestReviews.length === 0) return featuredList.slice(0, 15);
+      if (latestReviews.length >= 15) return latestReviews.slice(0, 15);
+      const seen = new Set(latestReviews.map((r) => `${r.platform}|${r.author}|${r.rating}|${r.text}`.trim()));
+      const filler = featuredList.filter((r) => {
+        const k = `${r.platform}|${r.author}|${r.rating}|${r.text}`.trim();
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+      return [...latestReviews, ...filler].slice(0, 15);
+    })();
+
     const res = NextResponse.json({
       totalSent,
       googleReviewUrl: settings?.googleReviewUrl ?? null,
@@ -93,6 +107,7 @@ export async function GET(request: NextRequest) {
           }
         : null,
       latestReviews,
+      displayReviews,
       featuredReviews,
     });
     return addCorsHeaders(res, origin);

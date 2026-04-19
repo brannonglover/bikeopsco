@@ -137,7 +137,21 @@ export default async function ReviewWidget({
     .sort((a, b) => reviewTimestamp(b) - reviewTimestamp(a))
     .slice(0, 15);
 
-  const displayReviews = liveReviews.length > 0 ? liveReviews : featuredReviews;
+  const displayReviews = (() => {
+    if (liveReviews.length === 0) return featuredReviews.slice(0, 15);
+    if (liveReviews.length >= 15) return liveReviews.slice(0, 15);
+
+    const seen = new Set(
+      liveReviews.map((r) => `${r.platform}|${r.author}|${r.rating}|${r.text}`.trim())
+    );
+    const filler = featuredReviews.filter((r) => {
+      const k = `${r.platform}|${r.author}|${r.rating}|${r.text}`.trim();
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+    return [...liveReviews, ...filler].slice(0, 15);
+  })();
 
   const hasGoogle = !!(googleData || settings?.googleReviewUrl);
   const hasYelp = !!(yelpData || settings?.yelpReviewUrl);
