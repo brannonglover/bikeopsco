@@ -51,7 +51,9 @@ function CustomerChatSection({ customerId }: { customerId: string }) {
     }
     let cancelled = false;
     setStatus("loading");
-    fetch(`/api/conversations/by-customer/${encodeURIComponent(customerId)}`)
+    fetch(
+      `/api/conversations/by-customer/${encodeURIComponent(customerId)}?markRead=1`
+    )
       .then((r) => r.json())
       .then((data: { conversation?: CustomerChatPreviewPayload | null }) => {
         if (cancelled) return;

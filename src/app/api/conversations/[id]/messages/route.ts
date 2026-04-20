@@ -24,37 +24,69 @@ export async function GET(
     }
     const { id: conversationId } = await params;
 
-    const [conversation, messages] = await Promise.all([
-      prisma.conversation.findUnique({
-        where: { id: conversationId },
-        select: { customerTypingAt: true, customerLastReadAt: true, updatedAt: true },
-      }),
-      prisma.message.findMany({
-        where: { conversationId },
-        orderBy: { createdAt: "asc" },
-        include: { attachments: true, reactions: true },
-      }),
-    ]);
+    // Keep the base conversation fetch minimal so this route can still work if the DB
+    // is temporarily behind migrations (missing newer optional columns).
+    const conversation = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { updatedAt: true },
+    });
 
     if (!conversation) {
       return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
     }
 
+    let messages: unknown[] = [];
+    try {
+      messages = await prisma.message.findMany({
+        where: { conversationId },
+        orderBy: { createdAt: "asc" },
+        include: { attachments: true, reactions: true },
+      });
+    } catch (e) {
+      console.warn(
+        "[chat] Failed to load message includes (attachments/reactions); falling back:",
+        e
+      );
+      messages = await prisma.message.findMany({
+        where: { conversationId },
+        orderBy: { createdAt: "asc" },
+      });
+    }
+
+    let customerTypingAtIso: string | null = null;
+    let customerLastReadAtIso: string | null = null;
+    try {
+      const extra = await prisma.conversation.findUnique({
+        where: { id: conversationId },
+        select: { customerTypingAt: true, customerLastReadAt: true },
+      });
+      customerTypingAtIso = extra?.customerTypingAt?.toISOString() ?? null;
+      customerLastReadAtIso = extra?.customerLastReadAt?.toISOString() ?? null;
+    } catch (e) {
+      console.warn("[chat] Failed to load conversation extras; continuing:", e);
+    }
+
     // Preserve updatedAt so marking read does not reorder the inbox (list is sorted by updatedAt).
-    const readUpdate = await prisma.conversation.update({
-      where: { id: conversationId },
-      data: {
-        staffLastReadAt: new Date(),
-        updatedAt: conversation.updatedAt,
-      },
-      select: { staffLastReadAt: true },
-    });
+    let staffLastReadAtIso: string = new Date().toISOString();
+    try {
+      const readUpdate = await prisma.conversation.update({
+        where: { id: conversationId },
+        data: {
+          staffLastReadAt: new Date(),
+          updatedAt: conversation.updatedAt,
+        },
+        select: { staffLastReadAt: true },
+      });
+      staffLastReadAtIso = (readUpdate.staffLastReadAt ?? new Date()).toISOString();
+    } catch (e) {
+      console.warn("[chat] Failed to mark staffLastReadAt; continuing:", e);
+    }
 
     return NextResponse.json({
       messages,
-      customerTypingAt: conversation.customerTypingAt?.toISOString() ?? null,
-      staffLastReadAt: (readUpdate.staffLastReadAt ?? new Date()).toISOString(),
-      customerLastReadAt: conversation.customerLastReadAt?.toISOString() ?? null,
+      customerTypingAt: customerTypingAtIso,
+      staffLastReadAt: staffLastReadAtIso,
+      customerLastReadAt: customerLastReadAtIso,
     });
   } catch (error) {
     console.error("GET /api/conversations/[id]/messages error:", error);

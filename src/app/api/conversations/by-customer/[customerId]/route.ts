@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
  * Staff: preview of the customer's general chat thread (jobId null) for job detail / links.
  */
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ customerId: string }> }
 ) {
   try {
@@ -17,6 +17,7 @@ export async function GET(
       return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
     }
     const { customerId } = await params;
+    const markRead = new URL(request.url).searchParams.get("markRead") === "1";
 
     const conversation = await prisma.conversation.findFirst({
       where: { customerId, jobId: null, archived: false },
@@ -32,6 +33,19 @@ export async function GET(
 
     if (!conversation) {
       return NextResponse.json({ conversation: null });
+    }
+
+    if (markRead) {
+      try {
+        // Preserve updatedAt so marking read does not reorder inbox lists.
+        await prisma.conversation.update({
+          where: { id: conversation.id },
+          data: { staffLastReadAt: new Date(), updatedAt: conversation.updatedAt },
+          select: { id: true },
+        });
+      } catch (e) {
+        console.warn("[chat] Failed to mark staffLastReadAt from preview; continuing:", e);
+      }
     }
 
     const last = conversation.messages[0];
