@@ -3,6 +3,8 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
 export type AppFeatures = {
+  bookingsEnabled: boolean;
+  maxActiveBikes: number;
   collectionServiceEnabled: boolean;
   collectionRadiusMiles: number;
   collectionFeeRegular: number;
@@ -15,6 +17,8 @@ export type AppFeatures = {
 const APP_FEATURES_UPDATED_EVENT = "bikeops:app-features-updated";
 
 const DEFAULTS: AppFeatures = {
+  bookingsEnabled: true,
+  maxActiveBikes: 5,
   collectionServiceEnabled: true,
   collectionRadiusMiles: 5,
   collectionFeeRegular: 20,

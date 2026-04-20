@@ -6,6 +6,8 @@ import { getAppFeatures, upsertAppFeatures } from "@/lib/app-settings";
 export const dynamic = "force-dynamic";
 
 const updateSchema = z.object({
+  bookingsEnabled: z.boolean().optional(),
+  maxActiveBikes: z.number().int().min(0).max(200).optional(),
   collectionServiceEnabled: z.boolean().optional(),
   collectionRadiusMiles: z.number().min(0.1).max(100).optional(),
   collectionFeeRegular: z.number().min(0).max(10000).optional(),

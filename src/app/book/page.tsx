@@ -49,7 +49,11 @@ function BookForm() {
   const [collectionFeeEbike, setCollectionFeeEbike] = useState(30);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [success, setSuccess] = useState<{ id: string; statusUrl: string } | null>(null);
+  const [success, setSuccess] = useState<
+    | { kind: "JOB"; id: string; statusUrl: string }
+    | { kind: "WAITLIST"; waitlistId: string; message: string }
+    | null
+  >(null);
   const [error, setError] = useState<string | null>(null);
   const [collectionEligibility, setCollectionEligibility] = useState<CollectionEligibility | null>(null);
   const [checkingCollection, setCheckingCollection] = useState(false);
@@ -232,7 +236,23 @@ function BookForm() {
         return;
       }
 
-      setSuccess({ id: data.id, statusUrl: data.statusUrl || `${BASE}/status/${data.id}` });
+      if (data?.status === "WAITLISTED" && data?.waitlistId) {
+        setSuccess({
+          kind: "WAITLIST",
+          waitlistId: data.waitlistId,
+          message:
+            typeof data.message === "string"
+              ? data.message
+              : "You’ve been added to the waitlist. We’ll reach out as soon as a spot opens up.",
+        });
+        return;
+      }
+
+      setSuccess({
+        kind: "JOB",
+        id: data.id,
+        statusUrl: data.statusUrl || `${BASE}/status/${data.id}`,
+      });
     } catch {
       setError("Could not submit. Please check your connection and try again.");
     } finally {
@@ -249,6 +269,24 @@ function BookForm() {
   }
 
   if (success) {
+    if (success.kind === "WAITLIST") {
+      return (
+        <div className="mx-auto max-w-md space-y-4 rounded-xl border border-slate-100 bg-white p-6 shadow-sm">
+          <div className="text-center">
+            <span className="text-4xl" aria-hidden>
+              ✓
+            </span>
+            <h2 className="mt-2 text-xl font-bold text-slate-900">You&apos;re on the waitlist</h2>
+            <p className="mt-1 text-slate-600">{success.message}</p>
+          </div>
+          <p className="text-center text-xs text-slate-500">
+            We&apos;ll reach out by email or text when a spot opens up.
+          </p>
+          {embed && <p className="text-center text-xs text-slate-500">You can close this window.</p>}
+        </div>
+      );
+    }
+
     return (
       <div className="mx-auto max-w-md space-y-4 rounded-xl border border-slate-100 bg-white p-6 shadow-sm">
         <div className="text-center">

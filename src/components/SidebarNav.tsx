@@ -7,6 +7,7 @@ import { useAppFeatures } from "@/contexts/AppFeaturesContext";
 
 const NAV_LINKS = [
   { href: "/calendar", label: "Job Board" },
+  { href: "/waitlist", label: "Waitlist" },
   { href: "/archive", label: "Archive" },
   { href: "/chat", label: "Chat" },
   { href: "/stats", label: "Stats" },

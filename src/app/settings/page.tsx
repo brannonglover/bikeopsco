@@ -5,6 +5,8 @@ import { useTheme, type ThemeMode } from "@/contexts/ThemeContext";
 import { broadcastAppFeaturesUpdated } from "@/contexts/AppFeaturesContext";
 
 type AppFeatures = {
+  bookingsEnabled: boolean;
+  maxActiveBikes: number;
   collectionServiceEnabled: boolean;
   collectionRadiusMiles: number;
   collectionFeeRegular: number;
@@ -15,6 +17,8 @@ type AppFeatures = {
 };
 
 const DEFAULT_FEATURES: AppFeatures = {
+  bookingsEnabled: true,
+  maxActiveBikes: 5,
   collectionServiceEnabled: true,
   collectionRadiusMiles: 5,
   collectionFeeRegular: 20,
@@ -109,6 +113,8 @@ export default function SettingsPage() {
   const [featuresSaving, setFeaturesSaving] = useState(false);
   const [featuresError, setFeaturesError] = useState<string | null>(null);
   const [featuresSaved, setFeaturesSaved] = useState(false);
+  const [maxActiveBikesInput, setMaxActiveBikesInput] = useState(String(DEFAULT_FEATURES.maxActiveBikes));
+  const [bookingDirty, setBookingDirty] = useState(false);
   const [collectionRadiusInput, setCollectionRadiusInput] = useState(String(DEFAULT_FEATURES.collectionRadiusMiles));
   const [collectionFeeRegularInput, setCollectionFeeRegularInput] = useState(String(DEFAULT_FEATURES.collectionFeeRegular));
   const [collectionFeeEbikeInput, setCollectionFeeEbikeInput] = useState(String(DEFAULT_FEATURES.collectionFeeEbike));
@@ -123,6 +129,8 @@ export default function SettingsPage() {
       const data = (await res.json()) as Partial<AppFeatures>;
       const next = { ...DEFAULT_FEATURES, ...data };
       setFeatures(next);
+      setMaxActiveBikesInput(String(next.maxActiveBikes));
+      setBookingDirty(false);
       setCollectionRadiusInput(String(next.collectionRadiusMiles));
       setCollectionFeeRegularInput(String(next.collectionFeeRegular));
       setCollectionFeeEbikeInput(String(next.collectionFeeEbike));
@@ -156,6 +164,8 @@ export default function SettingsPage() {
       const updated = { ...DEFAULT_FEATURES, ...(data as AppFeatures) };
       setFeatures(updated);
       broadcastAppFeaturesUpdated(updated);
+      setMaxActiveBikesInput(String(updated.maxActiveBikes));
+      setBookingDirty(false);
       setCollectionRadiusInput(String(updated.collectionRadiusMiles));
       setCollectionFeeRegularInput(String(updated.collectionFeeRegular));
       setCollectionFeeEbikeInput(String(updated.collectionFeeEbike));
@@ -200,6 +210,22 @@ export default function SettingsPage() {
     };
     setFeatures(next);
     setCollectionDirty(false);
+    void saveFeatures(next);
+  };
+
+  const saveBookingSettings = () => {
+    const n = Number(maxActiveBikesInput);
+    if (!Number.isFinite(n) || n < 0 || n > 200 || !Number.isInteger(n)) {
+      setFeaturesError("Max active bikes must be a whole number between 0 and 200.");
+      return;
+    }
+
+    const next: AppFeatures = {
+      ...features,
+      maxActiveBikes: n,
+    };
+    setFeatures(next);
+    setBookingDirty(false);
     void saveFeatures(next);
   };
 
@@ -270,6 +296,56 @@ export default function SettingsPage() {
           <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">Loading…</div>
         ) : (
           <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-4">
+            <ToggleRow
+              title="Accept bookings"
+              description="When off, new booking requests will be added to the waitlist instead of creating a job."
+              checked={features.bookingsEnabled}
+              disabled={featuresSaving}
+              onChange={(v) => setFeatureFlag("bookingsEnabled", v)}
+            />
+            <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="block text-xs font-medium text-slate-700">Max active bikes</label>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    If the number of bikes in <span className="font-semibold">Received</span> +{" "}
+                    <span className="font-semibold">Working on</span> meets or exceeds this limit, new requests go to the
+                    waitlist. Use 0 for unlimited.
+                  </p>
+                  <input
+                    type="number"
+                    min={0}
+                    max={200}
+                    step={1}
+                    value={maxActiveBikesInput}
+                    disabled={featuresSaving}
+                    onChange={(e) => {
+                      setMaxActiveBikesInput(e.target.value);
+                      setBookingDirty(true);
+                      const v = Number(e.target.value);
+                      if (Number.isFinite(v) && Number.isInteger(v)) {
+                        setFeatures((p) => ({ ...p, maxActiveBikes: v }));
+                      }
+                    }}
+                    className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+                  />
+                </div>
+                <div className="flex items-end justify-end">
+                  <button
+                    type="button"
+                    onClick={saveBookingSettings}
+                    disabled={featuresSaving || !bookingDirty}
+                    className={`h-10 rounded-lg px-3 text-sm font-semibold transition-colors ${
+                      featuresSaving || !bookingDirty
+                        ? "bg-slate-200 text-slate-500 cursor-not-allowed"
+                        : "bg-amber-600 text-white hover:bg-amber-700"
+                    }`}
+                  >
+                    Save booking settings
+                  </button>
+                </div>
+              </div>
+            </div>
             <ToggleRow
               title="Collection service"
               description="Allow collection/pickup bookings and collection delivery type."

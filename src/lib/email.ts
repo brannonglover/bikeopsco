@@ -601,6 +601,114 @@ ${calendarUrl ? buildCustomerEmailCtaButton(calendarUrl, "Review & accept or rej
   }
 }
 
+export async function sendWaitlistRequestNotification(entry: {
+  id: string;
+  customerName: string;
+  email: string;
+  phone: string;
+  bikeSummary: string;
+  deliveryType: string;
+  customerNotes?: string | null;
+  servicesList?: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const resend = getResend();
+  if (!resend) {
+    return { ok: false, error: "Email not configured" };
+  }
+
+  const notifyEmail =
+    process.env.SHOP_NOTIFY_EMAIL?.trim() || process.env.ADMIN_EMAIL?.trim();
+  if (!notifyEmail) {
+    console.warn("SHOP_NOTIFY_EMAIL and ADMIN_EMAIL not set, skipping waitlist notification");
+    return { ok: false, error: "No notification email configured" };
+  }
+
+  const baseUrl = getAppUrl();
+  const waitlistUrl = baseUrl ? `${baseUrl}/waitlist` : "";
+  const waitlistLinkHtml = waitlistUrl
+    ? `<p style="margin:16px 0 0 0">${buildCustomerEmailCtaButton(waitlistUrl, "Open waitlist")}</p>`
+    : "";
+
+  const innerHtml = `
+    <h2 style="margin:0 0 12px 0; font-size:18px;">New waitlist request</h2>
+    <p style="margin:0 0 8px 0;"><strong>Customer:</strong> ${escapeHtml(entry.customerName)}</p>
+    <p style="margin:0 0 8px 0;"><strong>Email:</strong> ${escapeHtml(entry.email)}</p>
+    <p style="margin:0 0 8px 0;"><strong>Phone:</strong> ${escapeHtml(entry.phone)}</p>
+    <p style="margin:0 0 8px 0;"><strong>Bikes:</strong> ${escapeHtml(entry.bikeSummary)}</p>
+    <p style="margin:0 0 8px 0;"><strong>Delivery:</strong> ${escapeHtml(entry.deliveryType)}</p>
+    <p style="margin:0 0 8px 0;"><strong>Services:</strong> ${escapeHtml(entry.servicesList || "None specified")}</p>
+    ${entry.customerNotes ? `<p style="margin:0 0 8px 0;"><strong>Notes:</strong><br/>${escapeHtml(entry.customerNotes)}</p>` : ""}
+    ${waitlistLinkHtml}
+  `;
+
+  const branding = getCustomerEmailBrandingAssets();
+  const html = buildCustomerEmailHtml({
+    innerHtml,
+    headerLogoSrc: branding.headerLogoSrc,
+  });
+  const attachments = customerEmailBrandingAttachments(branding);
+
+  try {
+    const { error } = await resend.emails.send({
+      from: getFromEmail(),
+      to: notifyEmail,
+      subject: `Waitlist request — ${process.env.SHOP_NAME || "Basement Bike Mechanic"}`,
+      html,
+      ...(attachments && { attachments }),
+    });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (e) {
+    const err = e instanceof Error ? e.message : "Unknown error";
+    return { ok: false, error: err };
+  }
+}
+
+export async function sendWaitlistReceivedEmail(entry: {
+  customerName: string;
+  recipient: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const resend = getResend();
+  if (!resend) {
+    console.warn("RESEND_API_KEY not set, skipping email");
+    return { ok: false, error: "Email not configured" };
+  }
+
+  const shopName = process.env.SHOP_NAME || "Basement Bike Mechanic";
+
+  const innerHtml = `
+    <h2 style="margin:0 0 12px 0; font-size:18px;">You’re on the waitlist</h2>
+    <p style="margin:0 0 8px 0;">Hi ${escapeHtml(entry.customerName)},</p>
+    <p style="margin:0 0 8px 0;">
+      Thanks for your booking request. We’re currently at capacity, so we’ve added you to our waitlist.
+      We’ll reach out as soon as a spot opens up.
+    </p>
+    <p style="margin:16px 0 0 0;">— ${escapeHtml(shopName)}</p>
+  `;
+
+  const branding = getCustomerEmailBrandingAssets();
+  const html = buildCustomerEmailHtml({
+    innerHtml,
+    headerLogoSrc: branding.headerLogoSrc,
+  });
+  const attachments = customerEmailBrandingAttachments(branding);
+
+  try {
+    const { error } = await resend.emails.send({
+      from: getFromEmail(),
+      to: entry.recipient,
+      subject: `Waitlist confirmation — ${shopName}`,
+      html,
+      ...(attachments && { attachments }),
+    });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (e) {
+    const err = e instanceof Error ? e.message : "Unknown error";
+    return { ok: false, error: err };
+  }
+}
+
 export async function sendBookingReceivedEmail(
   job: {
     id: string;

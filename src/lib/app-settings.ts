@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/db";
 
 export type AppFeatures = {
+  bookingsEnabled: boolean;
+  maxActiveBikes: number;
   collectionServiceEnabled: boolean;
   collectionRadiusMiles: number;
   collectionFeeRegular: number;
@@ -11,6 +13,8 @@ export type AppFeatures = {
 };
 
 const DEFAULT_FEATURES: AppFeatures = {
+  bookingsEnabled: true,
+  maxActiveBikes: 5,
   collectionServiceEnabled: true,
   collectionRadiusMiles: 5,
   collectionFeeRegular: 20,
@@ -25,6 +29,8 @@ export async function getAppFeatures(): Promise<AppFeatures> {
     const row = await prisma.appSettings.findUnique({ where: { id: "default" } });
     if (!row) return DEFAULT_FEATURES;
     return {
+      bookingsEnabled: row.bookingsEnabled,
+      maxActiveBikes: row.maxActiveBikes,
       collectionServiceEnabled: row.collectionServiceEnabled,
       collectionRadiusMiles: row.collectionRadiusMiles,
       collectionFeeRegular: Number(row.collectionFeeRegular),
@@ -51,6 +57,8 @@ export async function upsertAppFeatures(next: Partial<AppFeatures>): Promise<App
     update: next,
   });
   return {
+    bookingsEnabled: updated.bookingsEnabled,
+    maxActiveBikes: updated.maxActiveBikes,
     collectionServiceEnabled: updated.collectionServiceEnabled,
     collectionRadiusMiles: updated.collectionRadiusMiles,
     collectionFeeRegular: Number(updated.collectionFeeRegular),

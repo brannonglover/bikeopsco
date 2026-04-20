@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { Stage } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
-import { sendBookingRequestNotification, sendBookingReceivedEmail } from "@/lib/email";
+import {
+  sendBookingRequestNotification,
+  sendBookingReceivedEmail,
+  sendWaitlistReceivedEmail,
+  sendWaitlistRequestNotification,
+} from "@/lib/email";
 import { sendPushToAllStaff } from "@/lib/push";
 import { syncCollectionJobService } from "@/lib/collection-fee";
 import { coerceCustomerPhone } from "@/lib/phone";
@@ -10,6 +15,23 @@ import { checkCollectionEligibility } from "@/lib/collection-radius";
 import { getAppFeatures } from "@/lib/app-settings";
 
 export const dynamic = "force-dynamic";
+
+type WaitlistTxnResult = {
+  entry: {
+    id: string;
+    email: string;
+    phone: string;
+    deliveryType: string;
+    customerNotes: string | null;
+    bikes: { make: string; model: string | null }[];
+  };
+  customer: {
+    firstName: string;
+    lastName: string | null;
+    email: string | null;
+    phone: string | null;
+  };
+};
 
 const bikeItemSchema = z.object({
   make: z.string().min(1, "Bike make is required"),
@@ -132,6 +154,169 @@ export async function POST(request: NextRequest) {
 
     const emailNormalized = data.email.trim().toLowerCase();
     const phoneStored = coerceCustomerPhone(data.phone);
+
+    const maxActiveBikes = features.maxActiveBikes ?? 5;
+    const bookingsEnabled = features.bookingsEnabled ?? true;
+    const incomingBikesCount = bikesInput.length;
+    const activeBikesCount =
+      maxActiveBikes > 0
+        ? await prisma.jobBike.count({
+            where: {
+              job: {
+                archivedAt: null,
+                stage: { in: [Stage.RECEIVED, Stage.WORKING_ON] },
+              },
+            },
+          })
+        : 0;
+
+    const shouldWaitlist =
+      !bookingsEnabled ||
+      (maxActiveBikes > 0 && activeBikesCount + incomingBikesCount > maxActiveBikes);
+
+    if (shouldWaitlist) {
+      let waitlist: WaitlistTxnResult;
+      try {
+        waitlist = await prisma.$transaction(async (tx) => {
+          let customer = null;
+
+          if (data.customerId) {
+            customer = await tx.customer.findUnique({
+              where: { id: data.customerId },
+            });
+          }
+
+          if (!customer) {
+            customer = await tx.customer.findFirst({
+              where: {
+                email: { equals: emailNormalized, mode: "insensitive" },
+              },
+            });
+          }
+
+          if (!customer) {
+            customer = await tx.customer.create({
+              data: {
+                firstName: data.firstName,
+                lastName: data.lastName ?? null,
+                email: data.email.trim(),
+                phone: phoneStored,
+                address: data.address ?? null,
+              },
+            });
+          } else {
+            await tx.customer.update({
+              where: { id: customer.id },
+              data: {
+                firstName: data.firstName,
+                lastName: data.lastName ?? null,
+                phone: phoneStored,
+                address: data.address ?? customer.address,
+              },
+            });
+          }
+
+          const entry = await tx.waitlistEntry.create({
+            data: {
+              customerId: customer.id,
+              firstName: data.firstName,
+              lastName: data.lastName,
+              email: data.email.trim(),
+              phone: phoneStored ?? data.phone.trim(),
+              address: data.address ?? null,
+              deliveryType: data.deliveryType as "DROP_OFF_AT_SHOP" | "COLLECTION_SERVICE",
+              dropOffDate: data.dropOffDate ? new Date(data.dropOffDate) : null,
+              pickupDate: data.pickupDate ? new Date(data.pickupDate) : null,
+              collectionAddress: data.collectionAddress ?? null,
+              collectionWindowStart: data.collectionWindowStart ?? null,
+              collectionWindowEnd: data.collectionWindowEnd ?? null,
+              customerNotes: data.customerNotes ?? null,
+              serviceIds: data.serviceIds ?? [],
+              bikes: {
+                create: bikesInput.map((b, i) => ({
+                  make: b.make.trim(),
+                  model: b.model?.trim() || null,
+                  bikeType: b.bikeType ?? null,
+                  sortOrder: i,
+                })),
+              },
+            },
+            include: { bikes: { orderBy: { sortOrder: "asc" } } },
+          });
+
+          return { entry, customer };
+        });
+      } catch (e) {
+        console.error("[Widget book] Failed to create waitlist entry:", e);
+        const res = NextResponse.json(
+          {
+            error:
+              "We’re currently at capacity and can’t accept new bookings right now. Please try again in a few minutes.",
+          },
+          { status: 503 }
+        );
+        return addCorsHeaders(res, origin);
+      }
+
+      const services =
+        data.serviceIds && data.serviceIds.length > 0
+          ? await prisma.service.findMany({
+              where: { id: { in: data.serviceIds }, isSystem: false },
+              select: { name: true },
+            })
+          : [];
+      const servicesList = services.map((s) => s.name).join(", ") || "None specified";
+      const bikeSummary =
+        waitlist.entry.bikes.length === 1
+          ? `${waitlist.entry.bikes[0].make}${waitlist.entry.bikes[0].model ? ` ${waitlist.entry.bikes[0].model}` : ""}`
+          : `${waitlist.entry.bikes.length} bikes`;
+
+      const customerName = waitlist.customer.lastName
+        ? `${waitlist.customer.firstName} ${waitlist.customer.lastName}`
+        : waitlist.customer.firstName;
+
+      sendWaitlistRequestNotification({
+        id: waitlist.entry.id,
+        customerName,
+        email: waitlist.customer.email ?? waitlist.entry.email,
+        phone: waitlist.customer.phone ?? waitlist.entry.phone,
+        bikeSummary,
+        deliveryType: waitlist.entry.deliveryType,
+        customerNotes: waitlist.entry.customerNotes ?? null,
+        servicesList,
+      })
+        .then((result) => {
+          if (!result.ok) console.error("[Widget book] Waitlist staff email failed:", result.error);
+        })
+        .catch((e) => console.error("[Widget book] Waitlist staff email threw:", e));
+
+      sendPushToAllStaff({
+        title: "New Waitlist Request",
+        body: `${customerName} — ${bikeSummary}`,
+        data: { type: "waitlist_request", waitlistId: waitlist.entry.id },
+      }).catch((e) => console.error("[Widget book] Waitlist staff push failed:", e));
+
+      sendWaitlistReceivedEmail({
+        customerName,
+        recipient: waitlist.entry.email,
+      })
+        .then((result) => {
+          if (!result.ok) console.error("[Widget book] Waitlist customer email failed:", result.error);
+        })
+        .catch((e) => console.error("[Widget book] Waitlist customer email threw:", e));
+
+      const message =
+        maxActiveBikes > 0
+          ? `We’re currently at capacity (${activeBikesCount}/${maxActiveBikes} bikes). You’ve been added to the waitlist and we’ll reach out as soon as a spot opens up.`
+          : "We’re currently not accepting new bookings. You’ve been added to the waitlist and we’ll reach out as soon as a spot opens up.";
+
+      const res = NextResponse.json({
+        status: "WAITLISTED",
+        waitlistId: waitlist.entry.id,
+        message,
+      });
+      return addCorsHeaders(res, origin);
+    }
 
     const job = await prisma.$transaction(async (tx) => {
       let customer = null;

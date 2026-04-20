@@ -19,6 +19,7 @@ model Customer {
   bikes            Bike[]
   jobs             Job[]
   conversations    Conversation[]
+  waitlistEntries  WaitlistEntry[]  @relation("WaitlistCustomer")
   magicLinkTokens  MagicLinkToken[]
   chatSessions     ChatSession[]
   pushTokens       PushToken[]
@@ -98,6 +99,7 @@ model Job {
   payments          Payment[]
   conversations     Conversation[]
   reviewRequests    ReviewRequest[]
+  promotedWaitlistEntries WaitlistEntry[] @relation("WaitlistPromotedJob")
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
 }
@@ -369,6 +371,10 @@ model ReviewSettings {
 
 model AppSettings {
   id                       String   @id @default("default")
+  /// When false: new booking requests go to the waitlist instead of creating a job.
+  bookingsEnabled          Boolean  @default(true)
+  /// Maximum number of bikes allowed to be active (RECEIVED + WORKING_ON) before new bookings are waitlisted.
+  maxActiveBikes           Int      @default(5)
   collectionServiceEnabled Boolean  @default(true)
   /// Collection eligibility radius, in miles
   collectionRadiusMiles    Float    @default(5)
@@ -381,6 +387,57 @@ model AppSettings {
   reviewsEnabled           Boolean  @default(true)
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
+}
+
+enum WaitlistStatus {
+  WAITING
+  PROMOTED
+  CANCELLED
+}
+
+model WaitlistEntry {
+  id                   String         @id @default(cuid())
+  status               WaitlistStatus @default(WAITING)
+  customerId           String?
+  customer             Customer?      @relation("WaitlistCustomer", fields: [customerId], references: [id], onDelete: SetNull)
+  /// Snapshot of contact details from the booking request.
+  firstName            String
+  lastName             String
+  email                String
+  phone                String
+  address              String?
+  deliveryType         DeliveryType   @default(DROP_OFF_AT_SHOP)
+  dropOffDate          DateTime?
+  pickupDate           DateTime?
+  collectionAddress    String?
+  collectionWindowStart String?
+  collectionWindowEnd  String?
+  customerNotes        String?
+  /// Array of Service ids selected in the booking widget (catalog items only).
+  serviceIds           Json?          @default("[]")
+  bikes                WaitlistBike[]
+  promotedJobId        String?
+  promotedJob          Job?           @relation("WaitlistPromotedJob", fields: [promotedJobId], references: [id], onDelete: SetNull)
+  promotedAt           DateTime?
+  archivedAt           DateTime?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  @@index([status, createdAt])
+  @@index([customerId])
+}
+
+model WaitlistBike {
+  id             String        @id @default(cuid())
+  waitlistEntryId String
+  waitlistEntry  WaitlistEntry @relation(fields: [waitlistEntryId], references: [id], onDelete: Cascade)
+  make           String
+  model          String?
+  bikeType       BikeType?
+  sortOrder      Int           @default(0)
+  createdAt      DateTime      @default(now())
+
+  @@index([waitlistEntryId])
 }
 
 model ReviewRequest {
