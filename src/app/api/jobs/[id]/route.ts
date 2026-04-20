@@ -350,7 +350,13 @@ export async function PATCH(
           data: { waitingOnPartsAt: null },
         });
       }
-      if (features.collectionServiceEnabled) {
+      const nextDeliveryType =
+        data.deliveryType !== undefined ? data.deliveryType : existingJob.deliveryType;
+      if (
+        features.collectionServiceEnabled &&
+        (existingJob.deliveryType === "COLLECTION_SERVICE" ||
+          nextDeliveryType === "COLLECTION_SERVICE")
+      ) {
         await syncCollectionJobService(tx, id);
       }
       const result = await tx.job.findUnique({
