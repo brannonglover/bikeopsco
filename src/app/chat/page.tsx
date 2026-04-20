@@ -469,7 +469,7 @@ function ChatPageContent() {
       return;
     }
     let cancelled = false;
-    fetch(`/api/jobs?customerId=${encodeURIComponent(customerId)}`)
+    fetch(`/api/jobs?customerId=${encodeURIComponent(customerId)}&summary=1`)
       .then((r) => r.json())
       .then((data: unknown) => {
         if (cancelled) return;

@@ -46,6 +46,8 @@ export async function GET(request: NextRequest) {
     const weekEnd = searchParams.get("weekEnd");
     const archived = searchParams.get("archived") === "true";
     const customerIdFilter = searchParams.get("customerId");
+    const view = searchParams.get("view");
+    const summary = searchParams.get("summary") === "1" || searchParams.get("summary") === "true";
 
     const where: Record<string, unknown> = {};
 
@@ -87,6 +89,74 @@ export async function GET(request: NextRequest) {
     }
     // No week filter: returns all jobs so the board shows everything in one view
 
+    const orderBy = archived
+      ? { archivedAt: "desc" as const }
+      : [
+          { columnSortOrder: { sort: "asc" as const, nulls: "last" as const } },
+          { dropOffDate: { sort: "asc" as const, nulls: "last" as const } },
+          { createdAt: "asc" as const },
+        ];
+
+    if (summary) {
+      const jobs = await prisma.job.findMany({
+        where,
+        select: { id: true, stage: true },
+        orderBy,
+      });
+      return NextResponse.json(jobs);
+    }
+
+    if (view === "board") {
+      const jobs = await prisma.job.findMany({
+        where,
+        select: {
+          id: true,
+          bikeMake: true,
+          bikeModel: true,
+          stage: true,
+          deliveryType: true,
+          dropOffDate: true,
+          pickupDate: true,
+          collectionAddress: true,
+          collectionWindowStart: true,
+          collectionWindowEnd: true,
+          customerId: true,
+          customerNotes: true,
+          notes: true,
+          internalNotes: true,
+          cancellationReason: true,
+          completedAt: true,
+          archivedAt: true,
+          columnSortOrder: true,
+          paymentStatus: true,
+          workingOnJobBikeId: true,
+          createdAt: true,
+          updatedAt: true,
+          customer: customerIdFilter
+            ? { select: { id: true, firstName: true, lastName: true, email: true, phone: true, address: true, notes: true, createdAt: true, updatedAt: true } }
+            : { select: { id: true, firstName: true, lastName: true, email: true, phone: true, address: true, notes: true, createdAt: true, updatedAt: true } },
+          jobBikes: {
+            orderBy: { sortOrder: "asc" },
+            select: {
+              id: true,
+              jobId: true,
+              make: true,
+              model: true,
+              bikeType: true,
+              nickname: true,
+              imageUrl: true,
+              bikeId: true,
+              sortOrder: true,
+              completedAt: true,
+              waitingOnPartsAt: true,
+            },
+          },
+        },
+        orderBy,
+      });
+      return NextResponse.json(jobs);
+    }
+
     const jobs = await prisma.job.findMany({
       where,
       include: {
@@ -97,13 +167,7 @@ export async function GET(request: NextRequest) {
         },
         jobProducts: { include: { product: true } },
       },
-      orderBy: archived
-        ? { archivedAt: "desc" }
-        : [
-            { columnSortOrder: { sort: "asc", nulls: "last" } },
-            { dropOffDate: { sort: "asc", nulls: "last" } },
-            { createdAt: "asc" },
-          ],
+      orderBy,
     });
 
     return NextResponse.json(jobs);

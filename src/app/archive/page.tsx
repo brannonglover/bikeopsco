@@ -23,7 +23,7 @@ export default function ArchivePage() {
 
   const fetchJobs = useCallback(() => {
     setLoading(true);
-    fetch("/api/jobs?archived=true")
+    fetch("/api/jobs?archived=true&view=board")
       .then((res) => res.json())
       .then((data) => setJobs(Array.isArray(data) ? data : []))
       .catch(() => setJobs([]))
