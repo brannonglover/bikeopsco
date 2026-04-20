@@ -284,13 +284,36 @@ export default function CustomerChatPage() {
         (r) => r.reactorType === "CUSTOMER"
       );
       try {
+        // Optimistically update so the UI doesn't wait on network/DB latency.
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m.id !== messageId) return m;
+            const existing = (m.reactions ?? []).find((r) => r.reactorType === "CUSTOMER") ?? null;
+            const withoutMine = (m.reactions ?? []).filter((r) => r.reactorType !== "CUSTOMER");
+            if (existing?.emoji === emoji) {
+              return { ...m, reactions: withoutMine };
+            }
+            const optimistic = {
+              id: existing?.id ?? `temp-reaction-${messageId}-customer`,
+              messageId,
+              emoji,
+              reactorType: "CUSTOMER" as const,
+              createdAt: existing?.createdAt ?? new Date().toISOString(),
+            };
+            return { ...m, reactions: [...withoutMine, optimistic] };
+          })
+        );
+
         if (myReaction?.emoji === emoji) {
-          await fetch(
+          const res = await fetch(
             `/api/chat/conversation/messages/${messageId}/reactions`,
             { method: "DELETE", credentials: "include" }
           );
+          if (!res.ok) {
+            fetchMessages();
+          }
         } else {
-          await fetch(
+          const res = await fetch(
             `/api/chat/conversation/messages/${messageId}/reactions`,
             {
               method: "POST",
@@ -299,10 +322,23 @@ export default function CustomerChatPage() {
               body: JSON.stringify({ emoji }),
             }
           );
+          if (res.ok) {
+            const reaction = await res.json().catch(() => null);
+            if (reaction && typeof reaction === "object") {
+              setMessages((prev) =>
+                prev.map((m) => {
+                  if (m.id !== messageId) return m;
+                  const withoutMine = (m.reactions ?? []).filter((r) => r.reactorType !== "CUSTOMER");
+                  return { ...m, reactions: [...withoutMine, reaction] };
+                })
+              );
+            }
+          } else {
+            fetchMessages();
+          }
         }
-        fetchMessages();
       } catch {
-        // silently fail
+        fetchMessages();
       }
     },
     [messages, fetchMessages]

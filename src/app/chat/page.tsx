@@ -692,13 +692,36 @@ function ChatPageContent() {
         (r) => r.reactorType === "STAFF"
       );
       try {
+        // Optimistically update so the UI doesn't wait on network/DB latency.
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m.id !== messageId) return m;
+            const existing = (m.reactions ?? []).find((r) => r.reactorType === "STAFF") ?? null;
+            const withoutMine = (m.reactions ?? []).filter((r) => r.reactorType !== "STAFF");
+            if (existing?.emoji === emoji) {
+              return { ...m, reactions: withoutMine };
+            }
+            const optimistic = {
+              id: existing?.id ?? `temp-reaction-${messageId}-staff`,
+              messageId,
+              emoji,
+              reactorType: "STAFF" as const,
+              createdAt: existing?.createdAt ?? new Date().toISOString(),
+            };
+            return { ...m, reactions: [...withoutMine, optimistic] };
+          })
+        );
+
         if (myReaction?.emoji === emoji) {
-          await fetch(
+          const res = await fetch(
             `/api/conversations/${selectedId}/messages/${messageId}/reactions`,
             { method: "DELETE" }
           );
+          if (!res.ok) {
+            fetchMessages(selectedId);
+          }
         } else {
-          await fetch(
+          const res = await fetch(
             `/api/conversations/${selectedId}/messages/${messageId}/reactions`,
             {
               method: "POST",
@@ -706,10 +729,23 @@ function ChatPageContent() {
               body: JSON.stringify({ emoji }),
             }
           );
+          if (res.ok) {
+            const reaction = await res.json().catch(() => null);
+            if (reaction && typeof reaction === "object") {
+              setMessages((prev) =>
+                prev.map((m) => {
+                  if (m.id !== messageId) return m;
+                  const withoutMine = (m.reactions ?? []).filter((r) => r.reactorType !== "STAFF");
+                  return { ...m, reactions: [...withoutMine, reaction] };
+                })
+              );
+            }
+          } else {
+            fetchMessages(selectedId);
+          }
         }
-        fetchMessages(selectedId);
       } catch {
-        // silently fail
+        fetchMessages(selectedId);
       }
     },
     [selectedId, messages, fetchMessages]
