@@ -1,26 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-
-function addCorsHeaders(response: NextResponse, origin: string | null): NextResponse {
-  const allowed =
-    origin &&
-    (origin.endsWith("basementbikemechanic.com") ||
-      origin.endsWith(".basementbikemechanic.com") ||
-      origin.includes("localhost"));
-  response.headers.set("Vary", "Origin");
-  if (allowed && origin) {
-    response.headers.set("Access-Control-Allow-Origin", origin);
-  }
-  response.headers.set("Access-Control-Allow-Methods", "GET, OPTIONS");
-  response.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  response.headers.set("Access-Control-Max-Age", "86400");
-  return response;
-}
+import { addWidgetCorsHeaders } from "@/lib/widget-cors";
 
 export async function OPTIONS(request: NextRequest) {
   const origin = request.headers.get("origin");
   const res = new NextResponse(null, { status: 204 });
-  return addCorsHeaders(res, origin);
+  return addWidgetCorsHeaders(res, origin, {
+    methods: "GET, OPTIONS",
+    allowHeaders: "Content-Type, Authorization",
+  });
 }
 
 export async function GET(request: NextRequest) {
@@ -34,7 +22,10 @@ export async function GET(request: NextRequest) {
 
     if (!email && !firstName) {
       const res = NextResponse.json({ customer: null, bikes: [] });
-      return addCorsHeaders(res, origin);
+      return addWidgetCorsHeaders(res, origin, {
+        methods: "GET, OPTIONS",
+        allowHeaders: "Content-Type, Authorization",
+      });
     }
 
     const customer = await prisma.customer.findFirst({
@@ -73,13 +64,19 @@ export async function GET(request: NextRequest) {
         : null,
       bikes: customer?.bikes ?? [],
     });
-    return addCorsHeaders(res, origin);
+    return addWidgetCorsHeaders(res, origin, {
+      methods: "GET, OPTIONS",
+      allowHeaders: "Content-Type, Authorization",
+    });
   } catch (error) {
     console.error("GET /api/widget/customer-bikes error:", error);
     const res = NextResponse.json(
       { error: "Failed to fetch customer bikes" },
       { status: 500 }
     );
-    return addCorsHeaders(res, origin);
+    return addWidgetCorsHeaders(res, origin, {
+      methods: "GET, OPTIONS",
+      allowHeaders: "Content-Type, Authorization",
+    });
   }
 }

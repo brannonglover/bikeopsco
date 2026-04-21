@@ -260,6 +260,7 @@ function ChatPageContent() {
   const composerTextareaRef = useRef<HTMLTextAreaElement>(null);
   const sendingRef = useRef(false);
   const hasPendingOptimisticRef = useRef(false);
+  const deliveryTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   useEffect(() => {
     sendingRef.current = sending;
@@ -269,13 +270,38 @@ function ChatPageContent() {
     hasPendingOptimisticRef.current = messages.some((m) => m.id.startsWith("temp-"));
   }, [messages]);
 
+  useEffect(() => {
+    return () => {
+      for (const t of Object.values(deliveryTimeoutsRef.current)) clearTimeout(t);
+      deliveryTimeoutsRef.current = {};
+    };
+  }, []);
+
+  const clearClientDeliveryStateLater = useCallback((messageId: string, delayMs = 2000) => {
+    const existing = deliveryTimeoutsRef.current[messageId];
+    if (existing) clearTimeout(existing);
+    deliveryTimeoutsRef.current[messageId] = setTimeout(() => {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === messageId ? { ...m, clientDeliveryState: undefined } : m))
+      );
+      delete deliveryTimeoutsRef.current[messageId];
+    }, delayMs);
+  }, []);
+
   const mergeServerMessages = useCallback((serverMessages: ChatMessage[]) => {
     setMessages((prev) => {
       const optimistic = prev.filter((m) => m.id.startsWith("temp-"));
+      const prevById = new Map(prev.map((m) => [m.id, m] as const));
       const byId = new Map<string, ChatMessage>();
-      for (const msg of [...serverMessages, ...optimistic]) {
-        byId.set(msg.id, msg);
+      for (const msg of serverMessages) {
+        const prevMsg = prevById.get(msg.id);
+        if (prevMsg?.clientDeliveryState) {
+          byId.set(msg.id, { ...msg, clientDeliveryState: prevMsg.clientDeliveryState });
+        } else {
+          byId.set(msg.id, msg);
+        }
       }
+      for (const msg of optimistic) byId.set(msg.id, msg);
       return [...byId.values()].sort((a, b) => {
         const ta = new Date(a.createdAt).getTime();
         const tb = new Date(b.createdAt).getTime();
@@ -792,6 +818,7 @@ function ChatPageContent() {
       conversationId: selectedId,
       sender: "STAFF",
       body: textToSend || null,
+      clientDeliveryState: "SENDING",
       attachments: imagesToSend.map((img) => ({
         id: img.id,
         url: img.url,
@@ -823,10 +850,11 @@ function ChatPageContent() {
         }),
       });
       if (res.ok) {
-        const newMsg = await res.json();
+        const newMsg = (await res.json()) as ChatMessage;
+        const deliveredMsg: ChatMessage = { ...newMsg, clientDeliveryState: "DELIVERED" };
         // Replace the optimistic placeholder with the confirmed server message
         setMessages((prev) => {
-          const replaced = prev.map((m) => (m.id === tempId ? newMsg : m));
+          const replaced = prev.map((m) => (m.id === tempId ? deliveredMsg : m));
           const byId = new Map<string, ChatMessage>();
           for (const msg of replaced) byId.set(msg.id, msg);
           return [...byId.values()].sort((a, b) => {
@@ -836,6 +864,7 @@ function ChatPageContent() {
             return a.id.localeCompare(b.id);
           });
         });
+        clearClientDeliveryStateLater(deliveredMsg.id);
         fetchConversations();
       } else {
         const data = await res.json();

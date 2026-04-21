@@ -13,6 +13,7 @@ import { syncCollectionJobService } from "@/lib/collection-fee";
 import { coerceCustomerPhone } from "@/lib/phone";
 import { checkCollectionEligibility } from "@/lib/collection-radius";
 import { getAppFeatures } from "@/lib/app-settings";
+import { addWidgetCorsHeaders } from "@/lib/widget-cors";
 
 export const dynamic = "force-dynamic";
 
@@ -80,26 +81,13 @@ const bookSchema = z
     }
   });
 
-function addCorsHeaders(response: NextResponse, origin: string | null): NextResponse {
-  const allowed =
-    origin &&
-    (origin.endsWith("basementbikemechanic.com") ||
-      origin.endsWith(".basementbikemechanic.com") ||
-      origin.includes("localhost"));
-  response.headers.set("Vary", "Origin");
-  if (allowed && origin) {
-    response.headers.set("Access-Control-Allow-Origin", origin);
-  }
-  response.headers.set("Access-Control-Allow-Methods", "POST, OPTIONS");
-  response.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  response.headers.set("Access-Control-Max-Age", "86400");
-  return response;
-}
-
 export async function OPTIONS(request: NextRequest) {
   const origin = request.headers.get("origin");
   const res = new NextResponse(null, { status: 204 });
-  return addCorsHeaders(res, origin);
+  return addWidgetCorsHeaders(res, origin, {
+    methods: "POST, OPTIONS",
+    allowHeaders: "Content-Type, Authorization",
+  });
 }
 
 export async function POST(request: NextRequest) {
@@ -114,7 +102,10 @@ export async function POST(request: NextRequest) {
         { error: "Invalid JSON in request body" },
         { status: 400 }
       );
-      return addCorsHeaders(res, origin);
+      return addWidgetCorsHeaders(res, origin, {
+        methods: "POST, OPTIONS",
+        allowHeaders: "Content-Type, Authorization",
+      });
     }
 
     const data = bookSchema.parse(body);
@@ -126,7 +117,10 @@ export async function POST(request: NextRequest) {
           { error: "Collection service is currently unavailable." },
           { status: 400 }
         );
-        return addCorsHeaders(res, origin);
+        return addWidgetCorsHeaders(res, origin, {
+          methods: "POST, OPTIONS",
+          allowHeaders: "Content-Type, Authorization",
+        });
       }
       const addr = (data.collectionAddress ?? "").trim();
       const eligibility = await checkCollectionEligibility(addr, features.collectionRadiusMiles);
@@ -135,14 +129,20 @@ export async function POST(request: NextRequest) {
           { error: `Collection is only available within ${eligibility.radiusMiles} miles of the shop.` },
           { status: 400 }
         );
-        return addCorsHeaders(res, origin);
+        return addWidgetCorsHeaders(res, origin, {
+          methods: "POST, OPTIONS",
+          allowHeaders: "Content-Type, Authorization",
+        });
       }
       if (!eligibility.ok && eligibility.enabled) {
         const res = NextResponse.json(
           { error: eligibility.error },
           { status: 400 }
         );
-        return addCorsHeaders(res, origin);
+        return addWidgetCorsHeaders(res, origin, {
+          methods: "POST, OPTIONS",
+          allowHeaders: "Content-Type, Authorization",
+        });
       }
     }
 
@@ -255,7 +255,10 @@ export async function POST(request: NextRequest) {
           },
           { status: 503 }
         );
-        return addCorsHeaders(res, origin);
+        return addWidgetCorsHeaders(res, origin, {
+          methods: "POST, OPTIONS",
+          allowHeaders: "Content-Type, Authorization",
+        });
       }
 
       const services =
@@ -315,7 +318,10 @@ export async function POST(request: NextRequest) {
         waitlistId: waitlist.entry.id,
         message,
       });
-      return addCorsHeaders(res, origin);
+      return addWidgetCorsHeaders(res, origin, {
+        methods: "POST, OPTIONS",
+        allowHeaders: "Content-Type, Authorization",
+      });
     }
 
     const job = await prisma.$transaction(async (tx) => {
@@ -448,7 +454,10 @@ export async function POST(request: NextRequest) {
         { error: "Failed to create booking" },
         { status: 500 }
       );
-      return addCorsHeaders(res, origin);
+      return addWidgetCorsHeaders(res, origin, {
+        methods: "POST, OPTIONS",
+        allowHeaders: "Content-Type, Authorization",
+      });
     }
 
     // Notify shop owner of new booking request (email + push)
@@ -471,7 +480,10 @@ export async function POST(request: NextRequest) {
       id: job.id,
       statusUrl: `${process.env.NEXT_PUBLIC_APP_URL || ""}/status/${job.id}`,
     });
-    return addCorsHeaders(res, origin);
+    return addWidgetCorsHeaders(res, origin, {
+      methods: "POST, OPTIONS",
+      allowHeaders: "Content-Type, Authorization",
+    });
   } catch (error) {
     if (error instanceof z.ZodError) {
       const flattened = error.flatten();
@@ -483,13 +495,19 @@ export async function POST(request: NextRequest) {
         );
       const message = fieldErrors.length ? fieldErrors.join("; ") : "Invalid input";
       const res = NextResponse.json({ error: message }, { status: 400 });
-      return addCorsHeaders(res, origin);
+      return addWidgetCorsHeaders(res, origin, {
+        methods: "POST, OPTIONS",
+        allowHeaders: "Content-Type, Authorization",
+      });
     }
     console.error("POST /api/widget/book error:", error);
     const res = NextResponse.json(
       { error: "Failed to create booking" },
       { status: 500 }
     );
-    return addCorsHeaders(res, origin);
+    return addWidgetCorsHeaders(res, origin, {
+      methods: "POST, OPTIONS",
+      allowHeaders: "Content-Type, Authorization",
+    });
   }
 }

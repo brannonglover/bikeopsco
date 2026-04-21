@@ -26,6 +26,24 @@ export default function CustomerChatPage() {
   const [showScrollDown, setShowScrollDown] = useState(false);
   const isAtBottomRef = useRef(true);
   const typingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const sendingRef = useRef(false);
+  const hasPendingOptimisticRef = useRef(false);
+  const deliveryTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+  useEffect(() => {
+    sendingRef.current = sending;
+  }, [sending]);
+
+  useEffect(() => {
+    hasPendingOptimisticRef.current = messages.some((m) => m.id.startsWith("temp-"));
+  }, [messages]);
+
+  useEffect(() => {
+    return () => {
+      for (const t of Object.values(deliveryTimeoutsRef.current)) clearTimeout(t);
+      deliveryTimeoutsRef.current = {};
+    };
+  }, []);
 
   const sendTyping = useCallback((active: boolean) => {
     fetch("/api/chat/conversation/typing", {
@@ -54,18 +72,52 @@ export default function CustomerChatPage() {
     return () => stopTypingPing();
   }, [stopTypingPing]);
 
+  const clearClientDeliveryStateLater = useCallback((messageId: string, delayMs = 2000) => {
+    const existing = deliveryTimeoutsRef.current[messageId];
+    if (existing) clearTimeout(existing);
+    deliveryTimeoutsRef.current[messageId] = setTimeout(() => {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === messageId ? { ...m, clientDeliveryState: undefined } : m))
+      );
+      delete deliveryTimeoutsRef.current[messageId];
+    }, delayMs);
+  }, []);
+
+  const mergeServerMessages = useCallback((serverMessages: ChatMessage[]) => {
+    setMessages((prev) => {
+      const optimistic = prev.filter((m) => m.id.startsWith("temp-"));
+      const prevById = new Map(prev.map((m) => [m.id, m] as const));
+      const byId = new Map<string, ChatMessage>();
+      for (const msg of serverMessages) {
+        const prevMsg = prevById.get(msg.id);
+        if (prevMsg?.clientDeliveryState) {
+          byId.set(msg.id, { ...msg, clientDeliveryState: prevMsg.clientDeliveryState });
+        } else {
+          byId.set(msg.id, msg);
+        }
+      }
+      for (const msg of optimistic) byId.set(msg.id, msg);
+      return [...byId.values()].sort((a, b) => {
+        const ta = new Date(a.createdAt).getTime();
+        const tb = new Date(b.createdAt).getTime();
+        if (ta !== tb) return ta - tb;
+        return a.id.localeCompare(b.id);
+      });
+    });
+  }, []);
+
   const fetchMessages = useCallback(async () => {
     const res = await fetch("/api/chat/conversation/messages", { credentials: "include" });
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data)) {
-        setMessages(data);
+        mergeServerMessages(data);
       } else {
-        setMessages(data.messages ?? []);
+        mergeServerMessages(data.messages ?? []);
         setStaffLastReadAt(data.staffLastReadAt ?? null);
       }
     }
-  }, []);
+  }, [mergeServerMessages]);
 
   useEffect(() => {
     let cancelled = false;
@@ -166,7 +218,11 @@ export default function CustomerChatPage() {
 
   useEffect(() => {
     if (status !== "chat") return;
-    const id = setInterval(fetchMessages, POLL_INTERVAL_MS);
+    const id = setInterval(() => {
+      if (sendingRef.current) return;
+      if (hasPendingOptimisticRef.current) return;
+      void fetchMessages();
+    }, POLL_INTERVAL_MS);
     return () => clearInterval(id);
   }, [status, fetchMessages]);
 
@@ -384,6 +440,7 @@ export default function CustomerChatPage() {
       conversationId: "",
       sender: "CUSTOMER",
       body: textToSend || null,
+      clientDeliveryState: "SENDING",
       attachments: imagesToSend.map((img) => ({
         id: img.id,
         url: img.url,
@@ -414,9 +471,11 @@ export default function CustomerChatPage() {
         }),
       });
       if (res.ok) {
-        const newMsg = await res.json();
+        const newMsg = (await res.json()) as ChatMessage;
+        const deliveredMsg: ChatMessage = { ...newMsg, clientDeliveryState: "DELIVERED" };
         // Replace the optimistic placeholder with the confirmed server message
-        setMessages((prev) => prev.map((m) => (m.id === tempId ? newMsg : m)));
+        setMessages((prev) => prev.map((m) => (m.id === tempId ? deliveredMsg : m)));
+        clearClientDeliveryStateLater(deliveredMsg.id);
       } else {
         // Roll back the optimistic message on failure
         setMessages((prev) => prev.filter((m) => m.id !== tempId));

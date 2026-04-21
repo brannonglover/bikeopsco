@@ -140,7 +140,8 @@ export function ChatMessageBubble({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showEmojiPicker]);
 
-  const showActions = isOwn && (onPatch || onDelete) && !editing;
+  const isSending = isOwn && msg.clientDeliveryState === "SENDING";
+  const showActions = isOwn && (onPatch || onDelete) && !editing && !isSending;
   const canEdit = Boolean(onPatch);
   const attachments = msg.attachments ?? [];
   const hasAttachments = attachments.length > 0;
@@ -164,7 +165,7 @@ export function ChatMessageBubble({
           className={`max-h-[min(70vh,560px)] object-contain ${align === "end" ? "object-right" : "object-left"}`}
         />
       </button>
-      {isOwn && onRemoveAttachment && !editing && (
+      {isOwn && onRemoveAttachment && !editing && !isSending && (
         <button
           type="button"
           onClick={() => handleRemoveAttachment(att.id)}
@@ -187,6 +188,8 @@ export function ChatMessageBubble({
     ? reactions.find((r) => r.reactorType === role)
     : undefined;
   const hasReactions = Object.keys(aggregated).length > 0;
+  const deliveryState = isOwn && !editing ? msg.clientDeliveryState : undefined;
+  const showDeliveryState = Boolean(deliveryState);
 
   return (
     <>
@@ -441,6 +444,54 @@ export function ChatMessageBubble({
           </div>
         )}
       </div>
+
+      {showDeliveryState ? (
+        <div
+          className={`mt-1 flex items-center gap-1 text-[11px] ${
+            align === "end" ? "justify-end" : "justify-start"
+          } ${
+            deliveryState === "FAILED" ? "text-red-600" : "text-slate-400"
+          }`}
+          aria-live="polite"
+        >
+          {deliveryState === "SENDING" ? (
+            <span
+              className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-slate-200 border-t-slate-500"
+              aria-hidden
+            />
+          ) : deliveryState === "DELIVERED" ? (
+            <svg
+              className="h-3 w-3"
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              aria-hidden
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16 6l-7.5 8L4 10" />
+            </svg>
+          ) : (
+            <svg
+              className="h-3 w-3"
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              aria-hidden
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10 6v5m0 3h.01" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10 18a8 8 0 100-16 8 8 0 000 16z" />
+            </svg>
+          )}
+          <span>
+            {deliveryState === "SENDING"
+              ? "Sending…"
+              : deliveryState === "DELIVERED"
+                ? "Delivered"
+                : "Not delivered"}
+          </span>
+        </div>
+      ) : null}
     </div>
 
     {lightboxUrl &&

@@ -106,6 +106,13 @@ export interface ChatMessage {
   reactions: MessageReaction[];
   createdAt: string;
   editedAt?: string | null;
+  /**
+   * Client-only delivery indicator for optimistic UI (not persisted).
+   * - SENDING: request in flight
+   * - DELIVERED: request succeeded (shown briefly)
+   * - FAILED: request failed (optional future use)
+   */
+  clientDeliveryState?: "SENDING" | "DELIVERED" | "FAILED";
 }
 
 export interface Conversation {

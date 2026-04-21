@@ -95,6 +95,12 @@ function escapeHtml(str: string): string {
     .replace(/'/g, "&#39;");
 }
 
+function formatDeliveryTypeLabel(deliveryType: string): string {
+  if (deliveryType === "DROP_OFF_AT_SHOP") return "Drop-off at shop";
+  if (deliveryType === "COLLECTION_SERVICE") return "Collection service";
+  return deliveryType;
+}
+
 /** Aligns with src/app/globals.css --primary, --background, --foreground, --muted, --border */
 const BIKE_OPS_EMAIL = {
   font: "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
@@ -635,7 +641,7 @@ export async function sendWaitlistRequestNotification(entry: {
     <p style="margin:0 0 8px 0;"><strong>Email:</strong> ${escapeHtml(entry.email)}</p>
     <p style="margin:0 0 8px 0;"><strong>Phone:</strong> ${escapeHtml(entry.phone)}</p>
     <p style="margin:0 0 8px 0;"><strong>Bikes:</strong> ${escapeHtml(entry.bikeSummary)}</p>
-    <p style="margin:0 0 8px 0;"><strong>Delivery:</strong> ${escapeHtml(entry.deliveryType)}</p>
+    <p style="margin:0 0 8px 0;"><strong>Delivery:</strong> ${escapeHtml(formatDeliveryTypeLabel(entry.deliveryType))}</p>
     <p style="margin:0 0 8px 0;"><strong>Services:</strong> ${escapeHtml(entry.servicesList || "None specified")}</p>
     ${entry.customerNotes ? `<p style="margin:0 0 8px 0;"><strong>Notes:</strong><br/>${escapeHtml(entry.customerNotes)}</p>` : ""}
     ${waitlistLinkHtml}

@@ -8,27 +8,18 @@ import {
 } from "@/lib/reviews";
 import { getGooglePlacesApiKey, getYelpApiKey } from "@/lib/env";
 import { getAppFeatures } from "@/lib/app-settings";
+import { addWidgetCorsHeaders } from "@/lib/widget-cors";
 
 export const dynamic = "force-dynamic";
-
-function addCorsHeaders(response: NextResponse, origin: string | null): NextResponse {
-  const allowed =
-    origin &&
-    (origin.endsWith("basementbikemechanic.com") ||
-      origin.endsWith(".basementbikemechanic.com") ||
-      origin.includes("localhost"));
-  if (allowed && origin) {
-    response.headers.set("Access-Control-Allow-Origin", origin);
-  }
-  response.headers.set("Access-Control-Allow-Methods", "GET, OPTIONS");
-  response.headers.set("Cache-Control", "public, s-maxage=3600, stale-while-revalidate=7200");
-  return response;
-}
 
 export async function OPTIONS(request: NextRequest) {
   const origin = request.headers.get("origin");
   const res = NextResponse.json({}, { status: 204 });
-  return addCorsHeaders(res, origin);
+  res.headers.set("Cache-Control", "public, s-maxage=3600, stale-while-revalidate=7200");
+  return addWidgetCorsHeaders(res, origin, {
+    methods: "GET, OPTIONS",
+    allowHeaders: "Content-Type, Authorization",
+  });
 }
 
 export async function GET(request: NextRequest) {
@@ -38,7 +29,11 @@ export async function GET(request: NextRequest) {
     const features = await getAppFeatures();
     if (!features.reviewsEnabled) {
       const res = NextResponse.json({ error: "Reviews are disabled" }, { status: 404 });
-      return addCorsHeaders(res, origin);
+      res.headers.set("Cache-Control", "public, s-maxage=3600, stale-while-revalidate=7200");
+      return addWidgetCorsHeaders(res, origin, {
+        methods: "GET, OPTIONS",
+        allowHeaders: "Content-Type, Authorization",
+      });
     }
     const [settings, totalSent] = await Promise.all([
       prisma.reviewSettings.findUnique({ where: { id: "default" } }),
@@ -110,13 +105,21 @@ export async function GET(request: NextRequest) {
       displayReviews,
       featuredReviews,
     });
-    return addCorsHeaders(res, origin);
+    res.headers.set("Cache-Control", "public, s-maxage=3600, stale-while-revalidate=7200");
+    return addWidgetCorsHeaders(res, origin, {
+      methods: "GET, OPTIONS",
+      allowHeaders: "Content-Type, Authorization",
+    });
   } catch (error) {
     console.error("GET /api/widget/reviews error:", error);
     const res = NextResponse.json(
       { error: "Failed to fetch review widget data" },
       { status: 500 }
     );
-    return addCorsHeaders(res, origin);
+    res.headers.set("Cache-Control", "public, s-maxage=3600, stale-while-revalidate=7200");
+    return addWidgetCorsHeaders(res, origin, {
+      methods: "GET, OPTIONS",
+      allowHeaders: "Content-Type, Authorization",
+    });
   }
 }
