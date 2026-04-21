@@ -1414,6 +1414,11 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
   const [reviewBanner, setReviewBanner] = useState<{ ok: boolean; text: string } | null>(null);
   const latestJobPropRef = useRef(jobProp);
   latestJobPropRef.current = jobProp;
+  const onJobUpdatedRef = useRef(onJobUpdated);
+
+  useEffect(() => {
+    onJobUpdatedRef.current = onJobUpdated;
+  }, [onJobUpdated]);
 
   // Mirror parent job when it changes (e.g. kanban drag PATCH updates selectedJob — same id, new object)
   useEffect(() => {
@@ -1436,6 +1441,8 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
         const liveMs = Date.parse(live.updatedAt);
         if (Number.isFinite(fetchedMs) && Number.isFinite(liveMs) && fetchedMs < liveMs) return;
         setJob(fetched);
+        // Keep the parent (board/archive list) in sync so the card updates too.
+        onJobUpdatedRef.current?.(fetched);
       })
       .catch(() => {});
     return () => ac.abort();

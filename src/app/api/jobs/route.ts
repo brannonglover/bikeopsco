@@ -105,7 +105,9 @@ export async function GET(request: NextRequest) {
         select: { id: true, stage: true },
         orderBy,
       });
-      return NextResponse.json(jobs);
+      const res = NextResponse.json(jobs);
+      res.headers.set("Cache-Control", "no-store");
+      return res;
     }
 
     if (view === "board") {
@@ -165,7 +167,9 @@ export async function GET(request: NextRequest) {
         },
         orderBy,
       });
-      return NextResponse.json(jobs);
+      const res = NextResponse.json(jobs);
+      res.headers.set("Cache-Control", "no-store");
+      return res;
     }
 
     const jobs = await prisma.job.findMany({
@@ -181,7 +185,9 @@ export async function GET(request: NextRequest) {
       orderBy,
     });
 
-    return NextResponse.json(jobs);
+    const res = NextResponse.json(jobs);
+    res.headers.set("Cache-Control", "no-store");
+    return res;
   } catch (error) {
     console.error("GET /api/jobs error:", error);
     return NextResponse.json(

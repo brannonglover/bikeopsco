@@ -62,7 +62,9 @@ export async function GET(
     if (!job) {
       return NextResponse.json({ error: "Job not found" }, { status: 404 });
     }
-    return NextResponse.json(job);
+    const res = NextResponse.json(job);
+    res.headers.set("Cache-Control", "no-store");
+    return res;
   } catch (error) {
     console.error("GET /api/jobs/[id] error:", error);
     return NextResponse.json(
