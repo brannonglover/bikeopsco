@@ -136,9 +136,31 @@ export async function GET(request: NextRequest) {
           workingOnJobBikeId: true,
           createdAt: true,
           updatedAt: true,
-          customer: customerIdFilter
-            ? { select: { id: true, firstName: true, lastName: true, email: true, phone: true, address: true, notes: true, createdAt: true, updatedAt: true } }
-            : { select: { id: true, firstName: true, lastName: true, email: true, phone: true, address: true, notes: true, createdAt: true, updatedAt: true } },
+          customer: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              phone: true,
+              address: true,
+              notes: true,
+              createdAt: true,
+              updatedAt: true,
+              // Include bikes so job card display can fall back to the customer's profile bike when a JobBike
+              // is not linked (bikeId null), and so nickname edits reflect on the board reliably.
+              bikes: {
+                select: {
+                  id: true,
+                  make: true,
+                  model: true,
+                  bikeType: true,
+                  nickname: true,
+                  imageUrl: true,
+                },
+              },
+            },
+          },
           jobBikes: {
             orderBy: { sortOrder: "asc" },
             select: {
