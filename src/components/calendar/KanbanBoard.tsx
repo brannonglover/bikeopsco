@@ -23,6 +23,7 @@ import { useJobNotifications } from "@/hooks/useJobNotifications";
 import { useIsMobileBoard } from "@/hooks/useIsMobileBoard";
 import type { Job, Stage } from "@/lib/types";
 import { useAppFeatures } from "@/contexts/AppFeaturesContext";
+import { JOBS_REFRESH_EVENT } from "@/lib/jobs-refresh";
 
 const STAGES: Stage[] = [
   "PENDING_APPROVAL",
@@ -132,12 +133,26 @@ export function KanbanBoard() {
     if (!opts?.silent) setLoading(true);
     fetch("/api/jobs?view=board")
       .then((res) => res.json())
-      .then((data) => setJobs(Array.isArray(data) ? data : []))
+      .then((data) => {
+        const next = Array.isArray(data) ? (data as Job[]) : [];
+        setJobs(next);
+        // Keep the detail modal in sync if it's open.
+        setSelectedJob((prev) => {
+          if (!prev) return prev;
+          return next.find((j) => j.id === prev.id) ?? prev;
+        });
+      })
       .catch(() => setJobs([]))
       .finally(() => setLoading(false));
   }, []);
 
   useJobNotifications(jobs, () => fetchJobs({ silent: true }));
+
+  useEffect(() => {
+    const handler = () => fetchJobs({ silent: true });
+    window.addEventListener(JOBS_REFRESH_EVENT, handler);
+    return () => window.removeEventListener(JOBS_REFRESH_EVENT, handler);
+  }, [fetchJobs]);
 
   const handleJobCreated = useCallback((job: Job) => {
     setJobs((prev) => {

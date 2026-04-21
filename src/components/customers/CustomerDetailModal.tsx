@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { formatCustomerName } from "@/lib/customer";
+import { broadcastJobsRefresh } from "@/lib/jobs-refresh";
 
 // ── Types for job history ──────────────────────────────────────────────────
 type HistoryJobService = {
@@ -747,6 +748,7 @@ function EditBikeForm({
       if (res.ok) {
         const updated = await res.json();
         onSaved(updated);
+        broadcastJobsRefresh({ reason: "customer-bike-updated" });
       } else {
         const err = await res.json();
         alert(err.error || "Failed to update bike");
@@ -1254,6 +1256,7 @@ export function CustomerDetailModal({
                     onAdded={(bike) => {
                       setBikes((prev) => [...prev, bike]);
                       setShowAddBike(false);
+                      broadcastJobsRefresh({ reason: "customer-bike-added" });
                     }}
                     onCancel={() => setShowAddBike(false)}
                   />
@@ -1327,6 +1330,7 @@ export function CustomerDetailModal({
                                 setBikes((prev) =>
                                   prev.filter((b) => b.id !== bike.id)
                                 );
+                                broadcastJobsRefresh({ reason: "customer-bike-removed" });
                               }
                             }}
                             className="text-slate-500 hover:text-red-600 text-sm px-2 py-1"
