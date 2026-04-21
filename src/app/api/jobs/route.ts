@@ -8,6 +8,8 @@ import { syncCollectionJobService } from "@/lib/collection-fee";
 import { sendPushToAllStaff } from "@/lib/push";
 import { getAppFeatures } from "@/lib/app-settings";
 
+export const dynamic = "force-dynamic";
+
 const bikeSchema = z.object({
   make: z.string().min(1),
   model: z.string().min(1).optional().nullable(),
@@ -149,6 +151,15 @@ export async function GET(request: NextRequest) {
               sortOrder: true,
               completedAt: true,
               waitingOnPartsAt: true,
+              bike: {
+                select: {
+                  make: true,
+                  model: true,
+                  bikeType: true,
+                  nickname: true,
+                  imageUrl: true,
+                },
+              },
             },
           },
         },

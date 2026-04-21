@@ -131,7 +131,7 @@ export function KanbanBoard() {
 
   const fetchJobs = useCallback((opts?: { silent?: boolean }) => {
     if (!opts?.silent) setLoading(true);
-    fetch("/api/jobs?view=board")
+    fetch("/api/jobs?view=board", { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => {
         const next = Array.isArray(data) ? (data as Job[]) : [];
