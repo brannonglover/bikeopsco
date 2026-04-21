@@ -102,7 +102,7 @@ export function getJobBikeDisplayTitle(job: Job): string {
 
   if (rows.length === 0) {
     if (job.bikeMake === "Multiple") {
-      return job.bikeModel;
+      return `Multiple · ${job.bikeModel}`.trim();
     }
     const leg = resolveLegacyJobBikeDisplayParts(job);
     return [leg.make, leg.model].filter(Boolean).join(" ");
@@ -111,8 +111,5 @@ export function getJobBikeDisplayTitle(job: Job): string {
     const dp = resolveJobBikeDisplayParts(job, rows[0]);
     return [dp.make, dp.model].filter(Boolean).join(" ");
   }
-  if (job.bikeMake === "Multiple") {
-    return job.bikeModel;
-  }
-  return `${job.bikeMake} ${job.bikeModel}`.trim();
+  return `Multiple · ${rows.length} bikes`;
 }
