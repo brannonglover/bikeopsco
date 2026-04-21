@@ -60,6 +60,7 @@ export function JobCardContent({
   onReject,
   showMobileStageSelect,
   onStageChange,
+  variant = "card",
   notifyCustomer = true,
   onNotifyCustomerChange,
 }: {
@@ -69,6 +70,8 @@ export function JobCardContent({
   /** On narrow viewports, show a status control instead of relying on drag between columns. */
   showMobileStageSelect?: boolean;
   onStageChange?: (stage: Stage) => void;
+  /** "card" renders a bordered card container; "plain" renders without border/background. */
+  variant?: "card" | "plain";
   /** When false, board actions skip customer email/SMS for this job. */
   notifyCustomer?: boolean;
   onNotifyCustomerChange?: (notify: boolean) => void;
@@ -93,8 +96,13 @@ export function JobCardContent({
     job.stage !== "CANCELLED" &&
     job.stage !== "COMPLETED";
 
+  const containerClass =
+    variant === "plain"
+      ? "min-w-0 w-full"
+      : "bg-white rounded-xl border border-slate-200/80 p-4 shadow-soft min-w-0 w-full";
+
   return (
-    <div className="bg-white rounded-xl border border-slate-200/80 p-4 shadow-soft min-w-0 w-full">
+    <div className={containerClass}>
       <div className="flex items-start justify-between gap-2 mb-2 flex-wrap">
         <div className="flex items-center gap-1.5 flex-wrap">
           <span
