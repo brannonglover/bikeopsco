@@ -445,6 +445,12 @@ export function KanbanBoard() {
         isOpen={!!selectedJob}
         onClose={() => setSelectedJob(null)}
         onJobUpdated={(updated) => {
+          // If the job was archived, it no longer belongs on the active board list.
+          if (updated.archivedAt) {
+            setSelectedJob(null);
+            setJobs((prev) => prev.filter((j) => j.id !== updated.id));
+            return;
+          }
           setSelectedJob(updated);
           setJobs((prev) => prev.map((j) => (j.id === updated.id ? updated : j)));
         }}

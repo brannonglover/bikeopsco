@@ -1407,6 +1407,7 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
   const [job, setJob] = useState<Job | null>(jobProp);
   const [sendingReview, setSendingReview] = useState(false);
   const [accepting, setAccepting] = useState(false);
+  const [archiving, setArchiving] = useState(false);
   const [showRejectReason, setShowRejectReason] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [rejectSubmitting, setRejectSubmitting] = useState(false);
@@ -1548,6 +1549,26 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
       }
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleToggleArchive = async () => {
+    if (!job) return;
+    setArchiving(true);
+    try {
+      const nextArchived = !job.archivedAt;
+      const res = await fetch(`/api/jobs/${job.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ archived: nextArchived }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setJob(updated);
+        onJobUpdated?.(updated);
+      }
+    } finally {
+      setArchiving(false);
     }
   };
 
@@ -2042,6 +2063,19 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
 
         <div className="flex-shrink-0 flex items-center justify-between gap-4 px-6 py-4 border-t border-slate-200 bg-slate-50">
           <div className="flex gap-2">
+            <button
+              onClick={handleToggleArchive}
+              disabled={archiving}
+              className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors disabled:opacity-50"
+            >
+              {archiving
+                ? job.archivedAt
+                  ? "Unarchiving…"
+                  : "Archiving…"
+                : job.archivedAt
+                  ? "Unarchive"
+                  : "Archive"}
+            </button>
             {job.stage !== "CANCELLED" && (
               <button
                 onClick={handleCancelJobClick}

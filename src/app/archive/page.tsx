@@ -92,10 +92,14 @@ export default function ArchivePage() {
         isOpen={!!selectedJob}
         onClose={() => setSelectedJob(null)}
         onJobUpdated={(updated) => {
+          // If the job was unarchived, it no longer belongs in this list.
+          if (!updated.archivedAt) {
+            setSelectedJob(null);
+            setJobs((prev) => prev.filter((j) => j.id !== updated.id));
+            return;
+          }
           setSelectedJob(updated);
-          setJobs((prev) =>
-            prev.map((j) => (j.id === updated.id ? updated : j))
-          );
+          setJobs((prev) => prev.map((j) => (j.id === updated.id ? updated : j)));
         }}
         onJobDeleted={(jobId) => {
           setSelectedJob(null);
