@@ -182,7 +182,7 @@ export interface Job {
   archivedAt?: string | null;
   columnSortOrder?: number | null;
   paymentStatus?: PaymentStatus;
-  /** Sum of successful payments recorded for this job (USD). */
+  /** Sum of successful payments applied toward the job total (excludes card processing surcharge). */
   totalPaid?: number;
   jobServices?: JobService[];
   jobProducts?: JobProduct[];

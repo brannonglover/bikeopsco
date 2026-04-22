@@ -47,6 +47,10 @@ export async function POST(request: NextRequest) {
 	      await prisma.$transaction(async (tx) => {
 	        const paymentAt = new Date(event.created * 1000);
 	        const amount = (paymentIntent.amount / 100).toFixed(2);
+          const mode =
+            typeof paymentIntent.metadata?.mode === "string" && paymentIntent.metadata.mode.trim()
+              ? paymentIntent.metadata.mode.trim()
+              : null;
 	        await tx.payment.create({
 	          data: {
 	            jobId,
@@ -55,11 +59,12 @@ export async function POST(request: NextRequest) {
 	            currency: paymentIntent.currency ?? "usd",
 	            status: paymentIntent.status,
 	            createdAt: paymentAt,
-	            paymentMethod: paymentIntent.payment_method
-	              ? typeof paymentIntent.payment_method === "string"
-	                ? paymentIntent.payment_method
-	                : (paymentIntent.payment_method as Stripe.PaymentMethod).type
-	              : null,
+	            paymentMethod: mode ??
+                (paymentIntent.payment_method
+	                ? typeof paymentIntent.payment_method === "string"
+	                  ? paymentIntent.payment_method
+	                  : (paymentIntent.payment_method as Stripe.PaymentMethod).type
+	                : null),
 	          },
 	        });
 

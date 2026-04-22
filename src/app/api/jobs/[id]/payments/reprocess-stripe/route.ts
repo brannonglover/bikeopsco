@@ -91,6 +91,10 @@ export async function POST(
 	        return new Date(paymentIntent.created * 1000);
 	      })();
 	      const amount = (paymentIntent.amount / 100).toFixed(2);
+        const mode =
+          typeof paymentIntent.metadata?.mode === "string" && paymentIntent.metadata.mode.trim()
+            ? paymentIntent.metadata.mode.trim()
+            : null;
 	      const pm = paymentIntent.payment_method;
 	      await tx.payment.create({
 	        data: {
@@ -100,11 +104,7 @@ export async function POST(
 	          currency: paymentIntent.currency ?? "usd",
 	          status: paymentIntent.status,
 	          createdAt: paymentAt,
-	          paymentMethod: pm
-	            ? typeof pm === "string"
-	              ? pm
-	              : pm.type
-	            : null,
+	          paymentMethod: mode ?? (pm ? (typeof pm === "string" ? pm : pm.type) : null),
 	        },
 	      });
 

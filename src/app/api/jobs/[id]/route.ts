@@ -6,6 +6,7 @@ import { sendJobEmail, getTemplateForStage, sendBookingDeclinedEmail } from "@/l
 import { sendJobSms, getTemplateSlugForStage } from "@/lib/sms";
 import { syncCollectionJobService } from "@/lib/collection-fee";
 import { getAppFeatures } from "@/lib/app-settings";
+import { computeTotalFromChargedAmount } from "@/lib/stripe";
 
 const bikeSchema = z.object({
   make: z.string().min(1),
@@ -44,12 +45,29 @@ const updateJobSchema = z.object({
   internalNotes: z.string().optional().nullable(),
 });
 
-function computeTotalPaid(payments: Array<{ amount: unknown; status: unknown }> | null | undefined): number {
+function computeTotalPaid(
+  payments: Array<{
+    amount: unknown;
+    status: unknown;
+    stripePaymentIntentId?: string | null;
+    paymentMethod?: string | null;
+  }> | null | undefined
+): number {
   const totalPaid = (payments ?? []).reduce((sum, p) => {
     const status = String(p.status ?? "").toLowerCase();
     if (status !== "succeeded") return sum;
     const n = Number.parseFloat(String(p.amount));
-    return sum + (Number.isFinite(n) ? n : 0);
+    if (!Number.isFinite(n)) return sum;
+
+    const method = String(p.paymentMethod ?? "").toLowerCase();
+    const isStripe = Boolean(p.stripePaymentIntentId);
+    const mode =
+      method === "terminal" || method === "card_present" ? "terminal" : "online";
+
+    // Stripe "amount" is stored as the charged amount (includes card surcharge for online/in_person).
+    // For the invoice/remaining calculation we want the base job total it pays down (i.e. after fees).
+    const paidTowardJobTotal = isStripe ? computeTotalFromChargedAmount(n, mode) : n;
+    return sum + paidTowardJobTotal;
   }, 0);
   return Math.round(totalPaid * 100) / 100;
 }
@@ -67,7 +85,7 @@ export async function GET(
         jobBikes: { include: { bike: true }, orderBy: { sortOrder: "asc" } },
         jobServices: { include: { service: true, jobBike: { select: { id: true, make: true, model: true, nickname: true } } } },
         jobProducts: { include: { product: true, jobBike: { select: { id: true, make: true, model: true, nickname: true } } } },
-        payments: { select: { amount: true, status: true } },
+        payments: { select: { amount: true, status: true, stripePaymentIntentId: true, paymentMethod: true } },
       },
     });
     if (!job) {
@@ -387,7 +405,7 @@ export async function PATCH(
           jobBikes: { include: { bike: true }, orderBy: { sortOrder: "asc" } },
           jobServices: { include: { service: true, jobBike: { select: { id: true, make: true, model: true, nickname: true } } } },
           jobProducts: { include: { product: true, jobBike: { select: { id: true, make: true, model: true, nickname: true } } } },
-          payments: { select: { amount: true, status: true } },
+          payments: { select: { amount: true, status: true, stripePaymentIntentId: true, paymentMethod: true } },
         },
       });
       if (!result) throw new Error("Job not found");
