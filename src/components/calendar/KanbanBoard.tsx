@@ -22,8 +22,24 @@ import { JobDetailModal } from "@/components/jobs/JobDetailModal";
 import { useJobNotifications } from "@/hooks/useJobNotifications";
 import { useIsMobileBoard } from "@/hooks/useIsMobileBoard";
 import type { Job, Stage } from "@/lib/types";
+import { getJobBikeDisplayTitle } from "@/lib/job-display";
 import { useAppFeatures } from "@/contexts/AppFeaturesContext";
 import { JOBS_REFRESH_EVENT } from "@/lib/jobs-refresh";
+
+function formatShortDate(d: Date | string | null) {
+  if (!d) return null;
+  const date = typeof d === "string" ? new Date(d) : d;
+  return date.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+  });
+}
+
+function customerLine(job: Job) {
+  if (!job.customer) return "Customer";
+  const { firstName, lastName } = job.customer;
+  return lastName ? `${firstName} ${lastName}` : firstName;
+}
 
 const STAGES: Stage[] = [
   "PENDING_APPROVAL",
@@ -37,8 +53,10 @@ const STAGES: Stage[] = [
   "CANCELLED",
 ];
 
-/** Main board columns - Cancelled is shown in a collapsible section below */
-const DISPLAY_STAGES: Stage[] = STAGES.filter((s) => s !== "CANCELLED");
+/** Main board columns - Pending approvals + Cancelled are shown outside the main scroll columns. */
+const DISPLAY_STAGES: Stage[] = STAGES.filter(
+  (s) => s !== "CANCELLED" && s !== "PENDING_APPROVAL"
+);
 
 /** Match PATCH semantics so the card does not “snap” again when the server JSON arrives. */
 function withOptimisticStageChange(job: Job, newStage: Stage): Job {
@@ -137,10 +155,13 @@ export function KanbanBoard() {
       .then((data) => {
         const next = Array.isArray(data) ? (data as Job[]) : [];
         setJobs(next);
-        // Keep the detail modal in sync if it's open.
+        // Keep the detail modal in sync if it's open, without clobbering fields
+        // that aren't returned by the board view (e.g. jobServices/jobProducts).
         setSelectedJob((prev) => {
           if (!prev) return prev;
-          return next.find((j) => j.id === prev.id) ?? prev;
+          const refreshed = next.find((j) => j.id === prev.id);
+          if (!refreshed) return prev;
+          return { ...prev, ...refreshed };
         });
       })
       .catch(() => setJobs([]))
@@ -418,6 +439,7 @@ export function KanbanBoard() {
     return { ...acc, [stage]: stageJobs };
   }, {} as Record<Stage, Job[]>);
 
+  const pendingApprovals = jobsByStage.PENDING_APPROVAL || [];
   const completedCount = jobs.filter((j) => j.stage === "COMPLETED").length;
 
   if (loading) {
@@ -479,8 +501,117 @@ export function KanbanBoard() {
           </button>
         </div>
       )}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 flex-shrink-0">
-        <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Job Board</h1>
+      <div className="flex flex-col md:flex-row md:flex-wrap md:items-start justify-between gap-4 flex-shrink-0">
+        <div className="flex items-start gap-4 min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 flex-shrink-0">
+            Job Board
+          </h1>
+          {pendingApprovals.length > 0 ? (
+            <div className="hidden md:block w-[420px] max-w-full">
+              <section className="rounded-2xl border border-amber-200/90 bg-gradient-to-b from-amber-50/90 to-white shadow-soft overflow-hidden">
+                <div className="flex items-center justify-between gap-3 px-4 py-3 bg-amber-600 dark:bg-amber-800 text-white">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span
+                      className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/20 text-sm font-bold flex-shrink-0"
+                      aria-hidden
+                    >
+                      {pendingApprovals.length}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold leading-tight truncate">
+                        Pending approval
+                      </p>
+                      <p className="text-[11px] text-amber-100/95 font-medium truncate">
+                        Booking{pendingApprovals.length === 1 ? "" : "s"} waiting on a yes/no
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => fetchJobs({ silent: true })}
+                    className="text-[11px] font-semibold px-2.5 py-1.5 rounded-lg bg-white/15 hover:bg-white/20 transition-colors flex-shrink-0"
+                    title="Refresh"
+                  >
+                    Refresh
+                  </button>
+                </div>
+                <ul className="divide-y divide-amber-100/80 max-h-[232px] overflow-y-auto">
+                  {pendingApprovals.map((job) => (
+                    <li key={job.id} className="p-3">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedJob(job)}
+                        className="w-full text-left rounded-xl px-1 py-0.5 -mx-1 -my-0.5 hover:bg-amber-50/70 transition-colors"
+                        title="Open booking request"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-slate-900 truncate">
+                              {customerLine(job)}
+                            </p>
+                            <p className="text-sm text-slate-600 truncate">
+                              {getJobBikeDisplayTitle(job)}
+                            </p>
+                          </div>
+                          {job.dropOffDate && (
+                            <span
+                              className="flex-shrink-0 text-[10px] font-semibold text-amber-900/80 bg-amber-100 px-2 py-1 rounded-md self-start"
+                              title="Drop-off"
+                            >
+                              {formatShortDate(job.dropOffDate)}
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                      <div className="flex gap-2 mt-2.5">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAccept(job.id);
+                          }}
+                          className="flex-1 min-h-[36px] rounded-xl bg-emerald-600 px-3 text-xs font-semibold text-white hover:bg-emerald-700 active:bg-emerald-800 transition-colors touch-manipulation"
+                        >
+                          Accept
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRejectClick(job);
+                          }}
+                          className="flex-1 min-h-[36px] rounded-xl border border-red-200 bg-red-50 px-3 text-xs font-semibold text-red-800 hover:bg-red-100 active:bg-red-100 transition-colors touch-manipulation"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                      {features.notifyCustomerEnabled &&
+                        job.customer &&
+                        (job.customer.email || job.customer.phone) && (
+                          <label className="flex items-start gap-2 mt-2.5 px-0.5 cursor-pointer select-none touch-manipulation">
+                            <input
+                              type="checkbox"
+                              checked={jobNotifyCustomer(job.id)}
+                              onChange={(e) =>
+                                onJobNotifyCustomerChange(job.id, e.target.checked)
+                              }
+                              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+                            />
+                            <span className="text-[11px] text-slate-600 leading-snug">
+                              <span className="font-semibold text-slate-800">Notify customer</span>
+                              <span className="block text-slate-500 mt-0.5">
+                                Uncheck to skip email and SMS when accepting or rejecting from the board.
+                              </span>
+                            </span>
+                          </label>
+                        )}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            </div>
+          ) : null}
+        </div>
         <div className="flex flex-wrap gap-2">
           <button
             onClick={handleArchiveCompleted}
@@ -527,10 +658,6 @@ export function KanbanBoard() {
               stage={stage}
               jobs={jobsByStage[stage] || []}
               onJobClick={(job) => setSelectedJob(job)}
-              onAccept={stage === "PENDING_APPROVAL" ? handleAccept : undefined}
-              onReject={
-                stage === "PENDING_APPROVAL" ? handleRejectClick : undefined
-              }
               dragDisabled={isMobileBoard}
               showMobileStageSelect={isMobileBoard}
               onStageChange={patchJobStage}
