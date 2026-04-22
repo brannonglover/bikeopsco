@@ -182,6 +182,8 @@ export interface Job {
   archivedAt?: string | null;
   columnSortOrder?: number | null;
   paymentStatus?: PaymentStatus;
+  /** Sum of successful payments recorded for this job (USD). */
+  totalPaid?: number;
   jobServices?: JobService[];
   jobProducts?: JobProduct[];
   createdAt: string;

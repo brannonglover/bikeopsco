@@ -1424,7 +1424,19 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
 
   // Mirror parent job when it changes (e.g. kanban drag PATCH updates selectedJob — same id, new object)
   useEffect(() => {
-    setJob(jobProp);
+    setJob((prev) => {
+      if (!jobProp) return jobProp;
+      if (!prev || prev.id !== jobProp.id) return jobProp;
+
+      const prevMs = Date.parse(prev.updatedAt);
+      const nextMs = Date.parse(jobProp.updatedAt);
+      if (Number.isFinite(prevMs) && Number.isFinite(nextMs) && nextMs < prevMs) {
+        return prev;
+      }
+
+      // Merge so we don't clobber fields not returned by the parent view (e.g. jobServices/jobProducts).
+      return { ...prev, ...jobProp };
+    });
   }, [jobProp]);
 
   // One GET per modal open (per job id) to enrich linked bike data. A slow response must not overwrite
@@ -2530,6 +2542,18 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
       return sum + price * (jp.quantity || 1);
     }, 0);
 
+  const totalPaid =
+    typeof job.totalPaid === "number"
+      ? job.totalPaid
+      : job.paymentStatus === "PAID"
+        ? total
+        : 0;
+  const processingFee = Math.max(0, Math.round((totalPaid - total) * 100) / 100);
+  const remaining = Math.max(
+    0,
+    Math.round((total - Math.min(totalPaid, total)) * 100) / 100
+  );
+
   return (
     <div>
       <div className="space-y-3 mb-3">
@@ -3051,6 +3075,26 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
       <div className="flex justify-between items-center pt-4 mt-4 border-t-2 border-slate-200">
         <span className="font-bold text-slate-900">Total</span>
         <Price amount={total} variant="total" />
+      </div>
+      <div className="mt-2 space-y-1.5 text-sm">
+        <div className="flex items-center justify-between gap-3">
+          <span className="font-medium text-slate-600">Paid</span>
+          <Price amount={totalPaid} variant="inline" />
+        </div>
+        {processingFee > 0 && (
+          <div className="flex items-center justify-between gap-3 text-xs text-slate-500">
+            <span>Includes card processing fee</span>
+            <Price amount={processingFee} variant="inline" className="text-slate-500" />
+          </div>
+        )}
+        <div className="flex items-center justify-between gap-3 pt-2 mt-2 border-t border-slate-200">
+          <span className="font-semibold text-slate-900">Remaining</span>
+          <Price
+            amount={remaining}
+            variant="inline"
+            className={remaining > 0 ? "text-amber-700 font-bold" : ""}
+          />
+        </div>
       </div>
       {job.paymentStatus === "PAID" ? (
         <PaidStatusBlock job={job} />

@@ -27,15 +27,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: `Webhook Error: ${message}` }, { status: 400 });
   }
 
-  if (event.type === "payment_intent.succeeded") {
-    const paymentIntent = event.data.object as Stripe.PaymentIntent;
-    const jobId = paymentIntent.metadata?.jobId;
-    if (!jobId) {
-      console.error("Payment intent missing jobId in metadata");
-      return NextResponse.json({ received: true });
-    }
+	  if (event.type === "payment_intent.succeeded") {
+	    const paymentIntent = event.data.object as Stripe.PaymentIntent;
+	    const jobId = paymentIntent.metadata?.jobId;
+	    if (!jobId) {
+	      console.error("Payment intent missing jobId in metadata");
+	      return NextResponse.json({ received: true });
+	    }
 
-    try {
+	    try {
       const existing = await prisma.payment.findUnique({
         where: { stripePaymentIntentId: paymentIntent.id },
       });
@@ -44,22 +44,24 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ received: true });
       }
 
-      await prisma.$transaction(async (tx) => {
-        const amount = (paymentIntent.amount / 100).toFixed(2);
-        await tx.payment.create({
-          data: {
-            jobId,
-            stripePaymentIntentId: paymentIntent.id,
-            amount,
-            currency: paymentIntent.currency ?? "usd",
-            status: paymentIntent.status,
-            paymentMethod: paymentIntent.payment_method
-              ? typeof paymentIntent.payment_method === "string"
-                ? paymentIntent.payment_method
-                : (paymentIntent.payment_method as Stripe.PaymentMethod).type
-              : null,
-          },
-        });
+	      await prisma.$transaction(async (tx) => {
+	        const paymentAt = new Date(event.created * 1000);
+	        const amount = (paymentIntent.amount / 100).toFixed(2);
+	        await tx.payment.create({
+	          data: {
+	            jobId,
+	            stripePaymentIntentId: paymentIntent.id,
+	            amount,
+	            currency: paymentIntent.currency ?? "usd",
+	            status: paymentIntent.status,
+	            createdAt: paymentAt,
+	            paymentMethod: paymentIntent.payment_method
+	              ? typeof paymentIntent.payment_method === "string"
+	                ? paymentIntent.payment_method
+	                : (paymentIntent.payment_method as Stripe.PaymentMethod).type
+	              : null,
+	          },
+	        });
 
         const jobBikes = await tx.jobBike.findMany({
           where: { jobId },
@@ -69,16 +71,16 @@ export async function POST(request: NextRequest) {
           (b) => b.waitingOnPartsAt !== null && b.completedAt === null
         );
 
-        await tx.job.update({
-          where: { id: jobId },
-          data: {
-            paymentStatus: "PAID",
-            ...(hasUnresolvedParts
-              ? { stage: "WAITING_ON_PARTS" }
-              : { stage: "COMPLETED", completedAt: new Date() }),
-          },
-        });
-      });
+	        await tx.job.update({
+	          where: { id: jobId },
+	          data: {
+	            paymentStatus: "PAID",
+	            ...(hasUnresolvedParts
+	              ? { stage: "WAITING_ON_PARTS" }
+	              : { stage: "COMPLETED", completedAt: paymentAt }),
+	          },
+	        });
+	      });
 
       const job = await prisma.job.findUnique({
         where: { id: jobId },

@@ -42,16 +42,16 @@ export async function POST(
     return NextResponse.json({ error: "Job is already marked as paid" }, { status: 400 });
   }
 
-  const stripe = getStripe();
-  let paymentIntent;
-  try {
-    paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId, {
-      expand: ["payment_method"],
-    });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return NextResponse.json(
-      { error: `Could not retrieve Payment Intent from Stripe: ${msg}` },
+	  const stripe = getStripe();
+	  let paymentIntent;
+	  try {
+	    paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId, {
+	      expand: ["payment_method", "latest_charge"],
+	    });
+	  } catch (err) {
+	    const msg = err instanceof Error ? err.message : String(err);
+	    return NextResponse.json(
+	      { error: `Could not retrieve Payment Intent from Stripe: ${msg}` },
       { status: 400 }
     );
   }
@@ -81,24 +81,32 @@ export async function POST(
     );
   }
 
-  try {
-    await prisma.$transaction(async (tx) => {
-      const amount = (paymentIntent.amount / 100).toFixed(2);
-      const pm = paymentIntent.payment_method;
-      await tx.payment.create({
-        data: {
-          jobId,
-          stripePaymentIntentId: paymentIntent.id,
-          amount,
-          currency: paymentIntent.currency ?? "usd",
-          status: paymentIntent.status,
-          paymentMethod: pm
-            ? typeof pm === "string"
-              ? pm
-              : pm.type
-            : null,
-        },
-      });
+	  try {
+	    await prisma.$transaction(async (tx) => {
+	      const paymentAt = (() => {
+	        const latestCharge = paymentIntent.latest_charge;
+	        if (latestCharge && typeof latestCharge !== "string") {
+	          return new Date(latestCharge.created * 1000);
+	        }
+	        return new Date(paymentIntent.created * 1000);
+	      })();
+	      const amount = (paymentIntent.amount / 100).toFixed(2);
+	      const pm = paymentIntent.payment_method;
+	      await tx.payment.create({
+	        data: {
+	          jobId,
+	          stripePaymentIntentId: paymentIntent.id,
+	          amount,
+	          currency: paymentIntent.currency ?? "usd",
+	          status: paymentIntent.status,
+	          createdAt: paymentAt,
+	          paymentMethod: pm
+	            ? typeof pm === "string"
+	              ? pm
+	              : pm.type
+	            : null,
+	        },
+	      });
 
       const jobBikes = await tx.jobBike.findMany({
         where: { jobId },
@@ -108,19 +116,19 @@ export async function POST(
         (b) => b.waitingOnPartsAt !== null && b.completedAt === null
       );
 
-      await tx.job.update({
-        where: { id: jobId },
-        data: {
-          paymentStatus: "PAID",
-          ...(hasUnresolvedParts
-            ? { stage: "WAITING_ON_PARTS" }
-            : { stage: "COMPLETED", completedAt: new Date() }),
-        },
-      });
-    });
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    console.error("Failed to reprocess Stripe payment:", error);
+	      await tx.job.update({
+	        where: { id: jobId },
+	        data: {
+	          paymentStatus: "PAID",
+	          ...(hasUnresolvedParts
+	            ? { stage: "WAITING_ON_PARTS" }
+	            : { stage: "COMPLETED", completedAt: paymentAt }),
+	        },
+	      });
+	    });
+	  } catch (error) {
+	    const msg = error instanceof Error ? error.message : String(error);
+	    console.error("Failed to reprocess Stripe payment:", error);
     return NextResponse.json(
       { error: "Failed to record payment", details: msg },
       { status: 500 }

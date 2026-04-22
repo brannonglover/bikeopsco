@@ -65,15 +65,15 @@ export default function StatsPage() {
         (e.g. Square) is separate.
       </p>
 
-      {stats.lastYear && (
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm mb-6 max-w-md">
-          <p className="text-sm font-medium text-slate-500 uppercase tracking-wide mb-3">
-            {stats.lastYear.calendarYear} (full year)
-          </p>
-          <div>
-            <Price amount={stats.lastYear.revenue} variant="total" className="text-2xl" />
-            <p className="text-sm text-slate-600">revenue</p>
-            {(() => {
+	      {stats.lastYear && (
+	        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm mb-6 max-w-md">
+	          <p className="text-sm font-medium text-slate-500 uppercase tracking-wide mb-3">
+	            Last Year ({stats.lastYear.calendarYear})
+	          </p>
+	          <div>
+	            <Price amount={stats.lastYear.revenue} variant="total" className="text-2xl" />
+	            <p className="text-sm text-slate-600">revenue</p>
+	            {(() => {
               const stripe = stats.lastYear.stripeRevenue;
               const cash = stats.lastYear.cashRevenue;
               const imp = stats.lastYear.importedRevenue;

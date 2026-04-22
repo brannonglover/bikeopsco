@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+
 function getDateRanges() {
   const now = new Date();
   const utc = (y: number, m: number, d: number, h = 0, min = 0, sec = 0) =>

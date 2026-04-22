@@ -44,6 +44,16 @@ const updateJobSchema = z.object({
   internalNotes: z.string().optional().nullable(),
 });
 
+function computeTotalPaid(payments: Array<{ amount: unknown; status: unknown }> | null | undefined): number {
+  const totalPaid = (payments ?? []).reduce((sum, p) => {
+    const status = String(p.status ?? "").toLowerCase();
+    if (status !== "succeeded") return sum;
+    const n = Number.parseFloat(String(p.amount));
+    return sum + (Number.isFinite(n) ? n : 0);
+  }, 0);
+  return Math.round(totalPaid * 100) / 100;
+}
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: { id: string } }
@@ -57,12 +67,18 @@ export async function GET(
         jobBikes: { include: { bike: true }, orderBy: { sortOrder: "asc" } },
         jobServices: { include: { service: true, jobBike: { select: { id: true, make: true, model: true, nickname: true } } } },
         jobProducts: { include: { product: true, jobBike: { select: { id: true, make: true, model: true, nickname: true } } } },
+        payments: { select: { amount: true, status: true } },
       },
     });
     if (!job) {
       return NextResponse.json({ error: "Job not found" }, { status: 404 });
     }
-    const res = NextResponse.json(job);
+    const totalPaid = computeTotalPaid(job.payments);
+    const jobWithoutPayments = { ...job, payments: undefined };
+    const res = NextResponse.json({
+      ...jobWithoutPayments,
+      totalPaid,
+    });
     res.headers.set("Cache-Control", "no-store");
     return res;
   } catch (error) {
@@ -371,6 +387,7 @@ export async function PATCH(
           jobBikes: { include: { bike: true }, orderBy: { sortOrder: "asc" } },
           jobServices: { include: { service: true, jobBike: { select: { id: true, make: true, model: true, nickname: true } } } },
           jobProducts: { include: { product: true, jobBike: { select: { id: true, make: true, model: true, nickname: true } } } },
+          payments: { select: { amount: true, status: true } },
         },
       });
       if (!result) throw new Error("Job not found");
@@ -438,7 +455,11 @@ export async function PATCH(
       })();
     }
 
-    return NextResponse.json(job);
+    const totalPaid = computeTotalPaid(job.payments);
+    const jobWithoutPayments = { ...job, payments: undefined };
+    const res = NextResponse.json({ ...jobWithoutPayments, totalPaid });
+    res.headers.set("Cache-Control", "no-store");
+    return res;
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.flatten() }, { status: 400 });
