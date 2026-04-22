@@ -6,6 +6,8 @@ import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { Price } from "@/components/ui/Price";
 
+const PAYABLE_STAGES = ["RECEIVED", "WORKING_ON", "WAITING_ON_CUSTOMER", "WAITING_ON_PARTS", "BIKE_READY", "COMPLETED"] as const;
+
 function PaymentForm({
   jobId,
   total,
@@ -112,7 +114,6 @@ export default function PayPage() {
   const searchParams = useSearchParams();
   const jobId = params?.jobId as string;
   const inPerson = searchParams?.get("mode") === "in_person";
-  const PAYABLE_STAGES = ["RECEIVED", "WORKING_ON", "WAITING_ON_PARTS", "BIKE_READY", "COMPLETED"];
 
   const [job, setJob] = useState<{
     id: string;

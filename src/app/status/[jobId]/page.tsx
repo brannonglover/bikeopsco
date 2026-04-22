@@ -12,6 +12,7 @@ const STAGE_LABELS: Record<string, string> = {
   BOOKED_IN: "Booked In",
   RECEIVED: "Received",
   WORKING_ON: "Working On",
+  WAITING_ON_CUSTOMER: "Action needed",
   WAITING_ON_PARTS: "Waiting on Parts",
   BIKE_READY: "Bike Ready",
   COMPLETED: "Completed",
@@ -23,6 +24,7 @@ const STAGE_DESCRIPTIONS: Record<string, string> = {
   BOOKED_IN: "Your repair is scheduled.",
   RECEIVED: "Your bike has arrived at the shop.",
   WORKING_ON: "We're working on your bike.",
+  WAITING_ON_CUSTOMER: "We’re waiting on your approval before we continue. Please reply to our email (or contact the shop) and we’ll get back to work.",
   WAITING_ON_PARTS: "We're waiting on parts to complete your repair.",
   BIKE_READY: "Your bike is ready for pickup!",
   COMPLETED: "Thanks for your business!",
@@ -34,6 +36,7 @@ const BIKE_STATUS_LABEL: Record<string, string> = {
   BOOKED_IN: "Booked in",
   RECEIVED: "Received",
   WORKING_ON: "In queue",
+  WAITING_ON_CUSTOMER: "Waiting on you",
   WAITING_ON_PARTS: "Waiting on parts",
   BIKE_READY: "Ready for pickup",
   COMPLETED: "Completed",
@@ -156,6 +159,7 @@ function BikeStatusBadge({ stage, isWorkingOn, isCompleted, isWaitingOnParts }: 
     BOOKED_IN: "text-slate-600 bg-slate-100 border-slate-200",
     RECEIVED: "text-blue-700 bg-blue-50 border-blue-200",
     WORKING_ON: "text-slate-600 bg-slate-100 border-slate-200",
+    WAITING_ON_CUSTOMER: "text-violet-800 bg-violet-50 border-violet-200",
     WAITING_ON_PARTS: "text-yellow-800 bg-yellow-50 border-yellow-200",
     BIKE_READY: "text-emerald-700 bg-emerald-50 border-emerald-200",
     COMPLETED: "text-emerald-700 bg-emerald-50 border-emerald-200",
@@ -500,7 +504,7 @@ export default function StatusPage() {
       </div>
 
       {job.paymentStatus !== "PAID" && total > 0 &&
-        ["RECEIVED", "WORKING_ON", "WAITING_ON_PARTS", "BIKE_READY", "COMPLETED"].includes(job.stage) && (
+        ["RECEIVED", "WORKING_ON", "WAITING_ON_CUSTOMER", "WAITING_ON_PARTS", "BIKE_READY", "COMPLETED"].includes(job.stage) && (
         <Link
           href={`/pay/${job.id}`}
           className="block w-full rounded-lg bg-emerald-600 px-4 py-3 text-center font-semibold text-white hover:bg-emerald-700"

@@ -35,7 +35,7 @@ export async function POST(
       );
     }
 
-    const PAYABLE_STAGES = ["RECEIVED", "WORKING_ON", "WAITING_ON_PARTS", "BIKE_READY", "COMPLETED"];
+    const PAYABLE_STAGES = ["RECEIVED", "WORKING_ON", "WAITING_ON_CUSTOMER", "WAITING_ON_PARTS", "BIKE_READY", "COMPLETED"];
     if (mode === "online" && !PAYABLE_STAGES.includes(job.stage)) {
       return NextResponse.json(
         { error: "Payment is not available until the booking has been confirmed and the bike received" },

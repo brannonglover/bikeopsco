@@ -30,6 +30,7 @@ const STAGES: Stage[] = [
   "BOOKED_IN",
   "RECEIVED",
   "WORKING_ON",
+  "WAITING_ON_CUSTOMER",
   "WAITING_ON_PARTS",
   "BIKE_READY",
   "COMPLETED",

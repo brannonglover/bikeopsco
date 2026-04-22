@@ -361,9 +361,32 @@ export async function sendJobEmail(
   }
 
   const { prisma } = await import("./db");
-  const template = await prisma.emailTemplate.findUnique({
+  let template = await prisma.emailTemplate.findUnique({
     where: { slug: templateSlug },
   });
+
+  // Backfill newly-added default templates for older databases that haven't been re-seeded.
+  if (!template && templateSlug === "waiting_on_customer") {
+    try {
+      template = await prisma.emailTemplate.create({
+        data: {
+          slug: templateSlug,
+          name: "Waiting on Customer",
+          subject: "Action needed: We’re waiting on your approval – {{shopName}}",
+          bodyHtml:
+            `<p>Hi {{customerName}},</p><p>We’re ready to move forward with your {{bikeMake}} {{bikeModel}}, but we need your approval before we continue.</p><p>Please reply to this email with your approval (or any questions), and we’ll get back to work.</p><p style="margin: 20px 0;">{{statusButtonHtml}}</p><p>Thanks,<br/>The {{shopName}} Team</p>`,
+          triggerType: "STAGE_CHANGE",
+          stage: "WAITING_ON_CUSTOMER",
+          deliveryType: null,
+          delayDays: null,
+        },
+      });
+    } catch {
+      template = await prisma.emailTemplate.findUnique({
+        where: { slug: templateSlug },
+      });
+    }
+  }
 
   if (!template) {
     return { ok: false, error: "Template not found" };
@@ -917,6 +940,7 @@ export function getTemplateForStage(
   }
   const map: Record<string, string> = {
     WORKING_ON: "working_on_bike",
+    WAITING_ON_CUSTOMER: "waiting_on_customer",
     WAITING_ON_PARTS: "waiting_on_parts",
     BIKE_READY: "bike_ready",
     COMPLETED: "bike_completed",

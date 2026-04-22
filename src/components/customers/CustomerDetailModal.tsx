@@ -49,6 +49,7 @@ const STAGE_LABELS: Record<string, string> = {
   BOOKED_IN: "Booked in",
   RECEIVED: "Received",
   WORKING_ON: "Working on it",
+  WAITING_ON_CUSTOMER: "Waiting on customer",
   WAITING_ON_PARTS: "Waiting on parts",
   BIKE_READY: "Ready for pickup",
   COMPLETED: "Completed",
@@ -66,6 +67,7 @@ function stageBadgeClass(stage: string): string {
   if (stage === "COMPLETED") return "bg-green-100 text-green-700";
   if (stage === "CANCELLED") return "bg-red-100 text-red-600";
   if (stage === "BIKE_READY") return "bg-blue-100 text-blue-700";
+  if (stage === "WAITING_ON_CUSTOMER") return "bg-violet-100 text-violet-700";
   return "bg-slate-100 text-slate-600";
 }
 

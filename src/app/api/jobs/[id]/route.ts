@@ -17,7 +17,7 @@ const bikeSchema = z.object({
 });
 
 const updateJobSchema = z.object({
-  stage: z.enum(["BOOKED_IN", "RECEIVED", "WORKING_ON", "WAITING_ON_PARTS", "BIKE_READY", "COMPLETED", "CANCELLED"]).optional(),
+  stage: z.enum(["BOOKED_IN", "RECEIVED", "WORKING_ON", "WAITING_ON_CUSTOMER", "WAITING_ON_PARTS", "BIKE_READY", "COMPLETED", "CANCELLED"]).optional(),
   /** Archive/unarchive a job. When true, sets archivedAt; when false, clears it. */
   archived: z.boolean().optional(),
   /** When false, skip customer email and SMS for this update (stage / pending rejection). Defaults to true if omitted. */

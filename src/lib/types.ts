@@ -3,6 +3,7 @@ export type Stage =
   | "BOOKED_IN"
   | "RECEIVED"
   | "WORKING_ON"
+  | "WAITING_ON_CUSTOMER"
   | "WAITING_ON_PARTS"
   | "BIKE_READY"
   | "COMPLETED"
@@ -120,7 +121,12 @@ export interface Conversation {
   customerId: string;
   jobId: string | null;
   customer: Customer;
-  job?: { id: string; bikeMake: string; bikeModel: string } | null;
+  job?: {
+    id: string;
+    bikeMake: string;
+    bikeModel: string | null;
+    jobBikes?: JobBike[];
+  } | null;
   messages: ChatMessage[];
   archived?: boolean;
   customerTypingAt?: string | null;
