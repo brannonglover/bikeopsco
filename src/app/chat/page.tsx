@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useState, useEffect, useRef, useCallback, useLayoutEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import type { Conversation, ChatMessage, Customer } from "@/lib/types";
@@ -954,9 +955,15 @@ function ChatPageContent() {
                   </svg>
                 </button>
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-slate-900 truncate">
+                  <h3 className="font-semibold text-slate-900">
                     {selectedConv ? (
-                      <CustomerName conv={selectedConv} />
+                      <Link
+                        href={`/settings/customers?edit=${encodeURIComponent(selectedConv.customerId)}`}
+                        className="block truncate hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-inset rounded"
+                        title="View customer profile"
+                      >
+                        <CustomerName conv={selectedConv} />
+                      </Link>
                     ) : (
                       "Loading…"
                     )}
