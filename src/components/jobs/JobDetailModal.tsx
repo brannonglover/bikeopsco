@@ -2542,16 +2542,16 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
       return sum + price * (jp.quantity || 1);
     }, 0);
 
-  const totalPaid =
+  const grossPaid =
     typeof job.totalPaid === "number"
       ? job.totalPaid
       : job.paymentStatus === "PAID"
         ? total
         : 0;
-  const processingFee = Math.max(0, Math.round((totalPaid - total) * 100) / 100);
+  const paidTowardTotal = Math.min(grossPaid, total);
   const remaining = Math.max(
     0,
-    Math.round((total - Math.min(totalPaid, total)) * 100) / 100
+    Math.round((total - paidTowardTotal) * 100) / 100
   );
 
   return (
@@ -3079,14 +3079,8 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
       <div className="mt-2 space-y-1.5 text-sm">
         <div className="flex items-center justify-between gap-3">
           <span className="font-medium text-slate-600">Paid</span>
-          <Price amount={totalPaid} variant="inline" />
+          <Price amount={paidTowardTotal} variant="inline" />
         </div>
-        {processingFee > 0 && (
-          <div className="flex items-center justify-between gap-3 text-xs text-slate-500">
-            <span>Includes card processing fee</span>
-            <Price amount={processingFee} variant="inline" className="text-slate-500" />
-          </div>
-        )}
         <div className="flex items-center justify-between gap-3 pt-2 mt-2 border-t border-slate-200">
           <span className="font-semibold text-slate-900">Remaining</span>
           <Price
