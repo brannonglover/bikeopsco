@@ -58,7 +58,7 @@ const STAGE_LABELS: Record<string, string> = {
 
 const PAYMENT_LABELS: Record<string, string> = {
   UNPAID: "Unpaid",
-  PENDING: "Pending",
+  PENDING: "Partially paid",
   PAID: "Paid",
   REFUNDED: "Refunded",
 };

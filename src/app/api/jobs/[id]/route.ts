@@ -6,7 +6,7 @@ import { sendJobEmail, getTemplateForStage, sendBookingDeclinedEmail } from "@/l
 import { sendJobSms, getTemplateSlugForStage } from "@/lib/sms";
 import { syncCollectionJobService } from "@/lib/collection-fee";
 import { getAppFeatures } from "@/lib/app-settings";
-import { computeTotalFromChargedAmount } from "@/lib/stripe";
+import { computeJobSubtotal, computeTotalPaid, getJobPaymentSummary } from "@/lib/job-payments";
 
 const bikeSchema = z.object({
   make: z.string().min(1),
@@ -45,33 +45,6 @@ const updateJobSchema = z.object({
   internalNotes: z.string().optional().nullable(),
 });
 
-function computeTotalPaid(
-  payments: Array<{
-    amount: unknown;
-    status: unknown;
-    stripePaymentIntentId?: string | null;
-    paymentMethod?: string | null;
-  }> | null | undefined
-): number {
-  const totalPaid = (payments ?? []).reduce((sum, p) => {
-    const status = String(p.status ?? "").toLowerCase();
-    if (status !== "succeeded") return sum;
-    const n = Number.parseFloat(String(p.amount));
-    if (!Number.isFinite(n)) return sum;
-
-    const method = String(p.paymentMethod ?? "").toLowerCase();
-    const isStripe = Boolean(p.stripePaymentIntentId);
-    const mode =
-      method === "terminal" || method === "card_present" ? "terminal" : "online";
-
-    // Stripe "amount" is stored as the charged amount (includes card surcharge for online/in_person).
-    // For the invoice/remaining calculation we want the base job total it pays down (i.e. after fees).
-    const paidTowardJobTotal = isStripe ? computeTotalFromChargedAmount(n, mode) : n;
-    return sum + paidTowardJobTotal;
-  }, 0);
-  return Math.round(totalPaid * 100) / 100;
-}
-
 export async function GET(
   _request: NextRequest,
   { params }: { params: { id: string } }
@@ -91,10 +64,20 @@ export async function GET(
     if (!job) {
       return NextResponse.json({ error: "Job not found" }, { status: 404 });
     }
+    const subtotal = computeJobSubtotal({
+      jobServices: job.jobServices,
+      jobProducts: job.jobProducts,
+    });
     const totalPaid = computeTotalPaid(job.payments);
+    const paymentSummary = getJobPaymentSummary({
+      currentStatus: job.paymentStatus,
+      subtotal,
+      totalPaid,
+    });
     const jobWithoutPayments = { ...job, payments: undefined };
     const res = NextResponse.json({
       ...jobWithoutPayments,
+      paymentStatus: paymentSummary.paymentStatus,
       totalPaid,
     });
     res.headers.set("Cache-Control", "no-store");
@@ -473,9 +456,22 @@ export async function PATCH(
       })();
     }
 
+    const subtotal = computeJobSubtotal({
+      jobServices: job.jobServices,
+      jobProducts: job.jobProducts,
+    });
     const totalPaid = computeTotalPaid(job.payments);
+    const paymentSummary = getJobPaymentSummary({
+      currentStatus: job.paymentStatus,
+      subtotal,
+      totalPaid,
+    });
     const jobWithoutPayments = { ...job, payments: undefined };
-    const res = NextResponse.json({ ...jobWithoutPayments, totalPaid });
+    const res = NextResponse.json({
+      ...jobWithoutPayments,
+      paymentStatus: paymentSummary.paymentStatus,
+      totalPaid,
+    });
     res.headers.set("Cache-Control", "no-store");
     return res;
   } catch (error) {

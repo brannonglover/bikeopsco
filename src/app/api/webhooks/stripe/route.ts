@@ -3,6 +3,7 @@ import Stripe from "stripe";
 import { getStripe } from "@/lib/stripe";
 import { prisma } from "@/lib/db";
 import { sendPaymentReceiptEmail } from "@/lib/email";
+import { computeJobSubtotal, computeTotalPaid, getJobPaymentSummary } from "@/lib/job-payments";
 
 export async function POST(request: NextRequest) {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -27,15 +28,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: `Webhook Error: ${message}` }, { status: 400 });
   }
 
-	  if (event.type === "payment_intent.succeeded") {
-	    const paymentIntent = event.data.object as Stripe.PaymentIntent;
-	    const jobId = paymentIntent.metadata?.jobId;
-	    if (!jobId) {
-	      console.error("Payment intent missing jobId in metadata");
-	      return NextResponse.json({ received: true });
-	    }
+  if (event.type === "payment_intent.succeeded") {
+    const paymentIntent = event.data.object as Stripe.PaymentIntent;
+    const jobId = paymentIntent.metadata?.jobId;
+    if (!jobId) {
+      console.error("Payment intent missing jobId in metadata");
+      return NextResponse.json({ received: true });
+    }
 
-	    try {
+    try {
       const existing = await prisma.payment.findUnique({
         where: { stripePaymentIntentId: paymentIntent.id },
       });
@@ -44,29 +45,48 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ received: true });
       }
 
-	      await prisma.$transaction(async (tx) => {
-	        const paymentAt = new Date(event.created * 1000);
-	        const amount = (paymentIntent.amount / 100).toFixed(2);
-          const mode =
-            typeof paymentIntent.metadata?.mode === "string" && paymentIntent.metadata.mode.trim()
-              ? paymentIntent.metadata.mode.trim()
-              : null;
-	        await tx.payment.create({
-	          data: {
-	            jobId,
-	            stripePaymentIntentId: paymentIntent.id,
-	            amount,
-	            currency: paymentIntent.currency ?? "usd",
-	            status: paymentIntent.status,
-	            createdAt: paymentAt,
-	            paymentMethod: mode ??
-                (paymentIntent.payment_method
-	                ? typeof paymentIntent.payment_method === "string"
-	                  ? paymentIntent.payment_method
-	                  : (paymentIntent.payment_method as Stripe.PaymentMethod).type
-	                : null),
-	          },
-	        });
+      await prisma.$transaction(async (tx) => {
+        const paymentAt = new Date(event.created * 1000);
+        const amount = (paymentIntent.amount / 100).toFixed(2);
+        const mode =
+          typeof paymentIntent.metadata?.mode === "string" && paymentIntent.metadata.mode.trim()
+            ? paymentIntent.metadata.mode.trim()
+            : null;
+        await tx.payment.create({
+          data: {
+            jobId,
+            stripePaymentIntentId: paymentIntent.id,
+            amount,
+            currency: paymentIntent.currency ?? "usd",
+            status: paymentIntent.status,
+            createdAt: paymentAt,
+            paymentMethod: mode ??
+              (paymentIntent.payment_method
+                ? typeof paymentIntent.payment_method === "string"
+                  ? paymentIntent.payment_method
+                  : (paymentIntent.payment_method as Stripe.PaymentMethod).type
+                : null),
+          },
+        });
+
+        const jobWithPayments = await tx.job.findUnique({
+          where: { id: jobId },
+          include: {
+            jobServices: true,
+            jobProducts: true,
+            payments: {
+              select: {
+                amount: true,
+                status: true,
+                stripePaymentIntentId: true,
+                paymentMethod: true,
+              },
+            },
+          },
+        });
+        if (!jobWithPayments) {
+          throw new Error(`Job ${jobId} not found while applying Stripe payment`);
+        }
 
         const jobBikes = await tx.jobBike.findMany({
           where: { jobId },
@@ -76,16 +96,29 @@ export async function POST(request: NextRequest) {
           (b) => b.waitingOnPartsAt !== null && b.completedAt === null
         );
 
-	        await tx.job.update({
-	          where: { id: jobId },
-	          data: {
-	            paymentStatus: "PAID",
-	            ...(hasUnresolvedParts
-	              ? { stage: "WAITING_ON_PARTS" }
-	              : { stage: "COMPLETED", completedAt: paymentAt }),
-	          },
-	        });
-	      });
+        const subtotal = computeJobSubtotal({
+          jobServices: jobWithPayments.jobServices,
+          jobProducts: jobWithPayments.jobProducts,
+        });
+        const totalPaid = computeTotalPaid(jobWithPayments.payments);
+        const paymentSummary = getJobPaymentSummary({
+          currentStatus: jobWithPayments.paymentStatus,
+          subtotal,
+          totalPaid,
+        });
+
+        await tx.job.update({
+          where: { id: jobId },
+          data: {
+            paymentStatus: paymentSummary.paymentStatus,
+            ...(paymentSummary.isPaidInFull
+              ? hasUnresolvedParts
+                ? { stage: "WAITING_ON_PARTS" }
+                : { stage: "COMPLETED", completedAt: paymentAt }
+              : {}),
+          },
+        });
+      });
 
       const job = await prisma.job.findUnique({
         where: { id: jobId },

@@ -13,6 +13,7 @@ import {
   getDisplayPartsForJobBikeRow,
   getJobBikeDisplayTitle,
 } from "@/lib/job-display";
+import { getJobPaymentSummary } from "@/lib/job-payments";
 import { formatPhoneDisplay, phoneTelHref } from "@/lib/phone";
 
 function formatChatPreviewTime(iso: string): string {
@@ -1869,11 +1870,15 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
             >
               {job.deliveryType === "COLLECTION_SERVICE" ? "Collection" : "Drop-off"}
             </span>
-            {job.paymentStatus === "PAID" && (
-              <span className="text-xs font-medium px-2 py-1 rounded bg-emerald-100 text-emerald-800">
+            {job.paymentStatus === "PAID" ? (
+              <span className="text-xs font-medium px-2 py-1 rounded bg-emerald-100 text-emerald-800 whitespace-nowrap">
                 Paid
               </span>
-            )}
+            ) : job.paymentStatus === "PENDING" ? (
+              <span className="text-xs font-medium px-2 py-1 rounded bg-amber-100 text-amber-800 whitespace-nowrap">
+                Partially paid
+              </span>
+            ) : null}
           </div>
 
           {job.customer && (
@@ -2545,14 +2550,14 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
   const grossPaid =
     typeof job.totalPaid === "number"
       ? job.totalPaid
-      : job.paymentStatus === "PAID"
-        ? total
-        : 0;
-  const paidTowardTotal = Math.min(grossPaid, total);
-  const remaining = Math.max(
-    0,
-    Math.round((total - paidTowardTotal) * 100) / 100
-  );
+      : 0;
+  const paymentSummary = getJobPaymentSummary({
+    currentStatus: job.paymentStatus,
+    subtotal: total,
+    totalPaid: grossPaid,
+  });
+  const paidTowardTotal = Math.min(paymentSummary.totalPaid, total);
+  const remaining = paymentSummary.remaining;
 
   return (
     <div>
@@ -3090,7 +3095,7 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
           />
         </div>
       </div>
-      {job.paymentStatus === "PAID" ? (
+      {paymentSummary.isPaidInFull ? (
         <PaidStatusBlock job={job} />
       ) : (
         <div className="mt-4 flex flex-col gap-2">
@@ -3104,7 +3109,7 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
               </svg>
-              Pay online
+              {paymentSummary.totalPaid > 0 ? "Pay remaining balance" : "Pay online"}
             </a>
             <a
               href={`/pay/${job.id}?mode=in_person`}
@@ -3115,7 +3120,7 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
               </svg>
               Collect in person
             </a>
-            <RecordCashButton jobId={job.id} onRecorded={onJobUpdated} total={total} />
+            <RecordCashButton jobId={job.id} onRecorded={onJobUpdated} total={remaining} />
           </div>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
             <CopyPaymentLinkButton jobId={job.id} />

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { sendPaymentReceiptEmail } from "@/lib/email";
+import { computeJobSubtotal, computeTotalPaid, getJobPaymentSummary } from "@/lib/job-payments";
 
 export async function POST(
   _request: NextRequest,
@@ -15,6 +16,14 @@ export async function POST(
         customer: true,
         jobServices: { include: { service: true } },
         jobProducts: { include: { product: true } },
+        payments: {
+          select: {
+            amount: true,
+            status: true,
+            stripePaymentIntentId: true,
+            paymentMethod: true,
+          },
+        },
       },
     });
 
@@ -22,29 +31,32 @@ export async function POST(
       return NextResponse.json({ error: "Job not found" }, { status: 404 });
     }
 
-    if (job.paymentStatus === "PAID") {
+    const subtotal = computeJobSubtotal({
+      jobServices: job.jobServices,
+      jobProducts: job.jobProducts,
+    });
+    const totalPaid = computeTotalPaid(job.payments);
+    const paymentSummary = getJobPaymentSummary({
+      currentStatus: job.paymentStatus,
+      subtotal,
+      totalPaid,
+    });
+
+    if (subtotal <= 0) {
+      return NextResponse.json(
+        { error: "Job has no services, products, or total is zero" },
+        { status: 400 }
+      );
+    }
+
+    if (paymentSummary.isPaidInFull || paymentSummary.remaining <= 0) {
       return NextResponse.json(
         { error: "Job is already paid" },
         { status: 400 }
       );
     }
 
-    const amount =
-      job.jobServices.reduce((sum, js) => {
-        const price = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);
-        return sum + (isNaN(price) ? 0 : price) * (js.quantity || 1);
-      }, 0) +
-      (job.jobProducts ?? []).reduce((sum, jp) => {
-        const price = typeof jp.unitPrice === "string" ? parseFloat(jp.unitPrice) : Number(jp.unitPrice);
-        return sum + (isNaN(price) ? 0 : price) * (jp.quantity || 1);
-      }, 0);
-
-    if (amount <= 0) {
-      return NextResponse.json(
-        { error: "Job has no services, products, or total is zero" },
-        { status: 400 }
-      );
-    }
+    const amount = paymentSummary.remaining;
 
     await prisma.$transaction(async (tx) => {
       await tx.payment.create({
@@ -57,6 +69,25 @@ export async function POST(
         },
       });
 
+      const jobWithPayments = await tx.job.findUnique({
+        where: { id: jobId },
+        include: {
+          jobServices: true,
+          jobProducts: true,
+          payments: {
+            select: {
+              amount: true,
+              status: true,
+              stripePaymentIntentId: true,
+              paymentMethod: true,
+            },
+          },
+        },
+      });
+      if (!jobWithPayments) {
+        throw new Error(`Job ${jobId} not found while recording cash payment`);
+      }
+
       const jobBikes = await tx.jobBike.findMany({
         where: { jobId },
         select: { waitingOnPartsAt: true, completedAt: true },
@@ -65,13 +96,26 @@ export async function POST(
         (b) => b.waitingOnPartsAt !== null && b.completedAt === null
       );
 
+      const updatedSubtotal = computeJobSubtotal({
+        jobServices: jobWithPayments.jobServices,
+        jobProducts: jobWithPayments.jobProducts,
+      });
+      const updatedTotalPaid = computeTotalPaid(jobWithPayments.payments);
+      const updatedPaymentSummary = getJobPaymentSummary({
+        currentStatus: jobWithPayments.paymentStatus,
+        subtotal: updatedSubtotal,
+        totalPaid: updatedTotalPaid,
+      });
+
       await tx.job.update({
         where: { id: jobId },
         data: {
-          paymentStatus: "PAID",
-          ...(hasUnresolvedParts
-            ? { stage: "WAITING_ON_PARTS" }
-            : { stage: "COMPLETED", completedAt: new Date() }),
+          paymentStatus: updatedPaymentSummary.paymentStatus,
+          ...(updatedPaymentSummary.isPaidInFull
+            ? hasUnresolvedParts
+              ? { stage: "WAITING_ON_PARTS" }
+              : { stage: "COMPLETED", completedAt: new Date() }
+            : {}),
         },
       });
     });

@@ -116,11 +116,15 @@ export function JobCardContent({
           >
             {job.deliveryType === "COLLECTION_SERVICE" ? "Collection" : "Drop-off"}
           </span>
-          {job.paymentStatus === "PAID" && (
-            <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800">
+          {job.paymentStatus === "PAID" ? (
+            <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 whitespace-nowrap">
               Paid
             </span>
-          )}
+          ) : job.paymentStatus === "PENDING" ? (
+            <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-amber-100 text-amber-800 whitespace-nowrap">
+              Partially paid
+            </span>
+          ) : null}
         </div>
         {job.dropOffDate && (
           <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-indigo-100 text-indigo-800" title="Drop-off date">

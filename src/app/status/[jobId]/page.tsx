@@ -6,6 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Price } from "@/components/ui/Price";
 import { BikePlaceholderIcon } from "@/components/ui/BikePlaceholderIcon";
+import { computeJobSubtotal, getJobPaymentSummary } from "@/lib/job-payments";
 
 const STAGE_LABELS: Record<string, string> = {
   PENDING_APPROVAL: "Awaiting confirmation",
@@ -81,8 +82,10 @@ type StatusJob = {
   dropOffDate: string | null;
   pickupDate: string | null;
   paymentStatus: string;
+  totalPaid?: number;
   cancellationReason?: string | null;
   jobServices: StatusJobService[];
+  jobProducts?: { quantity: number; unitPrice: string | number }[];
 };
 
 function ServiceDescription({ text }: { text: string }) {
@@ -237,6 +240,15 @@ export default function StatusPage() {
     },
     0
   );
+  const subtotal = computeJobSubtotal({
+    jobServices: job.jobServices ?? [],
+    jobProducts: job.jobProducts ?? [],
+  });
+  const paymentSummary = getJobPaymentSummary({
+    currentStatus: job.paymentStatus,
+    subtotal,
+    totalPaid: typeof job.totalPaid === "number" ? job.totalPaid : 0,
+  });
 
   const servicesByBikeId = (job.jobServices ?? []).reduce<Map<string | null, StatusJobService[]>>(
     (map, js) => {
@@ -503,13 +515,13 @@ export default function StatusPage() {
         )}
       </div>
 
-      {job.paymentStatus !== "PAID" && total > 0 &&
+      {!paymentSummary.isPaidInFull && subtotal > 0 &&
         ["RECEIVED", "WORKING_ON", "WAITING_ON_CUSTOMER", "WAITING_ON_PARTS", "BIKE_READY", "COMPLETED"].includes(job.stage) && (
         <Link
           href={`/pay/${job.id}`}
           className="block w-full rounded-lg bg-emerald-600 px-4 py-3 text-center font-semibold text-white hover:bg-emerald-700"
         >
-          Pay online
+          {paymentSummary.totalPaid > 0 ? "Pay remaining balance" : "Pay online"}
         </Link>
       )}
 

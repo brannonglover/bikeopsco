@@ -7,6 +7,7 @@ import { sendJobEmail, getTemplateForStage } from "@/lib/email";
 import { syncCollectionJobService } from "@/lib/collection-fee";
 import { sendPushToAllStaff } from "@/lib/push";
 import { getAppFeatures } from "@/lib/app-settings";
+import { computeJobSubtotal, computeTotalPaid, getJobPaymentSummary } from "@/lib/job-payments";
 
 export const dynamic = "force-dynamic";
 
@@ -186,10 +187,48 @@ export async function GET(request: NextRequest) {
               },
             },
           },
+          jobServices: {
+            select: {
+              quantity: true,
+              unitPrice: true,
+            },
+          },
+          jobProducts: {
+            select: {
+              quantity: true,
+              unitPrice: true,
+            },
+          },
+          payments: {
+            select: {
+              amount: true,
+              status: true,
+              stripePaymentIntentId: true,
+              paymentMethod: true,
+            },
+          },
         },
         orderBy,
       });
-      const res = NextResponse.json(jobs);
+      const jobsWithPaymentState = jobs.map((job) => {
+        const subtotal = computeJobSubtotal({
+          jobServices: job.jobServices,
+          jobProducts: job.jobProducts,
+        });
+        const totalPaid = computeTotalPaid(job.payments);
+        const paymentSummary = getJobPaymentSummary({
+          currentStatus: job.paymentStatus,
+          subtotal,
+          totalPaid,
+        });
+        return {
+          ...job,
+          paymentStatus: paymentSummary.paymentStatus,
+          totalPaid,
+          payments: undefined,
+        };
+      });
+      const res = NextResponse.json(jobsWithPaymentState);
       res.headers.set("Cache-Control", "no-store");
       return res;
     }
@@ -203,11 +242,37 @@ export async function GET(request: NextRequest) {
           include: { service: true },
         },
         jobProducts: { include: { product: true } },
+        payments: {
+          select: {
+            amount: true,
+            status: true,
+            stripePaymentIntentId: true,
+            paymentMethod: true,
+          },
+        },
       },
       orderBy,
     });
+    const jobsWithPaymentState = jobs.map((job) => {
+      const subtotal = computeJobSubtotal({
+        jobServices: job.jobServices,
+        jobProducts: job.jobProducts,
+      });
+      const totalPaid = computeTotalPaid(job.payments);
+      const paymentSummary = getJobPaymentSummary({
+        currentStatus: job.paymentStatus,
+        subtotal,
+        totalPaid,
+      });
+      return {
+        ...job,
+        paymentStatus: paymentSummary.paymentStatus,
+        totalPaid,
+        payments: undefined,
+      };
+    });
 
-    const res = NextResponse.json(jobs);
+    const res = NextResponse.json(jobsWithPaymentState);
     res.headers.set("Cache-Control", "no-store");
     return res;
   } catch (error) {

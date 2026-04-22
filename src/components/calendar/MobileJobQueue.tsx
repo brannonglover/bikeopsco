@@ -193,11 +193,15 @@ export function MobileJobQueue({
                           >
                             {job.deliveryType === "COLLECTION_SERVICE" ? "Collection" : "Drop-off"}
                           </span>
-                          {job.paymentStatus === "PAID" && (
-                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800">
+                          {job.paymentStatus === "PAID" ? (
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 whitespace-nowrap">
                               Paid
                             </span>
-                          )}
+                          ) : job.paymentStatus === "PENDING" ? (
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 whitespace-nowrap">
+                              Partially paid
+                            </span>
+                          ) : null}
                         </div>
                       </div>
                       {job.dropOffDate && (

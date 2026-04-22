@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { Price } from "@/components/ui/Price";
+import { computeJobSubtotal, getJobPaymentSummary } from "@/lib/job-payments";
 
 const PAYABLE_STAGES = ["RECEIVED", "WORKING_ON", "WAITING_ON_CUSTOMER", "WAITING_ON_PARTS", "BIKE_READY", "COMPLETED"] as const;
 
@@ -124,12 +125,15 @@ export default function PayPage() {
     jobServices: { service?: { name: string } | null; customServiceName?: string | null; quantity: number; unitPrice: string | number }[];
     jobProducts?: { product: { name: string }; quantity: number; unitPrice: string | number }[];
     paymentStatus: string;
+    totalPaid?: number;
   } | null>(null);
   const [stripePromise, setStripePromise] = useState<ReturnType<typeof loadStripe> | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [paymentAmount, setPaymentAmount] = useState<{
     subtotal: number;
     amount: number;
+    originalSubtotal: number;
+    totalPaid: number;
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -139,14 +143,7 @@ export default function PayPage() {
 
     async function init() {
       try {
-        const [jobRes, intentRes] = await Promise.all([
-          fetch(`/api/jobs/${jobId}`),
-          fetch(`/api/jobs/${jobId}/payments/create-intent`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ mode: inPerson ? "in_person" : "online" }),
-          }),
-        ]);
+        const jobRes = await fetch(`/api/jobs/${jobId}`);
 
         if (!jobRes.ok) {
           setError("Job not found");
@@ -156,7 +153,17 @@ export default function PayPage() {
         const jobData = await jobRes.json();
         setJob(jobData);
 
-        if (jobData.paymentStatus === "PAID") {
+        const localSubtotal = computeJobSubtotal({
+          jobServices: jobData.jobServices ?? [],
+          jobProducts: jobData.jobProducts ?? [],
+        });
+        const localPaymentSummary = getJobPaymentSummary({
+          currentStatus: jobData.paymentStatus,
+          subtotal: localSubtotal,
+          totalPaid: typeof jobData.totalPaid === "number" ? jobData.totalPaid : 0,
+        });
+
+        if (localPaymentSummary.isPaidInFull || localPaymentSummary.remaining <= 0) {
           setError("This job is already paid");
           return;
         }
@@ -166,18 +173,16 @@ export default function PayPage() {
           return;
         }
 
-        const lineTotal = (js: { unitPrice: string | number; quantity: number }) => {
-          const price = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);
-          return price * (js.quantity || 1);
-        };
-        const subtotal =
-          (jobData.jobServices ?? []).reduce((sum: number, js: { unitPrice: string | number; quantity: number }) => sum + lineTotal(js), 0) +
-          (jobData.jobProducts ?? []).reduce((sum: number, jp: { unitPrice: string | number; quantity: number }) => sum + lineTotal(jp), 0);
-
-        if (subtotal <= 0) {
+        if (localSubtotal <= 0) {
           setError("No services or products to pay for");
           return;
         }
+
+        const intentRes = await fetch(`/api/jobs/${jobId}/payments/create-intent`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mode: inPerson ? "in_person" : "online" }),
+        });
 
         if (!intentRes.ok) {
           const errData = await intentRes.json().catch(() => ({}));
@@ -185,12 +190,21 @@ export default function PayPage() {
           return;
         }
 
-        const { clientSecret: secret, publishableKey, amount, subtotal: intentSubtotal } = await intentRes.json();
+        const {
+          clientSecret: secret,
+          publishableKey,
+          amount,
+          subtotal: intentSubtotal,
+          originalSubtotal,
+          totalPaid,
+        } = await intentRes.json();
         setStripePromise(loadStripe(publishableKey ?? process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!));
         setClientSecret(secret);
         setPaymentAmount({
-          subtotal: intentSubtotal ?? subtotal,
-          amount: amount ?? subtotal,
+          subtotal: intentSubtotal ?? localPaymentSummary.remaining,
+          amount: amount ?? localPaymentSummary.remaining,
+          originalSubtotal: originalSubtotal ?? localSubtotal,
+          totalPaid: totalPaid ?? localPaymentSummary.totalPaid,
         });
       } catch {
         setError("Something went wrong");
@@ -219,19 +233,22 @@ export default function PayPage() {
     );
   }
 
-  const lineTotal = (js: { unitPrice: string | number; quantity: number }) => {
-    const price = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);
-    return price * (js.quantity || 1);
-  };
-  const subtotal =
-    paymentAmount?.subtotal ??
-    ((job.jobServices ?? []).reduce((sum: number, js) => sum + lineTotal(js), 0) +
-      (job.jobProducts ?? []).reduce((sum: number, jp) => sum + lineTotal(jp), 0));
-  const total =
-    paymentAmount?.amount ??
-    ((job.jobServices ?? []).reduce((sum: number, js) => sum + lineTotal(js), 0) +
-      (job.jobProducts ?? []).reduce((sum: number, jp) => sum + lineTotal(jp), 0));
+  const originalSubtotal =
+    paymentAmount?.originalSubtotal ??
+    computeJobSubtotal({
+      jobServices: job.jobServices ?? [],
+      jobProducts: job.jobProducts ?? [],
+    });
+  const totalPaid = paymentAmount?.totalPaid ?? (typeof job.totalPaid === "number" ? job.totalPaid : 0);
+  const paymentSummary = getJobPaymentSummary({
+    currentStatus: job.paymentStatus,
+    subtotal: originalSubtotal,
+    totalPaid,
+  });
+  const subtotal = paymentAmount?.subtotal ?? paymentSummary.remaining;
+  const total = paymentAmount?.amount ?? subtotal;
   const hasSurcharge = total > subtotal;
+  const hasPartialPayment = totalPaid > 0 && subtotal > 0;
 
   const customerName = job.customer
     ? [job.customer.firstName, job.customer.lastName].filter(Boolean).join(" ")
@@ -250,7 +267,34 @@ export default function PayPage() {
           {customerName && ` · ${customerName}`}
         </p>
         <div className="mt-2">
-          {!inPerson && hasSurcharge ? (
+          {hasPartialPayment ? (
+            <div className="space-y-0.5 text-sm">
+              <p className="text-slate-600">
+                Original total <Price amount={originalSubtotal} variant="inline" />
+              </p>
+              <p className="text-emerald-700">
+                Already paid <Price amount={totalPaid} variant="inline" />
+              </p>
+              <p className="text-slate-700 font-medium">
+                Remaining balance <Price amount={subtotal} variant="inline" />
+              </p>
+              {!inPerson && hasSurcharge && (
+                <p className="text-slate-500 text-xs">
+                  Card processing fee{" "}
+                  <span className="font-medium tabular-nums text-slate-600">
+                    {(total - subtotal).toLocaleString("en-US", {
+                      style: "currency",
+                      currency: "USD",
+                      minimumFractionDigits: 2,
+                    })}
+                  </span>
+                </p>
+              )}
+              <p>
+                <Price amount={total} variant="total" />
+              </p>
+            </div>
+          ) : !inPerson && hasSurcharge ? (
             <div className="space-y-0.5 text-sm">
               <p className="text-slate-600">
                 Subtotal <Price amount={subtotal} variant="inline" />

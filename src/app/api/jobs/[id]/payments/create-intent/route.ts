@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { computeAmountWithSurcharge, getStripe, toCents } from "@/lib/stripe";
+import { computeJobSubtotal, computeTotalPaid, getJobPaymentSummary } from "@/lib/job-payments";
 import { z } from "zod";
 
 const bodySchema = z.object({
@@ -21,6 +22,14 @@ export async function POST(
       include: {
         jobServices: { include: { service: true } },
         jobProducts: { include: { product: true } },
+        payments: {
+          select: {
+            amount: true,
+            status: true,
+            stripePaymentIntentId: true,
+            paymentMethod: true,
+          },
+        },
       },
     });
 
@@ -28,9 +37,14 @@ export async function POST(
       return NextResponse.json({ error: "Job not found" }, { status: 404 });
     }
 
-    if (job.paymentStatus === "PAID") {
+    const subtotal = computeJobSubtotal({
+      jobServices: job.jobServices,
+      jobProducts: job.jobProducts,
+    });
+
+    if (subtotal <= 0) {
       return NextResponse.json(
-        { error: "Job is already paid" },
+        { error: "Job has no services, products, or total is zero" },
         { status: 400 }
       );
     }
@@ -43,24 +57,21 @@ export async function POST(
       );
     }
 
-    const subtotal =
-      job.jobServices.reduce((sum, js) => {
-        const price = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);
-        return sum + price * (js.quantity || 1);
-      }, 0) +
-      (job.jobProducts ?? []).reduce((sum, jp) => {
-        const price = typeof jp.unitPrice === "string" ? parseFloat(jp.unitPrice) : Number(jp.unitPrice);
-        return sum + price * (jp.quantity || 1);
-      }, 0);
+    const totalPaid = computeTotalPaid(job.payments);
+    const paymentSummary = getJobPaymentSummary({
+      currentStatus: job.paymentStatus,
+      subtotal,
+      totalPaid,
+    });
 
-    if (subtotal <= 0) {
+    if (paymentSummary.isPaidInFull || paymentSummary.remaining <= 0) {
       return NextResponse.json(
-        { error: "Job has no services, products, or total is zero" },
+        { error: "Job is already paid" },
         { status: 400 }
       );
     }
 
-    const amountToCharge = computeAmountWithSurcharge(subtotal, mode);
+    const amountToCharge = computeAmountWithSurcharge(paymentSummary.remaining, mode);
     const amountInCents = toCents(amountToCharge);
 
     const stripe = getStripe();
@@ -85,7 +96,9 @@ export async function POST(
       clientSecret: paymentIntent.client_secret,
       publishableKey: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
       amount: amountToCharge,
-      subtotal,
+      subtotal: paymentSummary.remaining,
+      totalPaid: paymentSummary.totalPaid,
+      originalSubtotal: paymentSummary.subtotal,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
