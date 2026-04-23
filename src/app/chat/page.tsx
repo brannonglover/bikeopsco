@@ -553,6 +553,10 @@ function ChatPageContent() {
     customerTypingAt ?? selectedConv?.customerTypingAt ?? null;
   const showCustomerTyping =
     Boolean(selectedId) && isCustomerTypingRecently(typingSignal);
+  const latestMessage = messages[messages.length - 1] ?? null;
+  const latestMessageKey = latestMessage
+    ? `${messages.length}:${latestMessage.id}:${latestMessage.createdAt}:${latestMessage.editedAt ?? ""}`
+    : "empty";
 
   useEffect(() => {
     if (!typingSignal) return;
@@ -565,8 +569,8 @@ function ChatPageContent() {
     if (!isAtBottomRef.current) return;
     const el = messagesScrollRef.current;
     if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }, [messages, showCustomerTyping]);
+    el.scrollTop = el.scrollHeight;
+  }, [latestMessageKey, showCustomerTyping]);
 
   const handleMessagesScroll = useCallback(() => {
     const el = messagesScrollRef.current;
