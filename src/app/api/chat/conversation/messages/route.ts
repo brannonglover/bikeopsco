@@ -16,44 +16,74 @@ const createSchema = z.object({
  * Customer-only: GET messages for their conversation.
  */
 export async function GET() {
-  const features = await getAppFeatures();
-  if (!features.chatEnabled) {
-    return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
-  }
-  const customerId = await getCustomerFromSession();
-  if (!customerId) {
-    return NextResponse.json({ error: "Not signed in" }, { status: 401 });
-  }
+  let customerId: string | null = null;
+  let conversationId: string | null = null;
+  try {
+    const features = await getAppFeatures();
+    if (!features.chatEnabled) {
+      return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
+    }
+    customerId = await getCustomerFromSession();
+    if (!customerId) {
+      return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+    }
 
-  const conversation = await prisma.conversation.findFirst({
-    where: { customerId, jobId: null },
-    select: { id: true, updatedAt: true, staffLastReadAt: true },
-  });
+    const conversation = await prisma.conversation.findFirst({
+      where: { customerId, jobId: null },
+      select: { id: true, updatedAt: true, staffLastReadAt: true, customerLastReadAt: true },
+    });
 
-  if (!conversation) {
-    return NextResponse.json({ messages: [], staffLastReadAt: null });
-  }
+    if (!conversation) {
+      return NextResponse.json({ messages: [], staffLastReadAt: null });
+    }
+    conversationId = conversation.id;
 
-  const [messages, readUpdate] = await Promise.all([
-    prisma.message.findMany({
+    const messages = await prisma.message.findMany({
       where: { conversationId: conversation.id },
       orderBy: { createdAt: "asc" },
       include: { attachments: true, reactions: true },
-    }),
-    prisma.conversation.update({
-      where: { id: conversation.id },
-      data: {
-        customerLastReadAt: new Date(),
-        updatedAt: conversation.updatedAt,
-      },
-      select: { customerLastReadAt: true, staffLastReadAt: true },
-    }),
-  ]);
+    });
 
-  return NextResponse.json({
-    messages,
-    staffLastReadAt: readUpdate.staffLastReadAt?.toISOString() ?? null,
-  });
+    const latestStaffMessageAt = messages.reduce<Date | null>((latest, message) => {
+      if (message.sender !== "STAFF") return latest;
+      if (!latest || message.createdAt > latest) return message.createdAt;
+      return latest;
+    }, null);
+
+    let staffLastReadAt = conversation.staffLastReadAt?.toISOString() ?? null;
+    const shouldMarkRead =
+      latestStaffMessageAt !== null &&
+      (!conversation.customerLastReadAt ||
+        latestStaffMessageAt.getTime() > conversation.customerLastReadAt.getTime());
+
+    if (shouldMarkRead) {
+      const readUpdate = await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: {
+          customerLastReadAt: new Date(),
+          updatedAt: conversation.updatedAt,
+        },
+        select: { staffLastReadAt: true },
+      });
+      staffLastReadAt = readUpdate.staffLastReadAt?.toISOString() ?? null;
+    }
+
+    return NextResponse.json({
+      messages,
+      staffLastReadAt,
+    });
+  } catch (error) {
+    console.error("GET /api/chat/conversation/messages error:", {
+      customerId,
+      conversationId,
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    return NextResponse.json(
+      { error: "Failed to fetch messages" },
+      { status: 500 }
+    );
+  }
 }
 
 /**

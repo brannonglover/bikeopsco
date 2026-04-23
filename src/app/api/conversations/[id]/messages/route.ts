@@ -7,6 +7,12 @@ import { getAppFeatures } from "@/lib/app-settings";
 
 export const dynamic = "force-dynamic";
 
+type ChatMessageRow = {
+  sender: "STAFF" | "CUSTOMER";
+  createdAt: Date;
+  [key: string]: unknown;
+};
+
 const createSchema = z.object({
   sender: z.enum(["STAFF", "CUSTOMER"]),
   body: z.string().optional().nullable(),
@@ -17,12 +23,13 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  let conversationId: string | null = null;
   try {
     const features = await getAppFeatures();
     if (!features.chatEnabled) {
       return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
     }
-    const { id: conversationId } = await params;
+    ({ id: conversationId } = await params);
 
     // Keep the base conversation fetch minimal so this route can still work if the DB
     // is temporarily behind migrations (missing newer optional columns).
@@ -35,7 +42,7 @@ export async function GET(
       return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
     }
 
-    let messages: unknown[] = [];
+    let messages: ChatMessageRow[] = [];
     try {
       messages = await prisma.message.findMany({
         where: { conversationId },
@@ -45,7 +52,7 @@ export async function GET(
     } catch (e) {
       console.warn(
         "[chat] Failed to load message includes (attachments/reactions); falling back:",
-        e
+        { conversationId, error: e }
       );
       messages = await prisma.message.findMany({
         where: { conversationId },
@@ -55,31 +62,52 @@ export async function GET(
 
     let customerTypingAtIso: string | null = null;
     let customerLastReadAtIso: string | null = null;
+    let currentStaffLastReadAt: Date | null = null;
     try {
       const extra = await prisma.conversation.findUnique({
         where: { id: conversationId },
-        select: { customerTypingAt: true, customerLastReadAt: true },
+        select: { customerTypingAt: true, customerLastReadAt: true, staffLastReadAt: true },
       });
       customerTypingAtIso = extra?.customerTypingAt?.toISOString() ?? null;
       customerLastReadAtIso = extra?.customerLastReadAt?.toISOString() ?? null;
+      currentStaffLastReadAt = extra?.staffLastReadAt ?? null;
     } catch (e) {
-      console.warn("[chat] Failed to load conversation extras; continuing:", e);
+      console.warn("[chat] Failed to load conversation extras; continuing:", {
+        conversationId,
+        error: e,
+      });
     }
 
+    const latestCustomerMessageAt = messages.reduce<Date | null>((latest, message) => {
+      if (message.sender !== "CUSTOMER") return latest;
+      if (!latest || message.createdAt > latest) return message.createdAt;
+      return latest;
+    }, null);
+
     // Preserve updatedAt so marking read does not reorder the inbox (list is sorted by updatedAt).
-    let staffLastReadAtIso: string = new Date().toISOString();
-    try {
-      const readUpdate = await prisma.conversation.update({
-        where: { id: conversationId },
-        data: {
-          staffLastReadAt: new Date(),
-          updatedAt: conversation.updatedAt,
-        },
-        select: { staffLastReadAt: true },
-      });
-      staffLastReadAtIso = (readUpdate.staffLastReadAt ?? new Date()).toISOString();
-    } catch (e) {
-      console.warn("[chat] Failed to mark staffLastReadAt; continuing:", e);
+    let staffLastReadAtIso: string | null = currentStaffLastReadAt?.toISOString() ?? null;
+    const shouldMarkRead =
+      latestCustomerMessageAt !== null &&
+      (!currentStaffLastReadAt ||
+        latestCustomerMessageAt.getTime() > currentStaffLastReadAt.getTime());
+
+    if (shouldMarkRead) {
+      try {
+        const readUpdate = await prisma.conversation.update({
+          where: { id: conversationId },
+          data: {
+            staffLastReadAt: new Date(),
+            updatedAt: conversation.updatedAt,
+          },
+          select: { staffLastReadAt: true },
+        });
+        staffLastReadAtIso = (readUpdate.staffLastReadAt ?? new Date()).toISOString();
+      } catch (e) {
+        console.warn("[chat] Failed to mark staffLastReadAt; continuing:", {
+          conversationId,
+          error: e,
+        });
+      }
     }
 
     return NextResponse.json({
@@ -89,7 +117,11 @@ export async function GET(
       customerLastReadAt: customerLastReadAtIso,
     });
   } catch (error) {
-    console.error("GET /api/conversations/[id]/messages error:", error);
+    console.error("GET /api/conversations/[id]/messages error:", {
+      conversationId,
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     return NextResponse.json(
       { error: "Failed to fetch messages" },
       { status: 500 }
