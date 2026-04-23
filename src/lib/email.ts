@@ -8,12 +8,37 @@ function getResend(): Resend | null {
   return key ? new Resend(key) : null;
 }
 
+function extractEmailAddress(raw: string | null | undefined): string | null {
+  const trimmed = raw?.trim();
+  if (!trimmed) return null;
+  const match = trimmed.match(/<([^>]+)>/);
+  const email = match ? match[1].trim() : trimmed;
+  return email || null;
+}
+
 function getFromEmail(): string {
-  const raw = process.env.FROM_EMAIL?.trim();
-  if (!raw) return "BBM Services <onboarding@resend.dev>";
-  const match = raw.match(/<([^>]+)>/);
-  const email = match ? match[1].trim() : raw;
+  const email = extractEmailAddress(process.env.FROM_EMAIL) ?? "onboarding@resend.dev";
   return `BBM Services <${email}>`;
+}
+
+function getCustomerNoReplyEmail(): string {
+  const explicitNoReply =
+    extractEmailAddress(process.env.CUSTOMER_NO_REPLY_EMAIL) ||
+    extractEmailAddress(process.env.NO_REPLY_EMAIL);
+  if (explicitNoReply) return explicitNoReply;
+
+  const fromEmail = extractEmailAddress(process.env.FROM_EMAIL) ?? "onboarding@resend.dev";
+  const atIndex = fromEmail.lastIndexOf("@");
+  if (atIndex === -1) return fromEmail;
+  return `no-reply@${fromEmail.slice(atIndex + 1)}`;
+}
+
+export function getCustomerEmailSendOptions(): { from: string; replyTo: string } {
+  const noReplyEmail = getCustomerNoReplyEmail();
+  return {
+    from: `BBM Services <${noReplyEmail}>`,
+    replyTo: noReplyEmail,
+  };
 }
 
 const CUSTOMER_EMAIL_HEADER_LOGO_CID = "customer-email-header-logo";
@@ -216,6 +241,25 @@ export function buildCustomerEmailHtml(options: {
 </html>`;
 }
 
+function buildCustomerReadOnlyNoticeHtml(): string {
+  return `<p style="margin:24px 0 0;font-size:12px;line-height:1.6;color:#64748b">This inbox is not monitored. Please do not reply to this email — use the links in this email or contact the shop directly if you need help.</p>`;
+}
+
+function getCustomerReadOnlyNoticeText(): string {
+  return "This inbox is not monitored. Please do not reply to this email. Use the links in this email or contact the shop directly if you need help.";
+}
+
+export function buildReadOnlyCustomerEmailHtml(options: {
+  innerHtml: string;
+  headerLogoSrc: string;
+  heading?: string;
+}): string {
+  return buildCustomerEmailHtml({
+    ...options,
+    innerHtml: `${options.innerHtml}${buildCustomerReadOnlyNoticeHtml()}`,
+  });
+}
+
 /** Primary action button — Bike Ops indigo (matches app --primary). */
 export function buildCustomerEmailCtaButton(href: string, label: string): string {
   const { font, primary } = BIKE_OPS_EMAIL;
@@ -268,6 +312,12 @@ export function mergeEmailTemplateWithPreviewVars(bodyHtml: string): string {
   return mergeTemplateVariables(bodyHtml, getEmailTemplatePreviewVars());
 }
 
+const LEGACY_WAITING_ON_CUSTOMER_TEMPLATE_BODY =
+  `<p>Hi {{customerName}},</p><p>We’re ready to move forward with your {{bikeMake}} {{bikeModel}}, but we need your approval before we continue.</p><p>Please reply to this email with your approval (or any questions), and we’ll get back to work.</p><p style="margin: 20px 0;">{{statusButtonHtml}}</p><p>Thanks,<br/>The {{shopName}} Team</p>`;
+
+const WAITING_ON_CUSTOMER_TEMPLATE_BODY =
+  `<p>Hi {{customerName}},</p><p>We’re ready to move forward with your {{bikeMake}} {{bikeModel}}, but we need your approval before we continue.</p><p>Please contact the shop to approve the work so we can continue.</p><p style="margin: 20px 0;">{{statusButtonHtml}}</p><p>Thanks,<br/>The {{shopName}} Team</p>`;
+
 /**
  * Send one customer-style email using a DB template slug + preview merge data (for staff testing).
  */
@@ -297,7 +347,7 @@ export async function sendEmailTemplateTestEmail(
   const subject = `${mergeTemplateVariables(template.subject, vars)} [test]`;
   const mergedBody = mergeTemplateVariables(template.bodyHtml, vars);
   const branding = getCustomerEmailBrandingAssets();
-  const html = buildCustomerEmailHtml({
+  const html = buildReadOnlyCustomerEmailHtml({
     innerHtml: mergedBody,
     headerLogoSrc: branding.headerLogoSrc,
   });
@@ -305,7 +355,7 @@ export async function sendEmailTemplateTestEmail(
 
   try {
     const { error } = await resend.emails.send({
-      from: getFromEmail(),
+      ...getCustomerEmailSendOptions(),
       to: trimmedTo,
       subject,
       html,
@@ -322,7 +372,7 @@ export async function sendEmailTemplateTestEmail(
 export function buildCustomerEmailPreviewDocument(bodyHtml: string): string {
   const merged = mergeEmailTemplateWithPreviewVars(bodyHtml);
   const branding = getCustomerEmailBrandingAssets();
-  return buildCustomerEmailHtml({
+  return buildReadOnlyCustomerEmailHtml({
     innerHtml: merged,
     headerLogoSrc: branding.headerLogoSrc,
   });
@@ -373,8 +423,7 @@ export async function sendJobEmail(
           slug: templateSlug,
           name: "Waiting on Customer",
           subject: "Action needed: We’re waiting on your approval – {{shopName}}",
-          bodyHtml:
-            `<p>Hi {{customerName}},</p><p>We’re ready to move forward with your {{bikeMake}} {{bikeModel}}, but we need your approval before we continue.</p><p>Please reply to this email with your approval (or any questions), and we’ll get back to work.</p><p style="margin: 20px 0;">{{statusButtonHtml}}</p><p>Thanks,<br/>The {{shopName}} Team</p>`,
+          bodyHtml: WAITING_ON_CUSTOMER_TEMPLATE_BODY,
           triggerType: "STAGE_CHANGE",
           stage: "WAITING_ON_CUSTOMER",
           deliveryType: null,
@@ -385,6 +434,20 @@ export async function sendJobEmail(
       template = await prisma.emailTemplate.findUnique({
         where: { slug: templateSlug },
       });
+    }
+  }
+
+  if (
+    templateSlug === "waiting_on_customer" &&
+    template?.bodyHtml?.trim() === LEGACY_WAITING_ON_CUSTOMER_TEMPLATE_BODY
+  ) {
+    try {
+      template = await prisma.emailTemplate.update({
+        where: { slug: templateSlug },
+        data: { bodyHtml: WAITING_ON_CUSTOMER_TEMPLATE_BODY },
+      });
+    } catch {
+      template = { ...template, bodyHtml: WAITING_ON_CUSTOMER_TEMPLATE_BODY };
     }
   }
 
@@ -443,7 +506,7 @@ export async function sendJobEmail(
   const subject = mergeTemplateVariables(template.subject, vars);
   const bodyHtml = mergeTemplateVariables(template.bodyHtml, vars);
   const branding = getCustomerEmailBrandingAssets();
-  const html = buildCustomerEmailHtml({
+  const html = buildReadOnlyCustomerEmailHtml({
     innerHtml: bodyHtml,
     headerLogoSrc: branding.headerLogoSrc,
   });
@@ -451,7 +514,7 @@ export async function sendJobEmail(
 
   try {
     const { error } = await resend.emails.send({
-      from: getFromEmail(),
+      ...getCustomerEmailSendOptions(),
       to: recipient,
       subject,
       html,
@@ -716,7 +779,7 @@ export async function sendWaitlistReceivedEmail(entry: {
   `;
 
   const branding = getCustomerEmailBrandingAssets();
-  const html = buildCustomerEmailHtml({
+  const html = buildReadOnlyCustomerEmailHtml({
     innerHtml,
     headerLogoSrc: branding.headerLogoSrc,
   });
@@ -724,7 +787,7 @@ export async function sendWaitlistReceivedEmail(entry: {
 
   try {
     const { error } = await resend.emails.send({
-      from: getFromEmail(),
+      ...getCustomerEmailSendOptions(),
       to: entry.recipient,
       subject: `Waitlist confirmation — ${shopName}`,
       html,
@@ -838,7 +901,7 @@ ${ctaButton}
 `;
 
   const branding = getCustomerEmailBrandingAssets();
-  const html = buildCustomerEmailHtml({
+  const html = buildReadOnlyCustomerEmailHtml({
     innerHtml,
     headerLogoSrc: branding.headerLogoSrc,
     heading: "Booking Request Received",
@@ -847,7 +910,7 @@ ${ctaButton}
 
   try {
     const { error } = await resend.emails.send({
-      from: getFromEmail(),
+      ...getCustomerEmailSendOptions(),
       to: customerEmail,
       subject: `We received your booking request — ${job.bikeMake} ${job.bikeModel}`,
       html,
@@ -906,7 +969,7 @@ export async function sendBookingDeclinedEmail(
   const subject = mergeTemplateVariables(template.subject, vars);
   const bodyHtml = mergeTemplateVariables(template.bodyHtml, vars);
   const branding = getCustomerEmailBrandingAssets();
-  const html = buildCustomerEmailHtml({
+  const html = buildReadOnlyCustomerEmailHtml({
     innerHtml: bodyHtml,
     headerLogoSrc: branding.headerLogoSrc,
   });
@@ -914,7 +977,7 @@ export async function sendBookingDeclinedEmail(
 
   try {
     const { error } = await resend.emails.send({
-      from: getFromEmail(),
+      ...getCustomerEmailSendOptions(),
       to: recipient,
       subject,
       html,
@@ -1085,18 +1148,18 @@ ${buildCustomerEmailCtaButton(magicLinkUrl, "Sign in to chat")}
 <p style="margin:24px 0 0;font-size:12px;color:#6b7280">If you didn't request this email, you can safely ignore it.</p>
 <p style="margin:12px 0 0;font-size:12px;color:#64748b;word-break:break-all">Or copy this link: <a href="${escapeHtml(magicLinkUrl)}" style="color:#4f46e5;text-decoration:underline">${escapeHtml(magicLinkUrl)}</a></p>
 `.trim();
-  const html = buildCustomerEmailHtml({
+  const html = buildReadOnlyCustomerEmailHtml({
     innerHtml,
     headerLogoSrc: branding.headerLogoSrc,
     heading: `Chat with ${shopName}`,
   });
   const attachments = customerEmailBrandingAttachments(branding);
 
-  const fromEmail = getFromEmail();
-  console.log("[sendChatMagicLinkEmail] from:", fromEmail, "| to:", recipient);
+  const customerEmailSendOptions = getCustomerEmailSendOptions();
+  console.log("[sendChatMagicLinkEmail] from:", customerEmailSendOptions.from, "| to:", recipient);
   try {
     const { data, error } = await resend.emails.send({
-      from: fromEmail,
+      ...customerEmailSendOptions,
       to: recipient,
       subject,
       html,
@@ -1154,8 +1217,8 @@ export async function sendChatCustomerReplyReminder(
         : "";
 
   const textBody = hasLatestInBody
-    ? `Hi ${name},\n\nWe sent you a message in chat at least ${reminderMinutes} minute${reminderMinutes === 1 ? "" : "s"} ago. Here is the latest message:\n\n${plainLatest}\n\nOpen chat: ${chatUrl}\n\nIf you already replied, you can ignore this email.`
-    : `Hi ${name},\n\nWe sent you a message in chat at least ${reminderMinutes} minute${reminderMinutes === 1 ? "" : "s"} ago. When you have a moment, please open the conversation and reply.\n\n${chatUrl}\n\nIf you already replied, you can ignore this email.`;
+    ? `Hi ${name},\n\nWe sent you a message in chat at least ${reminderMinutes} minute${reminderMinutes === 1 ? "" : "s"} ago. Here is the latest message:\n\n${plainLatest}\n\nOpen chat: ${chatUrl}\n\n${getCustomerReadOnlyNoticeText()}\n\nIf you already replied, you can ignore this email.`
+    : `Hi ${name},\n\nWe sent you a message in chat at least ${reminderMinutes} minute${reminderMinutes === 1 ? "" : "s"} ago. When you have a moment, please open the conversation and reply.\n\n${chatUrl}\n\n${getCustomerReadOnlyNoticeText()}\n\nIf you already replied, you can ignore this email.`;
 
   const branding = getCustomerEmailBrandingAssets();
   const innerHtml = `
@@ -1164,7 +1227,7 @@ ${latestMessageHtml}
 ${buildCustomerEmailCtaButton(chatUrl, "Open chat")}
 <p style="margin:24px 0 0;font-size:12px;color:#6b7280">If you already replied, you can ignore this email.</p>
 `.trim();
-  const html = buildCustomerEmailHtml({
+  const html = buildReadOnlyCustomerEmailHtml({
     innerHtml,
     headerLogoSrc: branding.headerLogoSrc,
     heading: `Hi ${name}`,
@@ -1173,7 +1236,7 @@ ${buildCustomerEmailCtaButton(chatUrl, "Open chat")}
 
   try {
     const { error } = await resend.emails.send({
-      from: getFromEmail(),
+      ...getCustomerEmailSendOptions(),
       to: customerEmail,
       subject,
       text: textBody,
@@ -1277,7 +1340,7 @@ export async function sendPaymentReceiptEmail(
 
   const branding = getCustomerEmailBrandingAssets();
   const innerHtml = buildInvoiceInnerHtml(job, subtotal, paid, SHOP_NAME);
-  const html = buildCustomerEmailHtml({
+  const html = buildReadOnlyCustomerEmailHtml({
     innerHtml,
     headerLogoSrc: branding.headerLogoSrc,
     heading: "Payment receipt",
@@ -1286,7 +1349,7 @@ export async function sendPaymentReceiptEmail(
 
   try {
     const { data, error } = await resend.emails.send({
-      from: getFromEmail(),
+      ...getCustomerEmailSendOptions(),
       to: email,
       subject,
       html,
@@ -1372,14 +1435,14 @@ export async function sendReviewRequestEmail({
     <p style="margin:24px 0 0;font-size:13px;color:#64748b">You can review on whichever platform you prefer — even a few words makes a big difference. Thank you!</p>
   `;
 
-  const html = buildCustomerEmailHtml({
+  const html = buildReadOnlyCustomerEmailHtml({
     innerHtml,
     headerLogoSrc: branding.headerLogoSrc,
     heading: "How did we do?",
   });
 
   await resend.emails.send({
-    from: getFromEmail(),
+    ...getCustomerEmailSendOptions(),
     to: recipientEmail,
     subject: subjectByWave[followUpNumber],
     html,

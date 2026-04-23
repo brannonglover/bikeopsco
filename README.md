@@ -55,10 +55,52 @@ Get an API key from [resend.com](https://resend.com) and add to `.env`:
 
 ```
 RESEND_API_KEY="re_xxx"
-FROM_EMAIL="Bike Ops <notifications@yourdomain.com>"
+FROM_EMAIL="Bike Ops <no-reply@yourdomain.com>"
 ```
 
-### 4. Payments (Stripe and cash)
+### 4. SMS (Infobip or Twilio)
+
+The app sends customer-facing job updates by SMS and mirrors staff chat messages to the customer’s phone. If both providers are configured, the app prefers **Infobip** and falls back to **Twilio** only when Infobip is not set.
+
+#### Infobip
+
+Add these to `.env`:
+
+```
+INFOBIP_BASE_URL="https://xxxxx.api.infobip.com"
+INFOBIP_API_KEY="your-api-key"
+INFOBIP_SENDER="+15551234567"
+```
+
+- Create an API key with the `sms:message:send` scope.
+- Use your personal Infobip base URL from the Infobip API hub.
+- For two-way chat over SMS, use a sender/number that can **receive** replies. An alphanumeric sender is fine for one-way alerts, but customers cannot reply to it.
+- Test outbound SMS with `GET /api/sms/test?to=%2B15551234567`.
+
+To receive customer replies into chat, configure your purchased number in Infobip:
+
+1. Go to **Channels and Numbers → Numbers**
+2. Open the number, then the **SMS** tab
+3. Under **Keywords**, add a keyword rule
+4. Set **Forwarding action** to **Forward to HTTP**
+5. Set the URL to `https://your-domain.com/api/webhooks/infobip/sms`
+6. Set **Renderer Type** to `MO_JSON_2`
+
+If you want to protect the inbound webhook, set `INFOBIP_WEBHOOK_SECRET` and append `?secret=...` to the webhook URL you enter in Infobip.
+
+#### Twilio
+
+Twilio is still supported as a fallback. Configure:
+
+```
+TWILIO_ACCOUNT_SID="AC..."
+TWILIO_AUTH_TOKEN="..."
+TWILIO_PHONE_NUMBER="+15551234567"
+```
+
+For Twilio inbound SMS replies, point your number webhook to `https://your-domain.com/api/webhooks/twilio/sms`.
+
+### 5. Payments (Stripe and cash)
 
 Accept card, Apple Pay, and Google Pay via Stripe, or record cash payments from the job Invoice tab:
 
@@ -77,7 +119,7 @@ NEXT_PUBLIC_APP_URL="http://localhost:3000"
    - Local: Use [Stripe CLI](https://stripe.com/docs/stripe-cli): `stripe listen --forward-to localhost:3000/api/webhooks/stripe`  
    - Production: Add `https://yourdomain.com/api/webhooks/stripe` in [Stripe Webhooks](https://dashboard.stripe.com/webhooks), select `payment_intent.succeeded`
 
-### 5. Run
+### 6. Run
 
 ```bash
 npm run dev

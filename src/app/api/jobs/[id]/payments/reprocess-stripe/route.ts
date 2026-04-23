@@ -147,14 +147,6 @@ export async function POST(
         throw new Error(`Job ${jobId} not found while reprocessing payment`);
       }
 
-      const jobBikes = await tx.jobBike.findMany({
-        where: { jobId },
-        select: { waitingOnPartsAt: true, completedAt: true },
-      });
-      const hasUnresolvedParts = jobBikes.some(
-        (b) => b.waitingOnPartsAt !== null && b.completedAt === null
-      );
-
       const updatedSubtotal = computeJobSubtotal({
         jobServices: jobWithPayments.jobServices,
         jobProducts: jobWithPayments.jobProducts,
@@ -170,11 +162,6 @@ export async function POST(
         where: { id: jobId },
         data: {
           paymentStatus: updatedPaymentSummary.paymentStatus,
-          ...(updatedPaymentSummary.isPaidInFull
-            ? hasUnresolvedParts
-              ? { stage: "WAITING_ON_PARTS" }
-              : { stage: "COMPLETED", completedAt: paymentAt }
-            : {}),
         },
       });
     });

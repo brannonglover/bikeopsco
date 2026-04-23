@@ -88,14 +88,6 @@ export async function POST(request: NextRequest) {
           throw new Error(`Job ${jobId} not found while applying Stripe payment`);
         }
 
-        const jobBikes = await tx.jobBike.findMany({
-          where: { jobId },
-          select: { waitingOnPartsAt: true, completedAt: true },
-        });
-        const hasUnresolvedParts = jobBikes.some(
-          (b) => b.waitingOnPartsAt !== null && b.completedAt === null
-        );
-
         const subtotal = computeJobSubtotal({
           jobServices: jobWithPayments.jobServices,
           jobProducts: jobWithPayments.jobProducts,
@@ -111,11 +103,6 @@ export async function POST(request: NextRequest) {
           where: { id: jobId },
           data: {
             paymentStatus: paymentSummary.paymentStatus,
-            ...(paymentSummary.isPaidInFull
-              ? hasUnresolvedParts
-                ? { stage: "WAITING_ON_PARTS" }
-                : { stage: "COMPLETED", completedAt: paymentAt }
-              : {}),
           },
         });
       });

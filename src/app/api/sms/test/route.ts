@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sendSmsTest } from "@/lib/sms";
+import { getConfiguredSmsProvider, sendSmsTest } from "@/lib/sms";
 
 export const runtime = "nodejs";
 
 /**
- * Test Twilio SMS (A2P / from number). GET /api/sms/test?to=%2B1XXXXXXXXXX
- * Uses TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER.
+ * Test the configured SMS provider. GET /api/sms/test?to=%2B1XXXXXXXXXX
+ * Prefers Infobip when INFOBIP_* vars are set, otherwise falls back to Twilio.
  * If SMS_TEST_SECRET is set, add &secret=... (avoid open sends in production).
  */
 export async function GET(request: NextRequest) {
@@ -21,6 +21,8 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  const provider = getConfiguredSmsProvider();
+
   if (!to || to.length < 10) {
     return NextResponse.json(
       {
@@ -34,13 +36,21 @@ export async function GET(request: NextRequest) {
 
   if (!ok) {
     return NextResponse.json(
-      { error: error ?? "Send failed", hint: "Check Twilio logs and that TWILIO_PHONE_NUMBER matches your A2P sender." },
+      {
+        error: error ?? "Send failed",
+        hint:
+          provider === "infobip"
+            ? "Check INFOBIP_BASE_URL, INFOBIP_API_KEY, INFOBIP_SENDER, and your Infobip account logs."
+            : provider === "twilio"
+              ? "Check Twilio logs and that TWILIO_PHONE_NUMBER matches your SMS-capable sender."
+              : "Configure INFOBIP_* or TWILIO_* environment variables first.",
+      },
       { status: 500 }
     );
   }
 
   return NextResponse.json({
     success: true,
-    message: `Test SMS sent to ${to} from your configured from number.`,
+    message: `Test SMS sent to ${to} using ${provider ?? "your configured SMS provider"}.`,
   });
 }

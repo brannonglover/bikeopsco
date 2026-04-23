@@ -1169,7 +1169,7 @@ function RecordCashButton({
                   Record cash payment
                 </h2>
                 <p className="text-sm text-slate-600">
-                  {formatted} will be marked as paid. The job will be completed.
+                  {formatted} will be marked as paid. Move the card to Completed when the bike is actually picked up.
                 </p>
               </div>
             </div>

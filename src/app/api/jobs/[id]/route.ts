@@ -166,8 +166,8 @@ export async function PATCH(
         ? data.workingOnJobBikeId
         : autoWorkingOnJobBikeId;
 
-    if (data.stage === "COMPLETED") {
-      updateData.completedAt = new Date();
+    if (data.stage !== undefined && data.stage !== existingJob.stage) {
+      updateData.completedAt = data.stage === "COMPLETED" ? new Date() : null;
     }
 
     // Reset column sort order when moving between stages so the job falls back

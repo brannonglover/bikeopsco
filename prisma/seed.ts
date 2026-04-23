@@ -59,7 +59,7 @@ const DEFAULT_TEMPLATES = [
     slug: "waiting_on_customer",
     name: "Waiting on Customer",
     subject: "Action needed: We’re waiting on your approval – {{shopName}}",
-    bodyHtml: `<p>Hi {{customerName}},</p><p>We’re ready to move forward with your {{bikeMake}} {{bikeModel}}, but we need your approval before we continue.</p><p>Please reply to this email with your approval (or any questions), and we’ll get back to work.</p><p style="margin: 20px 0;">{{statusButtonHtml}}</p><p>Thanks,<br/>The {{shopName}} Team</p>`,
+    bodyHtml: `<p>Hi {{customerName}},</p><p>We’re ready to move forward with your {{bikeMake}} {{bikeModel}}, but we need your approval before we continue.</p><p>Please contact the shop to approve the work so we can continue.</p><p style="margin: 20px 0;">{{statusButtonHtml}}</p><p>Thanks,<br/>The {{shopName}} Team</p>`,
     triggerType: "STAGE_CHANGE",
     stage: "WAITING_ON_CUSTOMER" as const,
     deliveryType: null,

@@ -97,6 +97,8 @@ function withOptimisticStageChange(job: Job, newStage: Stage): Job {
 
   if (newStage === "COMPLETED") {
     next = { ...next, completedAt: new Date().toISOString() };
+  } else {
+    next = { ...next, completedAt: null };
   }
 
   return next;

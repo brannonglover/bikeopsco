@@ -25,7 +25,7 @@ const STAGE_DESCRIPTIONS: Record<string, string> = {
   BOOKED_IN: "Your repair is scheduled.",
   RECEIVED: "Your bike has arrived at the shop.",
   WORKING_ON: "We're working on your bike.",
-  WAITING_ON_CUSTOMER: "We’re waiting on your approval before we continue. Please reply to our email (or contact the shop) and we’ll get back to work.",
+  WAITING_ON_CUSTOMER: "We’re waiting on your approval before we continue. Please contact the shop so we can get back to work.",
   WAITING_ON_PARTS: "We're waiting on parts to complete your repair.",
   BIKE_READY: "Your bike is ready for pickup!",
   COMPLETED: "Thanks for your business!",

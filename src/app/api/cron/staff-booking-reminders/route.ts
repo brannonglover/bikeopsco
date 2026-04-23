@@ -107,6 +107,16 @@ function formatShortDate(d: Date, timezone: string): string {
   });
 }
 
+function getLocalHour(timezone: string, at: Date = new Date()): number {
+  return Number(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      hour: "numeric",
+      hour12: false,
+    }).format(at)
+  );
+}
+
 interface JobRow {
   id: string;
   bikeMake: string;
@@ -195,7 +205,9 @@ function buildJobTableRows(jobs: JobRow[]): string {
  * Sends an email to SHOP_NOTIFY_EMAIL (or ADMIN_EMAIL) and a push notification
  * to all registered staff devices.
  *
- * Runs daily via Vercel Cron (see vercel.json).
+ * Runs daily at 8:00 AM in the shop timezone via Vercel Cron (see vercel.json).
+ * Vercel cron schedules are UTC-only, so vercel.json invokes this route at both
+ * 12:00 and 13:00 UTC; this handler sends only when the shop's local hour is 8.
  */
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
@@ -209,6 +221,16 @@ export async function GET(request: NextRequest) {
   try {
     const timezone =
       process.env.SHOP_TIMEZONE?.trim() || "America/New_York";
+
+    const localHour = getLocalHour(timezone);
+    if (localHour !== 8) {
+      return NextResponse.json({
+        skipped: true,
+        reason: "outside_send_window",
+        timezone,
+        localHour,
+      });
+    }
 
     const { gte: todayStart, lte: todayEnd } = getLocalDayBounds(timezone, 0);
     const { gte: tomorrowStart, lte: tomorrowEnd } = getLocalDayBounds(timezone, 1);

@@ -27,7 +27,7 @@ export function validateTwilioWebhook(
   return Twilio.validateRequest(authToken, signature ?? "", url, params);
 }
 
-/** Match Twilio From / customer.phone (stored formats vary). */
+/** Match inbound SMS sender / customer.phone (stored formats vary). */
 export async function findCustomerIdBySmsFrom(
   fromE164: string
 ): Promise<string | null> {
