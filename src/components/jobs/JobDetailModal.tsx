@@ -2192,6 +2192,7 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
 function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job) => void }) {
   const [services, setServices] = useState<{ id: string; name: string; price: number | string }[]>([]);
   const [products, setProducts] = useState<{ id: string; name: string; price: number | string }[]>([]);
+  const [searchedProducts, setSearchedProducts] = useState<{ id: string; name: string; price: number | string }[] | null>(null);
   const [productsLoading, setProductsLoading] = useState(false);
   const [adding, setAdding] = useState(false);
   const [addingProduct, setAddingProduct] = useState(false);
@@ -2237,12 +2238,14 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
           name: p.name,
           price: typeof p.price === "string" ? parseFloat(p.price) : Number(p.price ?? 0),
         }));
+      const trimmedQuery = query.trim();
       setProducts((prev) => {
-        if (!query.trim()) return nextProducts;
+        if (!trimmedQuery) return nextProducts;
         const byId = new Map(prev.map((p) => [p.id, p]));
         nextProducts.forEach((p) => byId.set(p.id, p));
         return Array.from(byId.values());
       });
+      setSearchedProducts(trimmedQuery ? nextProducts : null);
     } catch {
       // Keep the current list if a background refresh fails.
     } finally {
@@ -2298,7 +2301,11 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
   useEffect(() => {
     if (!productsDropdownOpen) return;
     const search = productSearch.trim();
-    if (!search) return;
+    if (!search) {
+      setSearchedProducts(null);
+      return;
+    }
+    setProductsLoading(true);
     const timer = window.setTimeout(() => {
       void loadProducts(search);
     }, 200);
@@ -2327,7 +2334,7 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
     ? services.filter((s) => s.name.toLowerCase().includes(serviceSearch.trim().toLowerCase()))
     : services;
   const filteredProducts = productSearch.trim()
-    ? products.filter((p) => p.name.toLowerCase().includes(productSearch.trim().toLowerCase()))
+    ? searchedProducts ?? products.filter((p) => p.name.toLowerCase().includes(productSearch.trim().toLowerCase()))
     : products;
 
   const jobBikesList: JobBike[] = job.jobBikes ?? [];
@@ -3025,8 +3032,8 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
               {adding ? "Adding…" : "+ Add service"}
             </button>
             {servicesDropdownOpen && (
-              <div className="absolute bottom-full left-0 right-0 mb-1 bg-white border border-slate-200 rounded-lg shadow-lg z-30 flex flex-col">
-                <div className="p-2 border-b border-slate-100 order-last">
+              <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-[80] flex flex-col">
+                <div className="p-2 border-b border-slate-100">
                   <input
                     ref={serviceSearchRef}
                     type="text"
