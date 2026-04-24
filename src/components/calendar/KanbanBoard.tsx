@@ -606,21 +606,6 @@ export function KanbanBoard() {
                           </button>
                         </div>
                       </div>
-                      {features.notifyCustomerEnabled &&
-                        job.customer &&
-                        (job.customer.email || job.customer.phone) && (
-                          <label className="mt-1 flex items-center gap-2 px-2 text-[11px] text-secondary cursor-pointer select-none touch-manipulation">
-                            <input
-                              type="checkbox"
-                              checked={jobNotifyCustomer(job.id)}
-                              onChange={(e) =>
-                                onJobNotifyCustomerChange(job.id, e.target.checked)
-                              }
-                              className="h-3.5 w-3.5 rounded border-slate-300 text-amber-600 focus:ring-amber-500"
-                            />
-                            <span>Notify customer</span>
-                          </label>
-                        )}
                     </li>
                   ))}
                 </ul>
