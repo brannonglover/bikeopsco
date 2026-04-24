@@ -14,6 +14,7 @@ import { coerceCustomerPhone } from "@/lib/phone";
 import { checkCollectionEligibility } from "@/lib/collection-radius";
 import { getAppFeatures } from "@/lib/app-settings";
 import { addWidgetCorsHeaders } from "@/lib/widget-cors";
+import { buildSmsConsentUpdate } from "@/lib/sms-consent";
 
 export const dynamic = "force-dynamic";
 
@@ -48,10 +49,7 @@ const bookSchema = z
     lastName: z.string().min(1, "Last name is required"),
     email: z.string().email("Valid email is required"),
     phone: z.string().min(1, "Phone is required"),
-    smsConsent: z.literal(true, {
-      message:
-        "SMS consent is required to receive repair updates and service messages by text",
-    }),
+    smsConsent: z.boolean().optional().default(false),
     address: z.string().optional().nullable(),
     // Bikes — new array format (preferred)
     bikes: z.array(bikeItemSchema).min(1, "At least one bike is required").optional(),
@@ -201,6 +199,7 @@ export async function POST(request: NextRequest) {
                 lastName: data.lastName ?? null,
                 email: data.email.trim(),
                 phone: phoneStored,
+                ...buildSmsConsentUpdate(Boolean(data.smsConsent), "BOOKING_FORM"),
                 address: data.address ?? null,
               },
             });
@@ -211,6 +210,9 @@ export async function POST(request: NextRequest) {
                 firstName: data.firstName,
                 lastName: data.lastName ?? null,
                 phone: phoneStored,
+                ...(data.smsConsent
+                  ? buildSmsConsentUpdate(true, "BOOKING_FORM")
+                  : {}),
                 address: data.address ?? customer.address,
               },
             });
@@ -348,6 +350,7 @@ export async function POST(request: NextRequest) {
             lastName: data.lastName ?? null,
             email: data.email.trim(),
             phone: phoneStored,
+            ...buildSmsConsentUpdate(Boolean(data.smsConsent), "BOOKING_FORM"),
             address: data.address ?? null,
           },
         });
@@ -358,6 +361,9 @@ export async function POST(request: NextRequest) {
             firstName: data.firstName,
             lastName: data.lastName ?? null,
             phone: phoneStored,
+            ...(data.smsConsent
+              ? buildSmsConsentUpdate(true, "BOOKING_FORM")
+              : {}),
             address: data.address ?? customer.address,
           },
         });

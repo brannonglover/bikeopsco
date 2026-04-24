@@ -7,6 +7,7 @@ import { sendJobSms, getTemplateSlugForStage } from "@/lib/sms";
 import { syncCollectionJobService } from "@/lib/collection-fee";
 import { getAppFeatures } from "@/lib/app-settings";
 import { computeJobSubtotal, computeTotalPaid, getJobPaymentSummary } from "@/lib/job-payments";
+import { getEffectiveSmsConsent } from "@/lib/sms-consent";
 
 const bikeSchema = z.object({
   make: z.string().min(1),
@@ -74,9 +75,17 @@ export async function GET(
       subtotal,
       totalPaid,
     });
+    const customer =
+      job.customer
+        ? {
+            ...job.customer,
+            smsConsent: getEffectiveSmsConsent(job.customer),
+          }
+        : null;
     const jobWithoutPayments = { ...job, payments: undefined };
     const res = NextResponse.json({
       ...jobWithoutPayments,
+      customer,
       paymentStatus: paymentSummary.paymentStatus,
       totalPaid,
     });
@@ -425,6 +434,7 @@ export async function PATCH(
       const smsTemplateSlug = getTemplateSlugForStage(data.stage, existingJob.deliveryType);
       const customerEmail = job.customer?.email;
       const customerPhone = job.customer?.phone;
+      const canSendSms = getEffectiveSmsConsent(job.customer);
 
       void (async () => {
         try {
@@ -435,7 +445,7 @@ export async function PATCH(
                 })
               : Promise.resolve(null);
           const smsPromise =
-            customerPhone && smsTemplateSlug
+            canSendSms && customerPhone && smsTemplateSlug
               ? prisma.jobSms.findFirst({
                   where: { jobId: id, templateSlug: smsTemplateSlug },
                 })
@@ -447,7 +457,7 @@ export async function PATCH(
           if (customerEmail && templateSlug && !emailAlreadySent) {
             sendJobEmail(templateSlug, customerEmail, job).catch(console.error);
           }
-          if (customerPhone && smsTemplateSlug && !smsAlreadySent) {
+          if (canSendSms && customerPhone && smsTemplateSlug && !smsAlreadySent) {
             sendJobSms(smsTemplateSlug, customerPhone, job).catch(console.error);
           }
         } catch (e) {
@@ -466,9 +476,17 @@ export async function PATCH(
       subtotal,
       totalPaid,
     });
+    const customer =
+      job.customer
+        ? {
+            ...job.customer,
+            smsConsent: getEffectiveSmsConsent(job.customer),
+          }
+        : null;
     const jobWithoutPayments = { ...job, payments: undefined };
     const res = NextResponse.json({
       ...jobWithoutPayments,
+      customer,
       paymentStatus: paymentSummary.paymentStatus,
       totalPaid,
     });

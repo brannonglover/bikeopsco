@@ -183,10 +183,6 @@ function BookForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!form.smsConsent) {
-      setError("Please agree to SMS notifications to continue.");
-      return;
-    }
     if (
       collectionServiceEnabled &&
       form.deliveryType === "COLLECTION_SERVICE" &&
@@ -208,7 +204,7 @@ function BookForm() {
           lastName: form.lastName.trim(),
           email: form.email.trim(),
           phone: form.phone.trim(),
-          smsConsent: true,
+          smsConsent: form.smsConsent,
           address: form.address.trim() || null,
           bikes: bikes.map((b) => ({
             make: b.make.trim(),
@@ -280,7 +276,7 @@ function BookForm() {
             <p className="mt-1 text-slate-600">{success.message}</p>
           </div>
           <p className="text-center text-xs text-slate-500">
-            We&apos;ll reach out by email or text when a spot opens up.
+            We&apos;ll reach out by email, and by text if you opted in.
           </p>
           {embed && <p className="text-center text-xs text-slate-500">You can close this window.</p>}
         </div>
@@ -307,7 +303,7 @@ function BookForm() {
           Track your repair status
         </a>
         <p className="text-center text-xs text-slate-500">
-          You&apos;ll get an email when your booking is confirmed.
+          You&apos;ll get an email when your booking is confirmed. You can turn text updates on later from your status page.
         </p>
         {embed && (
           <p className="text-center text-xs text-slate-500">
@@ -388,13 +384,13 @@ function BookForm() {
                 setForm((p) => ({ ...p, smsConsent: e.target.checked }))
               }
               className="mt-1 h-4 w-4 shrink-0 rounded border-slate-300 text-amber-600 focus:ring-amber-500/20"
-              required
             />
             <span className="text-sm leading-snug text-slate-700">
-              I agree to receive SMS from <strong>{SHOP_DISPLAY_NAME}</strong> about my
-              repair, including status updates and service-related messages. No marketing.
-              Message frequency varies. Message &amp; data rates may apply. Reply{" "}
-              <strong>STOP</strong> to opt out, <strong>HELP</strong> for help.
+              Optional: I agree to receive service-related SMS from{" "}
+              <strong>{SHOP_DISPLAY_NAME}</strong> about this repair, including
+              status updates and questions about my bike. No marketing. Message
+              frequency varies. Message &amp; data rates may apply. Reply{" "}
+              <strong>STOP</strong> to opt out.
             </span>
           </label>
         </div>
@@ -633,7 +629,6 @@ function BookForm() {
           type="submit"
           disabled={
             submitting ||
-            !form.smsConsent ||
             (collectionServiceEnabled &&
               form.deliveryType === "COLLECTION_SERVICE" &&
               collectionEligibility?.ok === true &&

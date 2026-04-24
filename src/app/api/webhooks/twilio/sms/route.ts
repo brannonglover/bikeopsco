@@ -7,8 +7,28 @@ import {
   validateTwilioWebhook,
 } from "@/lib/chat-sms";
 import { normalizePhone } from "@/lib/phone";
+import { buildSmsConsentUpdate, parseSmsConsentKeyword } from "@/lib/sms-consent";
 
 export const runtime = "nodejs";
+
+function escapeXml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+function twimlMessage(body?: string): NextResponse {
+  const xml = body?.trim()
+    ? `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${escapeXml(body)}</Message></Response>`
+    : '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
+  return new NextResponse(xml, {
+    status: 200,
+    headers: { "Content-Type": "text/xml" },
+  });
+}
 
 /**
  * Twilio inbound SMS → customer chat message.
@@ -51,20 +71,14 @@ export async function POST(request: NextRequest) {
   }
 
   if (!messageSid || !fromE164) {
-    return new NextResponse(
-      '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
-      { status: 200, headers: { "Content-Type": "text/xml" } }
-    );
+    return twimlMessage();
   }
 
   const existing = await prisma.message.findUnique({
     where: { smsSid: messageSid },
   });
   if (existing) {
-    return new NextResponse(
-      '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
-      { status: 200, headers: { "Content-Type": "text/xml" } }
-    );
+    return twimlMessage();
   }
 
   let bodyText = bodyRaw.trim();
@@ -72,18 +86,37 @@ export async function POST(request: NextRequest) {
     bodyText = "[Photo sent via SMS]";
   }
   if (!bodyText) {
-    return new NextResponse(
-      '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
-      { status: 200, headers: { "Content-Type": "text/xml" } }
-    );
+    return twimlMessage();
   }
 
   const customerId = await findCustomerIdBySmsFrom(fromE164);
   if (!customerId) {
     console.warn("Twilio SMS: unknown sender", fromE164);
-    return new NextResponse(
-      '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
-      { status: 200, headers: { "Content-Type": "text/xml" } }
+    return twimlMessage();
+  }
+
+  const consentKeyword = parseSmsConsentKeyword(bodyText);
+  if (consentKeyword === "stop") {
+    await prisma.customer.update({
+      where: { id: customerId },
+      data: buildSmsConsentUpdate(false, "SMS_STOP"),
+    });
+    return twimlMessage(
+      "You’re unsubscribed from repair update texts. You can still follow your repair by email or on your status page."
+    );
+  }
+  if (consentKeyword === "start") {
+    await prisma.customer.update({
+      where: { id: customerId },
+      data: buildSmsConsentUpdate(true, "SMS_START"),
+    });
+    return twimlMessage(
+      "Text updates are back on for your repair. Reply STOP to opt out."
+    );
+  }
+  if (consentKeyword === "help") {
+    return twimlMessage(
+      "Need help with your repair? Reply STOP to opt out. You can also contact the shop by email or check your status page."
     );
   }
 
@@ -110,8 +143,5 @@ export async function POST(request: NextRequest) {
     return new NextResponse("Error", { status: 500 });
   }
 
-  return new NextResponse(
-    '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
-    { status: 200, headers: { "Content-Type": "text/xml" } }
-  );
+  return twimlMessage();
 }

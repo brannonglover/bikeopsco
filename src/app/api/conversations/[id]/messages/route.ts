@@ -4,6 +4,7 @@ import { sendChatStaffSms } from "@/lib/sms";
 import { sendPushToCustomer, sendPushToAllStaff } from "@/lib/push";
 import { z } from "zod";
 import { getAppFeatures } from "@/lib/app-settings";
+import { getEffectiveSmsConsent } from "@/lib/sms-consent";
 
 export const dynamic = "force-dynamic";
 
@@ -186,7 +187,7 @@ export async function POST(
       const hasText = Boolean(bodyText?.trim());
       const hasAtt = Boolean(attachmentIds?.length);
 
-      if (conversation.customer.phone) {
+      if (conversation.customer.phone && getEffectiveSmsConsent(conversation.customer)) {
         if (hasText) {
           const smsText = hasAtt
             ? `${bodyText!.trim()} (see chat for photos)`

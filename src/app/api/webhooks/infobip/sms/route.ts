@@ -6,6 +6,8 @@ import {
   findOrCreateConversationForInboundSms,
 } from "@/lib/chat-sms";
 import { normalizePhone } from "@/lib/phone";
+import { sendPlainSms } from "@/lib/sms";
+import { buildSmsConsentUpdate, parseSmsConsentKeyword } from "@/lib/sms-consent";
 
 export const runtime = "nodejs";
 
@@ -81,6 +83,37 @@ export async function POST(request: NextRequest) {
       const customerId = await findCustomerIdBySmsFrom(fromE164);
       if (!customerId) {
         console.warn("Infobip SMS: unknown sender", fromE164);
+        continue;
+      }
+
+      const consentKeyword = parseSmsConsentKeyword(bodyText);
+      if (consentKeyword === "stop") {
+        await prisma.customer.update({
+          where: { id: customerId },
+          data: buildSmsConsentUpdate(false, "SMS_STOP"),
+        });
+        await sendPlainSms(
+          fromE164,
+          "You’re unsubscribed from repair update texts. You can still follow your repair by email or on your status page."
+        ).catch((e) => console.error("Infobip STOP reply failed:", e));
+        continue;
+      }
+      if (consentKeyword === "start") {
+        await prisma.customer.update({
+          where: { id: customerId },
+          data: buildSmsConsentUpdate(true, "SMS_START"),
+        });
+        await sendPlainSms(
+          fromE164,
+          "Text updates are back on for your repair. Reply STOP to opt out."
+        ).catch((e) => console.error("Infobip START reply failed:", e));
+        continue;
+      }
+      if (consentKeyword === "help") {
+        await sendPlainSms(
+          fromE164,
+          "Need help with your repair? Reply STOP to opt out. You can also contact the shop by email or check your status page."
+        ).catch((e) => console.error("Infobip HELP reply failed:", e));
         continue;
       }
 

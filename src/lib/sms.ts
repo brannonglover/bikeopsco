@@ -196,19 +196,19 @@ async function sendSms(
 /** SMS templates - slugs match email templates. {{statusUrl}} links to /status/[jobId] */
 const SMS_TEMPLATES: Record<string, string> = {
   booking_confirmation_dropoff:
-    "{{shopName}}: Booking confirmed! Your {{bikeMake}} {{bikeModel}} is scheduled. Drop off at the shop. Track: {{statusUrl}}",
+    "{{shopName}}: Booking confirmed! Your {{bikeMake}} {{bikeModel}} is scheduled. Drop off at the shop. Track: {{statusUrl}} Reply STOP to opt out.",
   booking_confirmation_collection:
-    "{{shopName}}: Booking confirmed! We'll collect your {{bikeMake}} {{bikeModel}} as arranged. Track: {{statusUrl}}",
+    "{{shopName}}: Booking confirmed! We'll collect your {{bikeMake}} {{bikeModel}} as arranged. Track: {{statusUrl}} Reply STOP to opt out.",
   bike_arrived:
-    "{{shopName}}: Your {{bikeMake}} {{bikeModel}} has arrived. Track status: {{statusUrl}}",
+    "{{shopName}}: Your {{bikeMake}} {{bikeModel}} has arrived. Track status: {{statusUrl}} Reply STOP to opt out.",
   bike_collected:
-    "{{shopName}}: We've collected your {{bikeMake}} {{bikeModel}}. Track status: {{statusUrl}}",
+    "{{shopName}}: We've collected your {{bikeMake}} {{bikeModel}}. Track status: {{statusUrl}} Reply STOP to opt out.",
   working_on_bike:
-    "{{shopName}}: We're working on your {{bikeMake}} {{bikeModel}}. Track: {{statusUrl}}",
+    "{{shopName}}: We're working on your {{bikeMake}} {{bikeModel}}. Track: {{statusUrl}} Reply STOP to opt out.",
   waiting_on_parts:
-    "{{shopName}}: Waiting on parts for your {{bikeMake}} {{bikeModel}}. Track: {{statusUrl}}",
+    "{{shopName}}: Waiting on parts for your {{bikeMake}} {{bikeModel}}. Track: {{statusUrl}} Reply STOP to opt out.",
   bike_ready:
-    "{{shopName}}: Good news! Your {{bikeMake}} {{bikeModel}} is ready for pickup. {{statusUrl}}",
+    "{{shopName}}: Good news! Your {{bikeMake}} {{bikeModel}} is ready for pickup. {{statusUrl}} Reply STOP to opt out.",
 };
 
 export function getTemplateSlugForStage(
@@ -321,13 +321,13 @@ export async function sendChatStaffSms(
   const shopName = process.env.SHOP_NAME || "Basement Bike Mechanic";
   let body: string;
   if (opts?.attachmentOnly) {
-    body = `${shopName}: We sent you a photo in chat. Reply to this text to message us.`;
+    body = `${shopName}: We sent you a photo in chat. Reply to this text to message us. Reply STOP to opt out.`;
   } else {
     const trimmed = messageText.trim();
     if (!trimmed) {
       return { ok: false, error: "Empty message" };
     }
-    body = `${trimmed}\n\n— ${shopName}\nReply to this text to continue.`;
+    body = `${trimmed}\n\n— ${shopName}\nReply to this text to continue. Reply STOP to opt out.`;
   }
   if (body.length > CHAT_SMS_MAX_LEN) {
     body = body.slice(0, CHAT_SMS_MAX_LEN - 3) + "...";
@@ -346,4 +346,13 @@ export async function sendSmsTest(
   const shopName = process.env.SHOP_NAME || "Basement Bike Mechanic";
   const body = `${shopName}: SMS test — if you received this, your configured SMS provider is working.`;
   return sendSms(phoneNumber, body);
+}
+
+/** Provider-agnostic direct SMS send for system replies like STOP/HELP confirmations. */
+export async function sendPlainSms(
+  phoneNumber: string,
+  body: string
+): Promise<{ ok: boolean; error?: string }> {
+  const result = await sendSms(phoneNumber, body);
+  return result.ok ? { ok: true } : { ok: false, error: result.error };
 }
