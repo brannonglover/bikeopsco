@@ -2224,19 +2224,25 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
   const serviceSearchRef = useRef<HTMLInputElement>(null);
   const productSearchRef = useRef<HTMLInputElement>(null);
 
-  const loadProducts = useCallback(async () => {
+  const loadProducts = useCallback(async (query = "") => {
     setProductsLoading(true);
     try {
-      const res = await fetch(`/api/products?ts=${Date.now()}`, { cache: "no-store" });
+      const params = new URLSearchParams({ ts: String(Date.now()) });
+      if (query.trim()) params.set("q", query.trim());
+      const res = await fetch(`/api/products?${params.toString()}`, { cache: "no-store" });
       if (!res.ok) return;
       const data = await res.json();
-      setProducts(
-        (Array.isArray(data) ? data : []).map((p: { id: string; name: string; price: unknown }) => ({
+      const nextProducts = (Array.isArray(data) ? data : []).map((p: { id: string; name: string; price: unknown }) => ({
           id: p.id,
           name: p.name,
           price: typeof p.price === "string" ? parseFloat(p.price) : Number(p.price ?? 0),
-        }))
-      );
+        }));
+      setProducts((prev) => {
+        if (!query.trim()) return nextProducts;
+        const byId = new Map(prev.map((p) => [p.id, p]));
+        nextProducts.forEach((p) => byId.set(p.id, p));
+        return Array.from(byId.values());
+      });
     } catch {
       // Keep the current list if a background refresh fails.
     } finally {
@@ -2288,6 +2294,16 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
   useEffect(() => {
     void loadProducts();
   }, [loadProducts]);
+
+  useEffect(() => {
+    if (!productsDropdownOpen) return;
+    const search = productSearch.trim();
+    if (!search) return;
+    const timer = window.setTimeout(() => {
+      void loadProducts(search);
+    }, 200);
+    return () => window.clearTimeout(timer);
+  }, [loadProducts, productSearch, productsDropdownOpen]);
 
   useEffect(() => {
     const refreshProducts = () => {
