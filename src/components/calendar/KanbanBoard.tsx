@@ -526,52 +526,52 @@ export function KanbanBoard() {
           </h1>
           {pendingApprovals.length > 0 ? (
             <div className="hidden md:block mt-2 w-full max-w-4xl">
-              <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-                <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-3 py-2">
+              <section className="rounded-xl border border-surface-border bg-surface shadow-sm dark:shadow-none overflow-hidden">
+                <div className="flex items-center justify-between gap-3 border-b border-surface-border-subtle px-3 py-2">
                   <div className="flex items-center gap-2.5 min-w-0">
                     <span
-                      className="flex h-6 min-w-6 items-center justify-center rounded-full bg-amber-100 px-2 text-xs font-bold text-amber-800 flex-shrink-0"
+                      className="flex h-6 min-w-6 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30 px-2 text-xs font-bold text-amber-800 dark:text-amber-300 flex-shrink-0"
                       aria-hidden
                     >
                       {pendingApprovals.length}
                     </span>
-                    <p className="text-sm font-semibold leading-tight text-slate-900 truncate">
+                    <p className="text-sm font-semibold leading-tight text-heading truncate">
                       Pending approval
                     </p>
-                    <span className="text-xs text-slate-500 truncate">
+                    <span className="text-xs text-secondary truncate">
                       Booking{pendingApprovals.length === 1 ? "" : "s"} waiting on a yes/no
                     </span>
                   </div>
                   <button
                     type="button"
                     onClick={() => fetchJobs({ silent: true })}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition-colors flex-shrink-0"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-secondary hover:bg-subtle-bg hover:text-heading transition-colors flex-shrink-0"
                     title="Refresh"
                     aria-label="Refresh pending approvals"
                   >
                     <RefreshCw className="h-4 w-4" aria-hidden />
                   </button>
                 </div>
-                <ul className="max-h-[180px] divide-y divide-slate-100 overflow-y-auto">
+                <ul className="max-h-[180px] divide-y divide-surface-border-subtle overflow-y-auto">
                   {pendingApprovals.map((job) => (
                     <li key={job.id} className="px-3 py-2">
                       <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3">
                         <button
                           type="button"
                           onClick={() => setSelectedJob(job)}
-                          className="min-w-0 text-left rounded-lg px-2 py-1 -mx-2 hover:bg-slate-50 transition-colors"
+                          className="min-w-0 text-left rounded-lg px-2 py-1 -mx-2 hover:bg-subtle-bg transition-colors"
                           title="Open booking request"
                         >
-                          <p className="font-semibold text-slate-900 truncate">
+                          <p className="font-semibold text-heading truncate">
                             {customerLine(job)}
                           </p>
-                          <p className="text-xs text-slate-500 truncate">
+                          <p className="text-xs text-secondary truncate">
                             {getJobBikeDisplayTitle(job)}
                           </p>
                         </button>
                         {job.dropOffDate ? (
                           <span
-                            className="text-[11px] font-semibold text-slate-600 bg-slate-100 px-2 py-1 rounded-md"
+                            className="text-[11px] font-semibold text-tertiary bg-subtle-bg px-2 py-1 rounded-md"
                             title="Drop-off"
                           >
                             {formatShortDate(job.dropOffDate)}
@@ -586,7 +586,7 @@ export function KanbanBoard() {
                               e.stopPropagation();
                               handleAccept(job.id);
                             }}
-                            className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 active:bg-emerald-100 transition-colors touch-manipulation"
+                            className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 active:bg-emerald-100 dark:active:bg-emerald-900/30 transition-colors touch-manipulation"
                             title="Accept"
                             aria-label={`Accept booking for ${customerLine(job)}`}
                           >
@@ -598,7 +598,7 @@ export function KanbanBoard() {
                               e.stopPropagation();
                               handleRejectClick(job);
                             }}
-                            className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-50 text-red-700 hover:bg-red-100 active:bg-red-100 transition-colors touch-manipulation"
+                            className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/30 active:bg-red-100 dark:active:bg-red-900/30 transition-colors touch-manipulation"
                             title="Reject"
                             aria-label={`Reject booking for ${customerLine(job)}`}
                           >
@@ -609,7 +609,7 @@ export function KanbanBoard() {
                       {features.notifyCustomerEnabled &&
                         job.customer &&
                         (job.customer.email || job.customer.phone) && (
-                          <label className="mt-1 flex items-center gap-2 px-2 text-[11px] text-slate-500 cursor-pointer select-none touch-manipulation">
+                          <label className="mt-1 flex items-center gap-2 px-2 text-[11px] text-secondary cursor-pointer select-none touch-manipulation">
                             <input
                               type="checkbox"
                               checked={jobNotifyCustomer(job.id)}
