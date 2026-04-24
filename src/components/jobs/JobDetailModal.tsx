@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import type { Job, JobBike, JobProduct, JobService, Stage } from "@/lib/types";
 import { Price } from "@/components/ui/Price";
 import { BikePlaceholderIcon } from "@/components/ui/BikePlaceholderIcon";
@@ -2208,6 +2208,23 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
   const serviceSearchRef = useRef<HTMLInputElement>(null);
   const productSearchRef = useRef<HTMLInputElement>(null);
 
+  const loadProducts = useCallback(async () => {
+    try {
+      const res = await fetch("/api/products", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = await res.json();
+      setProducts(
+        (Array.isArray(data) ? data : []).map((p: { id: string; name: string; price: unknown }) => ({
+          id: p.id,
+          name: p.name,
+          price: typeof p.price === "string" ? parseFloat(p.price) : Number(p.price ?? 0),
+        }))
+      );
+    } catch {
+      // Keep the current list if a background refresh fails.
+    }
+  }, []);
+
   const toggleServiceExpanded = (id: string) => {
     setExpandedServiceIds((prev) => {
       const next = new Set(prev);
@@ -2250,18 +2267,23 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
   }, []);
 
   useEffect(() => {
-    fetch("/api/products")
-      .then((res) => res.json())
-      .then((data) =>
-        setProducts(
-          (Array.isArray(data) ? data : []).map((p: { id: string; name: string; price: unknown }) => ({
-            id: p.id,
-            name: p.name,
-            price: typeof p.price === "string" ? parseFloat(p.price) : Number(p.price ?? 0),
-          }))
-        )
-      );
-  }, []);
+    void loadProducts();
+  }, [loadProducts]);
+
+  useEffect(() => {
+    const refreshProducts = () => {
+      if (document.visibilityState === "visible") {
+        void loadProducts();
+      }
+    };
+
+    window.addEventListener("focus", refreshProducts);
+    document.addEventListener("visibilitychange", refreshProducts);
+    return () => {
+      window.removeEventListener("focus", refreshProducts);
+      document.removeEventListener("visibilitychange", refreshProducts);
+    };
+  }, [loadProducts]);
 
   const jobServices: JobService[] = job.jobServices ?? [];
   const jobProductsList: JobProduct[] = job.jobProducts ?? [];
@@ -3028,6 +3050,7 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
               <button
                 type="button"
                 onClick={() => {
+                  void loadProducts();
                   setServicesDropdownOpen(false);
                   setServiceSearch("");
                   setProductsDropdownOpen((o) => {
