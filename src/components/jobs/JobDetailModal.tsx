@@ -1399,6 +1399,21 @@ const CANCELLATION_REASONS = [
   "Other",
 ] as const;
 
+function mergeJobPreservingInvoiceDetails(prev: Job, next: Job): Job {
+  const merged = { ...prev, ...next };
+  const nextServices = next.jobServices ?? [];
+  const nextProducts = next.jobProducts ?? [];
+
+  if (nextServices.length > 0 && nextServices.some((js) => !js.id)) {
+    merged.jobServices = prev.jobServices;
+  }
+  if (nextProducts.length > 0 && nextProducts.some((jp) => !jp.id || !jp.productId)) {
+    merged.jobProducts = prev.jobProducts;
+  }
+
+  return merged;
+}
+
 export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, onJobDeleted }: JobDetailModalProps) {
   const [activeTab, setActiveTab] = useState<Tab>("details");
   const [cancelling, setCancelling] = useState(false);
@@ -1435,8 +1450,8 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
         return prev;
       }
 
-      // Merge so we don't clobber fields not returned by the parent view (e.g. jobServices/jobProducts).
-      return { ...prev, ...jobProp };
+      // Merge so lightweight board refreshes don't clobber invoice line relations.
+      return mergeJobPreservingInvoiceDetails(prev, jobProp);
     });
   }, [jobProp]);
 

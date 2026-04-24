@@ -28,7 +28,9 @@ export async function GET(request: NextRequest) {
         : {},
       orderBy: { name: "asc" },
     });
-    return NextResponse.json(products);
+    const res = NextResponse.json(products);
+    res.headers.set("Cache-Control", "no-store");
+    return res;
   } catch (error) {
     console.error("GET /api/products error:", error);
     return NextResponse.json(

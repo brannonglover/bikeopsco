@@ -41,6 +41,21 @@ function customerLine(job: Job) {
   return lastName ? `${firstName} ${lastName}` : firstName;
 }
 
+function mergeJobPreservingInvoiceDetails(prev: Job, next: Job): Job {
+  const merged = { ...prev, ...next };
+  const nextServices = next.jobServices ?? [];
+  const nextProducts = next.jobProducts ?? [];
+
+  if (nextServices.length > 0 && nextServices.some((js) => !js.id)) {
+    merged.jobServices = prev.jobServices;
+  }
+  if (nextProducts.length > 0 && nextProducts.some((jp) => !jp.id || !jp.productId)) {
+    merged.jobProducts = prev.jobProducts;
+  }
+
+  return merged;
+}
+
 const STAGES: Stage[] = [
   "PENDING_APPROVAL",
   "BOOKED_IN",
@@ -163,7 +178,7 @@ export function KanbanBoard() {
           if (!prev) return prev;
           const refreshed = next.find((j) => j.id === prev.id);
           if (!refreshed) return prev;
-          return { ...prev, ...refreshed };
+          return mergeJobPreservingInvoiceDetails(prev, refreshed);
         });
       })
       .catch(() => setJobs([]))
