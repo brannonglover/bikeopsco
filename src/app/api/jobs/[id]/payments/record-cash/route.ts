@@ -58,53 +58,19 @@ export async function POST(
 
     const amount = paymentSummary.remaining;
 
-    await prisma.$transaction(async (tx) => {
-      await tx.payment.create({
-        data: {
-          jobId,
-          amount: amount.toFixed(2),
-          currency: "usd",
-          status: "succeeded",
-          paymentMethod: "cash",
-        },
-      });
-
-      const jobWithPayments = await tx.job.findUnique({
-        where: { id: jobId },
-        include: {
-          jobServices: true,
-          jobProducts: true,
-          payments: {
-            select: {
-              amount: true,
-              status: true,
-              stripePaymentIntentId: true,
-              paymentMethod: true,
-            },
+    await prisma.job.update({
+      where: { id: jobId },
+      data: {
+        paymentStatus: "PAID",
+        payments: {
+          create: {
+            amount: amount.toFixed(2),
+            currency: "usd",
+            status: "succeeded",
+            paymentMethod: "cash",
           },
         },
-      });
-      if (!jobWithPayments) {
-        throw new Error(`Job ${jobId} not found while recording cash payment`);
-      }
-
-      const updatedSubtotal = computeJobSubtotal({
-        jobServices: jobWithPayments.jobServices,
-        jobProducts: jobWithPayments.jobProducts,
-      });
-      const updatedTotalPaid = computeTotalPaid(jobWithPayments.payments);
-      const updatedPaymentSummary = getJobPaymentSummary({
-        currentStatus: jobWithPayments.paymentStatus,
-        subtotal: updatedSubtotal,
-        totalPaid: updatedTotalPaid,
-      });
-
-      await tx.job.update({
-        where: { id: jobId },
-        data: {
-          paymentStatus: updatedPaymentSummary.paymentStatus,
-        },
-      });
+      },
     });
 
     const jobForEmail = {
