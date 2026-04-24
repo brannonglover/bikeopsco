@@ -2192,6 +2192,7 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
 function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job) => void }) {
   const [services, setServices] = useState<{ id: string; name: string; price: number | string }[]>([]);
   const [products, setProducts] = useState<{ id: string; name: string; price: number | string }[]>([]);
+  const [productsLoading, setProductsLoading] = useState(false);
   const [adding, setAdding] = useState(false);
   const [addingProduct, setAddingProduct] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
@@ -2224,8 +2225,9 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
   const productSearchRef = useRef<HTMLInputElement>(null);
 
   const loadProducts = useCallback(async () => {
+    setProductsLoading(true);
     try {
-      const res = await fetch("/api/products", { cache: "no-store" });
+      const res = await fetch(`/api/products?ts=${Date.now()}`, { cache: "no-store" });
       if (!res.ok) return;
       const data = await res.json();
       setProducts(
@@ -2237,6 +2239,8 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
       );
     } catch {
       // Keep the current list if a background refresh fails.
+    } finally {
+      setProductsLoading(false);
     }
   }, []);
 
@@ -2303,13 +2307,12 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
   const jobServices: JobService[] = job.jobServices ?? [];
   const jobProductsList: JobProduct[] = job.jobProducts ?? [];
   const attachedProductIds = new Set(jobProductsList.map((jp) => jp.productId));
-  const availableProducts = products.filter((p) => !attachedProductIds.has(p.id));
   const filteredServices = serviceSearch.trim()
     ? services.filter((s) => s.name.toLowerCase().includes(serviceSearch.trim().toLowerCase()))
     : services;
   const filteredProducts = productSearch.trim()
-    ? availableProducts.filter((p) => p.name.toLowerCase().includes(productSearch.trim().toLowerCase()))
-    : availableProducts;
+    ? products.filter((p) => p.name.toLowerCase().includes(productSearch.trim().toLowerCase()))
+    : products;
 
   const jobBikesList: JobBike[] = job.jobBikes ?? [];
   const isMultiBike = jobBikesList.length > 1;
@@ -3060,60 +3063,70 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
               </div>
             )}
           </div>
-          {availableProducts.length > 0 && (
-            <div ref={productsDropdownRef} className="relative flex-1 min-w-[140px] max-w-sm">
-              <button
-                type="button"
-                onClick={() => {
-                  void loadProducts();
-                  setServicesDropdownOpen(false);
-                  setServiceSearch("");
-                  setProductsDropdownOpen((o) => {
-                    if (o) setProductSearch("");
-                    return !o;
-                  });
-                }}
-                disabled={addingProduct}
-                className="w-full text-left text-sm px-3 py-2 border border-slate-300 rounded-lg bg-white hover:bg-slate-50 truncate disabled:opacity-50"
-              >
-                {addingProduct ? "Adding…" : "+ Add product"}
-              </button>
-              {productsDropdownOpen && (
-                <div className="absolute bottom-full left-0 right-0 mb-1 bg-white border border-slate-200 rounded-lg shadow-lg z-30 flex flex-col">
-                  <div className="p-2 border-b border-slate-100 order-last">
-                    <input
-                      ref={productSearchRef}
-                      type="text"
-                      value={productSearch}
-                      onChange={(e) => setProductSearch(e.target.value)}
-                      placeholder="Search products…"
-                      className="w-full px-2 py-1.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                      autoFocus
-                    />
-                  </div>
-                  <div className="max-h-48 overflow-y-auto">
-                    {filteredProducts.length === 0 ? (
-                      <p className="px-3 py-2 text-sm text-slate-400">No matching products</p>
-                    ) : (
-                      filteredProducts.map((p) => (
+          <div ref={productsDropdownRef} className="relative flex-1 min-w-[140px] max-w-sm">
+            <button
+              type="button"
+              onClick={() => {
+                void loadProducts();
+                setServicesDropdownOpen(false);
+                setServiceSearch("");
+                setProductsDropdownOpen((o) => {
+                  if (o) setProductSearch("");
+                  return !o;
+                });
+              }}
+              disabled={addingProduct}
+              className="w-full text-left text-sm px-3 py-2 border border-slate-300 rounded-lg bg-white hover:bg-slate-50 truncate disabled:opacity-50"
+            >
+              {addingProduct ? "Adding…" : "+ Add product"}
+            </button>
+            {productsDropdownOpen && (
+              <div className="absolute bottom-full left-0 right-0 mb-1 bg-white border border-slate-200 rounded-lg shadow-lg z-30 flex flex-col">
+                <div className="p-2 border-b border-slate-100 order-last">
+                  <input
+                    ref={productSearchRef}
+                    type="text"
+                    value={productSearch}
+                    onChange={(e) => setProductSearch(e.target.value)}
+                    placeholder="Search products…"
+                    className="w-full px-2 py-1.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                    autoFocus
+                  />
+                </div>
+                <div className="max-h-48 overflow-y-auto">
+                  {productsLoading && products.length === 0 ? (
+                    <p className="px-3 py-2 text-sm text-slate-400">Loading products…</p>
+                  ) : filteredProducts.length === 0 ? (
+                    <p className="px-3 py-2 text-sm text-slate-400">No matching products</p>
+                  ) : (
+                    filteredProducts.map((p) => {
+                      const isAttached = attachedProductIds.has(p.id);
+                      const canAddProduct = isMultiBike || !isAttached;
+                      return (
                         <button
                           key={p.id}
                           type="button"
-                          onClick={() => handleAddProduct(p.id)}
-                          className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50 last:rounded-b-lg flex flex-col items-start min-w-0"
+                          onClick={() => {
+                            if (canAddProduct) handleAddProduct(p.id);
+                          }}
+                          disabled={!canAddProduct || addingProduct}
+                          className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50 disabled:hover:bg-white disabled:cursor-not-allowed last:rounded-b-lg flex flex-col items-start min-w-0"
                         >
-                          <span className="font-medium truncate w-full">{p.name}</span>
+                          <span className={`font-medium truncate w-full ${!canAddProduct ? "text-slate-400" : "text-slate-900"}`}>
+                            {p.name}
+                          </span>
                           <span className="text-slate-500 text-xs">
                             ${Number(p.price).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            {!canAddProduct ? " · Already added" : isAttached ? " · Add another" : ""}
                           </span>
                         </button>
-                      ))
-                    )}
-                  </div>
+                      );
+                    })
+                  )}
                 </div>
-              )}
-            </div>
-          )}
+              </div>
+            )}
+          </div>
         </div>
       <div className="flex justify-between items-center pt-4 mt-4 border-t-2 border-slate-200">
         <span className="font-bold text-slate-900">Total</span>
