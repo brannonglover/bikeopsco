@@ -19,8 +19,10 @@ export const dynamic = "force-dynamic";
 const LIGHT_VARS = `
   --w-card-bg: #ffffff;
   --w-card-border: #e5e7eb;
-  --w-tile-bg: #f9fafb;
-  --w-tile-border: #efefef;
+  --w-card-shadow: rgba(15, 23, 42, 0.08);
+  --w-panel-bg: #f8fafc;
+  --w-tile-bg: rgba(255, 255, 255, 0.88);
+  --w-tile-border: rgba(15, 23, 42, 0.08);
   --w-text-heading: #111827;
   --w-text-body: #4b5563;
   --w-text-muted: #6b7280;
@@ -33,13 +35,17 @@ const LIGHT_VARS = `
   --w-dot-active: #6366f1;
   --w-dot-inactive: #d1d5db;
   --w-star-empty: #e5e7eb;
+  --w-badge-bg: rgba(255, 255, 255, 0.8);
+  --w-quote: rgba(15, 23, 42, 0.07);
 `;
 
 const DARK_VARS = `
   --w-card-bg: #1e293b;
   --w-card-border: #334155;
-  --w-tile-bg: #0f172a;
-  --w-tile-border: #1e293b;
+  --w-card-shadow: rgba(0, 0, 0, 0.24);
+  --w-panel-bg: #0f172a;
+  --w-tile-bg: rgba(15, 23, 42, 0.86);
+  --w-tile-border: rgba(148, 163, 184, 0.18);
   --w-text-heading: #f8fafc;
   --w-text-body: #cbd5e1;
   --w-text-muted: #94a3b8;
@@ -52,6 +58,8 @@ const DARK_VARS = `
   --w-dot-active: #818cf8;
   --w-dot-inactive: #475569;
   --w-star-empty: #475569;
+  --w-badge-bg: rgba(15, 23, 42, 0.68);
+  --w-quote: rgba(248, 250, 252, 0.08);
 `;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -155,6 +163,7 @@ export default async function ReviewWidget({
 
   const hasGoogle = !!(googleData || settings?.googleReviewUrl);
   const hasYelp = !!(yelpData || settings?.yelpReviewUrl);
+  const showReviewInvite = displayReviews.length === 0 && !!(settings?.googleReviewUrl || settings?.yelpReviewUrl);
 
   // Resolve theme: "light" | "dark" | "auto" (default: "light")
   const rawTheme = Array.isArray(searchParams?.theme)
@@ -178,20 +187,311 @@ export default async function ReviewWidget({
         a { color: inherit; }
         ${themeStyle}
 
-        /* Responsive tile grid */
-        .w-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-        @media (max-width: 620px) { .w-tiles { grid-template-columns: repeat(2, 1fr); } }
-        @media (max-width: 340px) { .w-tiles { grid-template-columns: 1fr; } }
-
-        /* Tile card */
-        .w-tile {
-          background: var(--w-tile-bg);
-          border: 1px solid var(--w-tile-border);
-          border-radius: 10px;
+        .w-carousel-shell {
+          border-radius: 16px;
           padding: 12px;
+          background:
+            radial-gradient(circle at 16% 0%, var(--w-accent-wash, rgba(20, 184, 166, 0.11)), transparent 28%),
+            linear-gradient(135deg, var(--w-panel-bg), var(--w-card-bg));
+          border: 1px solid var(--w-tile-border);
+          overflow: hidden;
+        }
+
+        .w-empty-review-panel {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 16px;
+          border-radius: 16px;
+          padding: 16px;
+          background:
+            radial-gradient(circle at 0% 0%, rgba(20, 184, 166, 0.14), transparent 34%),
+            radial-gradient(circle at 100% 20%, rgba(249, 115, 22, 0.13), transparent 30%),
+            linear-gradient(135deg, var(--w-panel-bg), var(--w-card-bg));
+          border: 1px solid var(--w-tile-border);
+          box-shadow: 0 12px 28px var(--w-card-shadow);
+        }
+
+        .w-empty-title {
+          color: var(--w-text-heading);
+          font-size: 18px;
+          line-height: 1.15;
+          font-weight: 850;
+          margin: 0;
+        }
+
+        .w-empty-copy {
+          color: var(--w-text-muted);
+          font-size: 12px;
+          line-height: 1.45;
+          margin: 6px 0 0;
+          max-width: 330px;
+        }
+
+        .w-empty-actions {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
+          justify-content: flex-end;
+        }
+
+        .w-review-action {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 7px;
+          min-height: 36px;
+          border-radius: 999px;
+          padding: 0 12px;
+          background: var(--w-badge-bg);
+          border: 1px solid var(--w-tile-border);
+          color: var(--w-text-heading);
+          font-size: 12px;
+          font-weight: 800;
+          text-decoration: none;
+          white-space: nowrap;
+          transition: transform 0.15s, border-color 0.15s;
+        }
+
+        .w-review-action:hover {
+          transform: translateY(-1px);
+          border-color: var(--w-dot-active);
+        }
+
+        .w-carousel-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          margin-bottom: 10px;
+        }
+
+        .w-kicker {
+          color: var(--w-text-muted);
+          font-size: 10px;
+          font-weight: 800;
+          letter-spacing: 0;
+          text-transform: uppercase;
+          margin: 0 0 2px;
+        }
+
+        .w-carousel-title {
+          color: var(--w-text-heading);
+          font-size: 15px;
+          line-height: 1.15;
+          font-weight: 800;
+          margin: 0;
+        }
+
+        .w-carousel-controls {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          flex-shrink: 0;
+        }
+
+        .w-carousel-button {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 32px;
+          height: 32px;
+          border-radius: 999px;
+          border: 1px solid var(--w-chevron-border);
+          background: var(--w-chevron-bg);
+          padding: 0;
+          outline: none;
+          transition: transform 0.15s, background 0.15s, border-color 0.15s;
+        }
+
+        .w-carousel-button:not(:disabled):hover {
+          transform: translateY(-1px);
+          border-color: var(--w-dot-active);
+        }
+
+        .w-tiles {
+          display: grid;
+          grid-template-columns: 1.2fr 1fr 1fr;
+          gap: 10px;
+          align-items: stretch;
+        }
+
+        .w-tile {
+          position: relative;
+          min-width: 0;
+          min-height: 178px;
+          background:
+            linear-gradient(150deg, var(--w-accent-wash), transparent 44%),
+            var(--w-tile-bg);
+          border: 1px solid var(--w-tile-border);
+          border-radius: 8px;
+          padding: 13px;
           display: flex;
           flex-direction: column;
-          gap: 6px;
+          justify-content: space-between;
+          gap: 12px;
+          overflow: hidden;
+          box-shadow: 0 12px 28px var(--w-card-shadow);
+        }
+
+        .w-tile::before {
+          content: "";
+          position: absolute;
+          inset: 0 auto 0 0;
+          width: 4px;
+          background: var(--w-accent);
+        }
+
+        .w-tile:first-child {
+          min-height: 194px;
+        }
+
+        .w-quote-mark {
+          position: absolute;
+          top: -18px;
+          right: 10px;
+          color: var(--w-quote);
+          font-size: 88px;
+          line-height: 1;
+          font-family: Georgia, serif;
+          pointer-events: none;
+        }
+
+        .w-review-topline,
+        .w-review-footer {
+          position: relative;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          min-width: 0;
+        }
+
+        .w-review-topline {
+          justify-content: space-between;
+        }
+
+        .w-mood-pill,
+        .w-platform-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          min-width: 0;
+          border-radius: 999px;
+          white-space: nowrap;
+          font-size: 10.5px;
+          line-height: 1;
+          font-weight: 800;
+        }
+
+        .w-mood-pill {
+          color: var(--w-accent-deep);
+          background: var(--w-accent-wash);
+          padding: 6px 8px;
+        }
+
+        .w-platform-badge {
+          color: var(--w-text-muted);
+          background: var(--w-badge-bg);
+          border: 1px solid var(--w-tile-border);
+          padding: 6px 7px;
+        }
+
+        .w-review-copy {
+          position: relative;
+          color: var(--w-text-heading);
+          font-size: 13px;
+          line-height: 1.48;
+          font-weight: 650;
+          margin: 0;
+          display: -webkit-box;
+          -webkit-line-clamp: 5;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+
+        .w-avatar {
+          width: 34px;
+          height: 34px;
+          border-radius: 50%;
+          color: #ffffff;
+          background: linear-gradient(135deg, var(--w-accent), var(--w-accent-deep));
+          box-shadow: 0 7px 18px var(--w-accent-wash);
+          font-size: 11px;
+          font-weight: 800;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+
+        .w-review-person {
+          min-width: 0;
+          flex: 1;
+        }
+
+        .w-review-author {
+          color: var(--w-text-heading);
+          font-size: 12px;
+          font-weight: 800;
+          line-height: 1.2;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          margin: 0;
+        }
+
+        .w-review-meta {
+          color: var(--w-text-time);
+          font-size: 10.5px;
+          line-height: 1.3;
+          margin: 1px 0 0;
+        }
+
+        .w-stars-wrap {
+          display: inline-flex;
+          flex-shrink: 0;
+        }
+
+        .w-carousel-dots {
+          display: flex;
+          justify-content: center;
+          gap: 5px;
+          margin-top: 11px;
+        }
+
+        .w-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 999px;
+          background: var(--w-dot-inactive);
+          border: none;
+          padding: 0;
+          cursor: pointer;
+          transition: width 0.2s, background 0.2s;
+          outline: none;
+        }
+
+        .w-dot-active {
+          width: 18px;
+          background: var(--w-dot-active);
+        }
+
+        @media (max-width: 680px) {
+          .w-tiles { grid-template-columns: 1fr; }
+          .w-tile,
+          .w-tile:first-child { min-height: 0; }
+          .w-review-copy { -webkit-line-clamp: 4; }
+          .w-stars-wrap { display: none; }
+          .w-empty-review-panel { align-items: flex-start; flex-direction: column; }
+          .w-empty-actions { justify-content: flex-start; }
+        }
+
+        @media (max-width: 380px) {
+          .w-carousel-header { align-items: flex-start; }
+          .w-carousel-title { font-size: 14px; }
+          .w-platform-badge { font-size: 0; gap: 0; }
+          .w-platform-badge svg { margin: 0; }
         }
       `}</style>
 
@@ -202,13 +502,48 @@ export default async function ReviewWidget({
           style={{
             background: "var(--w-card-bg)",
             borderRadius: "14px",
-            padding: "18px 20px",
+            padding: "14px",
             border: "1px solid var(--w-card-border)",
+            boxShadow: "0 14px 34px var(--w-card-shadow)",
           }}
         >
           {/* ── Rating summary row ── */}
           <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: displayReviews.length > 0 ? "16px" : "0" }}>
-            {googleData ? (
+            {showReviewInvite ? (
+              <div className="w-empty-review-panel">
+                <div>
+                  <p className="w-kicker">Customer notes</p>
+                  <p className="w-empty-title">Fresh stories coming soon</p>
+                  <p className="w-empty-copy">
+                    Loved the tune-up? Drop a quick note for the next rider choosing a workshop.
+                  </p>
+                </div>
+                <div className="w-empty-actions">
+                  {settings?.googleReviewUrl && (
+                    <a
+                      href={settings.googleReviewUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-review-action"
+                    >
+                      <GoogleIcon size={15} />
+                      Google
+                    </a>
+                  )}
+                  {settings?.yelpReviewUrl && (
+                    <a
+                      href={settings.yelpReviewUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-review-action"
+                    >
+                      <YelpBurstIcon size={15} />
+                      Yelp
+                    </a>
+                  )}
+                </div>
+              </div>
+            ) : googleData ? (
               <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
                 <GoogleIcon size={20} />
                 <StarsRow rating={googleData.rating} size={17} />
@@ -244,7 +579,7 @@ export default async function ReviewWidget({
               </div>
             ) : null}
 
-            {yelpData ? (
+            {!showReviewInvite && yelpData ? (
               <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
                 <YelpBurstIcon size={20} />
                 <StarsRow rating={yelpData.rating} size={17} />
@@ -265,7 +600,7 @@ export default async function ReviewWidget({
                   </a>
                 )}
               </div>
-            ) : hasYelp && settings?.yelpReviewUrl ? (
+            ) : !showReviewInvite && hasYelp && settings?.yelpReviewUrl ? (
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                 <YelpBurstIcon size={20} />
                 <StarsRow rating={5} size={17} />
@@ -280,7 +615,7 @@ export default async function ReviewWidget({
               </div>
             ) : null}
 
-            {!hasGoogle && !hasYelp && (
+            {!showReviewInvite && !hasGoogle && !hasYelp && (
               <>
                 <StarsRow rating={5} size={20} />
                 <p style={{ fontSize: "14px", color: "var(--w-text-muted)" }}>Configure review links in settings.</p>
@@ -299,7 +634,7 @@ export default async function ReviewWidget({
           )}
 
           {/* ── View all reviews footer ── */}
-          {(settings?.googleReviewUrl || settings?.yelpReviewUrl) && (
+          {!showReviewInvite && (settings?.googleReviewUrl || settings?.yelpReviewUrl) && (
             <div
               style={{
                 display: "flex",

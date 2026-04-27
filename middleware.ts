@@ -20,8 +20,8 @@ export async function middleware(req: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Protect staff routes. Public: login, pay, status, chat/c, api/auth, webhooks, jobs, chat, cron
+     * Protect staff routes. Public: login, pay, status, chat/c, open, api/auth, webhooks, jobs, chat, cron
      */
-    "/((?!_next|favicon|login|pay|status|chat/c|book|widget|api/auth|api/webhooks|api/jobs/|api/chat|api/cron|api/booking|api/widget|api/og-preview|api/push-tokens|api/review-requests/.+/redirect).*)",
+    "/((?!_next|favicon|login|pay|status|chat/c|open|book|widget|api/auth|api/webhooks|api/jobs/|api/chat|api/cron|api/booking|api/widget|api/og-preview|api/push-tokens|api/review-requests/.+/redirect).*)",
   ],
 };

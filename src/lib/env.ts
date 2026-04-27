@@ -43,3 +43,16 @@ export function getAppUrl(): string {
   if (url) return `https://${url.replace(/^https?:\/\//, "")}`;
   return "";
 }
+
+export function getStaffAppScheme(): string {
+  return process.env.STAFF_APP_SCHEME?.trim() || "bikeops";
+}
+
+export function getStaffJobDeepLink(jobId: string): string {
+  return `${getStaffAppScheme()}:///(staff)/(jobs)/${encodeURIComponent(jobId)}`;
+}
+
+export function getStaffJobOpenUrl(jobId: string): string {
+  const appUrl = getAppUrl();
+  return appUrl ? `${appUrl}/open/staff/jobs/${encodeURIComponent(jobId)}` : "";
+}

@@ -1,7 +1,7 @@
 import { Resend } from "resend";
 import fs from "fs";
 import path from "path";
-import { getAppUrl, getResendApiKey } from "./env";
+import { getAppUrl, getResendApiKey, getStaffJobOpenUrl } from "./env";
 
 function getResend(): Resend | null {
   const key = getResendApiKey();
@@ -567,8 +567,7 @@ export async function sendBookingRequestNotification(
     return { ok: false, error: "No notification email configured" };
   }
 
-  const baseUrl = getAppUrl();
-  const calendarUrl = baseUrl ? `${baseUrl}/calendar` : "";
+  const staffJobUrl = getStaffJobOpenUrl(job.id);
   const customerName = job.customer
     ? job.customer.lastName
       ? `${job.customer.firstName} ${job.customer.lastName}`
@@ -666,7 +665,7 @@ export async function sendBookingRequestNotification(
   </tbody>
 </table>
 
-${calendarUrl ? buildCustomerEmailCtaButton(calendarUrl, "Review & accept or reject") : ""}
+${staffJobUrl ? buildCustomerEmailCtaButton(staffJobUrl, "Review & accept or reject") : ""}
 `.trim();
 
   const branding = getCustomerEmailBrandingAssets();

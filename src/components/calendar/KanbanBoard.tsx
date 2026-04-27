@@ -292,7 +292,7 @@ export function KanbanBoard() {
     const job = jobs.find((j) => j.id === openJobId);
     if (job) {
       setSelectedJob(job);
-      router.replace("/", { scroll: false });
+      router.replace("/calendar", { scroll: false });
     }
   }, [openJobId, jobs, loading, router]);
 
