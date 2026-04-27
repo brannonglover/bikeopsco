@@ -182,8 +182,8 @@ export default async function ReviewWidget({
     <>
       <style>{`
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        html { -webkit-text-size-adjust: 100%; }
-        body { background: var(--w-card-bg) !important; min-height: auto !important; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; }
+        html { -webkit-text-size-adjust: 100%; background: transparent !important; }
+        body { background: transparent !important; min-height: auto !important; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; }
         a { color: inherit; }
         ${themeStyle}
 
@@ -253,6 +253,54 @@ export default async function ReviewWidget({
         .w-review-action:hover {
           transform: translateY(-1px);
           border-color: var(--w-dot-active);
+        }
+
+        .w-platform-summary {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+
+        .w-platform-summary-link {
+          display: inline-flex;
+          align-items: center;
+          gap: 7px;
+          min-height: 30px;
+          border-radius: 999px;
+          padding: 0 9px;
+          color: var(--w-text-heading);
+          text-decoration: none;
+          background: transparent;
+          border: 1px solid transparent;
+          transition: border-color 0.15s, background 0.15s;
+        }
+
+        .w-platform-summary-link:hover {
+          background: var(--w-badge-bg);
+          border-color: var(--w-tile-border);
+        }
+
+        .w-platform-summary-copy {
+          display: inline-flex;
+          align-items: baseline;
+          gap: 5px;
+          white-space: nowrap;
+        }
+
+        .w-platform-summary-name {
+          color: var(--w-text-heading);
+          font-size: 12px;
+          font-weight: 800;
+          line-height: 1;
+        }
+
+        .w-platform-summary-meta {
+          color: var(--w-text-muted);
+          font-size: 11px;
+          font-weight: 650;
+          line-height: 1;
         }
 
         .w-carousel-header {
@@ -527,75 +575,76 @@ export default async function ReviewWidget({
                   )}
                 </div>
               </div>
-            ) : googleData ? (
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "9px", flexWrap: "wrap" }}>
-                <GoogleIcon size={20} />
-                <StarsRow rating={googleData.rating} size={17} />
-                <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--w-text-heading)" }}>
-                  {googleData.rating.toFixed(1)}
-                </span>
-                <span style={{ fontSize: "13px", color: "var(--w-text-muted)" }}>
-                  {googleData.reviewCount.toLocaleString()} review{googleData.reviewCount !== 1 ? "s" : ""}
-                </span>
-                {settings?.googleReviewUrl && (
+            ) : hasGoogle || hasYelp ? (
+              <div className="w-platform-summary">
+                {hasGoogle && settings?.googleReviewUrl ? (
                   <a
                     href={settings.googleReviewUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    style={{ marginLeft: "auto", fontSize: "12px", color: "#4285F4", fontWeight: 600, textDecoration: "none", whiteSpace: "nowrap" }}
+                    className="w-platform-summary-link"
+                    aria-label={googleData ? `Google rating ${googleData.rating.toFixed(1)} from ${googleData.reviewCount} reviews` : "Review us on Google"}
                   >
-                    Leave a review →
+                    <GoogleIcon size={16} />
+                    <span className="w-platform-summary-copy">
+                      <span className="w-platform-summary-name">Google</span>
+                      <span className="w-platform-summary-meta">
+                        {googleData
+                          ? `${googleData.rating.toFixed(1)} · ${googleData.reviewCount.toLocaleString()} review${googleData.reviewCount !== 1 ? "s" : ""}`
+                          : "Review"}
+                      </span>
+                    </span>
                   </a>
-                )}
-              </div>
-            ) : hasGoogle && settings?.googleReviewUrl ? (
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "9px", flexWrap: "wrap" }}>
-                <GoogleIcon size={20} />
-                <StarsRow rating={5} size={17} />
-                <a
-                  href={settings.googleReviewUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ fontSize: "13px", color: "#4285F4", fontWeight: 600, textDecoration: "none" }}
-                >
-                  Review us on Google →
-                </a>
-              </div>
-            ) : null}
-
-            {!showReviewInvite && yelpData ? (
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "9px", flexWrap: "wrap" }}>
-                <YelpBurstIcon size={20} />
-                <StarsRow rating={yelpData.rating} size={17} />
-                <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--w-text-heading)" }}>
-                  {yelpData.rating.toFixed(1)}
-                </span>
-                <span style={{ fontSize: "13px", color: "var(--w-text-muted)" }}>
-                  {yelpData.reviewCount.toLocaleString()} review{yelpData.reviewCount !== 1 ? "s" : ""}
-                </span>
-                {settings?.yelpReviewUrl && (
+                ) : hasGoogle ? (
+                  <span
+                    className="w-platform-summary-link"
+                    aria-label={googleData ? `Google rating ${googleData.rating.toFixed(1)} from ${googleData.reviewCount} reviews` : "Google reviews"}
+                  >
+                    <GoogleIcon size={16} />
+                    <span className="w-platform-summary-copy">
+                      <span className="w-platform-summary-name">Google</span>
+                      <span className="w-platform-summary-meta">
+                        {googleData
+                          ? `${googleData.rating.toFixed(1)} · ${googleData.reviewCount.toLocaleString()} review${googleData.reviewCount !== 1 ? "s" : ""}`
+                          : "Reviews"}
+                      </span>
+                    </span>
+                  </span>
+                ) : null}
+                {hasYelp && settings?.yelpReviewUrl ? (
                   <a
                     href={settings.yelpReviewUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    style={{ marginLeft: "auto", fontSize: "12px", color: "#d32323", fontWeight: 600, textDecoration: "none", whiteSpace: "nowrap" }}
+                    className="w-platform-summary-link"
+                    aria-label={yelpData ? `Yelp rating ${yelpData.rating.toFixed(1)} from ${yelpData.reviewCount} reviews` : "Review us on Yelp"}
                   >
-                    Leave a review →
+                    <YelpBurstIcon size={16} />
+                    <span className="w-platform-summary-copy">
+                      <span className="w-platform-summary-name">Yelp</span>
+                      <span className="w-platform-summary-meta">
+                        {yelpData
+                          ? `${yelpData.rating.toFixed(1)} · ${yelpData.reviewCount.toLocaleString()} review${yelpData.reviewCount !== 1 ? "s" : ""}`
+                          : "Review"}
+                      </span>
+                    </span>
                   </a>
-                )}
-              </div>
-            ) : !showReviewInvite && hasYelp && settings?.yelpReviewUrl ? (
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "9px", flexWrap: "wrap" }}>
-                <YelpBurstIcon size={20} />
-                <StarsRow rating={5} size={17} />
-                <a
-                  href={settings.yelpReviewUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ fontSize: "13px", color: "#d32323", fontWeight: 600, textDecoration: "none" }}
-                >
-                  Review us on Yelp →
-                </a>
+                ) : hasYelp ? (
+                  <span
+                    className="w-platform-summary-link"
+                    aria-label={yelpData ? `Yelp rating ${yelpData.rating.toFixed(1)} from ${yelpData.reviewCount} reviews` : "Yelp reviews"}
+                  >
+                    <YelpBurstIcon size={16} />
+                    <span className="w-platform-summary-copy">
+                      <span className="w-platform-summary-name">Yelp</span>
+                      <span className="w-platform-summary-meta">
+                        {yelpData
+                          ? `${yelpData.rating.toFixed(1)} · ${yelpData.reviewCount.toLocaleString()} review${yelpData.reviewCount !== 1 ? "s" : ""}`
+                          : "Reviews"}
+                      </span>
+                    </span>
+                  </span>
+                ) : null}
               </div>
             ) : null}
 
@@ -612,66 +661,6 @@ export default async function ReviewWidget({
             <ReviewCarousel reviews={displayReviews} />
           )}
 
-          {/* ── View all reviews footer ── */}
-          {!showReviewInvite && (settings?.googleReviewUrl || settings?.yelpReviewUrl) && (
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                gap: "16px",
-                marginTop: "10px",
-                paddingTop: "0",
-                borderTop: "none",
-                flexWrap: "wrap",
-              }}
-            >
-              <span style={{ fontSize: "12px", color: "var(--w-text-muted)" }}>View all reviews on</span>
-              <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-                {settings.googleReviewUrl && (
-                  <a
-                    href={settings.googleReviewUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "5px",
-                      fontSize: "12px",
-                      fontWeight: 600,
-                      color: "#4285F4",
-                      textDecoration: "none",
-                    }}
-                  >
-                    <GoogleIcon size={14} />
-                    Google
-                  </a>
-                )}
-                {settings.googleReviewUrl && settings.yelpReviewUrl && (
-                  <span style={{ color: "var(--w-divider)", fontSize: "14px" }}>|</span>
-                )}
-                {settings.yelpReviewUrl && (
-                  <a
-                    href={settings.yelpReviewUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "5px",
-                      fontSize: "12px",
-                      fontWeight: 600,
-                      color: "#d32323",
-                      textDecoration: "none",
-                    }}
-                  >
-                    <YelpBurstIcon size={14} />
-                    Yelp
-                  </a>
-                )}
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </>
