@@ -189,27 +189,23 @@ export default async function ReviewWidget({
 
         .w-carousel-shell {
           border-radius: 16px;
-          padding: 12px;
-          background:
-            radial-gradient(circle at 16% 0%, var(--w-accent-wash, rgba(20, 184, 166, 0.11)), transparent 28%),
-            linear-gradient(135deg, var(--w-panel-bg), var(--w-card-bg));
-          border: 1px solid var(--w-tile-border);
+          padding: 2px 0 0;
+          background: transparent;
+          border: 0;
           overflow: hidden;
         }
 
         .w-empty-review-panel {
           display: flex;
+          flex-direction: column;
           align-items: center;
-          justify-content: space-between;
-          gap: 16px;
+          justify-content: center;
+          gap: 12px;
           border-radius: 16px;
-          padding: 16px;
-          background:
-            radial-gradient(circle at 0% 0%, rgba(20, 184, 166, 0.14), transparent 34%),
-            radial-gradient(circle at 100% 20%, rgba(249, 115, 22, 0.13), transparent 30%),
-            linear-gradient(135deg, var(--w-panel-bg), var(--w-card-bg));
-          border: 1px solid var(--w-tile-border);
-          box-shadow: 0 12px 28px var(--w-card-shadow);
+          padding: 8px 0 4px;
+          background: transparent;
+          border: 0;
+          text-align: center;
         }
 
         .w-empty-title {
@@ -224,7 +220,7 @@ export default async function ReviewWidget({
           color: var(--w-text-muted);
           font-size: 12px;
           line-height: 1.45;
-          margin: 6px 0 0;
+          margin: 6px auto 0;
           max-width: 330px;
         }
 
@@ -233,7 +229,7 @@ export default async function ReviewWidget({
           align-items: center;
           gap: 8px;
           flex-wrap: wrap;
-          justify-content: flex-end;
+          justify-content: center;
         }
 
         .w-review-action {
@@ -244,7 +240,7 @@ export default async function ReviewWidget({
           min-height: 36px;
           border-radius: 999px;
           padding: 0 12px;
-          background: var(--w-badge-bg);
+          background: transparent;
           border: 1px solid var(--w-tile-border);
           color: var(--w-text-heading);
           font-size: 12px;
@@ -267,18 +263,9 @@ export default async function ReviewWidget({
           margin-bottom: 10px;
         }
 
-        .w-kicker {
-          color: var(--w-text-muted);
-          font-size: 10px;
-          font-weight: 800;
-          letter-spacing: 0;
-          text-transform: uppercase;
-          margin: 0 0 2px;
-        }
-
         .w-carousel-title {
           color: var(--w-text-heading);
-          font-size: 15px;
+          font-size: 16px;
           line-height: 1.15;
           font-weight: 800;
           margin: 0;
@@ -332,7 +319,7 @@ export default async function ReviewWidget({
           justify-content: space-between;
           gap: 12px;
           overflow: hidden;
-          box-shadow: 0 12px 28px var(--w-card-shadow);
+          box-shadow: 0 8px 20px var(--w-card-shadow);
         }
 
         .w-tile::before {
@@ -483,13 +470,11 @@ export default async function ReviewWidget({
           .w-tile:first-child { min-height: 0; }
           .w-review-copy { -webkit-line-clamp: 4; }
           .w-stars-wrap { display: none; }
-          .w-empty-review-panel { align-items: flex-start; flex-direction: column; }
-          .w-empty-actions { justify-content: flex-start; }
         }
 
         @media (max-width: 380px) {
           .w-carousel-header { align-items: flex-start; }
-          .w-carousel-title { font-size: 14px; }
+          .w-carousel-title { font-size: 15px; }
           .w-platform-badge { font-size: 0; gap: 0; }
           .w-platform-badge svg { margin: 0; }
         }
@@ -500,19 +485,18 @@ export default async function ReviewWidget({
       <div style={{ padding: "10px" }}>
         <div
           style={{
-            background: "var(--w-card-bg)",
-            borderRadius: "14px",
-            padding: "14px",
-            border: "1px solid var(--w-card-border)",
-            boxShadow: "0 14px 34px var(--w-card-shadow)",
+            background: "transparent",
+            borderRadius: "0",
+            padding: "0",
+            border: "0",
+            boxShadow: "none",
           }}
         >
           {/* ── Rating summary row ── */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: displayReviews.length > 0 ? "16px" : "0" }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", marginBottom: displayReviews.length > 0 ? "10px" : "0" }}>
             {showReviewInvite ? (
               <div className="w-empty-review-panel">
                 <div>
-                  <p className="w-kicker">Customer notes</p>
                   <p className="w-empty-title">Fresh stories coming soon</p>
                   <p className="w-empty-copy">
                     Loved the tune-up? Drop a quick note for the next rider choosing a workshop.
@@ -544,7 +528,7 @@ export default async function ReviewWidget({
                 </div>
               </div>
             ) : googleData ? (
-              <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "9px", flexWrap: "wrap" }}>
                 <GoogleIcon size={20} />
                 <StarsRow rating={googleData.rating} size={17} />
                 <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--w-text-heading)" }}>
@@ -565,7 +549,7 @@ export default async function ReviewWidget({
                 )}
               </div>
             ) : hasGoogle && settings?.googleReviewUrl ? (
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "9px", flexWrap: "wrap" }}>
                 <GoogleIcon size={20} />
                 <StarsRow rating={5} size={17} />
                 <a
@@ -580,7 +564,7 @@ export default async function ReviewWidget({
             ) : null}
 
             {!showReviewInvite && yelpData ? (
-              <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "9px", flexWrap: "wrap" }}>
                 <YelpBurstIcon size={20} />
                 <StarsRow rating={yelpData.rating} size={17} />
                 <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--w-text-heading)" }}>
@@ -601,7 +585,7 @@ export default async function ReviewWidget({
                 )}
               </div>
             ) : !showReviewInvite && hasYelp && settings?.yelpReviewUrl ? (
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "9px", flexWrap: "wrap" }}>
                 <YelpBurstIcon size={20} />
                 <StarsRow rating={5} size={17} />
                 <a
@@ -623,11 +607,6 @@ export default async function ReviewWidget({
             )}
           </div>
 
-          {/* ── Divider ── */}
-          {displayReviews.length > 0 && (
-            <hr style={{ border: "none", borderTop: "1px solid var(--w-divider)", marginBottom: "14px" }} />
-          )}
-
           {/* ── Review carousel ── */}
           {displayReviews.length > 0 && (
             <ReviewCarousel reviews={displayReviews} />
@@ -641,9 +620,9 @@ export default async function ReviewWidget({
                 justifyContent: "center",
                 alignItems: "center",
                 gap: "16px",
-                marginTop: "14px",
-                paddingTop: "12px",
-                borderTop: displayReviews.length > 0 ? "1px solid var(--w-divider)" : "none",
+                marginTop: "10px",
+                paddingTop: "0",
+                borderTop: "none",
                 flexWrap: "wrap",
               }}
             >

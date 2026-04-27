@@ -110,7 +110,6 @@ export function ReviewCarousel({ reviews }: { reviews: ReviewEntry[] }) {
     <div className="w-carousel-shell">
       <div className="w-carousel-header">
         <div>
-          <p className="w-kicker">Customer notes</p>
           <p className="w-carousel-title">Stories from the stand</p>
         </div>
         <div className="w-carousel-controls">
