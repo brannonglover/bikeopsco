@@ -104,12 +104,21 @@ function reviewTimestamp(review: ReviewEntry): number {
   return Number.isFinite(t) ? t : 0;
 }
 
+function safeBackgroundColor(value: string | string[] | undefined): string {
+  const raw = Array.isArray(value) ? value[0] : value;
+  const color = raw?.trim() ?? "";
+  if (/^#[0-9a-fA-F]{3,8}$/.test(color)) return color;
+  if (/^rgba?\(\s*[\d.]+%?\s*,\s*[\d.]+%?\s*,\s*[\d.]+%?(?:\s*,\s*(?:0|1|0?\.\d+))?\s*\)$/.test(color)) return color;
+  if (/^hsla?\(\s*[\d.]+(?:deg)?\s*,\s*[\d.]+%\s*,\s*[\d.]+%(?:\s*,\s*(?:0|1|0?\.\d+))?\s*\)$/.test(color)) return color;
+  return "transparent";
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function ReviewWidget({
   searchParams,
 }: {
-  searchParams: { theme?: string | string[] };
+  searchParams: { theme?: string | string[]; bg?: string | string[] };
 }) {
   const features = await getAppFeatures();
   if (!features.reviewsEnabled) notFound();
@@ -177,13 +186,14 @@ export default async function ReviewWidget({
       : theme === "dark"
       ? `:root { ${DARK_VARS} }`
       : `:root { ${LIGHT_VARS} }`;
+  const pageBackground = safeBackgroundColor(searchParams?.bg);
 
   return (
     <>
       <style>{`
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        html { -webkit-text-size-adjust: 100%; background: transparent !important; }
-        body { background: transparent !important; min-height: auto !important; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; }
+        html { -webkit-text-size-adjust: 100%; background: ${pageBackground} !important; }
+        body { background: ${pageBackground} !important; min-height: auto !important; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; }
         a { color: inherit; }
         ${themeStyle}
 

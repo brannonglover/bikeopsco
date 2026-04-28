@@ -335,7 +335,7 @@ export default function ReviewsSettingsPage() {
   };
 
   const iframeCode = widgetOrigin
-    ? `<!-- Add ?theme=dark or ?theme=auto to the src URL to match your site's color scheme -->\n<iframe\n  id="bikeops-reviews"\n  src="${widgetOrigin}/widget/reviews"\n  width="100%"\n  height="240"\n  frameborder="0"\n  scrolling="no"\n  style="border:none;border-radius:16px;width:100%;display:block;"\n  title="Customer Reviews"\n></iframe>\n<script>\nwindow.addEventListener('message',function(e){\n  if(e.data&&e.data.type==='bikeops-widget-height'){\n    var f=document.getElementById('bikeops-reviews');\n    if(f)f.style.height=e.data.height+'px';\n  }\n});\n</script>`
+    ? `<div data-bikeops-reviews></div>\n<script\n  src="${widgetOrigin}/reviews-widget.js"\n  data-base-url="${widgetOrigin}"\n  data-theme="auto"\n></script>`
     : "";
 
   const apiUrl = widgetOrigin ? `${widgetOrigin}/api/widget/reviews` : "";
@@ -647,8 +647,8 @@ export default function ReviewsSettingsPage() {
           <div className="rounded-xl border border-surface-border bg-subtle-bg p-4">
             {widgetOrigin ? (
               <iframe
-                src={`${widgetOrigin}/widget/reviews`}
-                style={{ border: "none", borderRadius: "16px", display: "block", width: "100%", minHeight: "200px" }}
+                src={`${widgetOrigin}/widget/reviews?bg=%23f1f5f9`}
+                style={{ border: "none", borderRadius: "16px", display: "block", width: "100%", minHeight: "200px", background: "#f1f5f9" }}
                 title="Review Widget Preview"
               />
             ) : (
@@ -658,7 +658,7 @@ export default function ReviewsSettingsPage() {
         </div>
 
         <div className="mb-4">
-          <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-2">Embed code</p>
+          <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-2">Script embed code</p>
           <div className="flex items-start gap-2">
             <pre className="flex-1 min-w-0 rounded-lg bg-background border border-surface-border px-3 py-2.5 text-xs text-foreground font-mono whitespace-pre overflow-x-auto" suppressHydrationWarning>{iframeCode || null}</pre>
             {iframeCode ? <CopyButton text={iframeCode} /> : null}
