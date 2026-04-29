@@ -32,13 +32,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const isLoginPage = pathname === "/login";
+  const isSignupPage = pathname === "/signup";
   const isWidgetPage = pathname?.startsWith("/widget");
   const isPublicCustomerPage =
     pathname === "/book" ||
     pathname?.startsWith("/pay/") ||
     pathname?.startsWith("/status/") ||
     pathname?.startsWith("/chat/c");
-  const isStaffPage = !isLoginPage && !isWidgetPage && !isPublicCustomerPage;
+  const isStaffPage = !isLoginPage && !isSignupPage && !isWidgetPage && !isPublicCustomerPage;
   const { status } = useSession();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -69,7 +70,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     };
   }, [mobileMenuOpen]);
 
-  if (isLoginPage || isWidgetPage) {
+  if (isLoginPage || isSignupPage || isWidgetPage) {
     return <>{children}</>;
   }
 

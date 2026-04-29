@@ -6,6 +6,7 @@ import {
   applyProductMapping,
   type ProductColumnMapping,
 } from "@/lib/import-parser";
+import { requireCurrentShop } from "@/lib/shop";
 
 export const runtime = "nodejs";
 
@@ -52,6 +53,7 @@ export async function POST(request: NextRequest) {
   const errors: { row: number; message: string }[] = [];
 
   try {
+    const shop = await requireCurrentShop();
     const formData = await request.formData();
     const file = formData.get("file");
     const mappingStr = formData.get("mapping") as string | null;
@@ -135,7 +137,7 @@ export async function POST(request: NextRequest) {
 
       try {
         const product = await prisma.product.create({
-          data: { name, description, price, stockQuantity: qty, supplier },
+          data: { shopId: shop.id, name, description, price, stockQuantity: qty, supplier },
         });
         created.push({ name: product.name });
       } catch {

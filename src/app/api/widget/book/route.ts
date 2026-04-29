@@ -15,6 +15,7 @@ import { checkCollectionEligibility } from "@/lib/collection-radius";
 import { getAppFeatures } from "@/lib/app-settings";
 import { addWidgetCorsHeaders } from "@/lib/widget-cors";
 import { buildSmsConsentUpdate } from "@/lib/sms-consent";
+import { getShopForHost } from "@/lib/shop";
 
 export const dynamic = "force-dynamic";
 
@@ -92,6 +93,17 @@ export async function POST(request: NextRequest) {
   const origin = request.headers.get("origin");
 
   try {
+    const hostHeader =
+      request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+    const shop = await getShopForHost(hostHeader);
+    if (!shop) {
+      const res = NextResponse.json({ error: "Shop not found" }, { status: 404 });
+      return addWidgetCorsHeaders(res, origin, {
+        methods: "POST, OPTIONS",
+        allowHeaders: "Content-Type, Authorization",
+      });
+    }
+
     let body: unknown;
     try {
       body = await request.json();
@@ -107,7 +119,7 @@ export async function POST(request: NextRequest) {
     }
 
     const data = bookSchema.parse(body);
-    const features = await getAppFeatures();
+    const features = await getAppFeatures(shop.id);
 
     if (data.deliveryType === "COLLECTION_SERVICE") {
       if (!features.collectionServiceEnabled) {
@@ -160,6 +172,7 @@ export async function POST(request: NextRequest) {
       maxActiveBikes > 0
         ? await prisma.jobBike.count({
             where: {
+              shopId: shop.id,
               job: {
                 archivedAt: null,
                 stage: { in: [Stage.RECEIVED, Stage.WORKING_ON] },
@@ -179,14 +192,15 @@ export async function POST(request: NextRequest) {
           let customer = null;
 
           if (data.customerId) {
-            customer = await tx.customer.findUnique({
-              where: { id: data.customerId },
+            customer = await tx.customer.findFirst({
+              where: { id: data.customerId, shopId: shop.id },
             });
           }
 
           if (!customer) {
             customer = await tx.customer.findFirst({
               where: {
+                shopId: shop.id,
                 email: { equals: emailNormalized, mode: "insensitive" },
               },
             });
@@ -195,6 +209,7 @@ export async function POST(request: NextRequest) {
           if (!customer) {
             customer = await tx.customer.create({
               data: {
+                shopId: shop.id,
                 firstName: data.firstName,
                 lastName: data.lastName ?? null,
                 email: data.email.trim(),
@@ -220,6 +235,7 @@ export async function POST(request: NextRequest) {
 
           const entry = await tx.waitlistEntry.create({
             data: {
+              shopId: shop.id,
               customerId: customer.id,
               firstName: data.firstName,
               lastName: data.lastName,
@@ -236,6 +252,7 @@ export async function POST(request: NextRequest) {
               serviceIds: data.serviceIds ?? [],
               bikes: {
                 create: bikesInput.map((b, i) => ({
+                  shopId: shop.id,
                   make: b.make.trim(),
                   model: b.model?.trim() || null,
                   bikeType: b.bikeType ?? null,
@@ -266,7 +283,7 @@ export async function POST(request: NextRequest) {
       const services =
         data.serviceIds && data.serviceIds.length > 0
           ? await prisma.service.findMany({
-              where: { id: { in: data.serviceIds }, isSystem: false },
+              where: { shopId: shop.id, id: { in: data.serviceIds }, isSystem: false },
               select: { name: true },
             })
           : [];
@@ -295,7 +312,7 @@ export async function POST(request: NextRequest) {
         })
         .catch((e) => console.error("[Widget book] Waitlist staff email threw:", e));
 
-      sendPushToAllStaff({
+      sendPushToAllStaff(shop.id, {
         title: "New Waitlist Request",
         body: `${customerName} — ${bikeSummary}`,
         data: { type: "waitlist_request", waitlistId: waitlist.entry.id },
@@ -330,14 +347,15 @@ export async function POST(request: NextRequest) {
       let customer = null;
 
       if (data.customerId) {
-        customer = await tx.customer.findUnique({
-          where: { id: data.customerId },
+        customer = await tx.customer.findFirst({
+          where: { id: data.customerId, shopId: shop.id },
         });
       }
 
       if (!customer) {
         customer = await tx.customer.findFirst({
           where: {
+            shopId: shop.id,
             email: { equals: emailNormalized, mode: "insensitive" },
           },
         });
@@ -346,6 +364,7 @@ export async function POST(request: NextRequest) {
       if (!customer) {
         customer = await tx.customer.create({
           data: {
+            shopId: shop.id,
             firstName: data.firstName,
             lastName: data.lastName ?? null,
             email: data.email.trim(),
@@ -377,6 +396,7 @@ export async function POST(request: NextRequest) {
 
       const newJob = await tx.job.create({
         data: {
+          shopId: shop.id,
           stage: Stage.PENDING_APPROVAL,
           bikeMake: bikeMakeSummary,
           bikeModel: bikeModelSummary,
@@ -399,6 +419,7 @@ export async function POST(request: NextRequest) {
 
         let bike = await tx.bike.findFirst({
           where: {
+            shopId: shop.id,
             customerId: customer.id,
             make: { equals: makeNormalized, mode: "insensitive" },
             model: modelNormalized ? { equals: modelNormalized, mode: "insensitive" } : null,
@@ -407,6 +428,7 @@ export async function POST(request: NextRequest) {
         if (!bike) {
           bike = await tx.bike.create({
             data: {
+              shopId: shop.id,
               customerId: customer.id,
               make: makeNormalized,
               model: modelNormalized,
@@ -417,6 +439,7 @@ export async function POST(request: NextRequest) {
 
         await tx.jobBike.create({
           data: {
+            shopId: shop.id,
             jobId: newJob.id,
             make: makeNormalized,
             model: modelNormalized,
@@ -429,10 +452,11 @@ export async function POST(request: NextRequest) {
 
       if (data.serviceIds && data.serviceIds.length > 0) {
         const services = await tx.service.findMany({
-          where: { id: { in: data.serviceIds }, isSystem: false },
+          where: { shopId: shop.id, id: { in: data.serviceIds }, isSystem: false },
         });
         await tx.jobService.createMany({
           data: services.map((s) => ({
+            shopId: shop.id,
             jobId: newJob.id,
             serviceId: s.id,
             quantity: 1,
@@ -471,7 +495,7 @@ export async function POST(request: NextRequest) {
       if (!result.ok) console.error("[Widget book] Staff email failed:", result.error);
     }).catch((e) => console.error("[Widget book] Staff email threw:", e));
 
-    sendPushToAllStaff({
+    sendPushToAllStaff(job.shopId, {
       title: "New Booking Request",
       body: `${job.customer?.firstName ?? "Unknown"} ${job.customer?.lastName ?? ""} — ${job.bikeMake} ${job.bikeModel}`.trim(),
       data: { type: "booking_request", jobId: job.id },

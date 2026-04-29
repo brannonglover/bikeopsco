@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCustomerFromSession } from "@/lib/chat-session";
 import { getAppFeatures } from "@/lib/app-settings";
+import { requireCurrentShop } from "@/lib/shop";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +10,8 @@ export const dynamic = "force-dynamic";
  * Customer-only: returns the current customer's conversation (find or create).
  */
 export async function GET() {
-  const features = await getAppFeatures();
+  const shop = await requireCurrentShop();
+  const features = await getAppFeatures(shop.id);
   if (!features.chatEnabled) {
     return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
   }
@@ -19,7 +21,7 @@ export async function GET() {
   }
 
   let conversation = await prisma.conversation.findFirst({
-    where: { customerId, jobId: null },
+    where: { shopId: shop.id, customerId, jobId: null },
     orderBy: { updatedAt: "desc" },
     include: {
       customer: true,
@@ -34,11 +36,15 @@ export async function GET() {
 
   if (!conversation) {
     conversation = await prisma.conversation.create({
-      data: { customerId, jobId: null },
+      data: { shopId: shop.id, customerId, jobId: null },
       include: {
         customer: true,
         job: true,
-        messages: { include: { attachments: true } },
+        messages: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          include: { attachments: true },
+        },
       },
     });
   }

@@ -40,6 +40,7 @@ export async function POST(
 
     const jobForEmail = {
       id: job.id,
+      shopId: job.shopId,
       bikeMake: job.bikeMake,
       bikeModel: job.bikeModel,
       customer: job.customer

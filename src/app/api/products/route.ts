@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
+import { requireCurrentShop } from "@/lib/shop";
 
 const createProductSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -13,19 +14,21 @@ const createProductSchema = z.object({
 
 export async function GET(request: NextRequest) {
   try {
+    const shop = await requireCurrentShop();
     const { searchParams } = new URL(request.url);
     const q = searchParams.get("q") ?? "";
 
     const products = await prisma.product.findMany({
       where: q
         ? {
+            shopId: shop.id,
             OR: [
               { name: { contains: q, mode: "insensitive" } },
               { description: { contains: q, mode: "insensitive" } },
               { supplier: { contains: q, mode: "insensitive" } },
             ],
           }
-        : {},
+        : { shopId: shop.id },
       orderBy: { name: "asc" },
     });
     const res = NextResponse.json(products);
@@ -42,11 +45,13 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const shop = await requireCurrentShop();
     const body = await request.json();
     const data = createProductSchema.parse(body);
 
     const product = await prisma.product.create({
       data: {
+        shopId: shop.id,
         name: data.name,
         description: data.description ?? null,
         imageUrl: data.imageUrl ?? null,

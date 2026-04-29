@@ -15,14 +15,14 @@ const bodySchema = z.object({
  */
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.email) {
+  if (!session?.user?.email || !session.user.shopId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
     const json = await request.json();
     const { slug, to } = bodySchema.parse(json);
-    const result = await sendEmailTemplateTestEmail(slug, to);
+    const result = await sendEmailTemplateTestEmail(session.user.shopId, slug, to);
     if (!result.ok) {
       return NextResponse.json({ error: result.error ?? "Send failed" }, { status: 400 });
     }

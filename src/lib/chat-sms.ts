@@ -29,10 +29,11 @@ export function validateTwilioWebhook(
 
 /** Match inbound SMS sender / customer.phone (stored formats vary). */
 export async function findCustomerIdBySmsFrom(
+  shopId: string,
   fromE164: string
 ): Promise<string | null> {
   const customers = await prisma.customer.findMany({
-    where: { phone: { not: null } },
+    where: { shopId, phone: { not: null } },
     select: { id: true, phone: true },
   });
   for (const c of customers) {
@@ -45,14 +46,15 @@ export async function findCustomerIdBySmsFrom(
 
 /** Most recently active thread, or a new general (no job) conversation. */
 export async function findOrCreateConversationForInboundSms(
+  shopId: string,
   customerId: string
 ) {
   const existing = await prisma.conversation.findFirst({
-    where: { customerId, archived: false },
+    where: { shopId, customerId, archived: false },
     orderBy: { updatedAt: "desc" },
   });
   if (existing) return existing;
   return prisma.conversation.create({
-    data: { customerId, jobId: null },
+    data: { shopId, customerId, jobId: null },
   });
 }

@@ -8,6 +8,7 @@ import { syncCollectionJobService } from "@/lib/collection-fee";
 import { sendPushToAllStaff } from "@/lib/push";
 import { getAppFeatures } from "@/lib/app-settings";
 import { computeJobSubtotal, computeTotalPaid, getJobPaymentSummary } from "@/lib/job-payments";
+import { getShopForHost } from "@/lib/shop";
 
 export const dynamic = "force-dynamic";
 
@@ -37,9 +38,21 @@ const createJobSchema = z.object({
   serviceIds: z.array(z.string()).optional().default([]),
 });
 
-export async function GET(request: NextRequest) {
+async function getAuthorizedShopId(request: NextRequest): Promise<string | null> {
   const token = await getToken({ req: request });
-  if (!token) {
+  if (!token?.shopId) return null;
+
+  const hostHeader =
+    request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  const shop = await getShopForHost(hostHeader);
+  if (!shop || shop.id !== token.shopId) return null;
+
+  return shop.id;
+}
+
+export async function GET(request: NextRequest) {
+  const shopId = await getAuthorizedShopId(request);
+  if (!shopId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -52,7 +65,7 @@ export async function GET(request: NextRequest) {
     const view = searchParams.get("view");
     const summary = searchParams.get("summary") === "1" || searchParams.get("summary") === "true";
 
-    const where: Record<string, unknown> = {};
+    const where: Record<string, unknown> = { shopId };
 
     if (archived) {
       where.archivedAt = { not: null };
@@ -285,8 +298,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const token = await getToken({ req: request });
-  if (!token) {
+  const shopId = await getAuthorizedShopId(request);
+  if (!shopId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -309,14 +322,16 @@ export async function POST(request: NextRequest) {
       );
     }
     const bikes = data.bikes && data.bikes.length > 0 ? data.bikes : [{ make: data.bikeMake, model: data.bikeModel }];
+    const customerId = data.customerId ?? null;
 
     const job = await prisma.$transaction(async (tx) => {
       const newJob = await tx.job.create({
         data: {
+          shop: { connect: { id: shopId } },
           stage: Stage.BOOKED_IN,
           bikeMake: bikes.length === 1 ? bikes[0].make : "Multiple",
           bikeModel: bikes.length === 1 ? (bikes[0].model ?? "") : `${bikes.length} bikes`,
-          customerId: data.customerId,
+          customer: customerId ? { connect: { id: customerId, shopId } } : undefined,
           deliveryType: data.deliveryType as "DROP_OFF_AT_SHOP" | "COLLECTION_SERVICE",
           dropOffDate: data.dropOffDate ? new Date(data.dropOffDate) : null,
           pickupDate: data.pickupDate ? new Date(data.pickupDate) : null,
@@ -333,11 +348,12 @@ export async function POST(request: NextRequest) {
       const resolvedBikes: Array<(typeof bikes)[number] & { bikeId: string | null }> = [];
       for (const b of bikes) {
         let bikeId: string | null = b.bikeId ?? null;
-        if (!bikeId && data.customerId) {
+        if (!bikeId && customerId) {
           const trimmedModel = b.model?.trim() || null;
           const existing = await tx.bike.findFirst({
             where: {
-              customerId: data.customerId,
+              shopId,
+              customerId,
               make: { equals: b.make.trim(), mode: "insensitive" },
               model: trimmedModel ? { equals: trimmedModel, mode: "insensitive" } : null,
             },
@@ -347,7 +363,8 @@ export async function POST(request: NextRequest) {
           } else {
             const created = await tx.bike.create({
               data: {
-                customerId: data.customerId,
+                shopId,
+                customerId,
                 make: b.make.trim(),
                 model: trimmedModel,
                 bikeType: b.bikeType ?? null,
@@ -363,6 +380,7 @@ export async function POST(request: NextRequest) {
 
       await tx.jobBike.createMany({
         data: resolvedBikes.map((b, i) => ({
+          shopId,
           jobId: newJob.id,
           make: b.make,
           model: b.model,
@@ -376,10 +394,11 @@ export async function POST(request: NextRequest) {
 
       if (data.serviceIds && data.serviceIds.length > 0) {
         const services = await tx.service.findMany({
-          where: { id: { in: data.serviceIds }, isSystem: false },
+          where: { shopId, id: { in: data.serviceIds }, isSystem: false },
         });
         await tx.jobService.createMany({
           data: services.map((s) => ({
+            shopId,
             jobId: newJob.id,
             serviceId: s.id,
             quantity: 1,
@@ -393,7 +412,7 @@ export async function POST(request: NextRequest) {
       }
 
       return tx.job.findUnique({
-        where: { id: newJob.id },
+        where: { id: newJob.id, shopId },
         include: {
           customer: true,
           jobBikes: { include: { bike: true }, orderBy: { sortOrder: "asc" } },
@@ -421,7 +440,7 @@ export async function POST(request: NextRequest) {
     }
 
     const customerName = [job.customer?.firstName, job.customer?.lastName].filter(Boolean).join(" ") || "Walk-in";
-    sendPushToAllStaff({
+    sendPushToAllStaff(shopId, {
       title: "New Job",
       body: `${customerName} — ${job.bikeMake} ${job.bikeModel}`.trim(),
       data: { type: "new_job", jobId: job.id },

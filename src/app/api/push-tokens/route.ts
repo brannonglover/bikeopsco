@@ -5,6 +5,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { authOptions } from "@/lib/auth";
 import { getCustomerFromSession } from "@/lib/chat-session";
+import { getShopForHost } from "@/lib/shop";
 
 const registerSchema = z.object({
   token: z.string().min(1),
@@ -20,26 +21,28 @@ const registerSchema = z.object({
 async function resolveIdentity(
   req: NextRequest
 ): Promise<
-  | { kind: "staff"; userId: string }
-  | { kind: "customer"; customerId: string }
+  | { kind: "staff"; userId: string; shopId: string }
+  | { kind: "customer"; customerId: string; shopId: string }
   | null
 > {
   // Try getToken first: it accepts both the plain and __Secure- cookie variants,
   // which makes it compatible with the mobile app regardless of which name it stored.
   const jwtToken = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-  if (jwtToken?.id) {
-    return { kind: "staff", userId: jwtToken.id as string };
+  if (jwtToken?.id && jwtToken.shopId) {
+    return { kind: "staff", userId: jwtToken.id as string, shopId: jwtToken.shopId as string };
   }
 
   // Fall back to getServerSession for any browser-based staff sessions.
   const session = await getServerSession(authOptions);
-  if (session?.user?.id) {
-    return { kind: "staff", userId: session.user.id };
+  if (session?.user?.id && session.user.shopId) {
+    return { kind: "staff", userId: session.user.id, shopId: session.user.shopId };
   }
 
   const customerId = await getCustomerFromSession();
   if (customerId) {
-    return { kind: "customer", customerId };
+    const shop = await getShopForHost(req.headers.get("x-forwarded-host") ?? req.headers.get("host"));
+    if (!shop) return null;
+    return { kind: "customer", customerId, shopId: shop.id };
   }
 
   return null;
@@ -72,6 +75,7 @@ export async function POST(request: NextRequest) {
     await prisma.pushToken.upsert({
       where: { token },
       update: {
+        shopId: identity.shopId,
         platform,
         ...(identity.kind === "staff"
           ? { userId: identity.userId, customerId: null }
@@ -79,6 +83,7 @@ export async function POST(request: NextRequest) {
         updatedAt: new Date(),
       },
       create: {
+        shopId: identity.shopId,
         token,
         platform,
         ...(identity.kind === "staff"

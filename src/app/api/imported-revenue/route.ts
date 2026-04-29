@@ -16,9 +16,10 @@ const UPSERT_CHUNK = 40;
 
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.email) {
+  if (!session?.user?.email || !session.user.shopId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const shopId = session.user.shopId;
 
   const ct = request.headers.get("content-type") ?? "";
   let source = "SQUARE";
@@ -97,6 +98,7 @@ export async function POST(request: Request) {
   for (const row of rows) {
     const amount = new Prisma.Decimal(String(row.amount));
     const base = {
+      shopId,
       source,
       occurredAt: row.occurredAt,
       amount,
@@ -119,7 +121,7 @@ export async function POST(request: Request) {
     const chunk = withId.slice(i, i + UPSERT_CHUNK);
     const ids = chunk.map((r) => r.externalId!);
     const existing = await prisma.importedRevenue.findMany({
-      where: { externalId: { in: ids } },
+      where: { shopId, externalId: { in: ids } },
       select: { externalId: true },
     });
     const existingSet = new Set(
@@ -130,13 +132,14 @@ export async function POST(request: Request) {
       chunk.map((row) => {
         const amount = new Prisma.Decimal(String(row.amount));
         const base = {
+          shopId,
           source,
           occurredAt: row.occurredAt,
           amount,
           description: row.description ?? null,
         };
         return prisma.importedRevenue.upsert({
-          where: { externalId: row.externalId! },
+          where: { shopId_externalId: { shopId, externalId: row.externalId! } },
           create: { ...base, externalId: row.externalId! },
           update: {
             amount,

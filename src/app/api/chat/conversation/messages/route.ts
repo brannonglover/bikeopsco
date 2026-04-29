@@ -4,6 +4,7 @@ import { getCustomerFromSession } from "@/lib/chat-session";
 import { sendPushToAllStaff } from "@/lib/push";
 import { z } from "zod";
 import { getAppFeatures } from "@/lib/app-settings";
+import { requireCurrentShop } from "@/lib/shop";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,8 @@ export async function GET() {
   let customerId: string | null = null;
   let conversationId: string | null = null;
   try {
-    const features = await getAppFeatures();
+    const shop = await requireCurrentShop();
+    const features = await getAppFeatures(shop.id);
     if (!features.chatEnabled) {
       return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
     }
@@ -29,7 +31,7 @@ export async function GET() {
     }
 
     const conversation = await prisma.conversation.findFirst({
-      where: { customerId, jobId: null },
+      where: { shopId: shop.id, customerId, jobId: null },
       select: { id: true, updatedAt: true, staffLastReadAt: true, customerLastReadAt: true },
     });
 
@@ -39,7 +41,7 @@ export async function GET() {
     conversationId = conversation.id;
 
     const messages = await prisma.message.findMany({
-      where: { conversationId: conversation.id },
+      where: { shopId: shop.id, conversationId: conversation.id },
       orderBy: { createdAt: "asc" },
       include: { attachments: true, reactions: true },
     });
@@ -90,7 +92,8 @@ export async function GET() {
  * Customer-only: POST a new message (always as CUSTOMER).
  */
 export async function POST(request: NextRequest) {
-  const features = await getAppFeatures();
+  const shop = await requireCurrentShop();
+  const features = await getAppFeatures(shop.id);
   if (!features.chatEnabled) {
     return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
   }
@@ -100,12 +103,12 @@ export async function POST(request: NextRequest) {
   }
 
   let conversation = await prisma.conversation.findFirst({
-    where: { customerId, jobId: null },
+    where: { shopId: shop.id, customerId, jobId: null },
   });
 
   if (!conversation) {
     conversation = await prisma.conversation.create({
-      data: { customerId, jobId: null },
+      data: { shopId: shop.id, customerId, jobId: null },
     });
   }
 
@@ -122,6 +125,7 @@ export async function POST(request: NextRequest) {
   const [message] = await Promise.all([
     prisma.message.create({
       data: {
+        shopId: shop.id,
         conversationId: conversation.id,
         sender: "CUSTOMER",
         body: bodyText?.trim() || null,
@@ -144,7 +148,7 @@ export async function POST(request: NextRequest) {
         ? [customer.firstName, customer.lastName].filter(Boolean).join(" ")
         : "Customer";
       const pushBody = bodyText?.trim() || "Sent a photo";
-      sendPushToAllStaff({
+      sendPushToAllStaff(shop.id, {
         title: `New message from ${customerName}`,
         body: pushBody,
         data: { type: "new_message", conversationId: conversation.id },

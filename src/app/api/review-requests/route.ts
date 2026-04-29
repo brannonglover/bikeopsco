@@ -3,10 +3,13 @@ import { prisma } from "@/lib/db";
 import { sendReviewRequestEmail } from "@/lib/email";
 import { getAppUrl } from "@/lib/env";
 import { z } from "zod";
+import { requireCurrentShop } from "@/lib/shop";
 
 export async function GET() {
   try {
+    const shop = await requireCurrentShop();
     const requests = await prisma.reviewRequest.findMany({
+      where: { shopId: shop.id },
       orderBy: { sentAt: "desc" },
       take: 100,
       include: {
@@ -33,11 +36,12 @@ const sendSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    const shop = await requireCurrentShop();
     const body = await request.json();
     const data = sendSchema.parse(body);
 
     const reviewSettings = await prisma.reviewSettings.findUnique({
-      where: { id: "default" },
+      where: { shopId: shop.id },
     });
 
     const googleReviewUrl = reviewSettings?.googleReviewUrl;
@@ -55,6 +59,7 @@ export async function POST(request: NextRequest) {
 
     const reviewRequest = await prisma.reviewRequest.create({
       data: {
+        shopId: shop.id,
         recipientEmail: data.email,
         recipientName: data.customerName ?? null,
         jobId: data.jobId ?? null,
@@ -62,7 +67,10 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    const appUrl = getAppUrl();
+    const host =
+      request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+    const proto = request.headers.get("x-forwarded-proto") ?? "https";
+    const appUrl = host ? `${proto}://${host}` : getAppUrl();
     const base = `${appUrl}/api/review-requests/${reviewRequest.token}/redirect`;
     const googleTrackUrl = googleReviewUrl ? `${base}?platform=google` : null;
     const yelpTrackUrl = yelpReviewUrl ? `${base}?platform=yelp` : null;
@@ -78,6 +86,7 @@ export async function POST(request: NextRequest) {
     if (data.jobId) {
       await prisma.jobEmail.create({
         data: {
+          shopId: shop.id,
           jobId: data.jobId,
           templateSlug: "follow_up_review",
           recipient: data.email,

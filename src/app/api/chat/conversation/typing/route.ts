@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { getCustomerFromSession } from "@/lib/chat-session";
 import { getAppFeatures } from "@/lib/app-settings";
+import { requireCurrentShop } from "@/lib/shop";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,8 @@ const bodySchema = z.object({
  * Customer-only: heartbeat while composing so staff can show a typing indicator.
  */
 export async function POST(request: NextRequest) {
-  const features = await getAppFeatures();
+  const shop = await requireCurrentShop();
+  const features = await getAppFeatures(shop.id);
   if (!features.chatEnabled) {
     return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
   }
@@ -31,12 +33,12 @@ export async function POST(request: NextRequest) {
   }
 
   let conversation = await prisma.conversation.findFirst({
-    where: { customerId, jobId: null },
+    where: { shopId: shop.id, customerId, jobId: null },
   });
 
   if (!conversation) {
     conversation = await prisma.conversation.create({
-      data: { customerId, jobId: null },
+      data: { shopId: shop.id, customerId, jobId: null },
     });
   }
 

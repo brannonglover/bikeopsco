@@ -17,17 +17,21 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const token = await getToken({ req: request });
-  if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!token?.shopId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
     const { id } = await params;
-    const features = await getAppFeatures();
+    const shopId = token.shopId;
+    const features = await getAppFeatures(shopId);
     const maxActiveBikes = features.maxActiveBikes ?? 5;
 
     const entry = await prisma.waitlistEntry.findUnique({
       where: { id },
       include: { bikes: { orderBy: { sortOrder: "asc" } } },
     });
+    if (entry && entry.shopId !== shopId) {
+      return NextResponse.json({ error: "Waitlist entry not found" }, { status: 404 });
+    }
     if (!entry || entry.archivedAt) {
       return NextResponse.json({ error: "Waitlist entry not found" }, { status: 404 });
     }
@@ -39,6 +43,7 @@ export async function POST(
     if (maxActiveBikes > 0) {
       const activeBikesCount = await prisma.jobBike.count({
         where: {
+          shopId,
           job: { archivedAt: null, stage: { in: [Stage.RECEIVED, Stage.WORKING_ON] } },
         },
       });
@@ -50,22 +55,23 @@ export async function POST(
       }
     }
 
-    const job = await prisma.$transaction(async (tx) => {
-      // Find or create customer
-      const emailNormalized = entry.email.trim().toLowerCase();
-      const customer =
-        (entry.customerId
-          ? await tx.customer.findUnique({ where: { id: entry.customerId } })
-          : null) ||
-        (await tx.customer.findFirst({
-          where: { email: { equals: emailNormalized, mode: "insensitive" } },
-        })) ||
-        (await tx.customer.create({
-          data: {
-            firstName: entry.firstName,
-            lastName: entry.lastName ?? null,
-            email: entry.email,
-            phone: entry.phone,
+      const job = await prisma.$transaction(async (tx) => {
+        // Find or create customer
+        const emailNormalized = entry.email.trim().toLowerCase();
+        const customer =
+          (entry.customerId
+            ? await tx.customer.findFirst({ where: { id: entry.customerId, shopId } })
+            : null) ||
+          (await tx.customer.findFirst({
+            where: { shopId, email: { equals: emailNormalized, mode: "insensitive" } },
+          })) ||
+          (await tx.customer.create({
+            data: {
+              shopId,
+              firstName: entry.firstName,
+              lastName: entry.lastName ?? null,
+              email: entry.email,
+              phone: entry.phone,
             address: entry.address ?? null,
           },
         }));
@@ -87,6 +93,7 @@ export async function POST(
 
       const newJob = await tx.job.create({
         data: {
+          shopId,
           stage: Stage.BOOKED_IN,
           bikeMake: bikeMakeSummary,
           bikeModel: bikeModelSummary,
@@ -108,6 +115,7 @@ export async function POST(
 
         let bike = await tx.bike.findFirst({
           where: {
+            shopId,
             customerId: customer.id,
             make: { equals: makeNormalized, mode: "insensitive" },
             model: modelNormalized ? { equals: modelNormalized, mode: "insensitive" } : null,
@@ -116,6 +124,7 @@ export async function POST(
         if (!bike) {
           bike = await tx.bike.create({
             data: {
+              shopId,
               customerId: customer.id,
               make: makeNormalized,
               model: modelNormalized,
@@ -126,6 +135,7 @@ export async function POST(
 
         await tx.jobBike.create({
           data: {
+            shopId,
             jobId: newJob.id,
             make: makeNormalized,
             model: modelNormalized,
@@ -139,10 +149,11 @@ export async function POST(
       const serviceIds = safeServiceIds(entry.serviceIds);
       if (serviceIds.length > 0) {
         const services = await tx.service.findMany({
-          where: { id: { in: serviceIds }, isSystem: false },
+          where: { shopId, id: { in: serviceIds }, isSystem: false },
         });
         await tx.jobService.createMany({
           data: services.map((s) => ({
+            shopId,
             jobId: newJob.id,
             serviceId: s.id,
             quantity: 1,
@@ -174,4 +185,3 @@ export async function POST(
     return NextResponse.json({ error: "Failed to promote waitlist entry" }, { status: 500 });
   }
 }
-

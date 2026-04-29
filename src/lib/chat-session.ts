@@ -1,6 +1,7 @@
 import { randomBytes } from "crypto";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
+import { requireCurrentShop } from "@/lib/shop";
 
 const SESSION_COOKIE_NAME = "chat_session";
 const SESSION_DAYS = 30;
@@ -10,6 +11,7 @@ export function getSessionCookieName(): string {
 }
 
 export async function getCustomerFromSession(): Promise<string | null> {
+  const shop = await requireCurrentShop();
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
   if (!token) return null;
@@ -18,7 +20,7 @@ export async function getCustomerFromSession(): Promise<string | null> {
     where: { token },
   });
 
-  if (!session || session.expiresAt < new Date()) {
+  if (!session || session.shopId !== shop.id || session.expiresAt < new Date()) {
     return null;
   }
 
@@ -26,12 +28,13 @@ export async function getCustomerFromSession(): Promise<string | null> {
 }
 
 export async function createSession(customerId: string): Promise<string> {
+  const shop = await requireCurrentShop();
   const token = generateSecureToken();
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + SESSION_DAYS);
 
   await prisma.chatSession.create({
-    data: { token, customerId, expiresAt },
+    data: { shopId: shop.id, token, customerId, expiresAt },
   });
 
   return token;

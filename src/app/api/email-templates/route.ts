@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
+import { requireCurrentShop } from "@/lib/shop";
 
 export async function GET() {
   try {
+    const shop = await requireCurrentShop();
     const templates = await prisma.emailTemplate.findMany({
+      where: { shopId: shop.id },
       orderBy: { slug: "asc" },
     });
     return NextResponse.json(templates);
@@ -25,11 +28,12 @@ const updateSchema = z.object({
 
 export async function PATCH(request: NextRequest) {
   try {
+    const shop = await requireCurrentShop();
     const body = await request.json();
     const data = updateSchema.parse(body);
 
     const template = await prisma.emailTemplate.update({
-      where: { slug: data.slug },
+      where: { shopId_slug: { shopId: shop.id, slug: data.slug } },
       data: {
         ...(data.subject !== undefined && { subject: data.subject }),
         ...(data.bodyHtml !== undefined && { bodyHtml: data.bodyHtml }),

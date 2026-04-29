@@ -6,6 +6,7 @@ import {
   applyMapping,
   type ColumnMapping,
 } from "@/lib/import-parser";
+import { requireCurrentShop } from "@/lib/shop";
 
 export const runtime = "nodejs";
 
@@ -50,6 +51,7 @@ function excelToParseResult(
 
 export async function POST(request: NextRequest) {
   try {
+    const shop = await requireCurrentShop();
     const formData = await request.formData();
     const file = formData.get("file");
     const mappingStr = formData.get("mapping") as string | null;
@@ -123,7 +125,7 @@ export async function POST(request: NextRequest) {
 
       try {
         const service = await prisma.service.create({
-          data: { name, description, price },
+          data: { shopId: shop.id, name, description, price },
         });
         created.push({ name: service.name });
       } catch {

@@ -19,23 +19,27 @@ export async function syncCollectionJobService(
   try {
     const slugList = [COLLECTION_SERVICE_SLUGS.regular, COLLECTION_SERVICE_SLUGS.ebike];
 
-    await tx.jobService.deleteMany({
-      where: {
-        jobId,
-        service: { slug: { in: slugList } },
-      },
-    });
-
     const job = await tx.job.findUnique({
       where: { id: jobId },
       include: {
         jobBikes: { include: { bike: true }, orderBy: { sortOrder: "asc" } },
       },
     });
-    if (!job || job.deliveryType !== "COLLECTION_SERVICE") return;
+    if (!job) return;
+    const shopId = job.shopId;
+
+    await tx.jobService.deleteMany({
+      where: {
+        shopId,
+        jobId,
+        service: { shopId, slug: { in: slugList } },
+      },
+    });
+
+    if (job.deliveryType !== "COLLECTION_SERVICE") return;
 
     const services = await tx.service.findMany({
-      where: { slug: { in: slugList } },
+      where: { shopId, slug: { in: slugList } },
     });
     const bySlug = new Map(services.map((s) => [s.slug as string, s]));
 
@@ -51,7 +55,7 @@ export async function syncCollectionJobService(
     const needsEbike = job.jobBikes.some((jb) => resolveEffectiveBikeType(jb) === "E_BIKE");
     const chosen = needsEbike ? ebike : regular;
 
-    const settings = await tx.appSettings.findUnique({ where: { id: "default" } }).catch(() => null);
+    const settings = await tx.appSettings.findUnique({ where: { shopId } }).catch(() => null);
     const fee =
       settings && needsEbike
         ? Number(settings.collectionFeeEbike)
@@ -61,6 +65,7 @@ export async function syncCollectionJobService(
 
     await tx.jobService.create({
       data: {
+        shopId,
         jobId,
         serviceId: chosen.id,
         quantity: 1,

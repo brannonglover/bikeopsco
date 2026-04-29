@@ -5,6 +5,7 @@ import { getAppUrl, getResendApiKey } from "@/lib/env";
 import { sendChatMagicLinkEmail } from "@/lib/email";
 import { z } from "zod";
 import { getAppFeatures } from "@/lib/app-settings";
+import { getShopForHost } from "@/lib/shop";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,7 +15,12 @@ const schema = z.object({ email: z.string().email() });
 
 export async function POST(request: NextRequest) {
   try {
-    const features = await getAppFeatures();
+    const shop = await getShopForHost(request.headers.get("host"));
+    if (!shop) {
+      return NextResponse.json({ error: "Shop not found" }, { status: 404 });
+    }
+
+    const features = await getAppFeatures(shop.id);
     if (!features.chatEnabled) {
       return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
     }
@@ -22,11 +28,14 @@ export async function POST(request: NextRequest) {
     const { email } = schema.parse(body);
 
     const customer = await prisma.customer.findFirst({
-      where: { email: { equals: email.trim(), mode: "insensitive" } },
+      where: { shopId: shop.id, email: { equals: email.trim(), mode: "insensitive" } },
     });
 
     // Always return success - don't reveal if email exists
-    const baseUrl = getAppUrl();
+    const host =
+      request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+    const proto = request.headers.get("x-forwarded-proto") ?? "https";
+    const baseUrl = host ? `${proto}://${host}` : getAppUrl();
 
     if (!customer) {
       return NextResponse.json({
@@ -40,7 +49,7 @@ export async function POST(request: NextRequest) {
     expiresAt.setMinutes(expiresAt.getMinutes() + EXPIRY_MINUTES);
 
     await prisma.magicLinkToken.create({
-      data: { token, customerId: customer.id, expiresAt },
+      data: { shopId: shop.id, token, customerId: customer.id, expiresAt },
     });
 
     const magicLinkUrl = `${baseUrl}/chat/c#token=${encodeURIComponent(token)}`;

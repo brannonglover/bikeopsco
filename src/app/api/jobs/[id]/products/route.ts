@@ -14,17 +14,18 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   const token = await getToken({ req: request });
-  if (!token) {
+  if (!token?.shopId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const shopId = token.shopId;
 
   try {
     const { id: jobId } = params;
     const body = await request.json();
     const data = addProductSchema.parse(body);
 
-    const product = await prisma.product.findUnique({
-      where: { id: data.productId },
+    const product = await prisma.product.findFirst({
+      where: { id: data.productId, shopId },
     });
 
     if (!product) {
@@ -36,6 +37,7 @@ export async function POST(
 
     const jobProduct = await prisma.jobProduct.create({
       data: {
+        shopId,
         jobId,
         productId: data.productId,
         quantity: data.quantity,
@@ -73,9 +75,10 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   const token = await getToken({ req: request });
-  if (!token) {
+  if (!token?.shopId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const shopId = token.shopId;
 
   try {
     const { id: jobId } = params;
@@ -83,7 +86,7 @@ export async function PATCH(
     const data = patchProductSchema.parse(body);
 
     const existing = await prisma.jobProduct.findFirst({
-      where: { id: data.jobProductId, jobId },
+      where: { shopId, id: data.jobProductId, jobId },
     });
 
     if (!existing) {
@@ -119,9 +122,10 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   const token = await getToken({ req: request });
-  if (!token) {
+  if (!token?.shopId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const shopId = token.shopId;
 
   try {
     const { id: jobId } = params;
@@ -137,6 +141,7 @@ export async function DELETE(
 
     const result = await prisma.jobProduct.deleteMany({
       where: {
+        shopId,
         id: jobProductId,
         jobId,
       },

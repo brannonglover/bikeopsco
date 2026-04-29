@@ -8,6 +8,7 @@ import {
 import { normalizePhone } from "@/lib/phone";
 import { sendPlainSms } from "@/lib/sms";
 import { buildSmsConsentUpdate, parseSmsConsentKeyword } from "@/lib/sms-consent";
+import { getShopForHost } from "@/lib/shop";
 
 export const runtime = "nodejs";
 
@@ -42,6 +43,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const hostHeader =
+    request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  const shop = await getShopForHost(hostHeader);
+  if (!shop) {
+    console.warn("Infobip SMS webhook: shop not found for host", hostHeader);
+    return NextResponse.json({ received: true });
+  }
+
   let payload: z.infer<typeof infobipInboundSchema>;
   try {
     payload = infobipInboundSchema.parse(await request.json());
@@ -68,8 +77,8 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      const existing = await prisma.message.findUnique({
-        where: { smsSid: item.messageId },
+      const existing = await prisma.message.findFirst({
+        where: { shopId: shop.id, smsSid: item.messageId },
       });
       if (existing) {
         continue;
@@ -80,7 +89,7 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      const customerId = await findCustomerIdBySmsFrom(fromE164);
+      const customerId = await findCustomerIdBySmsFrom(shop.id, fromE164);
       if (!customerId) {
         console.warn("Infobip SMS: unknown sender", fromE164);
         continue;
@@ -88,8 +97,8 @@ export async function POST(request: NextRequest) {
 
       const consentKeyword = parseSmsConsentKeyword(bodyText);
       if (consentKeyword === "stop") {
-        await prisma.customer.update({
-          where: { id: customerId },
+        await prisma.customer.updateMany({
+          where: { id: customerId, shopId: shop.id },
           data: buildSmsConsentUpdate(false, "SMS_STOP"),
         });
         await sendPlainSms(
@@ -99,8 +108,8 @@ export async function POST(request: NextRequest) {
         continue;
       }
       if (consentKeyword === "start") {
-        await prisma.customer.update({
-          where: { id: customerId },
+        await prisma.customer.updateMany({
+          where: { id: customerId, shopId: shop.id },
           data: buildSmsConsentUpdate(true, "SMS_START"),
         });
         await sendPlainSms(
@@ -118,11 +127,13 @@ export async function POST(request: NextRequest) {
       }
 
       const conversation = await findOrCreateConversationForInboundSms(
+        shop.id,
         customerId
       );
 
       await prisma.message.create({
         data: {
+          shopId: shop.id,
           conversationId: conversation.id,
           sender: "CUSTOMER",
           body: bodyText,

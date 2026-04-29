@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { buildCustomerEmailPreviewDocument } from "@/lib/email";
+import { requireCurrentShop } from "@/lib/shop";
 
 export const dynamic = "force-dynamic";
 
@@ -21,13 +22,14 @@ function htmlResponse(html: string) {
  */
 export async function GET(request: NextRequest) {
   try {
+    const shop = await requireCurrentShop();
     const slug = request.nextUrl.searchParams.get("slug");
     if (!slug?.trim()) {
       return NextResponse.json({ error: "Missing slug" }, { status: 400 });
     }
 
     const template = await prisma.emailTemplate.findUnique({
-      where: { slug: slug.trim() },
+      where: { shopId_slug: { shopId: shop.id, slug: slug.trim() } },
     });
     if (!template) {
       return NextResponse.json({ error: "Template not found" }, { status: 404 });

@@ -2,6 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
+import { getShopForHost } from "@/lib/shop";
+
+async function getAuthorizedShopId(request: NextRequest): Promise<string | null> {
+  const token = await getToken({ req: request });
+  if (!token?.shopId) return null;
+
+  const hostHeader =
+    request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  const shop = await getShopForHost(hostHeader);
+  if (!shop || shop.id !== token.shopId) return null;
+
+  return shop.id;
+}
 
 const addServiceSchema = z.union([
   z.object({
@@ -21,8 +34,8 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const token = await getToken({ req: request });
-  if (!token) {
+  const shopId = await getAuthorizedShopId(request);
+  if (!shopId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -31,9 +44,14 @@ export async function POST(
     const body = await request.json();
     const data = addServiceSchema.parse(body);
 
+    const job = await prisma.job.findFirst({ where: { id: jobId, shopId }, select: { id: true } });
+    if (!job) {
+      return NextResponse.json({ error: "Job not found" }, { status: 404 });
+    }
+
     if ("serviceId" in data) {
       const service = await prisma.service.findUnique({
-        where: { id: data.serviceId },
+        where: { id: data.serviceId, shopId },
       });
 
       if (!service) {
@@ -50,8 +68,19 @@ export async function POST(
         );
       }
 
+      if (data.jobBikeId) {
+        const jobBike = await prisma.jobBike.findFirst({
+          where: { id: data.jobBikeId, jobId, shopId },
+          select: { id: true },
+        });
+        if (!jobBike) {
+          return NextResponse.json({ error: "Job bike not found" }, { status: 404 });
+        }
+      }
+
       const jobService = await prisma.jobService.create({
         data: {
+          shopId,
           jobId,
           serviceId: data.serviceId,
           quantity: data.quantity,
@@ -64,8 +93,19 @@ export async function POST(
       return NextResponse.json(jobService);
     }
 
+    if (data.jobBikeId) {
+      const jobBike = await prisma.jobBike.findFirst({
+        where: { id: data.jobBikeId, jobId, shopId },
+        select: { id: true },
+      });
+      if (!jobBike) {
+        return NextResponse.json({ error: "Job bike not found" }, { status: 404 });
+      }
+    }
+
     const jobService = await prisma.jobService.create({
       data: {
+        shopId,
         jobId,
         customServiceName: data.customServiceName,
         quantity: data.quantity,
@@ -92,8 +132,8 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const token = await getToken({ req: request });
-  if (!token) {
+  const shopId = await getAuthorizedShopId(request);
+  if (!shopId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -110,7 +150,7 @@ export async function DELETE(
     }
 
     const existing = await prisma.jobService.findFirst({
-      where: { id: jobServiceId, jobId },
+      where: { id: jobServiceId, jobId, shopId },
       include: { service: true },
     });
     if (existing?.service?.isSystem) {
@@ -127,6 +167,7 @@ export async function DELETE(
       where: {
         id: jobServiceId,
         jobId,
+        shopId,
       },
     });
 
@@ -168,8 +209,8 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const token = await getToken({ req: request });
-  if (!token) {
+  const shopId = await getAuthorizedShopId(request);
+  if (!shopId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -179,7 +220,7 @@ export async function PATCH(
     const data = patchServiceSchema.parse(body);
 
     const existing = await prisma.jobService.findFirst({
-      where: { id: data.jobServiceId, jobId },
+      where: { id: data.jobServiceId, jobId, shopId },
       include: { service: true },
     });
 
@@ -202,7 +243,7 @@ export async function PATCH(
 
     if (data.applyToAllBikes) {
       const jobBikes = await prisma.jobBike.findMany({
-        where: { jobId },
+        where: { jobId, shopId },
         select: { id: true },
         orderBy: { sortOrder: "asc" },
       });
@@ -210,7 +251,7 @@ export async function PATCH(
       // Legacy / single-bike jobs don't need fan-out; keep the existing line as-is.
       if (jobBikes.length <= 1) {
         const updated = await prisma.jobService.update({
-          where: { id: data.jobServiceId },
+          where: { id: data.jobServiceId, shopId },
           data: {},
           include: {
             service: true,
@@ -231,7 +272,7 @@ export async function PATCH(
 
       const { updated, createdIds } = await prisma.$transaction(async (tx) => {
         const updated = await tx.jobService.update({
-          where: { id: existing.id },
+          where: { id: existing.id, shopId },
           data: { jobBikeId: baseBikeId },
           include: {
             service: true,
@@ -241,6 +282,7 @@ export async function PATCH(
 
         const existingMatches = await tx.jobService.findMany({
           where: {
+            shopId,
             jobId,
             id: { not: existing.id },
             jobBikeId: { in: bikeIds },
@@ -261,6 +303,7 @@ export async function PATCH(
           if (bikesWithLine.has(bikeId)) continue;
           const created = await tx.jobService.create({
             data: {
+              shopId,
               jobId,
               serviceId: existing.serviceId,
               customServiceName: existing.customServiceName,
@@ -296,7 +339,7 @@ export async function PATCH(
     }
 
     const updated = await prisma.jobService.update({
-      where: { id: data.jobServiceId },
+      where: { id: data.jobServiceId, shopId },
       data: updateData,
       include: { service: true, jobBike: { select: { id: true, make: true, model: true, nickname: true } } },
     });

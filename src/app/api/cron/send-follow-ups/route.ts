@@ -24,90 +24,99 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const [reviewSettings] = await Promise.all([
-      prisma.reviewSettings.findUnique({ where: { id: "default" } }),
-    ]);
-
-    const appUrl = getAppUrl();
-    const googleReviewUrl = reviewSettings?.googleReviewUrl ?? null;
-    const yelpReviewUrl = reviewSettings?.yelpReviewUrl ?? null;
-
     const results: Record<string, { sent: number; skipped: number }> = {};
+    const shops = await prisma.shop.findMany({ select: { id: true, subdomain: true } });
 
     for (const wave of WAVES) {
       const threshold = daysAgoMidnight(wave.delayDays);
 
-      const jobs = await prisma.job.findMany({
-        where: {
-          stage: "COMPLETED",
-          completedAt: { lte: threshold },
-          customer: { email: { not: null } },
-        },
-        include: {
-          customer: true,
-          sentEmails: { select: { templateSlug: true } },
-          reviewRequests: {
-            select: { googleClickedAt: true, yelpClickedAt: true },
-          },
-        },
-      });
-
       let sent = 0;
       let skipped = 0;
 
-      for (const job of jobs) {
-        const email = job.customer?.email;
-        if (!email) continue;
+      for (const shop of shops) {
+        const reviewSettings = await prisma.reviewSettings.findUnique({
+          where: { shopId: shop.id },
+        });
+        const googleReviewUrl = reviewSettings?.googleReviewUrl ?? null;
+        const yelpReviewUrl = reviewSettings?.yelpReviewUrl ?? null;
 
-        // Skip if this wave was already sent for this job.
-        if (job.sentEmails.some((e) => e.templateSlug === wave.slug)) {
-          skipped++;
-          continue;
-        }
+        const appUrl =
+          getAppUrl() ||
+          (process.env.ROOT_DOMAIN
+            ? `https://${shop.subdomain}.${process.env.ROOT_DOMAIN}`
+            : "");
 
-        // Skip if the customer has already clicked a review link for this job.
-        const alreadyReviewed = job.reviewRequests.some(
-          (r) => r.googleClickedAt || r.yelpClickedAt
-        );
-        if (alreadyReviewed) {
-          skipped++;
-          continue;
-        }
-
-        const reviewRequest = await prisma.reviewRequest.create({
-          data: {
-            recipientEmail: email,
-            recipientName: job.customer
-              ? [job.customer.firstName, job.customer.lastName].filter(Boolean).join(" ") || null
-              : null,
-            jobId: job.id,
-            customerId: job.customer?.id ?? null,
+        const jobs = await prisma.job.findMany({
+          where: {
+            shopId: shop.id,
+            stage: "COMPLETED",
+            completedAt: { lte: threshold },
+            customer: { email: { not: null } },
+          },
+          include: {
+            customer: true,
+            sentEmails: { select: { templateSlug: true } },
+            reviewRequests: {
+              select: { googleClickedAt: true, yelpClickedAt: true },
+            },
           },
         });
 
-        const base = appUrl
-          ? `${appUrl}/api/review-requests/${reviewRequest.token}/redirect`
-          : null;
-        const googleTrackUrl = base && googleReviewUrl ? `${base}?platform=google` : null;
-        const yelpTrackUrl = base && yelpReviewUrl ? `${base}?platform=yelp` : null;
+        for (const job of jobs) {
+          const email = job.customer?.email;
+          if (!email) continue;
 
-        try {
-          await sendReviewRequestEmail({
-            recipientEmail: email,
-            recipientName: reviewRequest.recipientName,
-            googleTrackUrl,
-            yelpTrackUrl,
-            followUpNumber: wave.followUpNumber,
+          // Skip if this wave was already sent for this job.
+          if (job.sentEmails.some((e) => e.templateSlug === wave.slug)) {
+            skipped++;
+            continue;
+          }
+
+          // Skip if the customer has already clicked a review link for this job.
+          const alreadyReviewed = job.reviewRequests.some(
+            (r) => r.googleClickedAt || r.yelpClickedAt
+          );
+          if (alreadyReviewed) {
+            skipped++;
+            continue;
+          }
+
+          const reviewRequest = await prisma.reviewRequest.create({
+            data: {
+              shopId: shop.id,
+              recipientEmail: email,
+              recipientName: job.customer
+                ? [job.customer.firstName, job.customer.lastName].filter(Boolean).join(" ") || null
+                : null,
+              jobId: job.id,
+              customerId: job.customer?.id ?? null,
+            },
           });
 
-          await prisma.jobEmail.create({
-            data: { jobId: job.id, templateSlug: wave.slug, recipient: email },
-          });
+          const base = appUrl
+            ? `${appUrl}/api/review-requests/${reviewRequest.token}/redirect`
+            : null;
+          const googleTrackUrl = base && googleReviewUrl ? `${base}?platform=google` : null;
+          const yelpTrackUrl = base && yelpReviewUrl ? `${base}?platform=yelp` : null;
 
-          sent++;
-        } catch (emailError) {
-          await prisma.reviewRequest.delete({ where: { id: reviewRequest.id } });
-          console.error(`[${wave.slug}] Failed to send for job ${job.id}:`, emailError);
+          try {
+            await sendReviewRequestEmail({
+              recipientEmail: email,
+              recipientName: reviewRequest.recipientName,
+              googleTrackUrl,
+              yelpTrackUrl,
+              followUpNumber: wave.followUpNumber,
+            });
+
+            await prisma.jobEmail.create({
+              data: { shopId: shop.id, jobId: job.id, templateSlug: wave.slug, recipient: email },
+            });
+
+            sent++;
+          } catch (emailError) {
+            await prisma.reviewRequest.delete({ where: { id: reviewRequest.id } });
+            console.error(`[${wave.slug}] Failed to send for job ${job.id}:`, emailError);
+          }
         }
       }
 

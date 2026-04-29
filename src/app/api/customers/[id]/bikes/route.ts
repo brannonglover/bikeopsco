@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
+import { requireCurrentShop } from "@/lib/shop";
 
 const createBikeSchema = z.object({
   make: z.string().min(1, "Make is required"),
@@ -15,9 +16,10 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const shop = await requireCurrentShop();
     const { id } = await params;
     const bikes = await prisma.bike.findMany({
-      where: { customerId: id },
+      where: { shopId: shop.id, customerId: id },
       orderBy: [{ make: "asc" }, { model: "asc" }],
     });
     return NextResponse.json(bikes);
@@ -35,12 +37,14 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const shop = await requireCurrentShop();
     const { id } = await params;
     const body = await request.json();
     const data = createBikeSchema.parse(body);
 
     const bike = await prisma.bike.create({
       data: {
+        shopId: shop.id,
         customerId: id,
         make: data.make.trim(),
         model: data.model?.trim() || null,

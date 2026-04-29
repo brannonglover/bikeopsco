@@ -37,8 +37,23 @@ export async function POST(request: NextRequest) {
     }
 
     try {
+      const jobRow = await prisma.job.findUnique({
+        where: { id: jobId },
+        select: { id: true, shopId: true },
+      });
+      if (!jobRow) {
+        console.error(`Job ${jobId} not found for Stripe webhook`);
+        return NextResponse.json({ received: true });
+      }
+      const shopId = jobRow.shopId;
+
       const existing = await prisma.payment.findUnique({
-        where: { stripePaymentIntentId: paymentIntent.id },
+        where: {
+          shopId_stripePaymentIntentId: {
+            shopId,
+            stripePaymentIntentId: paymentIntent.id,
+          },
+        },
       });
       if (existing) {
         console.log(`Webhook idempotency: payment for ${paymentIntent.id} already recorded, skipping.`);
@@ -54,6 +69,7 @@ export async function POST(request: NextRequest) {
             : null;
         await tx.payment.create({
           data: {
+            shopId,
             jobId,
             stripePaymentIntentId: paymentIntent.id,
             amount,
@@ -132,6 +148,7 @@ export async function POST(request: NextRequest) {
       if (job && recipientEmail) {
         const jobForEmail = {
           id: job.id,
+          shopId: job.shopId,
           bikeMake: job.bikeMake,
           bikeModel: job.bikeModel,
           customer: job.customer

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { getAppFeatures } from "@/lib/app-settings";
+import { requireCurrentShop } from "@/lib/shop";
 
 export const dynamic = "force-dynamic";
 
@@ -12,12 +13,13 @@ const createSchema = z.object({
 
 export async function GET() {
   try {
-    const features = await getAppFeatures();
+    const shop = await requireCurrentShop();
+    const features = await getAppFeatures(shop.id);
     if (!features.chatEnabled) {
       return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
     }
     const conversations = await prisma.conversation.findMany({
-      where: { archived: false },
+      where: { shopId: shop.id, archived: false },
       orderBy: { updatedAt: "desc" },
       include: {
         customer: true,
@@ -42,7 +44,8 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const features = await getAppFeatures();
+    const shop = await requireCurrentShop();
+    const features = await getAppFeatures(shop.id);
     if (!features.chatEnabled) {
       return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
     }
@@ -51,6 +54,7 @@ export async function POST(request: NextRequest) {
 
     const conversation = await prisma.conversation.create({
       data: {
+        shopId: shop.id,
         customerId,
         jobId: jobId ?? null,
       },

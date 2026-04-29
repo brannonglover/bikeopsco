@@ -7,6 +7,7 @@ import {
   extractYelpAlias,
 } from "@/lib/reviews";
 import { getAppFeatures } from "@/lib/app-settings";
+import { requireCurrentShop } from "@/lib/shop";
 
 export const dynamic = "force-dynamic";
 
@@ -42,12 +43,13 @@ function serializeSettings(settings: {
 
 export async function GET() {
   try {
-    const features = await getAppFeatures();
+    const shop = await requireCurrentShop();
+    const features = await getAppFeatures(shop.id);
     if (!features.reviewsEnabled) {
       return NextResponse.json({ error: "Reviews are disabled" }, { status: 404 });
     }
     const settings = await prisma.reviewSettings.findUnique({
-      where: { id: "default" },
+      where: { shopId: shop.id },
     });
     if (!settings) {
       return NextResponse.json({
@@ -70,7 +72,8 @@ export async function GET() {
 
 export async function PUT(request: NextRequest) {
   try {
-    const features = await getAppFeatures();
+    const shop = await requireCurrentShop();
+    const features = await getAppFeatures(shop.id);
     if (!features.reviewsEnabled) {
       return NextResponse.json({ error: "Reviews are disabled" }, { status: 404 });
     }
@@ -86,9 +89,9 @@ export async function PUT(request: NextRequest) {
     }
 
     const settings = await prisma.reviewSettings.upsert({
-      where: { id: "default" },
+      where: { shopId: shop.id },
       create: {
-        id: "default",
+        shopId: shop.id,
         googleReviewUrl: data.googleReviewUrl || null,
         yelpReviewUrl: data.yelpReviewUrl || null,
         googlePlaceId: resolvedPlaceId,

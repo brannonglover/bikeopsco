@@ -322,6 +322,7 @@ const WAITING_ON_CUSTOMER_TEMPLATE_BODY =
  * Send one customer-style email using a DB template slug + preview merge data (for staff testing).
  */
 export async function sendEmailTemplateTestEmail(
+  shopId: string,
   slug: string,
   recipient: string
 ): Promise<{ ok: boolean; error?: string }> {
@@ -337,7 +338,7 @@ export async function sendEmailTemplateTestEmail(
 
   const { prisma } = await import("./db");
   const template = await prisma.emailTemplate.findUnique({
-    where: { slug: slug.trim() },
+    where: { shopId_slug: { shopId, slug: slug.trim() } },
   });
   if (!template) {
     return { ok: false, error: "Template not found" };
@@ -380,6 +381,7 @@ export function buildCustomerEmailPreviewDocument(bodyHtml: string): string {
 
 interface JobForEmail {
   id: string;
+  shopId: string;
   bikeMake: string;
   bikeModel: string;
   stage?: string;
@@ -411,8 +413,13 @@ export async function sendJobEmail(
   }
 
   const { prisma } = await import("./db");
+  const shopId = job.shopId;
+  const shopRow = await prisma.shop
+    .findUnique({ where: { id: shopId }, select: { name: true } })
+    .catch(() => null);
+
   let template = await prisma.emailTemplate.findUnique({
-    where: { slug: templateSlug },
+    where: { shopId_slug: { shopId, slug: templateSlug } },
   });
 
   // Backfill newly-added default templates for older databases that haven't been re-seeded.
@@ -420,6 +427,7 @@ export async function sendJobEmail(
     try {
       template = await prisma.emailTemplate.create({
         data: {
+          shopId,
           slug: templateSlug,
           name: "Waiting on Customer",
           subject: "Action needed: We’re waiting on your approval – {{shopName}}",
@@ -432,7 +440,7 @@ export async function sendJobEmail(
       });
     } catch {
       template = await prisma.emailTemplate.findUnique({
-        where: { slug: templateSlug },
+        where: { shopId_slug: { shopId, slug: templateSlug } },
       });
     }
   }
@@ -443,7 +451,7 @@ export async function sendJobEmail(
   ) {
     try {
       template = await prisma.emailTemplate.update({
-        where: { slug: templateSlug },
+        where: { shopId_slug: { shopId, slug: templateSlug } },
         data: { bodyHtml: WAITING_ON_CUSTOMER_TEMPLATE_BODY },
       });
     } catch {
@@ -480,7 +488,7 @@ export async function sendJobEmail(
       : "Customer",
     bikeMake: job.bikeMake,
     bikeModel: job.bikeModel,
-    shopName: process.env.SHOP_NAME || "Basement Bike Mechanic",
+    shopName: shopRow?.name ?? process.env.SHOP_NAME ?? "Basement Bike Mechanic",
     customerNotes: job.customerNotes ?? "",
     statusUrl,
     statusButtonHtml,
@@ -527,6 +535,7 @@ export async function sendJobEmail(
 
     await prisma.jobEmail.create({
       data: {
+        shopId,
         jobId: job.id,
         templateSlug,
         recipient,
@@ -929,6 +938,7 @@ ${ctaButton}
 export async function sendBookingDeclinedEmail(
   recipient: string,
   job: {
+    shopId: string;
     bikeMake: string;
     bikeModel: string;
     cancellationReason: string;
@@ -941,8 +951,11 @@ export async function sendBookingDeclinedEmail(
   }
 
   const { prisma } = await import("./db");
+  const shopRow = await prisma.shop
+    .findUnique({ where: { id: job.shopId }, select: { name: true } })
+    .catch(() => null);
   const template = await prisma.emailTemplate.findUnique({
-    where: { slug: "booking_declined" },
+    where: { shopId_slug: { shopId: job.shopId, slug: "booking_declined" } },
   });
 
   if (!template) {
@@ -950,7 +963,7 @@ export async function sendBookingDeclinedEmail(
     return { ok: false, error: "Template not found" };
   }
 
-  const shopName = process.env.SHOP_NAME || "Basement Bike Mechanic";
+  const shopName = shopRow?.name ?? process.env.SHOP_NAME ?? "Basement Bike Mechanic";
   const customerName = job.customer
     ? job.customer.lastName
       ? `${job.customer.firstName} ${job.customer.lastName}`
@@ -1025,6 +1038,7 @@ export interface JobProductForInvoice {
 
 export interface JobForInvoice {
   id: string;
+  shopId: string;
   bikeMake: string;
   bikeModel: string;
   customer: { firstName: string; lastName: string | null; email: string | null } | null;
@@ -1323,6 +1337,12 @@ export async function sendPaymentReceiptEmail(
     return { ok: false, error: "No customer email" };
   }
 
+  const { prisma } = await import("./db");
+  const shopRow = await prisma.shop
+    .findUnique({ where: { id: job.shopId }, select: { name: true } })
+    .catch(() => null);
+  const shopName = shopRow?.name ?? SHOP_NAME;
+
   const subtotal =
     (job.jobServices ?? []).reduce((sum, js) => {
       const price = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);
@@ -1335,10 +1355,10 @@ export async function sendPaymentReceiptEmail(
 
   const paid = totalPaid ?? subtotal;
 
-  const subject = `Payment receipt – ${job.bikeMake} ${job.bikeModel} – ${SHOP_NAME}`;
+  const subject = `Payment receipt – ${job.bikeMake} ${job.bikeModel} – ${shopName}`;
 
   const branding = getCustomerEmailBrandingAssets();
-  const innerHtml = buildInvoiceInnerHtml(job, subtotal, paid, SHOP_NAME);
+  const innerHtml = buildInvoiceInnerHtml(job, subtotal, paid, shopName);
   const html = buildReadOnlyCustomerEmailHtml({
     innerHtml,
     headerLogoSrc: branding.headerLogoSrc,
@@ -1361,9 +1381,9 @@ export async function sendPaymentReceiptEmail(
 
     console.log(`[Email] Receipt sent to ${email} for job ${job.id}. Resend id: ${data?.id ?? "unknown"} – check resend.com/emails for delivery status`);
 
-    const { prisma } = await import("./db");
     await prisma.jobEmail.create({
       data: {
+        shopId: job.shopId,
         jobId: job.id,
         templateSlug: "payment_receipt",
         recipient: email,

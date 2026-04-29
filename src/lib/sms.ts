@@ -247,6 +247,7 @@ function mergeTemplateVariables(
 
 export interface JobForSms {
   id: string;
+  shopId: string;
   bikeMake: string;
   bikeModel: string;
   customer: { firstName: string; lastName: string | null } | null;
@@ -262,7 +263,11 @@ export async function sendJobSms(
     return { ok: false, error: `SMS template not found: ${templateSlug}` };
   }
 
-  const shopName = process.env.SHOP_NAME || "Basement Bike Mechanic";
+  const { prisma } = await import("./db");
+  const shopRow = await prisma.shop
+    .findUnique({ where: { id: job.shopId }, select: { name: true } })
+    .catch(() => null);
+  const shopName = shopRow?.name ?? process.env.SHOP_NAME ?? "Basement Bike Mechanic";
   const customerName = job.customer
     ? job.customer.lastName
       ? `${job.customer.firstName} ${job.customer.lastName}`
@@ -293,9 +298,9 @@ export async function sendJobSms(
   }
 
   try {
-    const { prisma } = await import("./db");
     await prisma.jobSms.create({
       data: {
+        shopId: job.shopId,
         jobId: job.id,
         templateSlug,
         recipient: normalized,

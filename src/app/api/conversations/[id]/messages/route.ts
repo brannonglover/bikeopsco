@@ -5,6 +5,7 @@ import { sendPushToCustomer, sendPushToAllStaff } from "@/lib/push";
 import { z } from "zod";
 import { getAppFeatures } from "@/lib/app-settings";
 import { getEffectiveSmsConsent } from "@/lib/sms-consent";
+import { requireCurrentShop } from "@/lib/shop";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,8 @@ export async function GET(
 ) {
   let conversationId: string | null = null;
   try {
-    const features = await getAppFeatures();
+    const shop = await requireCurrentShop();
+    const features = await getAppFeatures(shop.id);
     if (!features.chatEnabled) {
       return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
     }
@@ -34,8 +36,8 @@ export async function GET(
 
     // Keep the base conversation fetch minimal so this route can still work if the DB
     // is temporarily behind migrations (missing newer optional columns).
-    const conversation = await prisma.conversation.findUnique({
-      where: { id: conversationId },
+    const conversation = await prisma.conversation.findFirst({
+      where: { id: conversationId, shopId: shop.id },
       select: { updatedAt: true },
     });
 
@@ -46,7 +48,7 @@ export async function GET(
     let messages: ChatMessageRow[] = [];
     try {
       messages = await prisma.message.findMany({
-        where: { conversationId },
+        where: { shopId: shop.id, conversationId },
         orderBy: { createdAt: "asc" },
         include: { attachments: true, reactions: true },
       });
@@ -56,7 +58,7 @@ export async function GET(
         { conversationId, error: e }
       );
       messages = await prisma.message.findMany({
-        where: { conversationId },
+        where: { shopId: shop.id, conversationId },
         orderBy: { createdAt: "asc" },
       });
     }
@@ -65,8 +67,8 @@ export async function GET(
     let customerLastReadAtIso: string | null = null;
     let currentStaffLastReadAt: Date | null = null;
     try {
-      const extra = await prisma.conversation.findUnique({
-        where: { id: conversationId },
+      const extra = await prisma.conversation.findFirst({
+        where: { id: conversationId, shopId: shop.id },
         select: { customerTypingAt: true, customerLastReadAt: true, staffLastReadAt: true },
       });
       customerTypingAtIso = extra?.customerTypingAt?.toISOString() ?? null;
@@ -135,7 +137,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const features = await getAppFeatures();
+    const shop = await requireCurrentShop();
+    const features = await getAppFeatures(shop.id);
     if (!features.chatEnabled) {
       return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
     }
@@ -143,8 +146,8 @@ export async function POST(
     const body = await request.json();
     const { sender, body: bodyText, attachmentIds } = createSchema.parse(body);
 
-    const conversation = await prisma.conversation.findUnique({
-      where: { id: conversationId },
+    const conversation = await prisma.conversation.findFirst({
+      where: { id: conversationId, shopId: shop.id },
       include: { customer: true },
     });
 
@@ -164,6 +167,7 @@ export async function POST(
 
     const message = await prisma.message.create({
       data: {
+        shopId: shop.id,
         conversationId,
         sender,
         body: bodyText?.trim() || null,
@@ -181,7 +185,7 @@ export async function POST(
       data: { updatedAt: new Date() },
     });
 
-    const shopName = process.env.SHOP_NAME || "Basement Bike Mechanic";
+    const shopName = shop.name;
 
     if (sender === "STAFF") {
       const hasText = Boolean(bodyText?.trim());
@@ -207,7 +211,7 @@ export async function POST(
         : hasAtt
           ? "Sent a photo"
           : "New message";
-      sendPushToCustomer(conversation.customerId, {
+      sendPushToCustomer(shop.id, conversation.customerId, {
         title: shopName,
         body: pushBody,
         data: { type: "new_message", conversationId },
@@ -222,7 +226,7 @@ export async function POST(
         .filter(Boolean)
         .join(" ");
       const pushBody = bodyText?.trim() || "Sent a photo";
-      sendPushToAllStaff({
+      sendPushToAllStaff(shop.id, {
         title: `New message from ${customerName}`,
         body: pushBody,
         data: { type: "new_message", conversationId },

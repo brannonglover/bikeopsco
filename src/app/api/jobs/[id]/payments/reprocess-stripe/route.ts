@@ -92,7 +92,12 @@ export async function POST(
 
   // Check if already recorded (idempotent)
   const existing = await prisma.payment.findUnique({
-    where: { stripePaymentIntentId: paymentIntentId },
+    where: {
+      shopId_stripePaymentIntentId: {
+        shopId: job.shopId,
+        stripePaymentIntentId: paymentIntentId,
+      },
+    },
   });
   if (existing) {
     return NextResponse.json(
@@ -118,6 +123,7 @@ export async function POST(
       const pm = paymentIntent.payment_method;
       await tx.payment.create({
         data: {
+          shopId: job.shopId,
           jobId,
           stripePaymentIntentId: paymentIntent.id,
           amount,
@@ -191,6 +197,7 @@ export async function POST(
   if (recipientEmail) {
     const jobForEmail = {
       id: job.id,
+      shopId: job.shopId,
       bikeMake: job.bikeMake,
       bikeModel: job.bikeModel,
       customer: job.customer

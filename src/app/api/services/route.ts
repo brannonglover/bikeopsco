@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
+import { requireCurrentShop } from "@/lib/shop";
 
 const createServiceSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -10,18 +11,20 @@ const createServiceSchema = z.object({
 
 export async function GET(request: NextRequest) {
   try {
+    const shop = await requireCurrentShop();
     const { searchParams } = new URL(request.url);
     const q = searchParams.get("q") ?? "";
 
     const services = await prisma.service.findMany({
       where: q
         ? {
+            shopId: shop.id,
             OR: [
               { name: { contains: q, mode: "insensitive" } },
               { description: { contains: q, mode: "insensitive" } },
             ],
           }
-        : {},
+        : { shopId: shop.id },
       orderBy: { name: "asc" },
     });
     return NextResponse.json(services);
@@ -36,11 +39,13 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const shop = await requireCurrentShop();
     const body = await request.json();
     const data = createServiceSchema.parse(body);
 
     const service = await prisma.service.create({
       data: {
+        shopId: shop.id,
         name: data.name,
         description: data.description ?? null,
         price: data.price,

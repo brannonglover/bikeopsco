@@ -8,6 +8,7 @@ import { syncCollectionJobService } from "@/lib/collection-fee";
 import { getAppFeatures } from "@/lib/app-settings";
 import { computeJobSubtotal, computeTotalPaid, getJobPaymentSummary } from "@/lib/job-payments";
 import { getEffectiveSmsConsent } from "@/lib/sms-consent";
+import { getShopForHost } from "@/lib/shop";
 
 const bikeSchema = z.object({
   make: z.string().min(1),
@@ -47,13 +48,20 @@ const updateJobSchema = z.object({
 });
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
     const { id } = params;
-    const job = await prisma.job.findUnique({
-      where: { id },
+    const hostHeader =
+      request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+    const shop = await getShopForHost(hostHeader);
+    if (!shop) {
+      return NextResponse.json({ error: "Shop not found" }, { status: 404 });
+    }
+
+    const job = await prisma.job.findFirst({
+      where: { id, shopId: shop.id },
       include: {
         customer: { include: { bikes: true } },
         jobBikes: { include: { bike: true }, orderBy: { sortOrder: "asc" } },
@@ -105,11 +113,18 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   const token = await getToken({ req: request });
-  if (!token) {
+  if (!token?.shopId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
+    const hostHeader =
+      request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+    const shop = await getShopForHost(hostHeader);
+    if (!shop || shop.id !== token.shopId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const features = await getAppFeatures();
     const { id } = params;
     const body = await request.json();
@@ -129,8 +144,8 @@ export async function PATCH(
       );
     }
 
-    const existingJob = await prisma.job.findUnique({
-      where: { id },
+    const existingJob = await prisma.job.findFirst({
+      where: { id, shopId: shop.id },
       include: {
         customer: true,
         jobBikes: { select: { id: true, completedAt: true } },
@@ -208,17 +223,17 @@ export async function PATCH(
 
     const job = await prisma.$transaction(async (tx) => {
       await tx.job.update({
-        where: { id },
+        where: { id, shopId: shop.id },
         data: updateData,
       });
       if (workingOnBikeIdToClearWaiting) {
         await tx.jobBike.update({
-          where: { id: workingOnBikeIdToClearWaiting, jobId: id },
+          where: { id: workingOnBikeIdToClearWaiting, jobId: id, shopId: shop.id },
           data: { waitingOnPartsAt: null },
         });
       }
       if (data.bikes !== undefined) {
-        await tx.jobBike.deleteMany({ where: { jobId: id } });
+        await tx.jobBike.deleteMany({ where: { jobId: id, shopId: shop.id } });
         const bikes =
           data.bikes.length > 0
             ? data.bikes
@@ -236,6 +251,7 @@ export async function PATCH(
             const trimmedModel = b.model?.trim() || null;
             const existing = await tx.bike.findFirst({
               where: {
+                shopId: shop.id,
                 customerId: effectiveCustomerId,
                 make: { equals: b.make.trim(), mode: "insensitive" },
                 model: trimmedModel ? { equals: trimmedModel, mode: "insensitive" } : null,
@@ -246,6 +262,7 @@ export async function PATCH(
             } else {
               const created = await tx.bike.create({
                 data: {
+                  shopId: shop.id,
                   customerId: effectiveCustomerId,
                   make: b.make.trim(),
                   model: trimmedModel,
@@ -262,6 +279,7 @@ export async function PATCH(
 
         await tx.jobBike.createMany({
           data: resolvedBikes.map((b, i) => ({
+            shopId: shop.id,
             jobId: id,
             make: b.make,
             model: b.model,
@@ -282,6 +300,7 @@ export async function PATCH(
           const trimmedModel = b.model?.trim() || null;
           const found = await tx.bike.findFirst({
             where: {
+              shopId: shop.id,
               customerId: effectiveCustomerId,
               make: { equals: b.make.trim(), mode: "insensitive" },
               model: trimmedModel ? { equals: trimmedModel, mode: "insensitive" } : null,
@@ -292,6 +311,7 @@ export async function PATCH(
           } else {
             const created = await tx.bike.create({
               data: {
+                shopId: shop.id,
                 customerId: effectiveCustomerId,
                 make: b.make.trim(),
                 model: trimmedModel,
@@ -306,6 +326,7 @@ export async function PATCH(
         const nextSortOrder = (existingJob.jobBikes?.length ?? 0);
         await tx.jobBike.create({
           data: {
+            shopId: shop.id,
             jobId: id,
             make: b.make,
             model: b.model,
@@ -335,16 +356,16 @@ export async function PATCH(
       }
       if (data.waitForPartsJobBikeId) {
         await tx.jobBike.update({
-          where: { id: data.waitForPartsJobBikeId, jobId: id },
+          where: { id: data.waitForPartsJobBikeId, jobId: id, shopId: shop.id },
           data: { waitingOnPartsAt: new Date() },
         });
         if (existingJob.workingOnJobBikeId === data.waitForPartsJobBikeId) {
-          await tx.job.update({ where: { id }, data: { workingOnJobBikeId: null } });
+          await tx.job.update({ where: { id, shopId: shop.id }, data: { workingOnJobBikeId: null } });
         }
       }
       if (data.unwaitForPartsJobBikeId) {
         await tx.jobBike.update({
-          where: { id: data.unwaitForPartsJobBikeId, jobId: id },
+          where: { id: data.unwaitForPartsJobBikeId, jobId: id, shopId: shop.id },
           data: { waitingOnPartsAt: null },
         });
       }
@@ -356,10 +377,10 @@ export async function PATCH(
         !data.unwaitForPartsJobBikeId
       ) {
         await tx.jobBike.update({
-          where: { id: existingJob.workingOnJobBikeId, jobId: id },
+          where: { id: existingJob.workingOnJobBikeId, jobId: id, shopId: shop.id },
           data: { waitingOnPartsAt: new Date() },
         });
-        await tx.job.update({ where: { id }, data: { workingOnJobBikeId: null } });
+        await tx.job.update({ where: { id, shopId: shop.id }, data: { workingOnJobBikeId: null } });
       }
       /** Clear the active-bike pointer whenever the job leaves WORKING_ON (WAITING_ON_PARTS already handles its own branch above). */
       if (
@@ -368,12 +389,13 @@ export async function PATCH(
         data.stage !== "WAITING_ON_PARTS" &&
         existingJob.workingOnJobBikeId
       ) {
-        await tx.job.update({ where: { id }, data: { workingOnJobBikeId: null } });
+        await tx.job.update({ where: { id, shopId: shop.id }, data: { workingOnJobBikeId: null } });
       }
       /** Dragging the card out of Waiting on parts (or any other column) must drop bike-level flags; only staying in WAITING_ON_PARTS keeps them. */
       if (data.stage !== undefined && data.stage !== "WAITING_ON_PARTS") {
         await tx.jobBike.updateMany({
           where: {
+            shopId: shop.id,
             jobId: id,
             completedAt: null,
             waitingOnPartsAt: { not: null },
@@ -391,7 +413,7 @@ export async function PATCH(
         await syncCollectionJobService(tx, id);
       }
       const result = await tx.job.findUnique({
-        where: { id },
+        where: { id, shopId: shop.id },
         include: {
           customer: { include: { bikes: true } },
           jobBikes: { include: { bike: true }, orderBy: { sortOrder: "asc" } },
@@ -414,6 +436,7 @@ export async function PATCH(
     ) {
       const reason = (data.cancellationReason ?? job.cancellationReason ?? "").trim();
       sendBookingDeclinedEmail(job.customer.email, {
+        shopId: job.shopId,
         bikeMake: job.bikeMake,
         bikeModel: job.bikeModel,
         cancellationReason: reason || "We're unable to accommodate this booking at this time.",
@@ -441,13 +464,13 @@ export async function PATCH(
           const emailPromise =
             customerEmail && templateSlug
               ? prisma.jobEmail.findFirst({
-                  where: { jobId: id, templateSlug },
+                  where: { shopId: job.shopId, jobId: id, templateSlug },
                 })
               : Promise.resolve(null);
           const smsPromise =
             canSendSms && customerPhone && smsTemplateSlug
               ? prisma.jobSms.findFirst({
-                  where: { jobId: id, templateSlug: smsTemplateSlug },
+                  where: { shopId: job.shopId, jobId: id, templateSlug: smsTemplateSlug },
                 })
               : Promise.resolve(null);
           const [emailAlreadySent, smsAlreadySent] = await Promise.all([

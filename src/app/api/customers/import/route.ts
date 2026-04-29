@@ -7,6 +7,7 @@ import {
   applyCustomerMapping,
   type CustomerColumnMapping,
 } from "@/lib/import-parser";
+import { requireCurrentShop } from "@/lib/shop";
 
 export const runtime = "nodejs";
 
@@ -51,6 +52,7 @@ function excelToParseResult(
 
 export async function POST(request: NextRequest) {
   try {
+    const shop = await requireCurrentShop();
     const formData = await request.formData();
     const file = formData.get("file");
     const mappingStr = formData.get("mapping") as string | null;
@@ -152,6 +154,7 @@ export async function POST(request: NextRequest) {
       try {
         const customer = await prisma.customer.create({
           data: {
+            shopId: shop.id,
             firstName,
             lastName,
             email,

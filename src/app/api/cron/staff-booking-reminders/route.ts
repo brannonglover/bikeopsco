@@ -10,6 +10,8 @@ import {
 import { sendPushToAllStaff } from "@/lib/push";
 import { getAppUrl } from "@/lib/env";
 
+const DEFAULT_SHOP_ID = "shop_default";
+
 function getResend(): Resend | null {
   const key =
     process.env.RESEND_API_KEY?.trim() ||
@@ -238,6 +240,7 @@ export async function GET(request: NextRequest) {
     const [todayJobs, tomorrowJobs] = await Promise.all([
       prisma.job.findMany({
         where: {
+          shopId: DEFAULT_SHOP_ID,
           stage: "BOOKED_IN",
           dropOffDate: { gte: todayStart, lte: todayEnd },
         },
@@ -255,6 +258,7 @@ export async function GET(request: NextRequest) {
       }),
       prisma.job.findMany({
         where: {
+          shopId: DEFAULT_SHOP_ID,
           stage: "BOOKED_IN",
           dropOffDate: { gte: tomorrowStart, lte: tomorrowEnd },
         },
@@ -285,7 +289,7 @@ export async function GET(request: NextRequest) {
       if (tomorrowJobs.length > 0) {
         parts.push(`${tomorrowJobs.length} tomorrow`);
       }
-      await sendPushToAllStaff({
+      await sendPushToAllStaff(DEFAULT_SHOP_ID, {
         title: "Upcoming customer drop-offs",
         body: parts.join(", "),
       });

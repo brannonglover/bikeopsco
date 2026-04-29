@@ -74,19 +74,20 @@ export interface PushPayload {
 }
 
 export async function sendPushToCustomer(
+  shopId: string,
   customerId: string,
   payload: PushPayload
 ): Promise<void> {
-  const records = await prisma.pushToken.findMany({ where: { customerId } });
+  const records = await prisma.pushToken.findMany({ where: { shopId, customerId } });
   await sendPushToTokens(
     records.map((r) => r.token),
     { title: payload.title, body: payload.body, data: payload.data }
   );
 }
 
-export async function sendPushToAllStaff(payload: PushPayload): Promise<void> {
+export async function sendPushToAllStaff(shopId: string, payload: PushPayload): Promise<void> {
   const records = await prisma.pushToken.findMany({
-    where: { userId: { not: null } },
+    where: { shopId, userId: { not: null } },
   });
   await sendPushToTokens(
     records.map((r) => r.token),

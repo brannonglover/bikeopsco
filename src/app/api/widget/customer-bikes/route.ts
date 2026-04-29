@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { addWidgetCorsHeaders } from "@/lib/widget-cors";
+import { getShopForHost } from "@/lib/shop";
 
 export async function OPTIONS(request: NextRequest) {
   const origin = request.headers.get("origin");
@@ -15,6 +16,17 @@ export async function GET(request: NextRequest) {
   const origin = request.headers.get("origin");
 
   try {
+    const hostHeader =
+      request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+    const shop = await getShopForHost(hostHeader);
+    if (!shop) {
+      const res = NextResponse.json({ error: "Shop not found" }, { status: 404 });
+      return addWidgetCorsHeaders(res, origin, {
+        methods: "GET, OPTIONS",
+        allowHeaders: "Content-Type, Authorization",
+      });
+    }
+
     const { searchParams } = new URL(request.url);
     const firstName = searchParams.get("firstName")?.trim() ?? "";
     const lastName = searchParams.get("lastName")?.trim() ?? "";
@@ -31,9 +43,11 @@ export async function GET(request: NextRequest) {
     const customer = await prisma.customer.findFirst({
       where: email
         ? {
+            shopId: shop.id,
             email: { equals: email, mode: "insensitive" },
           }
         : {
+            shopId: shop.id,
             firstName: { equals: firstName, mode: "insensitive" },
             ...(lastName
               ? { lastName: { equals: lastName, mode: "insensitive" } }

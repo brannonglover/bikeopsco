@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAppFeatures } from "@/lib/app-settings";
 import { addWidgetCorsHeaders } from "@/lib/widget-cors";
+import { getShopForHost } from "@/lib/shop";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,18 @@ export async function OPTIONS(request: NextRequest) {
 export async function GET(request: NextRequest) {
   const origin = request.headers.get("origin");
   try {
-    const features = await getAppFeatures();
+    const hostHeader =
+      request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+    const shop = await getShopForHost(hostHeader);
+    if (!shop) {
+      const res = NextResponse.json({ error: "Shop not found" }, { status: 404 });
+      return addWidgetCorsHeaders(res, origin, {
+        methods: "GET, OPTIONS",
+        allowHeaders: "Content-Type, Authorization",
+      });
+    }
+
+    const features = await getAppFeatures(shop.id);
     const res = NextResponse.json({
       collectionServiceEnabled: features.collectionServiceEnabled,
       collectionRadiusMiles: features.collectionRadiusMiles,

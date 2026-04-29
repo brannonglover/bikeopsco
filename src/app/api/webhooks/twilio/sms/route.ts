@@ -8,6 +8,7 @@ import {
 } from "@/lib/chat-sms";
 import { normalizePhone } from "@/lib/phone";
 import { buildSmsConsentUpdate, parseSmsConsentKeyword } from "@/lib/sms-consent";
+import { getShopForHost } from "@/lib/shop";
 
 export const runtime = "nodejs";
 
@@ -55,6 +56,14 @@ export async function POST(request: NextRequest) {
     return new NextResponse("Forbidden", { status: 403 });
   }
 
+  const hostHeader =
+    request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  const shop = await getShopForHost(hostHeader);
+  if (!shop) {
+    console.warn("Twilio SMS webhook: shop not found for host", hostHeader);
+    return twimlMessage();
+  }
+
   const messageSid = params.MessageSid;
   const fromRaw = params.From;
   const toRaw = params.To;
@@ -74,8 +83,8 @@ export async function POST(request: NextRequest) {
     return twimlMessage();
   }
 
-  const existing = await prisma.message.findUnique({
-    where: { smsSid: messageSid },
+  const existing = await prisma.message.findFirst({
+    where: { shopId: shop.id, smsSid: messageSid },
   });
   if (existing) {
     return twimlMessage();
@@ -89,7 +98,7 @@ export async function POST(request: NextRequest) {
     return twimlMessage();
   }
 
-  const customerId = await findCustomerIdBySmsFrom(fromE164);
+  const customerId = await findCustomerIdBySmsFrom(shop.id, fromE164);
   if (!customerId) {
     console.warn("Twilio SMS: unknown sender", fromE164);
     return twimlMessage();
@@ -97,8 +106,8 @@ export async function POST(request: NextRequest) {
 
   const consentKeyword = parseSmsConsentKeyword(bodyText);
   if (consentKeyword === "stop") {
-    await prisma.customer.update({
-      where: { id: customerId },
+    await prisma.customer.updateMany({
+      where: { id: customerId, shopId: shop.id },
       data: buildSmsConsentUpdate(false, "SMS_STOP"),
     });
     return twimlMessage(
@@ -106,8 +115,8 @@ export async function POST(request: NextRequest) {
     );
   }
   if (consentKeyword === "start") {
-    await prisma.customer.update({
-      where: { id: customerId },
+    await prisma.customer.updateMany({
+      where: { id: customerId, shopId: shop.id },
       data: buildSmsConsentUpdate(true, "SMS_START"),
     });
     return twimlMessage(
@@ -121,12 +130,14 @@ export async function POST(request: NextRequest) {
   }
 
   const conversation = await findOrCreateConversationForInboundSms(
+    shop.id,
     customerId
   );
 
   try {
     await prisma.message.create({
       data: {
+        shopId: shop.id,
         conversationId: conversation.id,
         sender: "CUSTOMER",
         body: bodyText,

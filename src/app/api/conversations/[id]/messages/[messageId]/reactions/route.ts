@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { getAppFeatures } from "@/lib/app-settings";
+import { requireCurrentShop } from "@/lib/shop";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string; messageId: string }> }
 ) {
   try {
-    const features = await getAppFeatures();
+    const shop = await requireCurrentShop();
+    const features = await getAppFeatures(shop.id);
     if (!features.chatEnabled) {
       return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
     }
@@ -23,7 +25,7 @@ export async function POST(
     const { emoji } = createSchema.parse(json);
 
     const message = await prisma.message.findFirst({
-      where: { id: messageId, conversationId },
+      where: { shopId: shop.id, id: messageId, conversationId },
     });
 
     if (!message) {
@@ -33,7 +35,7 @@ export async function POST(
     const reaction = await prisma.messageReaction.upsert({
       where: { messageId_reactorType: { messageId, reactorType: "STAFF" } },
       update: { emoji },
-      create: { messageId, emoji, reactorType: "STAFF" },
+      create: { shopId: shop.id, messageId, emoji, reactorType: "STAFF" },
     });
 
     return NextResponse.json(reaction);
@@ -51,10 +53,11 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string; messageId: string }> }
 ) {
   try {
+    const shop = await requireCurrentShop();
     const { id: conversationId, messageId } = await params;
 
     const message = await prisma.message.findFirst({
-      where: { id: messageId, conversationId },
+      where: { shopId: shop.id, id: messageId, conversationId },
     });
 
     if (!message) {
@@ -62,7 +65,7 @@ export async function DELETE(
     }
 
     await prisma.messageReaction.deleteMany({
-      where: { messageId, reactorType: "STAFF" },
+      where: { shopId: shop.id, messageId, reactorType: "STAFF" },
     });
 
     return NextResponse.json({ ok: true });

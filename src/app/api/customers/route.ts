@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { coerceCustomerPhone } from "@/lib/phone";
 import { z } from "zod";
+import { requireCurrentShop } from "@/lib/shop";
 
 const createCustomerSchema = z.object({
   firstName: z.string().min(1),
@@ -14,12 +15,14 @@ const createCustomerSchema = z.object({
 
 export async function GET(request: NextRequest) {
   try {
+    const shop = await requireCurrentShop();
     const { searchParams } = new URL(request.url);
     const q = searchParams.get("q") ?? "";
 
     const customers = await prisma.customer.findMany({
       where: q
         ? {
+            shopId: shop.id,
             OR: [
               { firstName: { contains: q, mode: "insensitive" } },
               { lastName: { contains: q, mode: "insensitive" } },
@@ -27,7 +30,7 @@ export async function GET(request: NextRequest) {
               { phone: { contains: q } },
             ],
           }
-        : {},
+        : { shopId: shop.id },
       orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
     });
 
@@ -43,11 +46,13 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const shop = await requireCurrentShop();
     const body = await request.json();
     const data = createCustomerSchema.parse(body);
 
     const customer = await prisma.customer.create({
       data: {
+        shopId: shop.id,
         firstName: data.firstName,
         lastName: data.lastName ?? null,
         email: data.email ?? null,

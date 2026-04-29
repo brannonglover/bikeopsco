@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { encode } from "next-auth/jwt";
 import { prisma } from "@/lib/db";
+import { getShopForHost } from "@/lib/shop";
 
 export const runtime = "nodejs";
 
@@ -16,8 +17,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const shop = await getShopForHost(request.headers.get("host"));
+    if (!shop) {
+      return NextResponse.json({ error: "Shop not found." }, { status: 404 });
+    }
+
     const user = await prisma.user.findUnique({
-      where: { email: email.trim().toLowerCase() },
+      where: {
+        shopId_email: { shopId: shop.id, email: email.trim().toLowerCase() },
+      },
     });
 
     if (
@@ -31,14 +39,26 @@ export async function POST(request: NextRequest) {
     }
 
     const token = await encode({
-      token: { id: user.id, email: user.email, name: user.name },
+      token: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        shopId: shop.id,
+        shopSubdomain: shop.subdomain,
+      },
       secret: process.env.NEXTAUTH_SECRET!,
       maxAge: 30 * 24 * 60 * 60,
     });
 
     return NextResponse.json({
       token,
-      user: { id: user.id, email: user.email, name: user.name },
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        shopId: shop.id,
+        shopSubdomain: shop.subdomain,
+      },
     });
   } catch {
     return NextResponse.json(

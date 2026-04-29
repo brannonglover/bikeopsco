@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { checkCollectionEligibility } from "@/lib/collection-radius";
 import { getAppFeatures } from "@/lib/app-settings";
 import { addWidgetCorsHeaders } from "@/lib/widget-cors";
+import { getShopForHost } from "@/lib/shop";
 
 export async function OPTIONS(request: NextRequest) {
   const origin = request.headers.get("origin");
@@ -16,7 +17,18 @@ export async function GET(request: NextRequest) {
   const origin = request.headers.get("origin");
 
   try {
-    const features = await getAppFeatures();
+    const hostHeader =
+      request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+    const shop = await getShopForHost(hostHeader);
+    if (!shop) {
+      const res = NextResponse.json({ error: "Shop not found" }, { status: 404 });
+      return addWidgetCorsHeaders(res, origin, {
+        methods: "GET, OPTIONS",
+        allowHeaders: "Content-Type, Authorization",
+      });
+    }
+
+    const features = await getAppFeatures(shop.id);
     if (!features.collectionServiceEnabled) {
       const res = NextResponse.json({ ok: true, enabled: false });
       return addWidgetCorsHeaders(res, origin, {

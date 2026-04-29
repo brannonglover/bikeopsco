@@ -19,18 +19,18 @@ const updateSchema = z.object({
 
 export async function GET(request: NextRequest) {
   const token = await getToken({ req: request });
-  if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  return NextResponse.json(await getAppFeatures());
+  if (!token?.shopId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  return NextResponse.json(await getAppFeatures(token.shopId));
 }
 
 export async function PUT(request: NextRequest) {
   const token = await getToken({ req: request });
-  if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!token?.shopId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
     const body = await request.json();
     const data = updateSchema.parse(body);
-    return NextResponse.json(await upsertAppFeatures(data));
+    return NextResponse.json(await upsertAppFeatures(token.shopId, data));
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.flatten() }, { status: 400 });

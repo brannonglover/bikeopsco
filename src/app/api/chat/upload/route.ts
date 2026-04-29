@@ -4,6 +4,7 @@ import { put } from "@vercel/blob";
 import { BLOB_ACCESS, blobDisplayUrl } from "@/lib/blob";
 import { prisma } from "@/lib/db";
 import { getAppFeatures } from "@/lib/app-settings";
+import { getShopForHost } from "@/lib/shop";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +12,12 @@ const MAX_SIZE_MB = 5;
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp", "image/heic", "image/heif"];
 
 export async function POST(request: NextRequest) {
-  const features = await getAppFeatures();
+  const shop = await getShopForHost(request.headers.get("host"));
+  if (!shop) {
+    return NextResponse.json({ error: "Shop not found" }, { status: 404 });
+  }
+
+  const features = await getAppFeatures(shop.id);
   if (!features.chatEnabled) {
     return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
   }
@@ -58,6 +64,7 @@ export async function POST(request: NextRequest) {
 
     const attachment = await prisma.messageAttachment.create({
       data: {
+        shopId: shop.id,
         url,
         filename: file.name,
         mimeType: file.type,

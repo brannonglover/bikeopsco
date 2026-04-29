@@ -8,8 +8,46 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+model Shop {
+  id        String   @id @default(cuid())
+  name      String
+  subdomain String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  customers        Customer[]
+  bikes            Bike[]
+  jobs             Job[]
+  jobBikes         JobBike[]
+  payments         Payment[]
+  services         Service[]
+  jobServices      JobService[]
+  emailTemplates   EmailTemplate[]
+  jobEmails        JobEmail[]
+  jobSms           JobSms[]
+  products         Product[]
+  jobProducts      JobProduct[]
+  conversations    Conversation[]
+  messages         Message[]
+  messageReactions MessageReaction[]
+  chatReminders    ChatReminderEmail[]
+  messageAttachments MessageAttachment[]
+  users            User[]
+  pushTokens       PushToken[]
+  magicLinkTokens  MagicLinkToken[]
+  chatSessions     ChatSession[]
+  reviewSettings   ReviewSettings[]
+  appSettings      AppSettings[]
+  waitlistEntries  WaitlistEntry[]
+  waitlistBikes    WaitlistBike[]
+  reviewRequests   ReviewRequest[]
+  importedRevenue  ImportedRevenue[]
+}
+
 model Customer {
   id               String           @id @default(cuid())
+  shopId           String
+  shop             Shop             @relation(fields: [shopId], references: [id], onDelete: Cascade)
   firstName        String
   lastName         String?
   email            String?
@@ -29,10 +67,14 @@ model Customer {
   reviewRequests   ReviewRequest[]
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
+
+  @@index([shopId])
 }
 
 model Bike {
   id          String     @id @default(cuid())
+  shopId      String
+  shop        Shop       @relation(fields: [shopId], references: [id], onDelete: Cascade)
   make        String
   model       String?
   /// null = infer regular vs e-bike from make/model when needed
@@ -46,10 +88,13 @@ model Bike {
   updatedAt   DateTime   @updatedAt
 
   @@index([customerId])
+  @@index([shopId])
 }
 
 model JobBike {
   id        String   @id @default(cuid())
+  shopId    String
+  shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
   jobId     String
   job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
   make      String
@@ -69,10 +114,13 @@ model JobBike {
   jobProducts  JobProduct[]
 
   @@index([jobId])
+  @@index([shopId])
 }
 
 model Job {
   id                String       @id @default(cuid())
+  shopId            String
+  shop              Shop         @relation(fields: [shopId], references: [id], onDelete: Cascade)
   bikeMake          String       // Legacy / summary – first bike or "Multiple"
   bikeModel         String       // Legacy / summary
   jobBikes          JobBike[]
@@ -105,18 +153,25 @@ model Job {
   promotedWaitlistEntries WaitlistEntry[] @relation("WaitlistPromotedJob")
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
+
+  @@index([shopId])
 }
 
 model Payment {
   id                    String   @id @default(cuid())
+  shopId                String
+  shop                  Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
   jobId                 String
   job                   Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  stripePaymentIntentId String?  @unique
+  stripePaymentIntentId String?
   amount                Decimal  @db.Decimal(10, 2)
   currency              String   @default("usd")
   status                String
   paymentMethod         String?
   createdAt             DateTime @default(now())
+
+  @@unique([shopId, stripePaymentIntentId])
+  @@index([shopId])
 }
 
 enum PaymentStatus {
@@ -133,19 +188,26 @@ enum BikeType {
 
 model Service {
   id          String       @id @default(cuid())
+  shopId      String
+  shop        Shop         @relation(fields: [shopId], references: [id], onDelete: Cascade)
   name        String
   description String?
   price       Decimal     @db.Decimal(10, 2)
   /// Stable id for system-managed line items (e.g. collection fee)
-  slug        String?      @unique
+  slug        String?
   isSystem    Boolean      @default(false)
   jobServices JobService[]
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
+
+  @@unique([shopId, slug])
+  @@index([shopId])
 }
 
 model JobService {
   id                String   @id @default(cuid())
+  shopId            String
+  shop              Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
   jobId             String
   job               Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
   serviceId         String?
@@ -159,6 +221,8 @@ model JobService {
   jobBikeId         String?
   jobBike           JobBike? @relation(fields: [jobBikeId], references: [id], onDelete: SetNull)
   createdAt         DateTime @default(now())
+
+  @@index([shopId])
 }
 
 enum Stage {
@@ -180,7 +244,9 @@ enum DeliveryType {
 
 model EmailTemplate {
   id           String        @id @default(cuid())
-  slug         String        @unique
+  shopId       String
+  shop         Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  slug         String
   name         String
   subject      String
   bodyHtml     String
@@ -190,28 +256,41 @@ model EmailTemplate {
   delayDays    Int?
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
+
+  @@unique([shopId, slug])
+  @@index([shopId])
 }
 
 model JobEmail {
   id           String   @id @default(cuid())
+  shopId       String
+  shop         Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
   jobId        String
   job          Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
   templateSlug String
   sentAt       DateTime @default(now())
   recipient    String
+
+  @@index([shopId])
 }
 
 model JobSms {
   id           String   @id @default(cuid())
+  shopId       String
+  shop         Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
   jobId        String
   job          Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
   templateSlug String
   sentAt       DateTime @default(now())
   recipient    String
+
+  @@index([shopId])
 }
 
 model Product {
   id            String       @id @default(cuid())
+  shopId        String
+  shop          Shop         @relation(fields: [shopId], references: [id], onDelete: Cascade)
   name          String
   description   String?
   imageUrl      String?
@@ -221,10 +300,14 @@ model Product {
   jobProducts   JobProduct[]
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
+
+  @@index([shopId])
 }
 
 model JobProduct {
   id        String   @id @default(cuid())
+  shopId    String
+  shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
   jobId     String
   job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
   productId String
@@ -236,10 +319,14 @@ model JobProduct {
   jobBikeId String?
   jobBike   JobBike? @relation(fields: [jobBikeId], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
+
+  @@index([shopId])
 }
 
 model Conversation {
   id                 String    @id @default(cuid())
+  shopId             String
+  shop               Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
   customerId         String
   customer           Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
   jobId              String?
@@ -255,25 +342,34 @@ model Conversation {
   customerLastReadAt DateTime?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
+
+  @@index([shopId])
 }
 
 model Message {
   id                 String              @id @default(cuid())
+  shopId             String
+  shop               Shop                @relation(fields: [shopId], references: [id], onDelete: Cascade)
   conversationId     String
   conversation       Conversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   sender             MessageSender
   body               String?
   /// Twilio inbound MessageSid — dedupes webhook retries
-  smsSid             String?             @unique
+  smsSid             String?
   attachments        MessageAttachment[]
   reactions          MessageReaction[]
   chatReminderEmails ChatReminderEmail[]
   createdAt          DateTime            @default(now())
   editedAt           DateTime?
+
+  @@unique([shopId, smsSid])
+  @@index([shopId])
 }
 
 model MessageReaction {
   id          String        @id @default(cuid())
+  shopId      String
+  shop        Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
   messageId   String
   message     Message       @relation(fields: [messageId], references: [id], onDelete: Cascade)
   emoji       String
@@ -282,11 +378,14 @@ model MessageReaction {
 
   @@unique([messageId, reactorType])
   @@index([messageId])
+  @@index([shopId])
 }
 
 /// One nudge email per conversation + message + kind (so we do not repeat while that message is still last).
 model ChatReminderEmail {
   id             String           @id @default(cuid())
+  shopId         String
+  shop           Shop             @relation(fields: [shopId], references: [id], onDelete: Cascade)
   conversationId String
   conversation   Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   messageId      String
@@ -296,6 +395,7 @@ model ChatReminderEmail {
 
   @@unique([conversationId, messageId, kind])
   @@index([conversationId])
+  @@index([shopId])
 }
 
 enum ChatReminderKind {
@@ -305,12 +405,16 @@ enum ChatReminderKind {
 
 model MessageAttachment {
   id        String    @id @default(cuid())
+  shopId    String
+  shop      Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
   messageId String?
   message   Message?  @relation(fields: [messageId], references: [id], onDelete: Cascade)
   url       String
   filename  String
   mimeType  String
   createdAt DateTime  @default(now())
+
+  @@index([shopId])
 }
 
 enum MessageSender {
@@ -320,16 +424,23 @@ enum MessageSender {
 
 model User {
   id           String      @id @default(cuid())
-  email        String      @unique
+  shopId       String
+  shop         Shop        @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  email        String
   passwordHash String
   name         String?
   pushTokens   PushToken[]
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
+
+  @@unique([shopId, email])
+  @@index([shopId])
 }
 
 model PushToken {
   id         String    @id @default(cuid())
+  shopId     String
+  shop       Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
   token      String    @unique
   platform   String
   userId     String?
@@ -341,28 +452,39 @@ model PushToken {
 
   @@index([userId])
   @@index([customerId])
+  @@index([shopId])
 }
 
 model MagicLinkToken {
   id        String   @id @default(cuid())
+  shopId    String
+  shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
   token     String   @unique
   customerId String
   customer  Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
   expiresAt DateTime
   createdAt DateTime @default(now())
+
+  @@index([shopId])
 }
 
 model ChatSession {
   id        String   @id @default(cuid())
+  shopId    String
+  shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
   token     String   @unique
   customerId String
   customer  Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
   expiresAt DateTime
   createdAt DateTime @default(now())
+
+  @@index([shopId])
 }
 
 model ReviewSettings {
-  id                  String  @id @default("default")
+  id                  String  @id @default(cuid())
+  shopId              String
+  shop                Shop    @relation(fields: [shopId], references: [id], onDelete: Cascade)
   googleReviewUrl     String?
   yelpReviewUrl       String?
   googlePlaceId       String?
@@ -370,11 +492,16 @@ model ReviewSettings {
   googleReviewCount   Int?
   yelpRating          Float?
   yelpReviewCount     Int?
-  featuredReviews     Json?   @default("[]")
+  featuredReviews     Json    @default("[]")
+
+  @@unique([shopId])
+  @@index([shopId])
 }
 
 model AppSettings {
-  id                       String   @id @default("default")
+  id                       String   @id @default(cuid())
+  shopId                   String
+  shop                     Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
   /// When false: new booking requests go to the waitlist instead of creating a job.
   bookingsEnabled          Boolean  @default(true)
   /// Maximum number of bikes allowed to be active (RECEIVED + WORKING_ON) before new bookings are waitlisted.
@@ -391,6 +518,9 @@ model AppSettings {
   reviewsEnabled           Boolean  @default(true)
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
+
+  @@unique([shopId])
+  @@index([shopId])
 }
 
 enum WaitlistStatus {
@@ -401,6 +531,8 @@ enum WaitlistStatus {
 
 model WaitlistEntry {
   id                   String         @id @default(cuid())
+  shopId               String
+  shop                 Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
   status               WaitlistStatus @default(WAITING)
   customerId           String?
   customer             Customer?      @relation("WaitlistCustomer", fields: [customerId], references: [id], onDelete: SetNull)
@@ -429,10 +561,13 @@ model WaitlistEntry {
 
   @@index([status, createdAt])
   @@index([customerId])
+  @@index([shopId])
 }
 
 model WaitlistBike {
   id             String        @id @default(cuid())
+  shopId         String
+  shop           Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
   waitlistEntryId String
   waitlistEntry  WaitlistEntry @relation(fields: [waitlistEntryId], references: [id], onDelete: Cascade)
   make           String
@@ -442,10 +577,13 @@ model WaitlistBike {
   createdAt      DateTime      @default(now())
 
   @@index([waitlistEntryId])
+  @@index([shopId])
 }
 
 model ReviewRequest {
   id              String    @id @default(cuid())
+  shopId          String
+  shop            Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
   token           String    @unique @default(cuid())
   customerId      String?
   customer        Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
@@ -456,19 +594,25 @@ model ReviewRequest {
   sentAt          DateTime  @default(now())
   googleClickedAt DateTime?
   yelpClickedAt   DateTime?
+
+  @@index([shopId])
 }
 
 /// Historical revenue from outside the app (e.g. Square exports) for reporting and taxes.
 model ImportedRevenue {
   id          String   @id @default(cuid())
+  shopId      String
+  shop        Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
   source      String   @default("SQUARE")
   occurredAt  DateTime
   amount      Decimal  @db.Decimal(10, 2)
   description String?
   /// Square payment id or other stable id — avoids duplicate rows on re-import
-  externalId  String?  @unique
+  externalId  String?
   createdAt   DateTime   @default(now())
 
+  @@unique([shopId, externalId])
   @@index([occurredAt])
   @@index([source])
+  @@index([shopId])
 }

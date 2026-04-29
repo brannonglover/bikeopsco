@@ -4,6 +4,10 @@ import { COLLECTION_SERVICE_SLUGS } from "../src/lib/collection-fee";
 
 const prisma = new PrismaClient();
 
+const DEFAULT_SHOP_ID = "shop_default";
+const DEFAULT_SHOP_NAME = "Basement Bike Mechanic";
+const DEFAULT_SHOP_SUBDOMAIN = "bbm";
+
 const DEFAULT_TEMPLATES = [
   {
     slug: "booking_confirmation_dropoff",
@@ -218,15 +222,21 @@ const DEFAULT_TEMPLATES = [
 ];
 
 async function main() {
+  const defaultShop = await prisma.shop.upsert({
+    where: { id: DEFAULT_SHOP_ID },
+    update: { name: DEFAULT_SHOP_NAME, subdomain: DEFAULT_SHOP_SUBDOMAIN },
+    create: { id: DEFAULT_SHOP_ID, name: DEFAULT_SHOP_NAME, subdomain: DEFAULT_SHOP_SUBDOMAIN },
+  });
+
   // Create initial staff user if ADMIN_EMAIL is set
   const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
   const adminPassword = process.env.ADMIN_PASSWORD;
   if (adminEmail && adminPassword) {
     const passwordHash = await bcrypt.hash(adminPassword, 12);
     await prisma.user.upsert({
-      where: { email: adminEmail },
+      where: { shopId_email: { shopId: defaultShop.id, email: adminEmail } },
       update: { passwordHash },
-      create: { email: adminEmail, passwordHash, name: "Admin" },
+      create: { shopId: defaultShop.id, email: adminEmail, passwordHash, name: "Admin" },
     });
     console.log("Seeded admin user:", adminEmail);
   } else {
@@ -235,7 +245,7 @@ async function main() {
 
   for (const template of DEFAULT_TEMPLATES) {
     await prisma.emailTemplate.upsert({
-      where: { slug: template.slug },
+      where: { shopId_slug: { shopId: defaultShop.id, slug: template.slug } },
       update: {
         name: template.name,
         subject: template.subject,
@@ -246,6 +256,7 @@ async function main() {
         delayDays: template.delayDays,
       },
       create: {
+        shopId: defaultShop.id,
         slug: template.slug,
         name: template.name,
         subject: template.subject,
@@ -260,8 +271,9 @@ async function main() {
   console.log("Seeded email templates");
 
   await prisma.service.upsert({
-    where: { slug: COLLECTION_SERVICE_SLUGS.regular },
+    where: { shopId_slug: { shopId: defaultShop.id, slug: COLLECTION_SERVICE_SLUGS.regular } },
     create: {
+      shopId: defaultShop.id,
       name: "Pickup/dropoff – standard bike",
       description:
         "Pickup and return within the configured collection radius. Added automatically for collection jobs.",
@@ -277,8 +289,9 @@ async function main() {
     },
   });
   await prisma.service.upsert({
-    where: { slug: COLLECTION_SERVICE_SLUGS.ebike },
+    where: { shopId_slug: { shopId: defaultShop.id, slug: COLLECTION_SERVICE_SLUGS.ebike } },
     create: {
+      shopId: defaultShop.id,
       name: "Pickup/dropoff – e-bike",
       description:
         "Pickup and return within the configured collection radius (e-bike). Added automatically for collection jobs.",
@@ -297,19 +310,23 @@ async function main() {
 
   const [regularFee, ebikeFee] = await Promise.all([
     prisma.service
-      .findUnique({ where: { slug: COLLECTION_SERVICE_SLUGS.regular } })
+      .findUnique({
+        where: { shopId_slug: { shopId: defaultShop.id, slug: COLLECTION_SERVICE_SLUGS.regular } },
+      })
       .then((s) => Number(s?.price ?? 20))
       .catch(() => 20),
     prisma.service
-      .findUnique({ where: { slug: COLLECTION_SERVICE_SLUGS.ebike } })
+      .findUnique({
+        where: { shopId_slug: { shopId: defaultShop.id, slug: COLLECTION_SERVICE_SLUGS.ebike } },
+      })
       .then((s) => Number(s?.price ?? 30))
       .catch(() => 30),
   ]);
 
   await prisma.appSettings.upsert({
-    where: { id: "default" },
+    where: { shopId: defaultShop.id },
     create: {
-      id: "default",
+      shopId: defaultShop.id,
       collectionServiceEnabled: true,
       collectionRadiusMiles: 5,
       collectionFeeRegular: regularFee,

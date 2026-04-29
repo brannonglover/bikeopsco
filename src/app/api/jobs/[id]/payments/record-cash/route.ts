@@ -64,6 +64,7 @@ export async function POST(
         paymentStatus: "PAID",
         payments: {
           create: {
+            shop: { connect: { id: job.shopId } },
             amount: amount.toFixed(2),
             currency: "usd",
             status: "succeeded",
@@ -75,6 +76,7 @@ export async function POST(
 
     const jobForEmail = {
       id: job.id,
+      shopId: job.shopId,
       bikeMake: job.bikeMake,
       bikeModel: job.bikeModel,
       customer: job.customer

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCustomerFromSession } from "@/lib/chat-session";
 import { z } from "zod";
+import { requireCurrentShop } from "@/lib/shop";
 
 export const dynamic = "force-dynamic";
 
@@ -13,13 +14,14 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ messageId: string }> }
 ) {
+  const shop = await requireCurrentShop();
   const customerId = await getCustomerFromSession();
   if (!customerId) {
     return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   }
 
   const conversation = await prisma.conversation.findFirst({
-    where: { customerId, jobId: null },
+    where: { shopId: shop.id, customerId, jobId: null },
   });
 
   if (!conversation) {
@@ -32,7 +34,7 @@ export async function POST(
     const { emoji } = createSchema.parse(json);
 
     const message = await prisma.message.findFirst({
-      where: { id: messageId, conversationId: conversation.id },
+      where: { shopId: shop.id, id: messageId, conversationId: conversation.id },
     });
 
     if (!message) {
@@ -42,7 +44,7 @@ export async function POST(
     const reaction = await prisma.messageReaction.upsert({
       where: { messageId_reactorType: { messageId, reactorType: "CUSTOMER" } },
       update: { emoji },
-      create: { messageId, emoji, reactorType: "CUSTOMER" },
+      create: { shopId: shop.id, messageId, emoji, reactorType: "CUSTOMER" },
     });
 
     return NextResponse.json(reaction);
@@ -59,13 +61,14 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ messageId: string }> }
 ) {
+  const shop = await requireCurrentShop();
   const customerId = await getCustomerFromSession();
   if (!customerId) {
     return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   }
 
   const conversation = await prisma.conversation.findFirst({
-    where: { customerId, jobId: null },
+    where: { shopId: shop.id, customerId, jobId: null },
   });
 
   if (!conversation) {
@@ -76,7 +79,7 @@ export async function DELETE(
     const { messageId } = await params;
 
     const message = await prisma.message.findFirst({
-      where: { id: messageId, conversationId: conversation.id },
+      where: { shopId: shop.id, id: messageId, conversationId: conversation.id },
     });
 
     if (!message) {
@@ -84,7 +87,7 @@ export async function DELETE(
     }
 
     await prisma.messageReaction.deleteMany({
-      where: { messageId, reactorType: "CUSTOMER" },
+      where: { shopId: shop.id, messageId, reactorType: "CUSTOMER" },
     });
 
     return NextResponse.json({ ok: true });

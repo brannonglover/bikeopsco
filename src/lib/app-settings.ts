@@ -1,4 +1,7 @@
+import "server-only";
+
 import { prisma } from "@/lib/db";
+import { requireCurrentShop } from "@/lib/shop";
 
 export type AppFeatures = {
   bookingsEnabled: boolean;
@@ -24,9 +27,10 @@ const DEFAULT_FEATURES: AppFeatures = {
   reviewsEnabled: true,
 };
 
-export async function getAppFeatures(): Promise<AppFeatures> {
+export async function getAppFeatures(shopId?: string): Promise<AppFeatures> {
   try {
-    const row = await prisma.appSettings.findUnique({ where: { id: "default" } });
+    const resolvedShopId = shopId ?? (await requireCurrentShop()).id;
+    const row = await prisma.appSettings.findUnique({ where: { shopId: resolvedShopId } });
     if (!row) return DEFAULT_FEATURES;
     return {
       bookingsEnabled: row.bookingsEnabled,
@@ -40,17 +44,19 @@ export async function getAppFeatures(): Promise<AppFeatures> {
       reviewsEnabled: row.reviewsEnabled,
     };
   } catch (e) {
-    // Allows the app to boot if migrations haven’t run yet.
     console.warn("[app-settings] Failed to load AppSettings; using defaults:", e);
     return DEFAULT_FEATURES;
   }
 }
 
-export async function upsertAppFeatures(next: Partial<AppFeatures>): Promise<AppFeatures> {
+export async function upsertAppFeatures(
+  shopId: string,
+  next: Partial<AppFeatures>,
+): Promise<AppFeatures> {
   const updated = await prisma.appSettings.upsert({
-    where: { id: "default" },
+    where: { shopId },
     create: {
-      id: "default",
+      shopId,
       ...DEFAULT_FEATURES,
       ...next,
     },
