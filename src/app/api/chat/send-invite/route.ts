@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
-    const { ok, error } = await sendChatMagicLinkEmail(email, magicLinkUrl, resend);
+    const { ok, error } = await sendChatMagicLinkEmail(email, magicLinkUrl, resend, shop.id);
 
     if (!ok) {
       return NextResponse.json(

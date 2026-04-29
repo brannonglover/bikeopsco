@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
     const apiKey = getResendApiKey();
     console.log("[request-login] apiKey present:", !!apiKey, "| baseUrl:", baseUrl || "(empty)");
     const resend = apiKey ? new Resend(apiKey) : null;
-    const { ok, error } = await sendChatMagicLinkEmail(email.trim(), magicLinkUrl, resend);
+    const { ok, error } = await sendChatMagicLinkEmail(email.trim(), magicLinkUrl, resend, shop.id);
 
     if (!ok) {
       console.error("[request-login] sendChatMagicLinkEmail failed:", error);

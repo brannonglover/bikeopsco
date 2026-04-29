@@ -105,6 +105,7 @@ export async function GET(request: NextRequest) {
               recipientName: reviewRequest.recipientName,
               googleTrackUrl,
               yelpTrackUrl,
+              shopId: job.shopId,
               followUpNumber: wave.followUpNumber,
             });
 

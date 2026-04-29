@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Template not found" }, { status: 404 });
     }
 
-    return htmlResponse(buildCustomerEmailPreviewDocument(template.bodyHtml));
+    return htmlResponse(await buildCustomerEmailPreviewDocument(template.bodyHtml, shop.id));
   } catch (e) {
     console.error("GET /api/email-templates/preview", e);
     return NextResponse.json({ error: "Preview failed" }, { status: 500 });
@@ -51,9 +51,10 @@ const postSchema = z.object({
  */
 export async function POST(request: NextRequest) {
   try {
+    const shop = await requireCurrentShop();
     const json = await request.json();
     const { bodyHtml } = postSchema.parse(json);
-    return htmlResponse(buildCustomerEmailPreviewDocument(bodyHtml));
+    return htmlResponse(await buildCustomerEmailPreviewDocument(bodyHtml, shop.id));
   } catch (e) {
     if (e instanceof z.ZodError) {
       return NextResponse.json({ error: e.flatten() }, { status: 400 });

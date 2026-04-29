@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Suspense, useState, useEffect } from "react";
@@ -10,6 +9,7 @@ import { CustomerMobileNav } from "@/components/CustomerMobileNav";
 import { StaffChatAttentionProvider } from "@/contexts/StaffChatAttentionContext";
 import { AppFeaturesProvider, useAppFeatures } from "@/contexts/AppFeaturesContext";
 import { initNotificationSound } from "@/lib/notificationSound";
+import { BrandLogo } from "@/components/BrandLogo";
 
 function FeatureRedirector() {
   const pathname = usePathname();
@@ -88,7 +88,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             )}
           </div>
           <div className="flex-1 flex justify-center min-w-0">
-            <Image src="/bike-ops-logo.png" alt="Bike Ops" width={640} height={320} className="h-14 w-auto sm:h-16 md:h-24" priority />
+            <BrandLogo width={640} height={320} className="h-14 w-auto object-contain sm:h-16 md:h-24" priority />
           </div>
           <div className="w-10 flex-shrink-0 flex items-center justify-end">
             {pathname?.startsWith("/pay/") && status === "authenticated" && (
@@ -138,7 +138,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </svg>
               </button>
               <Link href="/" className="flex items-center justify-center flex-1 min-w-0" onClick={() => setMobileMenuOpen(false)}>
-                <Image src="/bike-ops-logo.png" alt="Bike Ops" width={320} height={160} className="h-12 w-auto" />
+                <BrandLogo width={320} height={160} className="h-12 w-auto object-contain" />
               </Link>
               <div className="w-10 flex-shrink-0" aria-hidden />
             </div>
@@ -172,7 +172,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 className="flex items-center text-white hover:opacity-90 transition-opacity"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                <Image src="/bike-ops-logo.png" alt="Bike Ops" width={480} height={240} className="h-16 md:h-20 w-auto" />
+                <BrandLogo width={480} height={240} className="h-16 w-auto object-contain md:h-20" />
               </Link>
               <button
                 type="button"

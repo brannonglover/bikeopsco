@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Upload, X } from "lucide-react";
 import { useTheme, type ThemeMode } from "@/contexts/ThemeContext";
 import { broadcastAppFeaturesUpdated } from "@/contexts/AppFeaturesContext";
 
@@ -16,6 +17,11 @@ type AppFeatures = {
   reviewsEnabled: boolean;
 };
 
+type AppBranding = {
+  logoUrl: string | null;
+  logoAlt: string;
+};
+
 const DEFAULT_FEATURES: AppFeatures = {
   bookingsEnabled: true,
   maxActiveBikes: 5,
@@ -26,6 +32,11 @@ const DEFAULT_FEATURES: AppFeatures = {
   notifyCustomerEnabled: true,
   chatEnabled: true,
   reviewsEnabled: true,
+};
+
+const DEFAULT_BRANDING: AppBranding = {
+  logoUrl: null,
+  logoAlt: "Bike Ops",
 };
 
 const THEME_OPTIONS: { value: ThemeMode; label: string; description: string }[] = [
@@ -113,6 +124,11 @@ export default function SettingsPage() {
   const [featuresSaving, setFeaturesSaving] = useState(false);
   const [featuresError, setFeaturesError] = useState<string | null>(null);
   const [featuresSaved, setFeaturesSaved] = useState(false);
+  const [branding, setBranding] = useState<AppBranding>(DEFAULT_BRANDING);
+  const [brandingLoading, setBrandingLoading] = useState(true);
+  const [brandingSaving, setBrandingSaving] = useState(false);
+  const [brandingError, setBrandingError] = useState<string | null>(null);
+  const [brandingSaved, setBrandingSaved] = useState(false);
   const [maxActiveBikesInput, setMaxActiveBikesInput] = useState(String(DEFAULT_FEATURES.maxActiveBikes));
   const [bookingDirty, setBookingDirty] = useState(false);
   const [collectionRadiusInput, setCollectionRadiusInput] = useState(String(DEFAULT_FEATURES.collectionRadiusMiles));
@@ -145,6 +161,25 @@ export default function SettingsPage() {
   useEffect(() => {
     void fetchFeatures();
   }, [fetchFeatures]);
+
+  const fetchBranding = useCallback(async () => {
+    setBrandingError(null);
+    setBrandingLoading(true);
+    try {
+      const res = await fetch("/api/settings/branding", { cache: "no-store" });
+      if (!res.ok) throw new Error("Failed");
+      const data = (await res.json()) as Partial<AppBranding>;
+      setBranding({ ...DEFAULT_BRANDING, ...data });
+    } catch {
+      setBrandingError("Failed to load branding.");
+    } finally {
+      setBrandingLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchBranding();
+  }, [fetchBranding]);
 
   const saveFeatures = async (next: AppFeatures) => {
     setFeaturesSaving(true);
@@ -183,6 +218,53 @@ export default function SettingsPage() {
     const next = { ...features, [key]: value };
     setFeatures(next);
     void saveFeatures(next);
+  };
+
+  const saveBranding = async (logoUrl: string | null) => {
+    setBrandingSaving(true);
+    setBrandingSaved(false);
+    setBrandingError(null);
+    try {
+      const res = await fetch("/api/settings/branding", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ logoUrl }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setBrandingError(typeof data?.error === "string" ? data.error : "Failed to save branding.");
+        return;
+      }
+      setBranding({ ...DEFAULT_BRANDING, ...(data as AppBranding) });
+      setBrandingSaved(true);
+      window.setTimeout(() => setBrandingSaved(false), 1500);
+      window.dispatchEvent(new Event("bikeops:branding-updated"));
+    } catch {
+      setBrandingError("Failed to save branding.");
+    } finally {
+      setBrandingSaving(false);
+    }
+  };
+
+  const uploadLogo = async (file: File) => {
+    setBrandingSaving(true);
+    setBrandingSaved(false);
+    setBrandingError(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const uploadRes = await fetch("/api/settings/branding/upload", { method: "POST", body: formData });
+      const uploadData = await uploadRes.json();
+      if (!uploadRes.ok || typeof uploadData?.url !== "string") {
+        setBrandingError(typeof uploadData?.error === "string" ? uploadData.error : "Upload failed.");
+        return;
+      }
+      await saveBranding(uploadData.url);
+    } catch {
+      setBrandingError("Upload failed.");
+    } finally {
+      setBrandingSaving(false);
+    }
   };
 
   const saveCollectionSettings = () => {
@@ -281,6 +363,85 @@ export default function SettingsPage() {
               </button>
             );
           })}
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-xl font-bold text-foreground mb-1">Branding</h2>
+          <p className="text-text-secondary">Upload your business logo for staff, customer pages, and emails.</p>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          {brandingLoading ? (
+            <div className="text-sm text-slate-600">Loading…</div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-h-24 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 px-6 py-4 sm:w-64">
+                  {branding.logoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={branding.logoUrl}
+                      alt={branding.logoAlt}
+                      className="max-h-20 max-w-full object-contain"
+                    />
+                  ) : (
+                    <span className="text-sm text-slate-500">Bike Ops logo</span>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <label
+                    className={`inline-flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+                      brandingSaving
+                        ? "bg-slate-200 text-slate-500"
+                        : "bg-amber-600 text-white hover:bg-amber-700"
+                    }`}
+                  >
+                    <Upload className="h-4 w-4" aria-hidden />
+                    Upload logo
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml"
+                      className="sr-only"
+                      disabled={brandingSaving}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        e.target.value = "";
+                        if (file) void uploadLogo(file);
+                      }}
+                    />
+                  </label>
+                  {branding.logoUrl && (
+                    <button
+                      type="button"
+                      onClick={() => void saveBranding(null)}
+                      disabled={brandingSaving}
+                      className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <X className="h-4 w-4" aria-hidden />
+                      Use Bike Ops logo
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {(brandingError || brandingSaved) && (
+                <div>
+                  {brandingError && (
+                    <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                      {brandingError}
+                    </div>
+                  )}
+                  {brandingSaved && !brandingError && (
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                      Saved.
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </section>
 

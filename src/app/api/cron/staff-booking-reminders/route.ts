@@ -344,7 +344,7 @@ ${buildJobTableRows(tomorrowJobs)}`;
       innerHtml += buildCustomerEmailCtaButton(calendarUrl, "Open calendar");
     }
 
-    const branding = getCustomerEmailBrandingAssets();
+    const branding = await getCustomerEmailBrandingAssets(DEFAULT_SHOP_ID);
     const html = buildCustomerEmailHtml({
       innerHtml: innerHtml.trim(),
       headerLogoSrc: branding.headerLogoSrc,

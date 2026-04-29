@@ -103,6 +103,7 @@ export async function GET(request: NextRequest) {
             reminderMinutes,
             last.body,
             last.attachments?.map((a) => a.filename) ?? [],
+            shop.id,
           );
           if (result.ok) {
             await prisma.chatReminderEmail.create({

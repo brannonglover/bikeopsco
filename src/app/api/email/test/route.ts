@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const branding = getCustomerEmailBrandingAssets();
+  const branding = await getCustomerEmailBrandingAssets();
   const html = buildReadOnlyCustomerEmailHtml({
     innerHtml: "<p style=\"margin:0\">If you got this, Resend is working.</p>",
     headerLogoSrc: branding.headerLogoSrc,

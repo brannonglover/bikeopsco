@@ -51,11 +51,11 @@ export interface CustomerEmailBrandingAssets {
 }
 
 /**
- * Single centered header logo for customer emails (`/public/bike-ops-logo.png`).
- * URL from app base when set; otherwise CID-embedded file.
+ * Single centered header logo for customer emails.
+ * Per-shop branding wins when available; otherwise URL from app base or CID-embedded file.
  * Override: CUSTOMER_EMAIL_HEADER_LOGO_URL or CUSTOMER_EMAIL_LOGO_URL / SHOP_LOGO_URL (HTTPS).
  */
-export function getCustomerEmailBrandingAssets(): CustomerEmailBrandingAssets {
+export async function getCustomerEmailBrandingAssets(shopId?: string | null): Promise<CustomerEmailBrandingAssets> {
   const base = getAppUrl();
   const logoOverride =
     process.env.CUSTOMER_EMAIL_HEADER_LOGO_URL?.trim() ||
@@ -64,6 +64,21 @@ export function getCustomerEmailBrandingAssets(): CustomerEmailBrandingAssets {
 
   if (logoOverride?.startsWith("http")) {
     return { headerLogoSrc: logoOverride };
+  }
+
+  if (shopId) {
+    try {
+      const { prisma } = await import("./db");
+      const settings = await prisma.appSettings.findUnique({
+        where: { shopId },
+        select: { logoUrl: true },
+      });
+      if (settings?.logoUrl?.trim()) {
+        return { headerLogoSrc: settings.logoUrl.trim() };
+      }
+    } catch {
+      // Fall back to the default logo below.
+    }
   }
 
   if (base) {
@@ -347,7 +362,7 @@ export async function sendEmailTemplateTestEmail(
   const vars = getEmailTemplatePreviewVars();
   const subject = `${mergeTemplateVariables(template.subject, vars)} [test]`;
   const mergedBody = mergeTemplateVariables(template.bodyHtml, vars);
-  const branding = getCustomerEmailBrandingAssets();
+  const branding = await getCustomerEmailBrandingAssets(shopId);
   const html = buildReadOnlyCustomerEmailHtml({
     innerHtml: mergedBody,
     headerLogoSrc: branding.headerLogoSrc,
@@ -370,9 +385,9 @@ export async function sendEmailTemplateTestEmail(
 }
 
 /** Full customer email HTML as sent (wrapper + logo + sample variable merge). */
-export function buildCustomerEmailPreviewDocument(bodyHtml: string): string {
+export async function buildCustomerEmailPreviewDocument(bodyHtml: string, shopId?: string | null): Promise<string> {
   const merged = mergeEmailTemplateWithPreviewVars(bodyHtml);
-  const branding = getCustomerEmailBrandingAssets();
+  const branding = await getCustomerEmailBrandingAssets(shopId);
   return buildReadOnlyCustomerEmailHtml({
     innerHtml: merged,
     headerLogoSrc: branding.headerLogoSrc,
@@ -513,7 +528,7 @@ export async function sendJobEmail(
 
   const subject = mergeTemplateVariables(template.subject, vars);
   const bodyHtml = mergeTemplateVariables(template.bodyHtml, vars);
-  const branding = getCustomerEmailBrandingAssets();
+  const branding = await getCustomerEmailBrandingAssets(job.shopId);
   const html = buildReadOnlyCustomerEmailHtml({
     innerHtml: bodyHtml,
     headerLogoSrc: branding.headerLogoSrc,
@@ -551,6 +566,7 @@ export async function sendJobEmail(
 
 export async function sendBookingRequestNotification(
   job: {
+    shopId?: string;
     id: string;
     bikeMake: string;
     bikeModel: string;
@@ -677,7 +693,7 @@ export async function sendBookingRequestNotification(
 ${staffJobUrl ? buildCustomerEmailCtaButton(staffJobUrl, "Review & accept or reject") : ""}
 `.trim();
 
-  const branding = getCustomerEmailBrandingAssets();
+  const branding = await getCustomerEmailBrandingAssets(job.shopId);
   const html = buildCustomerEmailHtml({
     innerHtml,
     headerLogoSrc: branding.headerLogoSrc,
@@ -702,6 +718,7 @@ ${staffJobUrl ? buildCustomerEmailCtaButton(staffJobUrl, "Review & accept or rej
 }
 
 export async function sendWaitlistRequestNotification(entry: {
+  shopId?: string;
   id: string;
   customerName: string;
   email: string;
@@ -741,7 +758,7 @@ export async function sendWaitlistRequestNotification(entry: {
     ${waitlistLinkHtml}
   `;
 
-  const branding = getCustomerEmailBrandingAssets();
+  const branding = await getCustomerEmailBrandingAssets(entry.shopId);
   const html = buildCustomerEmailHtml({
     innerHtml,
     headerLogoSrc: branding.headerLogoSrc,
@@ -765,6 +782,7 @@ export async function sendWaitlistRequestNotification(entry: {
 }
 
 export async function sendWaitlistReceivedEmail(entry: {
+  shopId?: string;
   customerName: string;
   recipient: string;
 }): Promise<{ ok: boolean; error?: string }> {
@@ -786,7 +804,7 @@ export async function sendWaitlistReceivedEmail(entry: {
     <p style="margin:16px 0 0 0;">— ${escapeHtml(shopName)}</p>
   `;
 
-  const branding = getCustomerEmailBrandingAssets();
+  const branding = await getCustomerEmailBrandingAssets(entry.shopId);
   const html = buildReadOnlyCustomerEmailHtml({
     innerHtml,
     headerLogoSrc: branding.headerLogoSrc,
@@ -811,6 +829,7 @@ export async function sendWaitlistReceivedEmail(entry: {
 
 export async function sendBookingReceivedEmail(
   job: {
+    shopId?: string;
     id: string;
     bikeMake: string;
     bikeModel: string;
@@ -908,7 +927,7 @@ ${job.customerNotes ? `<p style="margin:0 0 20px;font-size:14px;color:#64748b"><
 ${ctaButton}
 `;
 
-  const branding = getCustomerEmailBrandingAssets();
+  const branding = await getCustomerEmailBrandingAssets(job.shopId);
   const html = buildReadOnlyCustomerEmailHtml({
     innerHtml,
     headerLogoSrc: branding.headerLogoSrc,
@@ -980,7 +999,7 @@ export async function sendBookingDeclinedEmail(
 
   const subject = mergeTemplateVariables(template.subject, vars);
   const bodyHtml = mergeTemplateVariables(template.bodyHtml, vars);
-  const branding = getCustomerEmailBrandingAssets();
+  const branding = await getCustomerEmailBrandingAssets(job.shopId);
   const html = buildReadOnlyCustomerEmailHtml({
     innerHtml: bodyHtml,
     headerLogoSrc: branding.headerLogoSrc,
@@ -1144,7 +1163,8 @@ const SHOP_NAME = process.env.SHOP_NAME || "Basement Bike Mechanic";
 export async function sendChatMagicLinkEmail(
   recipient: string,
   magicLinkUrl: string,
-  resendClient?: InstanceType<typeof Resend> | null
+  resendClient?: InstanceType<typeof Resend> | null,
+  shopId?: string | null
 ): Promise<{ ok: boolean; error?: string }> {
   const resend = resendClient ?? getResend();
   if (!resend) {
@@ -1154,7 +1174,7 @@ export async function sendChatMagicLinkEmail(
 
   const shopName = SHOP_NAME;
   const subject = `Sign in to chat with ${shopName}`;
-  const branding = getCustomerEmailBrandingAssets();
+  const branding = await getCustomerEmailBrandingAssets(shopId);
   const innerHtml = `
 <p style="margin:0 0 24px;color:#475569">Click the button below to sign in and start chatting with us. This link expires in 15 minutes.</p>
 ${buildCustomerEmailCtaButton(magicLinkUrl, "Sign in to chat")}
@@ -1196,7 +1216,8 @@ export async function sendChatCustomerReplyReminder(
   chatUrl: string,
   reminderMinutes: number,
   staffMessageBody: string | null,
-  attachmentFilenames: string[] = []
+  attachmentFilenames: string[] = [],
+  shopId?: string | null
 ): Promise<{ ok: boolean; error?: string }> {
   const resend = getResend();
   if (!resend) {
@@ -1233,7 +1254,7 @@ export async function sendChatCustomerReplyReminder(
     ? `Hi ${name},\n\nWe sent you a message in chat at least ${reminderMinutes} minute${reminderMinutes === 1 ? "" : "s"} ago. Here is the latest message:\n\n${plainLatest}\n\nOpen chat: ${chatUrl}\n\n${getCustomerReadOnlyNoticeText()}\n\nIf you already replied, you can ignore this email.`
     : `Hi ${name},\n\nWe sent you a message in chat at least ${reminderMinutes} minute${reminderMinutes === 1 ? "" : "s"} ago. When you have a moment, please open the conversation and reply.\n\n${chatUrl}\n\n${getCustomerReadOnlyNoticeText()}\n\nIf you already replied, you can ignore this email.`;
 
-  const branding = getCustomerEmailBrandingAssets();
+  const branding = await getCustomerEmailBrandingAssets(shopId);
   const innerHtml = `
 ${intro}
 ${latestMessageHtml}
@@ -1357,7 +1378,7 @@ export async function sendPaymentReceiptEmail(
 
   const subject = `Payment receipt – ${job.bikeMake} ${job.bikeModel} – ${shopName}`;
 
-  const branding = getCustomerEmailBrandingAssets();
+  const branding = await getCustomerEmailBrandingAssets(job.shopId);
   const innerHtml = buildInvoiceInnerHtml(job, subtotal, paid, shopName);
   const html = buildReadOnlyCustomerEmailHtml({
     innerHtml,
@@ -1405,6 +1426,7 @@ export interface ReviewRequestEmailParams {
   /** Tracking redirect URL for Yelp. Omit to hide the button. */
   yelpTrackUrl?: string | null;
   shopName?: string;
+  shopId?: string | null;
   /** Which follow-up wave this is (1 = initial/day-3, 2 = day-7, 3 = day-14). Defaults to 1. */
   followUpNumber?: 1 | 2 | 3;
 }
@@ -1416,12 +1438,13 @@ export async function sendReviewRequestEmail({
   googleTrackUrl,
   yelpTrackUrl,
   shopName,
+  shopId,
   followUpNumber = 1,
 }: ReviewRequestEmailParams): Promise<void> {
   const resend = getResend();
   if (!resend) throw new Error("Email sending is not configured (missing Resend API key).");
 
-  const branding = getCustomerEmailBrandingAssets();
+  const branding = await getCustomerEmailBrandingAssets(shopId);
   const shop = shopName || process.env.SHOP_NAME?.trim() || "Basement Bike Mechanic";
   const firstName = recipientName ? recipientName.split(" ")[0] : null;
   const greeting = firstName ? `Hi ${firstName},` : "Hi there,";

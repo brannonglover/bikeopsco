@@ -80,6 +80,7 @@ export async function POST(request: NextRequest) {
       recipientName: data.customerName ?? null,
       googleTrackUrl,
       yelpTrackUrl,
+      shopId: shop.id,
     });
 
     // Prevent the day-3 cron wave from double-sending to this customer.

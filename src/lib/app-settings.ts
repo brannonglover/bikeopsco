@@ -15,6 +15,11 @@ export type AppFeatures = {
   reviewsEnabled: boolean;
 };
 
+export type AppBranding = {
+  logoUrl: string | null;
+  logoAlt: string;
+};
+
 const DEFAULT_FEATURES: AppFeatures = {
   bookingsEnabled: true,
   maxActiveBikes: 5,
@@ -25,6 +30,11 @@ const DEFAULT_FEATURES: AppFeatures = {
   notifyCustomerEnabled: true,
   chatEnabled: true,
   reviewsEnabled: true,
+};
+
+export const DEFAULT_BRANDING: AppBranding = {
+  logoUrl: null,
+  logoAlt: "Bike Ops",
 };
 
 export async function getAppFeatures(shopId?: string): Promise<AppFeatures> {
@@ -72,5 +82,55 @@ export async function upsertAppFeatures(
     notifyCustomerEnabled: updated.notifyCustomerEnabled,
     chatEnabled: updated.chatEnabled,
     reviewsEnabled: updated.reviewsEnabled,
+  };
+}
+
+export async function getAppBranding(shopId?: string): Promise<AppBranding> {
+  try {
+    const resolvedShopId = shopId ?? (await requireCurrentShop()).id;
+    const [settings, shop] = await Promise.all([
+      prisma.appSettings.findUnique({
+        where: { shopId: resolvedShopId },
+        select: { logoUrl: true },
+      }),
+      prisma.shop.findUnique({
+        where: { id: resolvedShopId },
+        select: { name: true },
+      }),
+    ]);
+
+    return {
+      logoUrl: settings?.logoUrl?.trim() || null,
+      logoAlt: shop?.name?.trim() || DEFAULT_BRANDING.logoAlt,
+    };
+  } catch (e) {
+    console.warn("[app-settings] Failed to load branding; using defaults:", e);
+    return DEFAULT_BRANDING;
+  }
+}
+
+export async function updateAppBranding(
+  shopId: string,
+  next: Partial<Pick<AppBranding, "logoUrl">>,
+): Promise<AppBranding> {
+  const updated = await prisma.appSettings.upsert({
+    where: { shopId },
+    create: {
+      shopId,
+      ...DEFAULT_FEATURES,
+      logoUrl: next.logoUrl ?? null,
+    },
+    update: {
+      logoUrl: next.logoUrl ?? null,
+    },
+    select: {
+      logoUrl: true,
+      shop: { select: { name: true } },
+    },
+  });
+
+  return {
+    logoUrl: updated.logoUrl?.trim() || null,
+    logoAlt: updated.shop.name?.trim() || DEFAULT_BRANDING.logoAlt,
   };
 }

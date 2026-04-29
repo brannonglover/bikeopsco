@@ -298,6 +298,7 @@ export async function POST(request: NextRequest) {
         : waitlist.customer.firstName;
 
       sendWaitlistRequestNotification({
+        shopId: shop.id,
         id: waitlist.entry.id,
         customerName,
         email: waitlist.customer.email ?? waitlist.entry.email,
@@ -319,6 +320,7 @@ export async function POST(request: NextRequest) {
       }).catch((e) => console.error("[Widget book] Waitlist staff push failed:", e));
 
       sendWaitlistReceivedEmail({
+        shopId: shop.id,
         customerName,
         recipient: waitlist.entry.email,
       })
