@@ -49,14 +49,12 @@ a {
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  font-weight: 800;
-  letter-spacing: 0;
 }
 
 .brand img {
-  width: 38px;
-  height: 38px;
+  display: block;
+  width: clamp(128px, 12vw, 164px);
+  height: auto;
   object-fit: contain;
 }
 
@@ -131,16 +129,6 @@ nav a:hover {
   content: "";
 }
 
-.hero-mark {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: min(760px, 90vw);
-  max-width: none;
-  opacity: 0.08;
-  transform: translate(-50%, -50%);
-}
-
 .hero-inner {
   position: relative;
   z-index: 1;
@@ -164,11 +152,16 @@ p {
   margin-top: 0;
 }
 
-h1 {
-  margin-bottom: 18px;
-  font-size: clamp(4rem, 11vw, 9.5rem);
-  line-height: 0.9;
-  letter-spacing: 0;
+.hero-logo-title {
+  display: flex;
+  justify-content: center;
+  margin: 0 auto 18px;
+}
+
+.hero-logo-title img {
+  display: block;
+  width: min(680px, 86vw);
+  height: auto;
 }
 
 .hero-copy {
@@ -218,8 +211,7 @@ h1 {
 }
 
 .product-strip div,
-.feature-grid article,
-.timeline li {
+.feature-grid article {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--paper);
@@ -231,8 +223,7 @@ h1 {
 }
 
 .product-strip strong,
-.feature-grid h3,
-.timeline strong {
+.feature-grid h3 {
   display: block;
   margin-bottom: 8px;
   font-size: 1.05rem;
@@ -240,7 +231,6 @@ h1 {
 
 .product-strip p,
 .feature-grid p,
-.timeline span,
 .cta p {
   color: var(--muted);
   line-height: 1.65;
@@ -276,33 +266,6 @@ h1 {
 .feature-grid article {
   min-height: 200px;
   padding: 22px;
-}
-
-.workflow {
-  display: grid;
-  gap: 32px;
-  grid-template-columns: 0.9fr 1.1fr;
-  align-items: start;
-}
-
-.timeline {
-  display: grid;
-  gap: 14px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.timeline li {
-  padding: 22px;
-}
-
-code {
-  border-radius: 6px;
-  background: var(--sky);
-  padding: 2px 6px;
-  color: #123f62;
-  font-size: 0.92em;
 }
 
 .cta {
@@ -353,14 +316,21 @@ footer {
     text-align: left;
   }
 
+  .hero-logo-title {
+    justify-content: flex-start;
+  }
+
+  .hero-logo-title img {
+    width: min(420px, 86vw);
+  }
+
   .hero-actions,
   .tenant-preview {
     justify-content: flex-start;
   }
 
   .product-strip,
-  .feature-grid,
-  .workflow {
+  .feature-grid {
     grid-template-columns: 1fr;
   }
 }
