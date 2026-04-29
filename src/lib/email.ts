@@ -42,16 +42,16 @@ export function getCustomerEmailSendOptions(): { from: string; replyTo: string }
 }
 
 const CUSTOMER_EMAIL_HEADER_LOGO_CID = "customer-email-header-logo";
-const DEFAULT_HEADER_LOGO_FILE = "bbm-logo-wo.png";
+const DEFAULT_HEADER_LOGO_FILE = "bike-ops-logo.png";
 
 export interface CustomerEmailBrandingAssets {
-  /** Centered header image (bbm-logo-wo.png or HTTPS override). */
+  /** Centered header image (bike-ops-logo.png or HTTPS override). */
   headerLogoSrc: string;
   attachments?: { filename: string; content: Buffer; contentId: string }[];
 }
 
 /**
- * Single centered header logo for customer emails (`/public/bbm-logo-wo.png`).
+ * Single centered header logo for customer emails (`/public/bike-ops-logo.png`).
  * URL from app base when set; otherwise CID-embedded file.
  * Override: CUSTOMER_EMAIL_HEADER_LOGO_URL or CUSTOMER_EMAIL_LOGO_URL / SHOP_LOGO_URL (HTTPS).
  */
@@ -159,7 +159,7 @@ function buildCustomerEmailHeaderBlock(headerLogoSrc: string): string {
   const src = headerLogoSrc.startsWith("cid:") ? headerLogoSrc : escapeHtml(headerLogoSrc);
   const h = EMAIL_HEADER_LOGO_MAX_HEIGHT_PX;
   const w = EMAIL_HEADER_LOGO_MAX_WIDTH_PX;
-  const img = `<img src="${src}" alt="Basement Bike Mechanic" height="${h}" style="display:block;margin:0 auto;border:0;height:${h}px;max-height:${h}px;width:auto;max-width:${w}px;object-fit:contain;outline:none;text-decoration:none" />`;
+  const img = `<img src="${src}" alt="Bike Ops" height="${h}" style="display:block;margin:0 auto;border:0;height:${h}px;max-height:${h}px;width:auto;max-width:${w}px;object-fit:contain;outline:none;text-decoration:none" />`;
   const websiteUrl = process.env.SHOP_WEBSITE_URL?.trim();
   if (websiteUrl) {
     return `<a href="${escapeHtml(websiteUrl)}" target="_blank" rel="noopener noreferrer" style="display:block;text-decoration:none;border:0">${img}</a>`;
