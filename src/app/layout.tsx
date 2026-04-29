@@ -42,7 +42,7 @@ export default function RootLayout({
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var h=location.hostname.toLowerCase();var a=h==="app.bikeops.co"||h==="app.localhost"||h==="app.lvh.me";var m=localStorage.getItem("bikeops_theme_preference");var mode=m==="dark"||m==="light"||m==="system"?m:a?"light":"system";var d=mode==="dark"||(mode==="system"&&matchMedia("(prefers-color-scheme:dark)").matches);document.documentElement.classList.toggle("dark",d)}catch(e){}})()`,
+            __html: `(function(){try{var m=localStorage.getItem("bikeops_theme_preference");var mode=m==="dark"||m==="light"||m==="system"?m:"light";var d=mode==="dark"||(mode==="system"&&matchMedia("(prefers-color-scheme:dark)").matches);document.documentElement.classList.toggle("dark",d)}catch(e){}})()`,
           }}
         />
       </head>

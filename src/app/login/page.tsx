@@ -20,6 +20,23 @@ function normalizeSubdomain(value: string): string {
     .slice(0, 30);
 }
 
+function LoginLogo({ src }: { src: string }) {
+  const isBikeOpsLogo = src === "/bike-ops-logo.png";
+
+  return (
+    <div className="mb-6 flex justify-center">
+      <Image
+        src={src}
+        alt="Bike Ops"
+        width={isBikeOpsLogo ? 640 : 240}
+        height={isBikeOpsLogo ? 320 : 80}
+        className={isBikeOpsLogo ? "h-auto w-full max-w-full" : "h-20 w-auto"}
+        priority={isBikeOpsLogo}
+      />
+    </div>
+  );
+}
+
 function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -104,9 +121,7 @@ function LoginForm() {
     return (
       <div className="fixed inset-0 flex flex-col items-center justify-center bg-mesh p-4">
         <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-8 shadow-lg">
-          <div className="mb-6 flex justify-center">
-            <Image src="/bike-ops-logo.png" alt="Bike Ops" width={200} height={100} />
-          </div>
+          <LoginLogo src="/bike-ops-logo.png" />
           <h1 className="mb-2 text-center text-xl font-semibold text-slate-900">Find your workspace</h1>
           <p className="mb-6 text-center text-sm leading-6 text-slate-600">
             Enter the shop subdomain you chose during signup.
@@ -159,9 +174,7 @@ function LoginForm() {
   return (
     <div className="fixed inset-0 flex flex-col items-center justify-center bg-mesh p-4">
       <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-8 shadow-lg">
-        <div className="mb-6 flex justify-center">
-          <Image src={loginLogoSrc} alt="Bike Ops" width={200} height={100} />
-        </div>
+        <LoginLogo src={loginLogoSrc} />
         <h1 className="mb-6 text-center text-xl font-semibold text-slate-900">Sign in</h1>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>

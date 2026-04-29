@@ -21,7 +21,7 @@ interface ThemeContextValue {
 
 const ThemeContext = createContext<ThemeContextValue>({
   isDark: false,
-  themeMode: "system",
+  themeMode: "light",
   setThemeMode: () => {},
 });
 
@@ -37,16 +37,7 @@ function resolveIsDark(mode: ThemeMode): boolean {
 }
 
 function getDefaultThemeMode(): ThemeMode {
-  if (typeof window === "undefined") return "system";
-  const hostname = window.location.hostname.toLowerCase();
-  if (
-    hostname === "app.bikeops.co" ||
-    hostname === "app.localhost" ||
-    hostname === "app.lvh.me"
-  ) {
-    return "light";
-  }
-  return "system";
+  return "light";
 }
 
 function applyDarkClass(isDark: boolean) {
@@ -55,7 +46,7 @@ function applyDarkClass(isDark: boolean) {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [themeMode, setThemeModeState] = useState<ThemeMode>("system");
+  const [themeMode, setThemeModeState] = useState<ThemeMode>("light");
   const [isDark, setIsDark] = useState(false);
   const [mounted, setMounted] = useState(false);
 
