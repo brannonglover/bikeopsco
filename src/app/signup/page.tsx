@@ -96,8 +96,15 @@ export default function SignupPage() {
     <main className="min-h-screen w-full bg-mesh px-4 py-8 text-slate-900 sm:py-10">
       <div className="mx-auto grid min-h-[calc(100vh-5rem)] w-full max-w-5xl items-center gap-8 lg:grid-cols-[0.95fr_1.05fr]">
         <section className="space-y-6">
-          <Link href="/login" className="inline-flex">
-            <Image src="/bike-ops-logo.png" alt="Bike Ops" width={220} height={110} priority />
+          <Link href="/login" className="inline-flex w-full max-w-md">
+            <Image
+              src="/bike-ops-logo.png"
+              alt="Bike Ops"
+              width={640}
+              height={320}
+              className="h-auto w-full"
+              priority
+            />
           </Link>
           <div>
             <h1 className="text-4xl font-semibold tracking-normal text-slate-950 sm:text-5xl">
