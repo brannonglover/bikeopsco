@@ -11,6 +11,13 @@ import { AppFeaturesProvider, useAppFeatures } from "@/contexts/AppFeaturesConte
 import { initNotificationSound } from "@/lib/notificationSound";
 import { BrandLogo } from "@/components/BrandLogo";
 
+type BillingStatus = {
+  status: string;
+  trialEndsAt: string | null;
+  billingActive: boolean;
+  hasSubscription: boolean;
+};
+
 function FeatureRedirector() {
   const pathname = usePathname();
   const router = useRouter();
@@ -26,6 +33,50 @@ function FeatureRedirector() {
   }, [features.chatEnabled, features.reviewsEnabled, pathname, router]);
 
   return null;
+}
+
+function BillingGuard() {
+  const pathname = usePathname();
+  const router = useRouter();
+  const [billing, setBilling] = useState<BillingStatus | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/billing/status", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (!cancelled) setBilling(data);
+      })
+      .catch(() => {
+        if (!cancelled) setBilling(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname]);
+
+  useEffect(() => {
+    if (billing && !billing.billingActive && pathname !== "/billing") {
+      router.replace("/billing");
+    }
+  }, [billing, pathname, router]);
+
+  if (!billing || pathname === "/billing" || billing.hasSubscription) return null;
+
+  const daysLeft = billing.trialEndsAt
+    ? Math.max(0, Math.ceil((new Date(billing.trialEndsAt).getTime() - Date.now()) / 86400000))
+    : 0;
+
+  return (
+    <Link
+      href="/billing"
+      className="mb-4 block rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900 hover:bg-amber-100"
+    >
+      {daysLeft > 0
+        ? `${daysLeft} day${daysLeft === 1 ? "" : "s"} left in your free trial. Add payment details for $39.99/mo.`
+        : "Your free trial has ended. Add payment details to continue."}
+    </Link>
+  );
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -138,7 +189,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </svg>
               </button>
               <Link href="/" className="flex items-center justify-center flex-1 min-w-0" onClick={() => setMobileMenuOpen(false)}>
-                <BrandLogo width={320} height={160} className="h-12 w-auto object-contain" />
+                <BrandLogo
+                  width={320}
+                  height={160}
+                  className="h-12 w-auto object-contain"
+                  defaultSrc="/bike-ops-logo-white.png"
+                />
               </Link>
               <div className="w-10 flex-shrink-0" aria-hidden />
             </div>
@@ -172,7 +228,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 className="flex items-center text-white hover:opacity-90 transition-opacity"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                <BrandLogo width={480} height={240} className="h-16 w-auto object-contain md:h-20" />
+                <BrandLogo
+                  width={480}
+                  height={240}
+                  className="h-16 w-auto object-contain md:h-20"
+                  defaultSrc="/bike-ops-logo-white.png"
+                />
               </Link>
               <button
                 type="button"
@@ -210,7 +271,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </aside>
 
           {/* Main content - offset for mobile header; left margin on desktop for fixed sidebar */}
-          <main className="flex-1 min-w-0 pt-[calc(5.5rem+env(safe-area-inset-top,0px))] md:pt-6 md:ml-56 p-4 sm:p-6">{children}</main>
+          <main className="flex-1 min-w-0 pt-[calc(5.5rem+env(safe-area-inset-top,0px))] md:pt-6 md:ml-56 p-4 sm:p-6">
+            <BillingGuard />
+            {children}
+          </main>
         </div>
       </StaffChatAttentionProvider>
     </AppFeaturesProvider>

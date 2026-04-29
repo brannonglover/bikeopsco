@@ -10,6 +10,7 @@ type BrandLogoProps = {
   width: number;
   height: number;
   priority?: boolean;
+  defaultSrc?: string;
 };
 
 type BrandingResponse = {
@@ -17,10 +18,10 @@ type BrandingResponse = {
   logoAlt?: string | null;
 };
 
-export function BrandLogo({ className, width, height, priority }: BrandLogoProps) {
+export function BrandLogo({ className, width, height, priority, defaultSrc = DEFAULT_LOGO }: BrandLogoProps) {
   const [branding, setBranding] = useState<BrandingResponse>({});
-  const src = branding.logoUrl || DEFAULT_LOGO;
-  const isDefaultLogo = src === DEFAULT_LOGO;
+  const src = branding.logoUrl || defaultSrc;
+  const isDefaultLogo = src === DEFAULT_LOGO || src === defaultSrc;
 
   useEffect(() => {
     let cancelled = false;

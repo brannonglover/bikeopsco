@@ -4,6 +4,7 @@ import { getStripe } from "@/lib/stripe";
 import { prisma } from "@/lib/db";
 import { sendPaymentReceiptEmail } from "@/lib/email";
 import { computeJobSubtotal, computeTotalPaid, getJobPaymentSummary } from "@/lib/job-payments";
+import { syncStripeSubscription, toStripeDate } from "@/lib/billing";
 
 export async function POST(request: NextRequest) {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -187,6 +188,69 @@ export async function POST(request: NextRequest) {
         { error: "Failed to process payment", detail: msg },
         { status: 500 }
       );
+    }
+  }
+
+  if (event.type === "checkout.session.completed") {
+    const session = event.data.object as Stripe.Checkout.Session;
+    const shopId =
+      typeof session.metadata?.shopId === "string" && session.metadata.shopId.trim()
+        ? session.metadata.shopId.trim()
+        : typeof session.client_reference_id === "string"
+          ? session.client_reference_id
+          : null;
+    const customerId =
+      typeof session.customer === "string" ? session.customer : session.customer?.id ?? null;
+
+    if (shopId && customerId) {
+      await prisma.shop.update({
+        where: { id: shopId },
+        data: { stripeCustomerId: customerId },
+      });
+    }
+
+    if (session.mode === "subscription" && session.subscription) {
+      const subscriptionId =
+        typeof session.subscription === "string" ? session.subscription : session.subscription.id;
+      const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+      await syncStripeSubscription(subscription);
+    }
+  }
+
+  if (
+    event.type === "customer.subscription.created" ||
+    event.type === "customer.subscription.updated" ||
+    event.type === "customer.subscription.deleted" ||
+    event.type === "customer.subscription.paused" ||
+    event.type === "customer.subscription.resumed"
+  ) {
+    const subscription = event.data.object as Stripe.Subscription;
+    await syncStripeSubscription(subscription);
+  }
+
+  if (event.type === "invoice.paid" || event.type === "invoice.payment_failed") {
+    const invoice = event.data.object as Stripe.Invoice;
+    const subscriptionId =
+      invoice.parent?.subscription_details?.subscription
+        ? typeof invoice.parent.subscription_details.subscription === "string"
+          ? invoice.parent.subscription_details.subscription
+          : invoice.parent.subscription_details.subscription.id
+        : null;
+    const customerId =
+      typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id ?? null;
+
+    if (subscriptionId) {
+      const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+      await syncStripeSubscription(subscription);
+    } else if (customerId && event.type === "invoice.payment_failed") {
+      await prisma.shop.updateMany({
+        where: { stripeCustomerId: customerId },
+        data: {
+          billingStatus: "past_due",
+          stripeCurrentPeriodEnd: toStripeDate(invoice.period_end),
+          stripeSubscriptionUpdatedAt: new Date(),
+        },
+      });
     }
   }
 

@@ -17,6 +17,7 @@
         <img src="/bike-ops-logo.png" alt="Bike Ops" />
       </a>
       <nav aria-label="Primary navigation">
+        <a href="#preview">Preview</a>
         <a href="#features">Features</a>
         <a href="https://app.bikeops.co/login">Sign in</a>
         <a class="button button-small" href="https://app.bikeops.co/signup">Start free</a>
@@ -63,6 +64,110 @@
         </div>
       </section>
 
+      <section id="preview" class="section app-preview">
+        <div class="section-heading">
+          <p class="eyebrow">Product preview</p>
+          <h2>A quick look at the Bike Ops workspace.</h2>
+        </div>
+
+        <div class="preview-shell">
+          <aside class="preview-sidebar" aria-label="Sample sidebar navigation">
+            <img src="/bike-ops-logo-white.png" alt="" />
+            <span class="active">Job Board</span>
+            <span>Waitlist</span>
+            <span>Chat</span>
+            <span>Stats</span>
+            <span>Settings</span>
+          </aside>
+
+          <div class="preview-board" aria-label="Sample repair job board">
+            <div class="preview-toolbar">
+              <div>
+                <strong>Job Board</strong>
+                <span>Today, 9 active bikes</span>
+              </div>
+              <button type="button">New job</button>
+            </div>
+
+            <div class="kanban-sample">
+              <article>
+                <h3>Booked In</h3>
+                <div class="job-card">
+                  <strong>Sarah M.</strong>
+                  <span>Trek Domane</span>
+                  <small>Gold service · Drop-off Fri</small>
+                </div>
+                <div class="job-card">
+                  <strong>Jon R.</strong>
+                  <span>Specialized Turbo</span>
+                  <small>Brake pads · E-bike</small>
+                </div>
+              </article>
+              <article>
+                <h3>Working On</h3>
+                <div class="job-card selected">
+                  <strong>Mike B.</strong>
+                  <span>Cannondale Synapse</span>
+                  <small>Indexed gears · Paid deposit</small>
+                </div>
+              </article>
+              <article>
+                <h3>Ready</h3>
+                <div class="job-card">
+                  <strong>Ava K.</strong>
+                  <span>Liv Avail</span>
+                  <small>Ready SMS sent · $84.50 due</small>
+                </div>
+              </article>
+            </div>
+          </div>
+        </div>
+
+        <div class="preview-grid">
+          <article class="phone-preview">
+            <div class="phone-top"></div>
+            <h3>Your bike is ready</h3>
+            <p>Collection is available today between 3:00 PM and 6:00 PM.</p>
+            <div class="status-pill">Ready for pickup</div>
+            <div class="chat-bubble">Can I collect tomorrow morning?</div>
+            <div class="chat-bubble staff">Absolutely, we open at 9.</div>
+          </article>
+
+          <article class="booking-preview">
+            <h3>Online booking</h3>
+            <label>
+              Service
+              <span>Annual service</span>
+            </label>
+            <label>
+              Bike
+              <span>Giant Revolt Advanced</span>
+            </label>
+            <label>
+              Preferred drop-off
+              <span>Tuesday morning</span>
+            </label>
+            <button type="button">Request booking</button>
+          </article>
+
+          <article class="stats-preview">
+            <h3>Shop snapshot</h3>
+            <div>
+              <strong>$4,280</strong>
+              <span>Revenue this month</span>
+            </div>
+            <div>
+              <strong>37</strong>
+              <span>Completed jobs</span>
+            </div>
+            <div>
+              <strong>4.9</strong>
+              <span>Review average</span>
+            </div>
+          </article>
+        </div>
+      </section>
+
       <section id="features" class="section">
         <div class="section-heading">
           <p class="eyebrow">MVP feature set</p>
@@ -91,7 +196,7 @@
           </article>
           <article>
             <h3>Payment flexibility</h3>
-            <p>Track payment state now while leaving room for each shop to choose Stripe, Square, or offline payment flows.</p>
+            <p>Accept Stripe payments, record cash, send payment links, and keep every job’s payment state visible.</p>
           </article>
         </div>
       </section>

@@ -9,11 +9,19 @@ datasource db {
 }
 
 model Shop {
-  id        String   @id @default(cuid())
-  name      String
-  subdomain String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                         String   @id @default(cuid())
+  name                       String
+  subdomain                  String   @unique
+  billingStatus              String   @default("trialing")
+  trialEndsAt                DateTime?
+  stripeCustomerId           String?  @unique
+  stripeSubscriptionId       String?  @unique
+  stripePriceId              String?
+  stripeCurrentPeriodEnd     DateTime?
+  stripeCancelAtPeriodEnd    Boolean  @default(false)
+  stripeSubscriptionUpdatedAt DateTime?
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
 
   customers        Customer[]
   bikes            Bike[]

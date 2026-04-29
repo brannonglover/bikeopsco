@@ -8,6 +8,7 @@ import {
   normalizeShopSubdomain,
 } from "@/lib/tenant-domain";
 import { provisionShopDefaults } from "@/lib/shop-provisioning";
+import { addTrialDays } from "@/lib/billing";
 
 export const dynamic = "force-dynamic";
 
@@ -81,6 +82,8 @@ export async function POST(request: NextRequest) {
         data: {
           name: shopName,
           subdomain,
+          billingStatus: "trialing",
+          trialEndsAt: addTrialDays(),
         },
       });
 

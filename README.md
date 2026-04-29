@@ -112,12 +112,15 @@ Accept card, Apple Pay, and Google Pay via Stripe, or record cash payments from 
 STRIPE_SECRET_KEY="sk_test_xxx"
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY="pk_test_xxx"
 STRIPE_WEBHOOK_SECRET="whsec_xxx"
+STRIPE_BIKEOPS_MONTHLY_PRICE_ID="price_xxx"
 NEXT_PUBLIC_APP_URL="http://localhost:3000"
 ```
 
 4. **Webhook** (required for payment confirmation):  
    - Local: Use [Stripe CLI](https://stripe.com/docs/stripe-cli): `stripe listen --forward-to localhost:3000/api/webhooks/stripe`  
-   - Production: Add `https://yourdomain.com/api/webhooks/stripe` in [Stripe Webhooks](https://dashboard.stripe.com/webhooks), select `payment_intent.succeeded`
+   - Production: Add `https://yourdomain.com/api/webhooks/stripe` in [Stripe Webhooks](https://dashboard.stripe.com/webhooks), select `payment_intent.succeeded`, `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `customer.subscription.paused`, `customer.subscription.resumed`, `invoice.paid`, and `invoice.payment_failed`
+
+For Bike Ops SaaS billing, create a recurring monthly Stripe Price for $39.99 USD and set its ID as `STRIPE_BIKEOPS_MONTHLY_PRICE_ID`. New shop signups receive a 14-day free trial.
 
 ### 6. Run
 
