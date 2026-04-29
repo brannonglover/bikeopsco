@@ -252,6 +252,12 @@ p {
   margin-bottom: 28px;
 }
 
+.preview-note {
+  margin-top: -8px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
 .section-heading h2,
 .cta h2 {
   font-size: clamp(2rem, 5vw, 3.6rem);
