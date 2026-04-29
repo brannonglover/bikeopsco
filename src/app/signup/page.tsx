@@ -97,13 +97,10 @@ export default function SignupPage() {
       <div className="mx-auto grid min-h-[calc(100vh-5rem)] w-full max-w-5xl items-center gap-8 lg:grid-cols-[0.95fr_1.05fr]">
         <section className="space-y-6">
           <Link href="/login" className="inline-flex">
-            <Image src="/bbm-logo-wo.png" alt="Bike Ops" width={220} height={74} priority />
+            <Image src="/bike-ops-logo.png" alt="Bike Ops" width={220} height={110} priority />
           </Link>
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
-              Bike Ops SaaS
-            </p>
-            <h1 className="mt-3 text-4xl font-semibold tracking-normal text-slate-950 sm:text-5xl">
+            <h1 className="text-4xl font-semibold tracking-normal text-slate-950 sm:text-5xl">
               Create a bike shop workspace
             </h1>
             <p className="mt-4 max-w-xl text-base leading-7 text-slate-600">

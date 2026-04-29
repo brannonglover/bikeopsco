@@ -36,6 +36,19 @@ function resolveIsDark(mode: ThemeMode): boolean {
   return getSystemDark();
 }
 
+function getDefaultThemeMode(): ThemeMode {
+  if (typeof window === "undefined") return "system";
+  const hostname = window.location.hostname.toLowerCase();
+  if (
+    hostname === "app.bikeops.co" ||
+    hostname === "app.localhost" ||
+    hostname === "app.lvh.me"
+  ) {
+    return "light";
+  }
+  return "system";
+}
+
 function applyDarkClass(isDark: boolean) {
   if (typeof document === "undefined") return;
   document.documentElement.classList.toggle("dark", isDark);
@@ -51,7 +64,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     const mode =
       stored === "dark" || stored === "light" || stored === "system"
         ? stored
-        : "system";
+        : getDefaultThemeMode();
     setThemeModeState(mode);
     const dark = resolveIsDark(mode);
     setIsDark(dark);
