@@ -8,6 +8,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? "bikeops.co";
+const DEFAULT_SHOP_SUBDOMAIN = process.env.NEXT_PUBLIC_DEFAULT_SHOP_SUBDOMAIN ?? "bbm";
 
 function normalizeSubdomain(value: string): string {
   return value
@@ -24,6 +25,7 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [workspace, setWorkspace] = useState("");
   const [loginMode, setLoginMode] = useState<"checking" | "workspace" | "credentials">("checking");
+  const [loginLogoSrc, setLoginLogoSrc] = useState("/bike-ops-logo.png");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const searchParams = useSearchParams();
@@ -36,6 +38,12 @@ function LoginForm() {
       hostname === "app.localhost" ||
       hostname === "app.lvh.me";
     setLoginMode(workspaceHost ? "workspace" : "credentials");
+    const defaultShopHost =
+      hostname === `${DEFAULT_SHOP_SUBDOMAIN}.${ROOT_DOMAIN}` ||
+      hostname === `${DEFAULT_SHOP_SUBDOMAIN}.localhost` ||
+      hostname === `${DEFAULT_SHOP_SUBDOMAIN}.lvh.me` ||
+      hostname === "localhost";
+    setLoginLogoSrc(defaultShopHost ? "/bbm-logo-wo.png" : "/bike-ops-logo.png");
   }, []);
 
   const handleWorkspaceSubmit = (e: React.FormEvent) => {
@@ -152,7 +160,7 @@ function LoginForm() {
     <div className="fixed inset-0 flex flex-col items-center justify-center bg-mesh p-4">
       <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-8 shadow-lg">
         <div className="mb-6 flex justify-center">
-          <Image src="/bbm-logo-wo.png" alt="Bike Ops" width={200} height={67} />
+          <Image src={loginLogoSrc} alt="Bike Ops" width={200} height={100} />
         </div>
         <h1 className="mb-6 text-center text-xl font-semibold text-slate-900">Sign in</h1>
         <form onSubmit={handleSubmit} className="space-y-4">
