@@ -60,7 +60,7 @@ export function SidebarNav({ onNavigate }: SidebarNavProps) {
             aria-label={chatLabel}
             className={`px-3 py-3 rounded-lg font-medium transition-colors text-base touch-manipulation flex items-center justify-between gap-2 min-w-0 ${
               isActive
-                ? "text-white bg-slate-600"
+                ? "text-white bg-slate-600 shadow-[inset_3px_0_0_#e49a32]"
                 : "text-slate-200 hover:text-white hover:bg-slate-600/50 active:bg-slate-600/70"
             }`}
           >

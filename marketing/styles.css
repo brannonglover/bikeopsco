@@ -233,6 +233,15 @@ p {
   box-shadow: 0 8px 22px rgba(16, 32, 51, 0.06);
 }
 
+.hero-highlights span:nth-child(2) {
+  border-color: rgba(228, 154, 50, 0.55);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(255, 236, 202, 0.9));
+  color: #162a3d;
+  padding: 11px 16px;
+  box-shadow: 0 14px 34px rgba(104, 67, 20, 0.16);
+  transform: translateY(-1px);
+}
+
 .tenant-preview {
   display: inline-flex;
   flex-wrap: wrap;
