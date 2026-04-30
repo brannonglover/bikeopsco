@@ -36,7 +36,14 @@ export default function StatsPage() {
   const [importBusy, setImportBusy] = useState(false);
 
   const reloadStats = useCallback(
-    () => fetch("/api/stats").then((res) => res.json()).then(setStats),
+    async () => {
+      const res = await fetch("/api/stats", { cache: "no-store" });
+      if (!res.ok) {
+        setStats(null);
+        throw new Error(`Failed to load stats (${res.status})`);
+      }
+      setStats((await res.json()) as Stats);
+    },
     []
   );
 

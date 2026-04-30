@@ -1,6 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { getToken } from "next-auth/jwt";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { getShopForHost } from "@/lib/shop";
 
 export const dynamic = "force-dynamic";
 
@@ -81,6 +83,18 @@ function lineItemRevenue(job: {
 
 type Period = "day" | "week" | "month" | "year";
 
+async function getAuthorizedShopId(request: NextRequest): Promise<string | null> {
+  const token = await getToken({ req: request });
+  if (!token?.shopId || typeof token.shopId !== "string") return null;
+
+  const hostHeader =
+    request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  const shop = await getShopForHost(hostHeader);
+  if (!shop || shop.id !== token.shopId) return null;
+
+  return shop.id;
+}
+
 function addPaymentToPeriods(
   ranges: ReturnType<typeof getDateRanges>,
   date: Date,
@@ -95,8 +109,13 @@ function addPaymentToPeriods(
   }
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const shopId = await getAuthorizedShopId(request);
+    if (!shopId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const ranges = getDateRanges();
     const now = new Date();
     const y = now.getUTCFullYear();
@@ -104,11 +123,11 @@ export async function GET() {
     const lastYearEnd = new Date(Date.UTC(y, 0, 1, 0, 0, 0) - 1);
 
     const completedJobs = await prisma.job.findMany({
-      where: { stage: "COMPLETED" },
+      where: { shopId, stage: "COMPLETED" },
       include: {
-        jobServices: true,
-        jobProducts: true,
-        payments: true,
+        jobServices: { where: { shopId } },
+        jobProducts: { where: { shopId } },
+        payments: { where: { shopId } },
       },
     });
 
@@ -197,7 +216,9 @@ export async function GET() {
 
     let importedRows: Awaited<ReturnType<typeof prisma.importedRevenue.findMany>> = [];
     try {
-      importedRows = await prisma.importedRevenue.findMany();
+      importedRows = await prisma.importedRevenue.findMany({
+        where: { shopId },
+      });
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2021") {
         importedRows = [];
@@ -228,7 +249,8 @@ export async function GET() {
 
     const jobServicesWithService = await prisma.jobService.findMany({
       where: {
-        job: { stage: "COMPLETED" },
+        shopId,
+        job: { shopId, stage: "COMPLETED" },
       },
       include: { service: true },
     });
