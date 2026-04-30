@@ -11,6 +11,7 @@ type BillingStatus = {
   hasStripeCustomer: boolean;
   hasSubscription: boolean;
   billingActive: boolean;
+  billingExempt: boolean;
   monthlyPrice: number;
 };
 
@@ -80,7 +81,9 @@ export default function BillingPage() {
       <div>
         <h1 className="text-3xl font-semibold text-slate-950">Billing</h1>
         <p className="mt-2 text-sm leading-6 text-slate-600">
-          Start with 14 days free. After trial, Bike Ops is ${billing?.monthlyPrice.toFixed(2) ?? "39.99"} per month.
+          {billing?.billingExempt
+            ? "This workspace is marked as an owned Bike Ops install."
+            : `Start with 14 days free. After trial, Bike Ops is $${billing?.monthlyPrice.toFixed(2) ?? "39.99"} per month.`}
         </p>
       </div>
 
@@ -94,13 +97,15 @@ export default function BillingPage() {
           <div className="grid gap-6 md:grid-cols-[1fr_16rem]">
             <div>
               <div className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
-                {statusLabel(billing.status)}
+                {billing.billingExempt ? "Owned install" : statusLabel(billing.status)}
               </div>
               <h2 className="mt-4 text-xl font-semibold text-slate-950">
                 {billing.billingActive ? "Your workspace is active" : "Payment required"}
               </h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                {billing.hasSubscription
+                {billing.billingExempt
+                  ? "No subscription is required for this workspace."
+                  : billing.hasSubscription
                   ? billing.cancelAtPeriodEnd
                     ? `Your subscription remains available until ${formatDate(billing.currentPeriodEnd)}.`
                     : `Your next billing period ends ${formatDate(billing.currentPeriodEnd)}.`
@@ -111,17 +116,19 @@ export default function BillingPage() {
             </div>
 
             <div className="flex flex-col gap-3">
-              <button
-                type="button"
-                onClick={() =>
-                  redirectFrom(billing.hasSubscription ? "/api/billing/portal" : "/api/billing/checkout")
-                }
-                disabled={actionLoading !== null}
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-800 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                <CreditCard className="h-4 w-4" aria-hidden />
-                {billing.hasSubscription ? "Manage subscription" : "Add payment details"}
-              </button>
+              {!billing.billingExempt && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    redirectFrom(billing.hasSubscription ? "/api/billing/portal" : "/api/billing/checkout")
+                  }
+                  disabled={actionLoading !== null}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-800 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <CreditCard className="h-4 w-4" aria-hidden />
+                  {billing.hasSubscription ? "Manage subscription" : "Add payment details"}
+                </button>
+              )}
               {billing.hasStripeCustomer && (
                 <button
                   type="button"

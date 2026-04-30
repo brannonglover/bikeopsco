@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/db";
-import { BIKEOPS_MONTHLY_PRICE, isBillingActive } from "@/lib/billing";
+import { BIKEOPS_MONTHLY_PRICE, isBillingActive, isBillingExemptShop } from "@/lib/billing";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +14,8 @@ export async function GET(request: NextRequest) {
   const shop = await prisma.shop.findUnique({
     where: { id: token.shopId },
     select: {
+      id: true,
+      subdomain: true,
       billingStatus: true,
       trialEndsAt: true,
       stripeCustomerId: true,
@@ -27,6 +29,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Shop not found" }, { status: 404 });
   }
 
+  const billingExempt = isBillingExemptShop(shop);
+
   return NextResponse.json({
     status: shop.billingStatus,
     trialEndsAt: shop.trialEndsAt?.toISOString() ?? null,
@@ -34,7 +38,8 @@ export async function GET(request: NextRequest) {
     cancelAtPeriodEnd: shop.stripeCancelAtPeriodEnd,
     hasStripeCustomer: !!shop.stripeCustomerId,
     hasSubscription: !!shop.stripeSubscriptionId,
-    billingActive: isBillingActive(shop),
+    billingExempt,
+    billingActive: billingExempt || isBillingActive(shop),
     monthlyPrice: BIKEOPS_MONTHLY_PRICE,
   });
 }

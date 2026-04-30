@@ -7,6 +7,7 @@ export const BIKEOPS_MONTHLY_PRICE = 39.99;
 export const BIKEOPS_TRIAL_DAYS = 14;
 
 const ACTIVE_BILLING_STATUSES = new Set(["active", "trialing"]);
+const DEFAULT_BILLING_EXEMPT_SUBDOMAINS = ["bbm"];
 
 export function getBikeOpsPriceId(): string {
   const priceId =
@@ -22,6 +23,17 @@ export function addTrialDays(from = new Date()): Date {
   const trialEndsAt = new Date(from);
   trialEndsAt.setDate(trialEndsAt.getDate() + BIKEOPS_TRIAL_DAYS);
   return trialEndsAt;
+}
+
+export function isBillingExemptShop(input: { subdomain: string }): boolean {
+  const configuredSubdomains = process.env.BIKEOPS_BILLING_EXEMPT_SUBDOMAINS?.split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const exemptSubdomains = configuredSubdomains?.length
+    ? configuredSubdomains
+    : DEFAULT_BILLING_EXEMPT_SUBDOMAINS;
+
+  return exemptSubdomains.includes(input.subdomain);
 }
 
 export function isBillingActive(input: {

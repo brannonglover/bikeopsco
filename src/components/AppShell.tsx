@@ -16,6 +16,7 @@ type BillingStatus = {
   trialEndsAt: string | null;
   billingActive: boolean;
   hasSubscription: boolean;
+  billingExempt: boolean;
 };
 
 function FeatureRedirector() {
@@ -61,7 +62,7 @@ function BillingGuard() {
     }
   }, [billing, pathname, router]);
 
-  if (!billing || pathname === "/billing" || billing.hasSubscription) return null;
+  if (!billing || pathname === "/billing" || billing.hasSubscription || billing.billingExempt) return null;
 
   const daysLeft = billing.trialEndsAt
     ? Math.max(0, Math.ceil((new Date(billing.trialEndsAt).getTime() - Date.now()) / 86400000))

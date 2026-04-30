@@ -120,7 +120,7 @@ NEXT_PUBLIC_APP_URL="http://localhost:3000"
    - Local: Use [Stripe CLI](https://stripe.com/docs/stripe-cli): `stripe listen --forward-to localhost:3000/api/webhooks/stripe`  
    - Production: Add `https://yourdomain.com/api/webhooks/stripe` in [Stripe Webhooks](https://dashboard.stripe.com/webhooks), select `payment_intent.succeeded`, `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `customer.subscription.paused`, `customer.subscription.resumed`, `invoice.paid`, and `invoice.payment_failed`
 
-For Bike Ops SaaS billing, create a recurring monthly Stripe Price for $39.99 USD and set its ID as `STRIPE_BIKEOPS_MONTHLY_PRICE_ID`. New shop signups receive a 14-day free trial.
+For Bike Ops SaaS billing, create a recurring monthly Stripe Price for $39.99 USD and set its ID as `STRIPE_BIKEOPS_MONTHLY_PRICE_ID`. New shop signups receive a 14-day free trial. The BikeOps-owned tenant defaults to billing-exempt via the `bbm` subdomain (`bbm.bikeops.co`); set `BIKEOPS_BILLING_EXEMPT_SUBDOMAINS` to a comma-separated list if you need to exempt different owned workspaces.
 
 ### 6. Run
 
