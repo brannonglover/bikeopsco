@@ -21,8 +21,8 @@ function normalizeSubdomain(value: string): string {
 
 function LoginLogo() {
   return (
-    <div className="mb-6 flex justify-center">
-      <BrandLogo width={640} height={320} className="h-20 w-auto max-w-full object-contain sm:h-24" priority />
+    <div className="mb-5 flex h-28 items-center justify-center sm:h-32">
+      <BrandLogo width={640} height={320} className="h-28 w-auto max-w-full object-contain sm:h-32" priority />
     </div>
   );
 }
