@@ -1,7 +1,7 @@
 import { Resend } from "resend";
 import fs from "fs";
 import path from "path";
-import { getAppUrl, getResendApiKey, getStaffJobOpenUrl } from "./env";
+import { getAppUrl, getCustomerStatusUrl, getResendApiKey, getStaffJobOpenUrl } from "./env";
 
 function getResend(): Resend | null {
   const key = getResendApiKey();
@@ -430,7 +430,7 @@ export async function sendJobEmail(
   const { prisma } = await import("./db");
   const shopId = job.shopId;
   const shopRow = await prisma.shop
-    .findUnique({ where: { id: shopId }, select: { name: true } })
+    .findUnique({ where: { id: shopId }, select: { name: true, subdomain: true } })
     .catch(() => null);
 
   let template = await prisma.emailTemplate.findUnique({
@@ -478,8 +478,7 @@ export async function sendJobEmail(
     return { ok: false, error: "Template not found" };
   }
 
-  const baseUrl = getAppUrl();
-  const statusUrl = baseUrl ? `${baseUrl}/status/${job.id}` : "";
+  const statusUrl = getCustomerStatusUrl(job.id, shopRow?.subdomain);
   const statusButtonHtml = statusUrl
     ? buildCustomerEmailCtaButton(statusUrl, "Track your repair status")
     : "";
@@ -856,8 +855,14 @@ export async function sendBookingReceivedEmail(
       : job.customer.firstName
     : "there";
 
-  const baseUrl = getAppUrl();
-  const statusUrl = baseUrl ? `${baseUrl}/status/${job.id}` : null;
+  const shopRow = job.shopId
+    ? await import("./db")
+        .then(({ prisma }) =>
+          prisma.shop.findUnique({ where: { id: job.shopId }, select: { subdomain: true } })
+        )
+        .catch(() => null)
+    : null;
+  const statusUrl = getCustomerStatusUrl(job.id, shopRow?.subdomain) || null;
 
   const formatDate = (d: Date | string | null): string => {
     if (!d) return "Not set";

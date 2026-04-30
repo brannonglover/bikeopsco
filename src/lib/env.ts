@@ -44,6 +44,36 @@ export function getAppUrl(): string {
   return "";
 }
 
+export function getShopAppUrl(shopSubdomain?: string | null): string {
+  const base = getAppUrl();
+  if (!base || !shopSubdomain?.trim()) return base;
+
+  try {
+    const url = new URL(base);
+    const subdomain = shopSubdomain.trim().toLowerCase();
+    const rootDomain = process.env.ROOT_DOMAIN ?? "bikeops.co";
+
+    if (url.hostname === "localhost" || url.hostname.endsWith(".localhost")) {
+      url.hostname = `${subdomain}.localhost`;
+    } else if (url.hostname.endsWith(".lvh.me")) {
+      url.hostname = `${subdomain}.lvh.me`;
+    } else if (url.hostname === rootDomain || url.hostname.endsWith(`.${rootDomain}`)) {
+      url.protocol = "https:";
+      url.hostname = `${subdomain}.${rootDomain}`;
+      url.port = "";
+    }
+
+    return url.toString().replace(/\/$/, "");
+  } catch {
+    return base;
+  }
+}
+
+export function getCustomerStatusUrl(jobId: string, shopSubdomain?: string | null): string {
+  const shopUrl = getShopAppUrl(shopSubdomain);
+  return shopUrl ? `${shopUrl}/status/${encodeURIComponent(jobId)}` : "";
+}
+
 export function getStaffAppScheme(): string {
   return process.env.STAFF_APP_SCHEME?.trim() || "bikeops";
 }

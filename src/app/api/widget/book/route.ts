@@ -16,6 +16,7 @@ import { getAppFeatures } from "@/lib/app-settings";
 import { addWidgetCorsHeaders } from "@/lib/widget-cors";
 import { buildSmsConsentUpdate } from "@/lib/sms-consent";
 import { getShopForHost } from "@/lib/shop";
+import { getCustomerStatusUrl } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
@@ -510,7 +511,7 @@ export async function POST(request: NextRequest) {
 
     const res = NextResponse.json({
       id: job.id,
-      statusUrl: `${process.env.NEXT_PUBLIC_APP_URL || ""}/status/${job.id}`,
+      statusUrl: getCustomerStatusUrl(job.id, shop.subdomain),
     });
     return addWidgetCorsHeaders(res, origin, {
       methods: "POST, OPTIONS",

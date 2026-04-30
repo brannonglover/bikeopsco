@@ -1,5 +1,5 @@
 import Twilio from "twilio";
-import { getAppUrl } from "./env";
+import { getCustomerStatusUrl } from "./env";
 import { normalizePhone } from "./phone";
 
 type SmsProvider = "infobip" | "twilio";
@@ -265,7 +265,7 @@ export async function sendJobSms(
 
   const { prisma } = await import("./db");
   const shopRow = await prisma.shop
-    .findUnique({ where: { id: job.shopId }, select: { name: true } })
+    .findUnique({ where: { id: job.shopId }, select: { name: true, subdomain: true } })
     .catch(() => null);
   const shopName = shopRow?.name ?? process.env.SHOP_NAME ?? "Basement Bike Mechanic";
   const customerName = job.customer
@@ -274,8 +274,7 @@ export async function sendJobSms(
       : job.customer.firstName
     : "Customer";
 
-  const baseUrl = getAppUrl();
-  const statusUrl = baseUrl ? `${baseUrl}/status/${job.id}` : "";
+  const statusUrl = getCustomerStatusUrl(job.id, shopRow?.subdomain);
 
   const vars: Record<string, string> = {
     customerName,
