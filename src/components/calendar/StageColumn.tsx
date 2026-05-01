@@ -7,7 +7,7 @@ import type { Job, Stage } from "@/lib/types";
 
 type JobStageChangeHandler = (jobId: string, stage: Stage) => void;
 
-const STAGE_COLORS: Record<Stage, string> = {
+const STAGE_HEADER_COLORS: Record<Stage, string> = {
   PENDING_APPROVAL: "bg-amber-600 dark:bg-amber-800",
   BOOKED_IN: "bg-slate-500 dark:bg-slate-700",
   RECEIVED: "bg-slate-600 dark:bg-slate-800",
@@ -69,35 +69,46 @@ export function StageColumn({
           : "border-slate-200/80 bg-white/60 shadow-soft"
       }`}
     >
-      <div
-        className={`${STAGE_COLORS[stage]} text-white px-4 py-2.5 rounded-t-xl font-semibold text-sm flex-shrink-0`}
-      >
-        {STAGE_LABELS[stage]} ({jobs.length})
+      <div className={`${STAGE_HEADER_COLORS[stage]} flex items-center justify-between gap-3 rounded-t-xl px-4 py-2.5 text-white flex-shrink-0`}>
+        <div className="flex min-w-0 items-center gap-2.5">
+          <h2 className="truncate text-sm font-semibold leading-tight">
+            {STAGE_LABELS[stage]}
+          </h2>
+        </div>
+        <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-white/20 px-2 text-xs font-bold text-white">
+          {jobs.length}
+        </span>
       </div>
       <div className="p-3 flex flex-col gap-3 overflow-y-auto overflow-x-hidden flex-1 min-h-[400px] min-w-0">
         <SortableContext items={jobs.map((j) => j.id)} strategy={verticalListSortingStrategy}>
-          {jobs.map((job) => (
-            <JobCard
-              key={job.id}
-              job={job}
-              onJobClick={onJobClick}
-              onAccept={onAccept}
-              onReject={onReject}
-              dragDisabled={dragDisabled}
-              showMobileStageSelect={showMobileStageSelect}
-              onStageChange={
-                onStageChange ? (s) => onStageChange(job.id, s) : undefined
-              }
-              notifyCustomer={
-                jobNotifyCustomer ? jobNotifyCustomer(job.id) : undefined
-              }
-              onNotifyCustomerChange={
-                onJobNotifyCustomerChange
-                  ? (notify) => onJobNotifyCustomerChange(job.id, notify)
-                  : undefined
-              }
-            />
-          ))}
+          {jobs.length > 0 ? (
+            jobs.map((job) => (
+              <JobCard
+                key={job.id}
+                job={job}
+                onJobClick={onJobClick}
+                onAccept={onAccept}
+                onReject={onReject}
+                dragDisabled={dragDisabled}
+                showMobileStageSelect={showMobileStageSelect}
+                onStageChange={
+                  onStageChange ? (s) => onStageChange(job.id, s) : undefined
+                }
+                notifyCustomer={
+                  jobNotifyCustomer ? jobNotifyCustomer(job.id) : undefined
+                }
+                onNotifyCustomerChange={
+                  onJobNotifyCustomerChange
+                    ? (notify) => onJobNotifyCustomerChange(job.id, notify)
+                    : undefined
+                }
+              />
+            ))
+          ) : (
+            <div className="flex min-h-[96px] items-center justify-center rounded-xl border border-dashed border-surface-border bg-subtle-bg/60 px-4 py-5 text-center">
+              <p className="text-sm font-medium text-muted">No Jobs</p>
+            </div>
+          )}
         </SortableContext>
       </div>
     </div>

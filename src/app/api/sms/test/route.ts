@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const { ok, error } = await sendSmsTest(to);
+  const { ok, error, externalMessageId } = await sendSmsTest(to);
 
   if (!ok) {
     return NextResponse.json(
@@ -52,5 +52,6 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     success: true,
     message: `Test SMS sent to ${to} using ${provider ?? "your configured SMS provider"}.`,
+    externalMessageId,
   });
 }

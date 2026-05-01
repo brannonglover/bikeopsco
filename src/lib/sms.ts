@@ -346,7 +346,7 @@ export async function sendChatStaffSms(
 /** One-off test send (no JobSms row). Uses the configured SMS provider sender. */
 export async function sendSmsTest(
   phoneNumber: string
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; externalMessageId?: string }> {
   const shopName = process.env.SHOP_NAME || "Basement Bike Mechanic";
   const body = `${shopName}: SMS test — if you received this, your configured SMS provider is working.`;
   return sendSms(phoneNumber, body);

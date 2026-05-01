@@ -38,13 +38,13 @@ export function buildSmsConsentUpdate(
 }
 
 /**
- * Existing customers created before consent tracking was added are treated as
- * legacy opt-ins until they explicitly change their preference.
+ * Customers must explicitly opt in before receiving service-related texts.
+ * If a preference was already stored before timestamp tracking existed, honor it.
  */
 export function getEffectiveSmsConsent(customer: SmsConsentLike | null | undefined): boolean {
   if (!customer?.phone) return false;
   if (customer.smsConsentUpdatedAt) return customer.smsConsent;
-  return true;
+  return customer.smsConsent;
 }
 
 export function parseSmsConsentKeyword(

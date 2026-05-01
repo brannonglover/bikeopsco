@@ -39,9 +39,15 @@ function FeatureRedirector() {
 function BillingGuard() {
   const pathname = usePathname();
   const router = useRouter();
+  const { status } = useSession();
   const [billing, setBilling] = useState<BillingStatus | null>(null);
 
   useEffect(() => {
+    if (status !== "authenticated") {
+      setBilling(null);
+      return;
+    }
+
     let cancelled = false;
     fetch("/api/billing/status", { cache: "no-store" })
       .then((response) => (response.ok ? response.json() : null))
@@ -54,7 +60,7 @@ function BillingGuard() {
     return () => {
       cancelled = true;
     };
-  }, [pathname]);
+  }, [pathname, status]);
 
   useEffect(() => {
     if (billing && !billing.billingActive && pathname !== "/billing") {
