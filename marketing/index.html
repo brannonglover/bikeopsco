@@ -26,6 +26,11 @@
 
     <main>
       <section class="hero">
+        <div class="component-backdrop" aria-hidden="true">
+          <span class="component component-chainring"></span>
+          <span class="component component-link"></span>
+          <span class="component component-spoke"></span>
+        </div>
         <div class="hero-inner">
           <p class="eyebrow">Bike repair shop management</p>
           <h1 class="hero-logo-title">
@@ -53,16 +58,19 @@
 
       <section class="section product-strip" aria-label="Product workflow summary">
         <div>
+          <span class="component-mark component-link-mark" aria-hidden="true"></span>
           <span class="stat">01</span>
           <strong>Customers book online</strong>
           <p>Collect contact info, bike details, services, preferred drop-off, and pickup notes.</p>
         </div>
         <div>
+          <span class="component-mark component-spoke-mark" aria-hidden="true"></span>
           <span class="stat">02</span>
           <strong>Staff approve and schedule</strong>
           <p>Turn requests into jobs, manage capacity, and keep the repair queue organized.</p>
         </div>
         <div>
+          <span class="component-mark component-chainring-mark" aria-hidden="true"></span>
           <span class="stat">03</span>
           <strong>Customers stay updated</strong>
           <p>Send email, SMS, payment links, status pages, reminders, and review requests.</p>
@@ -72,13 +80,14 @@
       <section id="preview" class="section app-preview">
         <div class="section-heading">
           <p class="eyebrow">Product preview</p>
-          <h2>A quick look at the Bike Ops workspace.</h2>
+          <h2>Built for the web, the counter, and the workshop.</h2>
           <p class="preview-note">
-            This preview is illustrative. Create a free workspace to explore the live product.
+            Run the shop from the full web workspace, then keep the same repair board,
+            invoices, and customer updates close by on iPad and iPhone.
           </p>
         </div>
 
-        <div class="preview-shell">
+        <div class="preview-shell web-showcase" aria-label="Bike Ops web workspace preview">
           <aside class="preview-sidebar" aria-label="Sample sidebar navigation">
             <img src="/bike-ops-logo-white.png" alt="" />
             <span class="active">Job Board</span>
@@ -88,11 +97,11 @@
             <span>Settings</span>
           </aside>
 
-          <div class="preview-board" aria-label="Sample repair job board">
+          <div class="preview-board" aria-label="Sample web repair job board">
             <div class="preview-toolbar">
               <div>
-                <strong>Job Board</strong>
-                <span>Today, 9 active bikes</span>
+                <strong>Web workspace</strong>
+                <span>Repair queue, customers, chat, services, and payments in one place.</span>
               </div>
               <button type="button">New job</button>
             </div>
@@ -101,22 +110,22 @@
               <article class="stage-booked">
                 <h3>Booked In</h3>
                 <div class="job-card">
-                  <strong>Sarah M.</strong>
-                  <span>Trek Domane</span>
-                  <small>Gold service · Drop-off Fri</small>
+                  <strong>Joe Smith</strong>
+                  <span>Specialized</span>
+                  <small>Drop-off Apr 30 · Unpaid</small>
                 </div>
                 <div class="job-card">
-                  <strong>Jon R.</strong>
-                  <span>Specialized Turbo</span>
-                  <small>Brake pads · E-bike</small>
+                  <strong>Pending approval</strong>
+                  <span>Trek Domane</span>
+                  <small>Online booking request</small>
                 </div>
               </article>
               <article class="stage-working">
                 <h3>Working On</h3>
                 <div class="job-card selected">
-                  <strong>Mike B.</strong>
-                  <span>Cannondale Synapse</span>
-                  <small>Indexed gears · Paid deposit</small>
+                  <strong>Santa Cruz Hightower C</strong>
+                  <span>Need parts</span>
+                  <small>Drop-off Apr 28 · Staff note added</small>
                 </div>
               </article>
               <article class="stage-ready">
@@ -124,54 +133,62 @@
                 <div class="job-card">
                   <strong>Ava K.</strong>
                   <span>Liv Avail</span>
-                  <small>Ready SMS sent · $84.50 due</small>
+                  <small>Payment link sent · $84.50 due</small>
                 </div>
               </article>
             </div>
           </div>
         </div>
 
+        <div class="device-showcase" aria-label="Bike Ops app screenshots">
+          <figure class="device-frame tablet-frame tablet-primary">
+            <img
+              src="/screenshots/ipad-job-board.png"
+              alt="Bike Ops job board on iPad with booked in and working on repair jobs"
+            />
+          </figure>
+          <figure class="device-frame tablet-frame tablet-secondary">
+            <img
+              src="/screenshots/ipad-job-details.png"
+              alt="Bike Ops iPad job details view with status, delivery, bike, and notes"
+            />
+          </figure>
+          <figure class="device-frame phone-frame phone-primary">
+            <img
+              src="/screenshots/iphone-invoice.png"
+              alt="Bike Ops iPhone invoice view with services, total, and payment actions"
+            />
+          </figure>
+          <figure class="device-frame phone-frame phone-secondary">
+            <img
+              src="/screenshots/iphone-job-board.png"
+              alt="Bike Ops iPhone job board with booked in and working on jobs"
+            />
+          </figure>
+        </div>
+
         <div class="preview-grid">
-          <article class="phone-preview">
-            <div class="phone-top"></div>
-            <h3>Your bike is ready</h3>
-            <p>Collection is available today between 3:00 PM and 6:00 PM.</p>
-            <div class="status-pill">Ready for pickup</div>
-            <div class="chat-bubble">Can I collect tomorrow morning?</div>
-            <div class="chat-bubble staff">Absolutely, we open at 9.</div>
+          <article>
+            <h3>Live repair board</h3>
+            <p>See booked work, active repairs, payment state, and drop-off dates in one focused view.</p>
           </article>
-
-          <article class="booking-preview">
-            <h3>Online booking</h3>
-            <label>
-              Service
-              <span>Annual service</span>
-            </label>
-            <label>
-              Bike
-              <span>Giant Revolt Advanced</span>
-            </label>
-            <label>
-              Preferred drop-off
-              <span>Tuesday morning</span>
-            </label>
-            <button type="button">Request booking</button>
+          <article>
+            <h3>Fast job details</h3>
+            <p>Update status, delivery type, bike notes, and internal staff-only context from the same screen.</p>
           </article>
-
-          <article class="stats-preview">
-            <h3>Shop snapshot</h3>
+          <article>
+            <h3>Payments on mobile</h3>
+            <p>Build invoices, take Tap to Pay, send payment links, and record cash while the customer is there.</p>
+          </article>
+          <article class="chat-preview-card">
             <div>
-              <strong>$4,280</strong>
-              <span>Revenue this month</span>
+              <h3>Customer chat</h3>
+              <p>Keep service updates, photos, and questions tied to the customer and their bike.</p>
             </div>
-            <div>
-              <strong>37</strong>
-              <span>Completed jobs</span>
-            </div>
-            <div>
-              <strong>4.9</strong>
-              <span>Review average</span>
-            </div>
+            <img
+              src="/screenshots/iphone-chat.png"
+              alt="Bike Ops iPhone chat conversation with a customer update"
+            />
           </article>
         </div>
       </section>

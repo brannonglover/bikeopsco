@@ -28,6 +28,8 @@ body {
   margin: 0;
   color: var(--ink);
   background:
+    url("/bike-components-pattern.svg") top 720px right -180px / 720px 420px no-repeat,
+    url("/bike-components-pattern.svg") bottom 260px left -220px / 720px 420px no-repeat,
     linear-gradient(180deg, #f9fcff 0%, var(--wash) 36%, #eef7f3 100%);
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
@@ -131,6 +133,47 @@ nav a:hover {
   overflow: hidden;
   padding: clamp(34px, 5vw, 64px) 20px;
   background: #eef7fb;
+}
+
+.component-backdrop {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.component {
+  position: absolute;
+  display: block;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  opacity: 0.72;
+}
+
+.component-chainring {
+  top: 86px;
+  left: max(26px, calc(50% - 620px));
+  width: clamp(118px, 13vw, 180px);
+  aspect-ratio: 1;
+  background-image: url("/component-chainring.svg");
+}
+
+.component-link {
+  right: max(22px, calc(50% - 640px));
+  bottom: 112px;
+  width: clamp(176px, 18vw, 260px);
+  aspect-ratio: 220 / 90;
+  background-image: url("/component-chain.svg");
+}
+
+.component-spoke {
+  top: 145px;
+  right: max(28px, calc(50% - 560px));
+  width: clamp(104px, 10vw, 150px);
+  aspect-ratio: 1;
+  background-image: url("/component-rotor.svg");
+  transform: rotate(28deg);
 }
 
 .hero::before {
@@ -285,6 +328,38 @@ p {
   position: relative;
   overflow: hidden;
   padding: 22px;
+}
+
+.component-mark {
+  position: absolute;
+  right: 18px;
+  top: 18px;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.component-link-mark {
+  width: 112px;
+  aspect-ratio: 220 / 90;
+  background-image: url("/component-chain.svg");
+}
+
+.component-spoke-mark,
+.component-chainring-mark {
+  width: 82px;
+  aspect-ratio: 1;
+}
+
+.component-spoke-mark {
+  background-image: url("/component-rotor.svg");
+  transform: rotate(18deg);
+}
+
+.component-chainring-mark {
+  background-image: url("/component-chainring.svg");
 }
 
 .product-strip div::before,
@@ -661,6 +736,170 @@ p {
   font-weight: 700;
 }
 
+.web-showcase {
+  min-height: 500px;
+  margin-bottom: 18px;
+}
+
+.web-showcase .preview-board {
+  background:
+    linear-gradient(180deg, #f8fbff 0%, #f4f8fc 100%),
+    linear-gradient(90deg, rgba(54, 119, 212, 0.08), rgba(22, 134, 95, 0.08));
+}
+
+.web-showcase .preview-toolbar strong {
+  font-size: clamp(1.25rem, 2vw, 1.7rem);
+}
+
+.web-showcase .kanban-sample article {
+  min-height: 318px;
+}
+
+.device-showcase {
+  position: relative;
+  display: grid;
+  min-height: clamp(640px, 72vw, 860px);
+  overflow: hidden;
+  border: 1px solid rgba(214, 226, 239, 0.95);
+  border-radius: 8px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.94) 0%, rgba(236, 246, 252, 0.92) 50%, rgba(225, 247, 236, 0.9) 100%);
+  box-shadow: var(--shadow-lg);
+  isolation: isolate;
+}
+
+.device-showcase::before {
+  position: absolute;
+  inset: 72px -90px auto auto;
+  width: min(540px, 50vw);
+  height: 96px;
+  background: rgba(54, 119, 212, 0.1);
+  content: "";
+  transform: rotate(-8deg);
+  z-index: -1;
+}
+
+.device-showcase::after {
+  position: absolute;
+  bottom: 70px;
+  left: -120px;
+  width: min(680px, 62vw);
+  height: 120px;
+  background: rgba(22, 134, 95, 0.11);
+  content: "";
+  transform: rotate(9deg);
+  z-index: -1;
+}
+
+.device-frame {
+  position: absolute;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid rgba(203, 213, 225, 0.9);
+  background: #ffffff;
+  box-shadow: 0 30px 80px rgba(16, 32, 51, 0.18);
+}
+
+.device-frame img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.tablet-frame {
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.phone-frame {
+  border-radius: 34px;
+  padding: 9px;
+}
+
+.phone-frame img {
+  border-radius: 26px;
+}
+
+.tablet-primary {
+  top: 52px;
+  left: clamp(22px, 5vw, 62px);
+  width: min(68%, 720px);
+  aspect-ratio: 1668 / 2388;
+  transform: rotate(-2deg);
+}
+
+.tablet-secondary {
+  right: clamp(20px, 4vw, 56px);
+  bottom: 46px;
+  width: min(54%, 560px);
+  aspect-ratio: 1668 / 2388;
+  transform: rotate(2.5deg);
+}
+
+.phone-primary {
+  top: 88px;
+  right: clamp(24px, 5vw, 70px);
+  width: min(29%, 250px);
+  aspect-ratio: 1179 / 2556;
+  transform: rotate(6deg);
+  z-index: 3;
+}
+
+.phone-secondary {
+  bottom: 62px;
+  left: clamp(32px, 8vw, 130px);
+  width: min(25%, 218px);
+  aspect-ratio: 1179 / 2556;
+  transform: rotate(-7deg);
+  z-index: 4;
+}
+
+.preview-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 16px;
+}
+
+.preview-grid article {
+  display: grid;
+  align-content: start;
+  min-height: 170px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 22px;
+  box-shadow: var(--shadow-sm);
+}
+
+.preview-grid h3 {
+  margin-bottom: 10px;
+  color: #0f172a;
+  font-size: 1rem;
+}
+
+.preview-grid p {
+  margin-bottom: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.chat-preview-card {
+  grid-template-columns: 1fr 92px;
+  gap: 14px;
+  overflow: hidden;
+}
+
+.chat-preview-card img {
+  align-self: center;
+  width: 92px;
+  height: 142px;
+  border: 1px solid #dbe3ef;
+  border-radius: 18px;
+  object-fit: cover;
+  object-position: top;
+  box-shadow: 0 14px 28px rgba(16, 32, 51, 0.12);
+}
+
 .feature-grid article {
   position: relative;
   min-height: 200px;
@@ -723,6 +962,23 @@ footer {
     text-align: left;
   }
 
+  .component-chainring {
+    top: 72px;
+    left: auto;
+    right: -36px;
+  }
+
+  .component-link {
+    display: none;
+  }
+
+  .component-spoke {
+    top: auto;
+    right: auto;
+    bottom: 42px;
+    left: -26px;
+  }
+
   .hero-inner {
     text-align: left;
   }
@@ -769,7 +1025,47 @@ footer {
     min-height: auto;
   }
 
+  .web-showcase {
+    min-height: auto;
+  }
+
   .phone-preview {
     max-width: none;
+  }
+
+  .device-showcase {
+    min-height: 760px;
+  }
+
+  .tablet-primary {
+    top: 28px;
+    left: 18px;
+    width: 76%;
+  }
+
+  .tablet-secondary {
+    right: 16px;
+    bottom: 30px;
+    width: 64%;
+  }
+
+  .phone-primary {
+    top: 180px;
+    right: 18px;
+    width: 34%;
+  }
+
+  .phone-secondary {
+    bottom: 94px;
+    left: 22px;
+    width: 30%;
+  }
+
+  .preview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .chat-preview-card {
+    grid-template-columns: 1fr 88px;
   }
 }
