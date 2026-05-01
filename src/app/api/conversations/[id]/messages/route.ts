@@ -10,7 +10,7 @@ import { requireCurrentShop } from "@/lib/shop";
 export const dynamic = "force-dynamic";
 
 type ChatMessageRow = {
-  sender: "STAFF" | "CUSTOMER";
+  sender: "STAFF" | "CUSTOMER" | "SYSTEM";
   createdAt: Date;
   [key: string]: unknown;
 };

@@ -9,6 +9,7 @@ import { getAppFeatures } from "@/lib/app-settings";
 import { computeJobSubtotal, computeTotalPaid, getJobPaymentSummary } from "@/lib/job-payments";
 import { getEffectiveSmsConsent } from "@/lib/sms-consent";
 import { getShopForHost } from "@/lib/shop";
+import { addCustomerSystemChatMessage } from "@/lib/system-chat";
 
 const bikeSchema = z.object({
   make: z.string().min(1),
@@ -481,7 +482,18 @@ export async function PATCH(
             sendJobEmail(templateSlug, customerEmail, job).catch(console.error);
           }
           if (canSendSms && customerPhone && smsTemplateSlug && !smsAlreadySent) {
-            sendJobSms(smsTemplateSlug, customerPhone, job).catch(console.error);
+            sendJobSms(smsTemplateSlug, customerPhone, job)
+              .then((result) => {
+                if (!result.ok || !result.message || !features.chatEnabled || !job.customer?.id) {
+                  return;
+                }
+                return addCustomerSystemChatMessage({
+                  shopId: job.shopId,
+                  customerId: job.customer.id,
+                  body: result.message,
+                });
+              })
+              .catch(console.error);
           }
         } catch (e) {
           console.error("[PATCH job] stage notification dedup/send failed:", e);

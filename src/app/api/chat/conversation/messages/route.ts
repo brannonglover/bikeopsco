@@ -46,17 +46,17 @@ export async function GET() {
       include: { attachments: true, reactions: true },
     });
 
-    const latestStaffMessageAt = messages.reduce<Date | null>((latest, message) => {
-      if (message.sender !== "STAFF") return latest;
+    const latestShopMessageAt = messages.reduce<Date | null>((latest, message) => {
+      if (message.sender !== "STAFF" && message.sender !== "SYSTEM") return latest;
       if (!latest || message.createdAt > latest) return message.createdAt;
       return latest;
     }, null);
 
     let staffLastReadAt = conversation.staffLastReadAt?.toISOString() ?? null;
     const shouldMarkRead =
-      latestStaffMessageAt !== null &&
+      latestShopMessageAt !== null &&
       (!conversation.customerLastReadAt ||
-        latestStaffMessageAt.getTime() > conversation.customerLastReadAt.getTime());
+        latestShopMessageAt.getTime() > conversation.customerLastReadAt.getTime());
 
     if (shouldMarkRead) {
       const readUpdate = await prisma.conversation.update({

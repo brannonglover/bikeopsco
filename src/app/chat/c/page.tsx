@@ -567,42 +567,47 @@ export default function CustomerChatPage() {
 
         <div className="relative flex-1 min-h-0">
         <div ref={messagesScrollRef} onScroll={handleMessagesScroll} className="absolute inset-0 overflow-y-auto p-4 space-y-3">
-          {messages.map((msg) => (
-            <ChatMessageBubble
-              key={msg.id}
-              msg={msg}
-              isOwn={msg.sender === "CUSTOMER"}
-              align={msg.sender === "CUSTOMER" ? "end" : "start"}
-              bubbleClassName={
-                msg.sender === "CUSTOMER"
-                  ? "bg-emerald-600 text-white rounded-br-md"
-                  : "bg-slate-100 text-slate-900 rounded-bl-md"
-              }
-              metaClassName={msg.sender === "CUSTOMER" ? "text-emerald-200" : "text-slate-500"}
-              linkClassName={msg.sender === "CUSTOMER" ? "text-emerald-100" : "text-emerald-700"}
-              actionMutedClassName={
-                msg.sender === "CUSTOMER"
-                  ? "text-emerald-200/90 hover:text-white"
-                  : "text-slate-500 hover:text-slate-700"
-              }
-              saveEditButtonClassName={
-                msg.sender === "CUSTOMER"
-                  ? "text-xs font-medium text-white hover:text-emerald-100"
-                  : undefined
-              }
-              viewed={
-                msg.sender === "CUSTOMER" && staffLastReadAt != null
-                  ? new Date(msg.createdAt).getTime() <= new Date(staffLastReadAt).getTime()
-                  : undefined
-              }
-              role="CUSTOMER"
-              onPatch={msg.sender === "CUSTOMER" ? patchCustomerMessage : undefined}
-              onDelete={msg.sender === "CUSTOMER" ? deleteCustomerMessage : undefined}
-              onRemoveAttachment={msg.sender === "CUSTOMER" ? removeCustomerAttachment : undefined}
-              onEditingChange={handleBubbleEditingChange}
-              onToggleReaction={toggleReaction}
-            />
-          ))}
+          {messages.map((msg) => {
+            const isSystem = msg.sender === "SYSTEM";
+            return (
+              <ChatMessageBubble
+                key={msg.id}
+                msg={msg}
+                isOwn={msg.sender === "CUSTOMER"}
+                align={msg.sender === "CUSTOMER" ? "end" : "start"}
+                bubbleClassName={
+                  msg.sender === "CUSTOMER"
+                    ? "bg-emerald-600 text-white rounded-br-md"
+                    : isSystem
+                      ? "border border-slate-200 bg-slate-50 text-slate-700 rounded-bl-md font-mono text-[13px]"
+                      : "bg-slate-100 text-slate-900 rounded-bl-md"
+                }
+                metaClassName={msg.sender === "CUSTOMER" ? "text-emerald-200" : "text-slate-500"}
+                linkClassName={msg.sender === "CUSTOMER" ? "text-emerald-100" : "text-emerald-700"}
+                actionMutedClassName={
+                  msg.sender === "CUSTOMER"
+                    ? "text-emerald-200/90 hover:text-white"
+                    : "text-slate-500 hover:text-slate-700"
+                }
+                saveEditButtonClassName={
+                  msg.sender === "CUSTOMER"
+                    ? "text-xs font-medium text-white hover:text-emerald-100"
+                    : undefined
+                }
+                viewed={
+                  msg.sender === "CUSTOMER" && staffLastReadAt != null
+                    ? new Date(msg.createdAt).getTime() <= new Date(staffLastReadAt).getTime()
+                    : undefined
+                }
+                role="CUSTOMER"
+                onPatch={msg.sender === "CUSTOMER" ? patchCustomerMessage : undefined}
+                onDelete={msg.sender === "CUSTOMER" ? deleteCustomerMessage : undefined}
+                onRemoveAttachment={msg.sender === "CUSTOMER" ? removeCustomerAttachment : undefined}
+                onEditingChange={handleBubbleEditingChange}
+                onToggleReaction={isSystem ? undefined : toggleReaction}
+              />
+            );
+          })}
         </div>
           {showScrollDown && (
             <button

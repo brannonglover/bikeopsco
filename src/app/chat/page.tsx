@@ -1013,42 +1013,47 @@ function ChatPageContent() {
                         Loading messages…
                       </div>
                     ) : null}
-                    {messages.map((msg) => (
-                      <ChatMessageBubble
-                        key={msg.id}
-                        msg={msg}
-                        isOwn={msg.sender === "STAFF"}
-                        align={msg.sender === "STAFF" ? "end" : "start"}
-                        bubbleClassName={
-                          msg.sender === "STAFF"
-                            ? "bg-emerald-600 text-white rounded-br-md"
-                            : "bg-slate-100 text-slate-900 rounded-bl-md"
-                        }
-                        metaClassName={msg.sender === "STAFF" ? "text-emerald-200" : "text-slate-500"}
-                        linkClassName={msg.sender === "STAFF" ? "text-emerald-100" : "text-emerald-700"}
-                        actionMutedClassName={
-                          msg.sender === "STAFF"
-                            ? "text-emerald-200/90 hover:text-white"
-                            : "text-slate-500 hover:text-slate-700"
-                        }
-                        saveEditButtonClassName={
-                          msg.sender === "STAFF"
-                            ? "text-xs font-medium text-white hover:text-emerald-100"
-                            : undefined
-                        }
-                        viewed={
-                          msg.sender === "STAFF" && customerLastReadAt != null
-                            ? new Date(msg.createdAt).getTime() <= new Date(customerLastReadAt).getTime()
-                            : undefined
-                        }
-                        role="STAFF"
-                        onPatch={msg.sender === "STAFF" ? patchStaffMessage : undefined}
-                        onDelete={msg.sender === "STAFF" ? deleteStaffMessage : undefined}
-                        onRemoveAttachment={msg.sender === "STAFF" ? removeStaffAttachment : undefined}
-                        onEditingChange={handleBubbleEditingChange}
-                        onToggleReaction={toggleReaction}
-                      />
-                    ))}
+                    {messages.map((msg) => {
+                      const isSystem = msg.sender === "SYSTEM";
+                      return (
+                        <ChatMessageBubble
+                          key={msg.id}
+                          msg={msg}
+                          isOwn={msg.sender === "STAFF"}
+                          align={msg.sender === "STAFF" ? "end" : "start"}
+                          bubbleClassName={
+                            msg.sender === "STAFF"
+                              ? "bg-emerald-600 text-white rounded-br-md"
+                              : isSystem
+                                ? "border border-slate-200 bg-slate-50 text-slate-700 rounded-bl-md font-mono text-[13px]"
+                                : "bg-slate-100 text-slate-900 rounded-bl-md"
+                          }
+                          metaClassName={msg.sender === "STAFF" ? "text-emerald-200" : "text-slate-500"}
+                          linkClassName={msg.sender === "STAFF" ? "text-emerald-100" : "text-emerald-700"}
+                          actionMutedClassName={
+                            msg.sender === "STAFF"
+                              ? "text-emerald-200/90 hover:text-white"
+                              : "text-slate-500 hover:text-slate-700"
+                          }
+                          saveEditButtonClassName={
+                            msg.sender === "STAFF"
+                              ? "text-xs font-medium text-white hover:text-emerald-100"
+                              : undefined
+                          }
+                          viewed={
+                            msg.sender === "STAFF" && customerLastReadAt != null
+                              ? new Date(msg.createdAt).getTime() <= new Date(customerLastReadAt).getTime()
+                              : undefined
+                          }
+                          role="STAFF"
+                          onPatch={msg.sender === "STAFF" ? patchStaffMessage : undefined}
+                          onDelete={msg.sender === "STAFF" ? deleteStaffMessage : undefined}
+                          onRemoveAttachment={msg.sender === "STAFF" ? removeStaffAttachment : undefined}
+                          onEditingChange={handleBubbleEditingChange}
+                          onToggleReaction={isSystem ? undefined : toggleReaction}
+                        />
+                      );
+                    })}
                     {showCustomerTyping && (
                       <p className="text-sm text-slate-500 italic" aria-live="polite">
                         Customer is typing…

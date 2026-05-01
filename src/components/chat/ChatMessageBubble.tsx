@@ -141,6 +141,7 @@ export function ChatMessageBubble({
   }, [showEmojiPicker]);
 
   const isSending = isOwn && msg.clientDeliveryState === "SENDING";
+  const isSystemMessage = msg.sender === "SYSTEM";
   const showActions = isOwn && (onPatch || onDelete) && !editing && !isSending;
   const canEdit = Boolean(onPatch);
   const attachments = msg.attachments ?? [];
@@ -309,6 +310,11 @@ export function ChatMessageBubble({
               </div>
             ) : (
               <>
+                {isSystemMessage ? (
+                  <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                    Automated SMS
+                  </div>
+                ) : null}
                 {msg.body ? (
                   <LinkifiedMessageBody
                     text={msg.body}

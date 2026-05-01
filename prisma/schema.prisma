@@ -428,6 +428,7 @@ model MessageAttachment {
 enum MessageSender {
   STAFF
   CUSTOMER
+  SYSTEM
 }
 
 model User {

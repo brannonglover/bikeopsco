@@ -253,11 +253,10 @@ export interface JobForSms {
   customer: { firstName: string; lastName: string | null } | null;
 }
 
-export async function sendJobSms(
+export async function buildJobSmsMessage(
   templateSlug: string,
-  phoneNumber: string,
   job: JobForSms
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; message?: string; error?: string }> {
   const body = SMS_TEMPLATES[templateSlug];
   if (!body) {
     return { ok: false, error: `SMS template not found: ${templateSlug}` };
@@ -284,9 +283,20 @@ export async function sendJobSms(
     statusUrl,
   };
 
-  const messageBody = mergeTemplateVariables(body, vars);
+  return { ok: true, message: mergeTemplateVariables(body, vars) };
+}
 
-  const result = await sendSms(phoneNumber, messageBody);
+export async function sendJobSms(
+  templateSlug: string,
+  phoneNumber: string,
+  job: JobForSms
+): Promise<{ ok: boolean; message?: string; error?: string }> {
+  const built = await buildJobSmsMessage(templateSlug, job);
+  if (!built.ok || !built.message) {
+    return { ok: false, error: built.error };
+  }
+
+  const result = await sendSms(phoneNumber, built.message);
   if (!result.ok) {
     return { ok: false, error: result.error };
   }
@@ -295,6 +305,8 @@ export async function sendJobSms(
   if (!normalized) {
     return { ok: false, error: "Invalid phone number" };
   }
+
+  const { prisma } = await import("./db");
 
   try {
     await prisma.jobSms.create({
@@ -306,7 +318,7 @@ export async function sendJobSms(
       },
     });
 
-    return { ok: true };
+    return { ok: true, message: built.message };
   } catch (e) {
     const err = e instanceof Error ? e.message : "Unknown error";
     console.error("SMS persistence error:", err);

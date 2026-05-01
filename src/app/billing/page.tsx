@@ -31,6 +31,17 @@ function statusLabel(status: string): string {
     .join(" ");
 }
 
+async function readJsonResponse(response: Response): Promise<{ error?: string; url?: string }> {
+  const text = await response.text();
+  if (!text) return {};
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { error: text };
+  }
+}
+
 export default function BillingPage() {
   const [billing, setBilling] = useState<BillingStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -48,9 +59,9 @@ export default function BillingPage() {
     setError(null);
     try {
       const response = await fetch("/api/billing/status", { cache: "no-store" });
-      const data = await response.json();
+      const data = await readJsonResponse(response);
       if (!response.ok) throw new Error(data?.error ?? "Could not load billing.");
-      setBilling(data);
+      setBilling(data as BillingStatus);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load billing.");
     } finally {
@@ -63,8 +74,9 @@ export default function BillingPage() {
     setError(null);
     try {
       const response = await fetch(endpoint, { method: "POST" });
-      const data = await response.json();
+      const data = await readJsonResponse(response);
       if (!response.ok) throw new Error(data?.error ?? "Could not start billing session.");
+      if (!data.url) throw new Error("Billing session did not include a redirect URL.");
       window.location.href = data.url;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start billing session.");
@@ -129,7 +141,7 @@ export default function BillingPage() {
                   {billing.hasSubscription ? "Manage subscription" : "Add payment details"}
                 </button>
               )}
-              {billing.hasStripeCustomer && (
+              {billing.hasSubscription && (
                 <button
                   type="button"
                   onClick={() => redirectFrom("/api/billing/portal")}

@@ -39,7 +39,7 @@ export function useCustomerChatNotifications(messages: ChatMessage[], isActive: 
 
     if (!hasInitialized.current) return;
 
-    const staffMessages = messages.filter((m) => m.sender === "STAFF");
+    const staffMessages = messages.filter((m) => m.sender === "STAFF" || m.sender === "SYSTEM");
     for (const msg of staffMessages) {
       if (seenMessageIds.current.has(msg.id)) continue;
       seenMessageIds.current.add(msg.id);

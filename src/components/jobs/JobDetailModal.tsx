@@ -33,7 +33,7 @@ type CustomerChatPreviewPayload = {
   id: string;
   lastMessage: {
     body: string | null;
-    sender: "STAFF" | "CUSTOMER";
+    sender: "STAFF" | "CUSTOMER" | "SYSTEM";
     createdAt: string;
     attachmentCount: number;
   } | null;
@@ -76,7 +76,7 @@ function CustomerChatSection({ customerId }: { customerId: string }) {
   const lastMessageLine = (msg: NonNullable<CustomerChatPreviewPayload["lastMessage"]>) => {
     const text = msg.body?.trim();
     const hasAtt = msg.attachmentCount > 0;
-    const prefix = msg.sender === "STAFF" ? "You: " : "";
+    const prefix = msg.sender === "STAFF" ? "You: " : msg.sender === "SYSTEM" ? "Auto: " : "";
     if (text) {
       const t = text.length > 140 ? `${text.slice(0, 140)}…` : text;
       return prefix + t;

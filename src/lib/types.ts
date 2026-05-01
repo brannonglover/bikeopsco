@@ -83,7 +83,7 @@ export interface JobProduct {
 
 export type PaymentStatus = "UNPAID" | "PENDING" | "PAID" | "REFUNDED";
 
-export type MessageSender = "STAFF" | "CUSTOMER";
+export type MessageSender = "STAFF" | "CUSTOMER" | "SYSTEM";
 
 export interface MessageAttachment {
   id: string;
