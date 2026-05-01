@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
 const DEFAULT_LOGO = "/bike-ops-logo.png";
 
@@ -13,15 +13,21 @@ type BrandLogoProps = {
   defaultSrc?: string;
 };
 
-type BrandingResponse = {
+export type BrandingResponse = {
   logoUrl?: string | null;
   logoAlt?: string | null;
 };
 
-export function BrandLogo({ className, width, height, priority, defaultSrc = DEFAULT_LOGO }: BrandLogoProps) {
-  const [branding, setBranding] = useState<BrandingResponse>({});
-  const src = branding.logoUrl || defaultSrc;
-  const isDefaultLogo = src === DEFAULT_LOGO || src === defaultSrc;
+const BrandingContext = createContext<BrandingResponse>({});
+
+export function BrandingProvider({
+  children,
+  initialBranding,
+}: {
+  children: React.ReactNode;
+  initialBranding?: BrandingResponse;
+}) {
+  const [branding, setBranding] = useState<BrandingResponse>(initialBranding ?? {});
 
   useEffect(() => {
     let cancelled = false;
@@ -31,9 +37,7 @@ export function BrandLogo({ className, width, height, priority, defaultSrc = DEF
         .then((data: BrandingResponse | null) => {
           if (!cancelled && data) setBranding(data);
         })
-        .catch(() => {
-          if (!cancelled) setBranding({});
-        });
+        .catch(() => {});
     };
 
     loadBranding();
@@ -45,6 +49,16 @@ export function BrandLogo({ className, width, height, priority, defaultSrc = DEF
     };
   }, []);
 
+  const value = useMemo(() => branding, [branding]);
+
+  return <BrandingContext.Provider value={value}>{children}</BrandingContext.Provider>;
+}
+
+export function BrandLogo({ className, width, height, priority, defaultSrc = DEFAULT_LOGO }: BrandLogoProps) {
+  const branding = useContext(BrandingContext);
+  const src = branding.logoUrl || defaultSrc;
+  const isDefaultLogo = src === DEFAULT_LOGO || src === defaultSrc;
+
   return (
     <Image
       src={src}
@@ -52,7 +66,7 @@ export function BrandLogo({ className, width, height, priority, defaultSrc = DEF
       width={width}
       height={height}
       className={className}
-      priority={priority && isDefaultLogo}
+      priority={priority}
       unoptimized={!isDefaultLogo}
     />
   );

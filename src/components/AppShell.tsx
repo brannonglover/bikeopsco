@@ -9,7 +9,7 @@ import { CustomerMobileNav } from "@/components/CustomerMobileNav";
 import { StaffChatAttentionProvider } from "@/contexts/StaffChatAttentionContext";
 import { AppFeaturesProvider, useAppFeatures } from "@/contexts/AppFeaturesContext";
 import { initNotificationSound } from "@/lib/notificationSound";
-import { BrandLogo } from "@/components/BrandLogo";
+import { BrandLogo, BrandingProvider, type BrandingResponse } from "@/components/BrandLogo";
 
 type BillingStatus = {
   status: string;
@@ -86,7 +86,21 @@ function BillingGuard() {
   );
 }
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({
+  children,
+  initialBranding,
+}: {
+  children: React.ReactNode;
+  initialBranding?: BrandingResponse;
+}) {
+  return (
+    <BrandingProvider initialBranding={initialBranding}>
+      <AppShellContent>{children}</AppShellContent>
+    </BrandingProvider>
+  );
+}
+
+function AppShellContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const isLoginPage = pathname === "/login";

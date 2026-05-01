@@ -1,7 +1,11 @@
 import { Plus_Jakarta_Sans } from "next/font/google";
+import { unstable_noStore as noStore } from "next/cache";
+import { getServerSession } from "next-auth";
 import { AppShell } from "@/components/AppShell";
 import { AuthProvider } from "@/components/AuthProvider";
 import { ThemeProvider } from "@/contexts/ThemeContext";
+import { authOptions } from "@/lib/auth";
+import { getAppBranding } from "@/lib/app-settings";
 import "./globals.css";
 
 const jakarta = Plus_Jakarta_Sans({
@@ -32,11 +36,15 @@ export const viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  noStore();
+  const session = await getServerSession(authOptions);
+  const initialBranding = await getAppBranding(session?.user?.shopId);
+
   return (
     <html lang="en" className={jakarta.variable} suppressHydrationWarning>
       <head>
@@ -49,7 +57,7 @@ export default function RootLayout({
       <body className="antialiased bg-mesh text-foreground min-h-screen font-sans flex">
         <ThemeProvider>
           <AuthProvider>
-            <AppShell>{children}</AppShell>
+            <AppShell initialBranding={initialBranding}>{children}</AppShell>
           </AuthProvider>
         </ThemeProvider>
       </body>
