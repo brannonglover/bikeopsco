@@ -169,9 +169,24 @@ function bikeOpsEmailShopSubtitle(): string | null {
 const EMAIL_HEADER_LOGO_MAX_HEIGHT_PX = 64;
 const EMAIL_HEADER_LOGO_MAX_WIDTH_PX = 220;
 
+function resolveEmailImageSrc(src: string): string {
+  const trimmed = src.trim();
+  if (!trimmed || trimmed.startsWith("cid:") || trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    return trimmed;
+  }
+
+  if (trimmed.startsWith("/")) {
+    const base = getAppUrl();
+    if (base) return `${base}${trimmed}`;
+  }
+
+  return trimmed;
+}
+
 function buildCustomerEmailHeaderBlock(headerLogoSrc: string): string {
-  if (!headerLogoSrc) return "";
-  const src = headerLogoSrc.startsWith("cid:") ? headerLogoSrc : escapeHtml(headerLogoSrc);
+  const resolvedLogoSrc = resolveEmailImageSrc(headerLogoSrc);
+  if (!resolvedLogoSrc) return "";
+  const src = resolvedLogoSrc.startsWith("cid:") ? resolvedLogoSrc : escapeHtml(resolvedLogoSrc);
   const h = EMAIL_HEADER_LOGO_MAX_HEIGHT_PX;
   const w = EMAIL_HEADER_LOGO_MAX_WIDTH_PX;
   const img = `<img src="${src}" alt="Bike Ops" height="${h}" style="display:block;margin:0 auto;border:0;height:${h}px;max-height:${h}px;width:auto;max-width:${w}px;object-fit:contain;outline:none;text-decoration:none" />`;
