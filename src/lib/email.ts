@@ -1,7 +1,7 @@
 import { Resend } from "resend";
 import fs from "fs";
 import path from "path";
-import { getAppUrl, getCustomerStatusUrl, getResendApiKey, getStaffJobOpenUrl } from "./env";
+import { getAppUrl, getCustomerStatusUrl, getResendApiKey, getShopAppUrl, getStaffJobOpenUrl } from "./env";
 
 function getResend(): Resend | null {
   const key = getResendApiKey();
@@ -56,7 +56,7 @@ export interface CustomerEmailBrandingAssets {
  * Override: CUSTOMER_EMAIL_HEADER_LOGO_URL or CUSTOMER_EMAIL_LOGO_URL / SHOP_LOGO_URL (HTTPS).
  */
 export async function getCustomerEmailBrandingAssets(shopId?: string | null): Promise<CustomerEmailBrandingAssets> {
-  const base = getAppUrl();
+  let base = getAppUrl();
   const logoOverride =
     process.env.CUSTOMER_EMAIL_HEADER_LOGO_URL?.trim() ||
     process.env.CUSTOMER_EMAIL_LOGO_URL?.trim() ||
@@ -71,10 +71,16 @@ export async function getCustomerEmailBrandingAssets(shopId?: string | null): Pr
       const { prisma } = await import("./db");
       const settings = await prisma.appSettings.findUnique({
         where: { shopId },
-        select: { logoUrl: true },
+        select: {
+          logoUrl: true,
+          shop: { select: { subdomain: true } },
+        },
       });
+      if (settings?.shop.subdomain) {
+        base = getShopAppUrl(settings.shop.subdomain) || base;
+      }
       if (settings?.logoUrl?.trim()) {
-        return { headerLogoSrc: settings.logoUrl.trim() };
+        return { headerLogoSrc: resolveEmailImageSrc(settings.logoUrl, base) };
       }
     } catch {
       // Fall back to the default logo below.
@@ -169,14 +175,14 @@ function bikeOpsEmailShopSubtitle(): string | null {
 const EMAIL_HEADER_LOGO_MAX_HEIGHT_PX = 64;
 const EMAIL_HEADER_LOGO_MAX_WIDTH_PX = 220;
 
-function resolveEmailImageSrc(src: string): string {
+function resolveEmailImageSrc(src: string, baseUrl = getAppUrl()): string {
   const trimmed = src.trim();
   if (!trimmed || trimmed.startsWith("cid:") || trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
     return trimmed;
   }
 
   if (trimmed.startsWith("/")) {
-    const base = getAppUrl();
+    const base = baseUrl.replace(/\/$/, "");
     if (base) return `${base}${trimmed}`;
   }
 
