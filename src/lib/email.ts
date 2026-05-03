@@ -172,8 +172,8 @@ function bikeOpsEmailShopSubtitle(): string | null {
 }
 
 /** Header logo: height-led so wide wordmarks stay proportional (not full-card width). */
-const EMAIL_HEADER_LOGO_MAX_HEIGHT_PX = 64;
-const EMAIL_HEADER_LOGO_MAX_WIDTH_PX = 220;
+const EMAIL_HEADER_LOGO_MAX_HEIGHT_PX = 88;
+const EMAIL_HEADER_LOGO_MAX_WIDTH_PX = 320;
 
 function resolveEmailImageSrc(src: string, baseUrl = getAppUrl()): string {
   const trimmed = src.trim();
