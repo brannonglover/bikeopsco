@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { flushSync } from "react-dom";
 import { Check, RefreshCw, X } from "lucide-react";
@@ -74,6 +74,8 @@ const DISPLAY_STAGES: Stage[] = STAGES.filter(
   (s) => s !== "CANCELLED" && s !== "PENDING_APPROVAL"
 );
 
+type ColumnSortUpdate = { id: string; columnSortOrder: number };
+
 /** Match PATCH semantics so the card does not “snap” again when the server JSON arrives. */
 function withOptimisticStageChange(job: Job, newStage: Stage): Job {
   const bikes = job.jobBikes ?? [];
@@ -142,6 +144,8 @@ export function KanbanBoard() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [archiving, setArchiving] = useState(false);
+  const [savedToast, setSavedToast] = useState<string | null>(null);
+  const dismissDateToastJobIdRef = useRef<string | null>(null);
   /** Job IDs for which board actions should not send customer email/SMS. */
   const [jobsSkippingCustomerNotify, setJobsSkippingCustomerNotify] = useState<
     Set<string>
@@ -200,6 +204,15 @@ export function KanbanBoard() {
       return [job, ...without];
     });
   }, []);
+
+  const showSavedToast = useCallback((message: string) => {
+    setSavedToast(message);
+    window.setTimeout(() => setSavedToast(null), 3000);
+  }, []);
+
+  useEffect(() => {
+    if (selectedJob) dismissDateToastJobIdRef.current = null;
+  }, [selectedJob]);
 
   const handleAccept = useCallback(
     async (jobId: string) => {
@@ -301,7 +314,7 @@ export function KanbanBoard() {
   };
 
   const reorderColumnJobs = useCallback(
-    async (updates: { id: string; columnSortOrder: number }[]) => {
+    async (updates: ColumnSortUpdate[]) => {
       try {
         await fetch("/api/jobs/reorder", {
           method: "POST",
@@ -316,36 +329,64 @@ export function KanbanBoard() {
   );
 
   const patchJobStage = useCallback(
-    async (jobId: string, newStage: Stage, opts?: { endDrag?: boolean }) => {
+    async (
+      jobId: string,
+      newStage: Stage,
+      opts?: { endDrag?: boolean; sortUpdates?: ColumnSortUpdate[] }
+    ) => {
       const endDrag = opts?.endDrag ?? false;
+      const sortUpdates = opts?.sortUpdates ?? [];
+      const sortMap = new Map(
+        sortUpdates.map((u) => [u.id, u.columnSortOrder])
+      );
       let previousStage: Stage | undefined;
-      let revertSnapshot: Job | null = null;
+      let revertSnapshots = new Map<string, Job>();
       flushSync(() => {
         if (endDrag) setActiveJobId(null);
         setJobs((prev) => {
           const job = prev.find((j) => j.id === jobId);
           if (!job || job.stage === newStage) return prev;
           previousStage = job.stage;
-          revertSnapshot = cloneJobForRevert(job);
-          return prev.map((j) =>
-            j.id === jobId ? withOptimisticStageChange(job, newStage) : j
+          const snapshotIds = new Set([jobId, ...sortMap.keys()]);
+          revertSnapshots = new Map(
+            prev
+              .filter((j) => snapshotIds.has(j.id))
+              .map((j) => [j.id, cloneJobForRevert(j)])
           );
+          return prev.map((j) => {
+            if (j.id === jobId) {
+              const next = withOptimisticStageChange(job, newStage);
+              return sortMap.has(j.id)
+                ? { ...next, columnSortOrder: sortMap.get(j.id)! }
+                : next;
+            }
+            return sortMap.has(j.id)
+              ? { ...j, columnSortOrder: sortMap.get(j.id)! }
+              : j;
+          });
         });
         if (previousStage !== undefined) {
           setSelectedJob((sel) =>
-            sel?.id === jobId ? withOptimisticStageChange(sel, newStage) : sel
+            sel?.id === jobId
+              ? {
+                  ...withOptimisticStageChange(sel, newStage),
+                  ...(sortMap.has(jobId)
+                    ? { columnSortOrder: sortMap.get(jobId)! }
+                    : {}),
+                }
+              : sel
           );
         }
       });
       if (previousStage === undefined) return;
 
       const revert = () => {
-        if (!revertSnapshot) return;
+        if (revertSnapshots.size === 0) return;
         setJobs((prev) =>
-          prev.map((j) => (j.id === jobId ? revertSnapshot! : j))
+          prev.map((j) => revertSnapshots.get(j.id) ?? j)
         );
         setSelectedJob((sel) =>
-          sel?.id === jobId ? revertSnapshot! : sel
+          sel?.id === jobId ? revertSnapshots.get(jobId) ?? sel : sel
         );
       };
 
@@ -361,8 +402,25 @@ export function KanbanBoard() {
         });
         if (res.ok) {
           const updated = await res.json();
-          setJobs((prev) => prev.map((j) => (j.id === jobId ? updated : j)));
-          setSelectedJob((sel) => (sel?.id === jobId ? updated : sel));
+          setJobs((prev) =>
+            prev.map((j) =>
+              j.id === jobId
+                ? sortMap.has(jobId)
+                  ? { ...updated, columnSortOrder: sortMap.get(jobId)! }
+                  : updated
+                : j
+            )
+          );
+          setSelectedJob((sel) =>
+            sel?.id === jobId
+              ? sortMap.has(jobId)
+                ? { ...updated, columnSortOrder: sortMap.get(jobId)! }
+                : updated
+              : sel
+          );
+          if (sortUpdates.length > 0) {
+            void reorderColumnJobs(sortUpdates);
+          }
         } else {
           revert();
         }
@@ -371,7 +429,7 @@ export function KanbanBoard() {
         revert();
       }
     },
-    [features.notifyCustomerEnabled, jobsSkippingCustomerNotify]
+    [features.notifyCustomerEnabled, jobsSkippingCustomerNotify, reorderColumnJobs]
   );
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -431,7 +489,30 @@ export function KanbanBoard() {
       return;
     }
 
-    void patchJobStage(jobId, newStage, { endDrag: true });
+    let sortUpdates: ColumnSortUpdate[] | undefined;
+    if (activeJob && newStage !== activeJob.stage) {
+      const destinationJobs = (jobsByStage[newStage] ?? []).filter(
+        (j) => j.id !== jobId
+      );
+      let insertIndex = destinationJobs.length;
+
+      if (!STAGES.includes(over.id as Stage)) {
+        const targetIndex = destinationJobs.findIndex((j) => j.id === over.id);
+        if (targetIndex !== -1) insertIndex = targetIndex;
+      }
+
+      const reordered = [
+        ...destinationJobs.slice(0, insertIndex),
+        activeJob,
+        ...destinationJobs.slice(insertIndex),
+      ];
+      sortUpdates = reordered.map((j, i) => ({
+        id: j.id,
+        columnSortOrder: i * 1000,
+      }));
+    }
+
+    void patchJobStage(jobId, newStage, { endDrag: true, sortUpdates });
   };
 
   const sensors = useSensors(
@@ -485,6 +566,9 @@ export function KanbanBoard() {
         job={selectedJob}
         isOpen={!!selectedJob}
         onClose={() => setSelectedJob(null)}
+        onDismissIntent={() => {
+          dismissDateToastJobIdRef.current = selectedJob?.id ?? null;
+        }}
         onJobUpdated={(updated) => {
           // If the job was archived, it no longer belongs on the active board list.
           if (updated.archivedAt) {
@@ -492,14 +576,33 @@ export function KanbanBoard() {
             setJobs((prev) => prev.filter((j) => j.id !== updated.id));
             return;
           }
-          setSelectedJob(updated);
+          setSelectedJob((prev) => (prev?.id === updated.id ? updated : prev));
           setJobs((prev) => prev.map((j) => (j.id === updated.id ? updated : j)));
+        }}
+        onJobDateSaved={(field, jobId) => {
+          if (dismissDateToastJobIdRef.current !== jobId) return;
+          dismissDateToastJobIdRef.current = null;
+          const label =
+            field === "pickupDate"
+              ? "Pickup date"
+              : field === "dropOffDate"
+                ? "Drop-off date"
+                : "Collection window";
+          showSavedToast(`${label} updated`);
         }}
         onJobDeleted={(jobId) => {
           setSelectedJob(null);
           setJobs((prev) => prev.filter((j) => j.id !== jobId));
         }}
       />
+      {savedToast && (
+        <div
+          className="fixed right-4 top-4 z-[70] rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 shadow-soft"
+          role="status"
+        >
+          {savedToast}
+        </div>
+      )}
       {showPaidBanner && (
         <div
           className="flex items-center justify-between gap-4 rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3 text-emerald-800"

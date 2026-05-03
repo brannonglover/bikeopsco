@@ -824,9 +824,11 @@ function jobDateToMillis(iso: string | null | undefined): number | null {
 function JobDetailsDateFields({
   job,
   onJobUpdated,
+  onDateSaved,
 }: {
   job: Job;
   onJobUpdated?: (job: Job) => void;
+  onDateSaved?: (field: "dropOffDate" | "pickupDate" | "collectionWindow", jobId: string) => void;
 }) {
   const [dropOff, setDropOff] = useState(() => toDateTimeLocalValue(job.dropOffDate));
   const [pickup, setPickup] = useState(() => toDateTimeLocalValue(job.pickupDate));
@@ -866,6 +868,7 @@ function JobDetailsDateFields({
       if (res.ok) {
         const updated = (await res.json()) as Job;
         onJobUpdated(updated);
+        onDateSaved?.(field, job.id);
       }
     } finally {
       setSavingField(null);
@@ -888,6 +891,7 @@ function JobDetailsDateFields({
       if (res.ok) {
         const updated = (await res.json()) as Job;
         onJobUpdated(updated);
+        onDateSaved?.("collectionWindow", job.id);
       }
     } finally {
       setSavingField(null);
@@ -1027,6 +1031,8 @@ interface JobDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   onJobUpdated?: (job: Job) => void;
+  onDismissIntent?: () => void;
+  onJobDateSaved?: (field: "dropOffDate" | "pickupDate" | "collectionWindow", jobId: string) => void;
   onJobDeleted?: (jobId: string) => void;
 }
 
@@ -1414,7 +1420,7 @@ function mergeJobPreservingInvoiceDetails(prev: Job, next: Job): Job {
   return merged;
 }
 
-export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, onJobDeleted }: JobDetailModalProps) {
+export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, onDismissIntent, onJobDateSaved, onJobDeleted }: JobDetailModalProps) {
   const [activeTab, setActiveTab] = useState<Tab>("details");
   const [cancelling, setCancelling] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -1643,6 +1649,11 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
     }
   };
 
+  const handleDismissClose = () => {
+    onDismissIntent?.();
+    onClose();
+  };
+
   useEffect(() => {
     if (job) {
       setActiveTab("details");
@@ -1698,7 +1709,10 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
     <>
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/40 backdrop-blur-sm"
-      onClick={onClose}
+      onPointerDown={(e) => {
+        if (e.target === e.currentTarget) onDismissIntent?.();
+      }}
+      onClick={handleDismissClose}
     >
       <div
         className="bg-white rounded-t-2xl sm:rounded-2xl shadow-soft-lg w-full max-w-lg sm:max-w-4xl max-h-[95vh] sm:max-h-[90vh] flex flex-col relative border border-slate-200/80 sm:border-t-0"
@@ -1793,7 +1807,8 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
             {getJobBikeDisplayTitle(job)}
           </h2>
           <button
-            onClick={onClose}
+            onPointerDown={onDismissIntent}
+            onClick={handleDismissClose}
             className="p-3 -mr-2 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center flex-shrink-0"
             aria-label="Close"
           >
@@ -1917,7 +1932,7 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
               {job.customer.email && (
                 <a
                   href={`mailto:${job.customer.email}`}
-                  className="text-sm text-emerald-600 hover:text-emerald-800"
+                  className="block text-sm text-slate-600 hover:text-slate-800"
                 >
                   {job.customer.email}
                 </a>
@@ -1979,6 +1994,7 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
               setJob(updated);
               onJobUpdated?.(updated);
             }}
+            onDateSaved={onJobDateSaved}
           />
 
           {/* Services & Products – quick reference on Details tab (no pricing; see Invoice tab) */}

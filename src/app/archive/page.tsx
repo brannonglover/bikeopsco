@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { JobDetailModal } from "@/components/jobs/JobDetailModal";
 import { JobCardContent } from "@/components/calendar/JobCard";
 import type { Job } from "@/lib/types";
@@ -21,6 +21,8 @@ export default function ArchivePage() {
   const [loading, setLoading] = useState(true);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [query, setQuery] = useState("");
+  const [savedToast, setSavedToast] = useState<string | null>(null);
+  const dismissDateToastJobIdRef = useRef<string | null>(null);
 
   const fetchJobs = useCallback(() => {
     setLoading(true);
@@ -34,6 +36,15 @@ export default function ArchivePage() {
   useEffect(() => {
     fetchJobs();
   }, [fetchJobs]);
+
+  const showSavedToast = useCallback((message: string) => {
+    setSavedToast(message);
+    window.setTimeout(() => setSavedToast(null), 3000);
+  }, []);
+
+  useEffect(() => {
+    if (selectedJob) dismissDateToastJobIdRef.current = null;
+  }, [selectedJob]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -149,6 +160,9 @@ export default function ArchivePage() {
         job={selectedJob}
         isOpen={!!selectedJob}
         onClose={() => setSelectedJob(null)}
+        onDismissIntent={() => {
+          dismissDateToastJobIdRef.current = selectedJob?.id ?? null;
+        }}
         onJobUpdated={(updated) => {
           // If the job was unarchived, it no longer belongs in this list.
           if (!updated.archivedAt) {
@@ -156,14 +170,33 @@ export default function ArchivePage() {
             setJobs((prev) => prev.filter((j) => j.id !== updated.id));
             return;
           }
-          setSelectedJob(updated);
+          setSelectedJob((prev) => (prev?.id === updated.id ? updated : prev));
           setJobs((prev) => prev.map((j) => (j.id === updated.id ? updated : j)));
+        }}
+        onJobDateSaved={(field, jobId) => {
+          if (dismissDateToastJobIdRef.current !== jobId) return;
+          dismissDateToastJobIdRef.current = null;
+          const label =
+            field === "pickupDate"
+              ? "Pickup date"
+              : field === "dropOffDate"
+                ? "Drop-off date"
+                : "Collection window";
+          showSavedToast(`${label} updated`);
         }}
         onJobDeleted={(jobId) => {
           setSelectedJob(null);
           setJobs((prev) => prev.filter((j) => j.id !== jobId));
         }}
       />
+      {savedToast && (
+        <div
+          className="fixed right-4 top-4 z-[70] rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 shadow-soft"
+          role="status"
+        >
+          {savedToast}
+        </div>
+      )}
     </div>
   );
 }
