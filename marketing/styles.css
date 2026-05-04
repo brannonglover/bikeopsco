@@ -28,8 +28,6 @@ body {
   margin: 0;
   color: var(--ink);
   background:
-    url("/bike-components-pattern.svg") top 720px right -180px / 720px 420px no-repeat,
-    url("/bike-components-pattern.svg") bottom 260px left -220px / 720px 420px no-repeat,
     linear-gradient(180deg, #f9fcff 0%, var(--wash) 36%, #eef7f3 100%);
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
@@ -133,47 +131,6 @@ nav a:hover {
   overflow: hidden;
   padding: clamp(34px, 5vw, 64px) 20px;
   background: #eef7fb;
-}
-
-.component-backdrop {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.component {
-  position: absolute;
-  display: block;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: contain;
-  opacity: 0.72;
-}
-
-.component-chainring {
-  top: 86px;
-  left: max(26px, calc(50% - 620px));
-  width: clamp(118px, 13vw, 180px);
-  aspect-ratio: 1;
-  background-image: url("/component-chainring.svg");
-}
-
-.component-link {
-  right: max(22px, calc(50% - 640px));
-  bottom: 112px;
-  width: clamp(176px, 18vw, 260px);
-  aspect-ratio: 220 / 90;
-  background-image: url("/component-chain.svg");
-}
-
-.component-spoke {
-  top: 145px;
-  right: max(28px, calc(50% - 560px));
-  width: clamp(104px, 10vw, 150px);
-  aspect-ratio: 1;
-  background-image: url("/component-rotor.svg");
-  transform: rotate(28deg);
 }
 
 .hero::before {
@@ -328,38 +285,6 @@ p {
   position: relative;
   overflow: hidden;
   padding: 22px;
-}
-
-.component-mark {
-  position: absolute;
-  right: 18px;
-  top: 18px;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: contain;
-  opacity: 0.72;
-  pointer-events: none;
-}
-
-.component-link-mark {
-  width: 112px;
-  aspect-ratio: 220 / 90;
-  background-image: url("/component-chain.svg");
-}
-
-.component-spoke-mark,
-.component-chainring-mark {
-  width: 82px;
-  aspect-ratio: 1;
-}
-
-.component-spoke-mark {
-  background-image: url("/component-rotor.svg");
-  transform: rotate(18deg);
-}
-
-.component-chainring-mark {
-  background-image: url("/component-chainring.svg");
 }
 
 .product-strip div::before,
@@ -962,23 +887,6 @@ footer {
     text-align: left;
   }
 
-  .component-chainring {
-    top: 72px;
-    left: auto;
-    right: -36px;
-  }
-
-  .component-link {
-    display: none;
-  }
-
-  .component-spoke {
-    top: auto;
-    right: auto;
-    bottom: 42px;
-    left: -26px;
-  }
-
   .hero-inner {
     text-align: left;
   }
@@ -1068,4 +976,5 @@ footer {
   .chat-preview-card {
     grid-template-columns: 1fr 88px;
   }
+
 }

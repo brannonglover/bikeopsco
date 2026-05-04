@@ -26,11 +26,6 @@
 
     <main>
       <section class="hero">
-        <div class="component-backdrop" aria-hidden="true">
-          <span class="component component-chainring"></span>
-          <span class="component component-link"></span>
-          <span class="component component-spoke"></span>
-        </div>
         <div class="hero-inner">
           <p class="eyebrow">Bike repair shop management</p>
           <h1 class="hero-logo-title">
@@ -58,19 +53,16 @@
 
       <section class="section product-strip" aria-label="Product workflow summary">
         <div>
-          <span class="component-mark component-link-mark" aria-hidden="true"></span>
           <span class="stat">01</span>
           <strong>Customers book online</strong>
           <p>Collect contact info, bike details, services, preferred drop-off, and pickup notes.</p>
         </div>
         <div>
-          <span class="component-mark component-spoke-mark" aria-hidden="true"></span>
           <span class="stat">02</span>
           <strong>Staff approve and schedule</strong>
           <p>Turn requests into jobs, manage capacity, and keep the repair queue organized.</p>
         </div>
         <div>
-          <span class="component-mark component-chainring-mark" aria-hidden="true"></span>
           <span class="stat">03</span>
           <strong>Customers stay updated</strong>
           <p>Send email, SMS, payment links, status pages, reminders, and review requests.</p>
@@ -237,5 +229,48 @@
       <span>Bike Ops</span>
       <a href="https://app.bikeops.co/login">Sign in</a>
     </footer>
+
+    <script>
+      var APP_ID = "z80hc6y6";
+      window.intercomSettings = {
+        api_base: "https://api-iam.intercom.io",
+        app_id: APP_ID,
+      };
+    </script>
+    <script>
+      (function () {
+        var w = window;
+        var ic = w.Intercom;
+        if (typeof ic === "function") {
+          ic("reattach_activator");
+          ic("update", w.intercomSettings);
+        } else {
+          var d = document;
+          var i = function () {
+            i.c(arguments);
+          };
+          i.q = [];
+          i.c = function (args) {
+            i.q.push(args);
+          };
+          w.Intercom = i;
+          var l = function () {
+            var s = d.createElement("script");
+            s.type = "text/javascript";
+            s.async = true;
+            s.src = "https://widget.intercom.io/widget/" + APP_ID;
+            var x = d.getElementsByTagName("script")[0];
+            x.parentNode.insertBefore(s, x);
+          };
+          if (document.readyState === "complete") {
+            l();
+          } else if (w.attachEvent) {
+            w.attachEvent("onload", l);
+          } else {
+            w.addEventListener("load", l, false);
+          }
+        }
+      })();
+    </script>
   </body>
 </html>
