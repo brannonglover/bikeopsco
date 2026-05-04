@@ -9,10 +9,14 @@ import { ChatMessageBubble } from "@/components/chat/ChatMessageBubble";
 const POLL_INTERVAL_MS = 3000;
 
 export default function CustomerChatPage() {
-  const [status, setStatus] = useState<"loading" | "login" | "chat" | "disabled">("loading");
+  const [status, setStatus] = useState<"loading" | "login" | "inviteConsent" | "chat" | "disabled">("loading");
   const [loginEmail, setLoginEmail] = useState("");
   const [loginSending, setLoginSending] = useState(false);
   const [loginMessage, setLoginMessage] = useState<string | null>(null);
+  const [inviteToken, setInviteToken] = useState<string | null>(null);
+  const [inviteSmsConsent, setInviteSmsConsent] = useState(false);
+  const [inviteAccepting, setInviteAccepting] = useState(false);
+  const [inviteMessage, setInviteMessage] = useState<string | null>(null);
   const [customerName, setCustomerName] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [staffLastReadAt, setStaffLastReadAt] = useState<string | null>(null);
@@ -151,45 +155,13 @@ export default function CustomerChatPage() {
       const hash = typeof window !== "undefined" ? window.location.hash : "";
       if (hash.startsWith("#token=")) {
         const token = decodeURIComponent(hash.slice("#token=".length));
-        try {
-          const res = await fetch("/api/chat/verify", {
-            method: "POST",
-            credentials: "include",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ token }),
-          });
-          if (!cancelled) {
-            window.history.replaceState(null, "", window.location.pathname + window.location.search);
-          }
-          if (res.ok) {
-            const me = await fetch("/api/chat/me", { credentials: "include" });
-            if (me.ok && !cancelled) {
-              const data = await me.json();
-              setCustomerName(data.lastName ? `${data.firstName} ${data.lastName}` : data.firstName);
-              setStatus("chat");
-              return;
-            }
-          }
-          if (!cancelled) {
-            const err = await res.json().catch(() => ({}));
-            const code = typeof err.error === "string" ? err.error : "invalid";
-            if (code === "expired") {
-              setLoginMessage("That sign-in link has expired. Please request a new one below.");
-            } else {
-              setLoginMessage(
-                "That sign-in link is invalid or was already used. Please request a new one below."
-              );
-            }
-            setStatus("login");
-          }
-          return;
-        } catch {
-          if (!cancelled) {
-            setLoginMessage("Something went wrong. Please try again.");
-            setStatus("login");
-          }
-          return;
+        if (!cancelled) {
+          setInviteToken(token);
+          setInviteSmsConsent(false);
+          setInviteMessage(null);
+          setStatus("inviteConsent");
         }
+        return;
       }
 
       try {
@@ -213,6 +185,49 @@ export default function CustomerChatPage() {
       cancelled = true;
     };
   }, []);
+
+  const handleInviteAccept = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inviteToken) {
+      setStatus("login");
+      return;
+    }
+    setInviteAccepting(true);
+    setInviteMessage(null);
+    try {
+      const res = await fetch("/api/chat/verify", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: inviteToken, smsConsent: inviteSmsConsent }),
+      });
+      if (typeof window !== "undefined") {
+        window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      }
+      if (res.ok) {
+        const me = await fetch("/api/chat/me", { credentials: "include" });
+        if (me.ok) {
+          const data = await me.json();
+          setCustomerName(data.lastName ? `${data.firstName} ${data.lastName}` : data.firstName);
+          setInviteToken(null);
+          setStatus("chat");
+          return;
+        }
+      }
+      const err = await res.json().catch(() => ({}));
+      const code = typeof err.error === "string" ? err.error : "invalid";
+      setLoginMessage(
+        code === "expired"
+          ? "That sign-in link has expired. Please request a new one below."
+          : "That sign-in link is invalid or was already used. Please request a new one below."
+      );
+      setStatus("login");
+    } catch {
+      setInviteMessage("Something went wrong. Please try again.");
+    } finally {
+      setInviteAccepting(false);
+    }
+  };
 
   useEffect(() => {
     if (status === "chat") {
@@ -504,6 +519,49 @@ export default function CustomerChatPage() {
     return (
       <div className="flex-1 flex items-center justify-center p-8">
         <p className="text-slate-500">Loading…</p>
+      </div>
+    );
+  }
+
+  if (status === "inviteConsent") {
+    return (
+      <div className="flex-1 flex items-center justify-center p-6">
+        <div className="w-full max-w-md">
+          <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h1 className="text-xl font-semibold text-slate-900 mb-2">Join the chat</h1>
+            <p className="text-slate-600 text-sm mb-6">
+              You can also opt into service-related text messages before you start chatting.
+            </p>
+            <form onSubmit={handleInviteAccept} className="space-y-4">
+              <label className="flex cursor-pointer gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <input
+                  type="checkbox"
+                  checked={inviteSmsConsent}
+                  onChange={(e) => setInviteSmsConsent(e.target.checked)}
+                  className="mt-1 h-4 w-4 shrink-0 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500/20"
+                />
+                <span className="text-sm leading-snug text-slate-700">
+                  Optional: I agree to receive service-related SMS about my repair,
+                  including status updates and questions about my bike. No marketing.
+                  Message frequency varies. Message &amp; data rates may apply. Reply{" "}
+                  <strong>STOP</strong> to opt out.
+                </span>
+              </label>
+              <button
+                type="submit"
+                disabled={inviteAccepting}
+                className="w-full rounded-lg bg-emerald-600 px-4 py-3 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {inviteAccepting ? "Opening chat…" : "Continue to chat"}
+              </button>
+            </form>
+            {inviteMessage && (
+              <p className="mt-4 text-sm text-slate-600" role="alert">
+                {inviteMessage}
+              </p>
+            )}
+          </div>
+        </div>
       </div>
     );
   }

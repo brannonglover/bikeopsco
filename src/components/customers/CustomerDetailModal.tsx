@@ -287,6 +287,9 @@ interface Customer {
   lastName: string | null;
   email: string | null;
   phone: string | null;
+  smsConsent?: boolean;
+  smsConsentSource?: string | null;
+  smsConsentUpdatedAt?: string | null;
   address: string | null;
   notes: string | null;
   createdAt: string;
@@ -515,6 +518,43 @@ function BikeImageSearch({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function SmsConsentStatus({ customer }: { customer: Customer }) {
+  const hasPhone = Boolean(customer.phone);
+  const hasConsent = Boolean(customer.smsConsent);
+  const updatedAt = customer.smsConsentUpdatedAt
+    ? new Date(customer.smsConsentUpdatedAt).toLocaleDateString()
+    : null;
+  const source = customer.smsConsentSource
+    ? customer.smsConsentSource.replace(/_/g, " ").toLowerCase()
+    : null;
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+      <div className="flex items-center justify-between gap-3">
+        <span className="font-medium text-slate-700">SMS consent</span>
+        <span
+          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
+            !hasPhone
+              ? "bg-slate-100 text-slate-600 border border-slate-200"
+              : hasConsent
+              ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+              : "bg-slate-100 text-slate-600 border border-slate-200"
+          }`}
+        >
+          {!hasPhone ? "No phone" : hasConsent ? "Consented" : "Not consented"}
+        </span>
+      </div>
+      <p className="mt-1 text-xs text-slate-500">
+        {!hasPhone
+          ? "Customer needs a phone number before SMS updates can be used."
+          : hasConsent
+          ? `Customer opted in${source ? ` via ${source}` : ""}${updatedAt ? ` on ${updatedAt}` : ""}.`
+          : "Customer has not opted in to service-related SMS."}
+      </p>
     </div>
   );
 }
@@ -1163,6 +1203,9 @@ export function CustomerDetailModal({
                       />
                     </div>
                     <div className="sm:col-span-2">
+                      <SmsConsentStatus customer={customer} />
+                    </div>
+                    <div className="sm:col-span-2">
                       <label className="block text-sm font-medium text-slate-700 mb-1">
                         Address
                       </label>
@@ -1218,6 +1261,7 @@ export function CustomerDetailModal({
                             </a>
                           </p>
                         )}
+                        {customer.phone && <SmsConsentStatus customer={customer} />}
                       </div>
                     </div>
                   )}

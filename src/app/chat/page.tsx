@@ -975,6 +975,17 @@ function ChatPageContent() {
                   {selectedConv?.customer.email && (
                     <p className="text-xs text-slate-500 truncate">{selectedConv.customer.email}</p>
                   )}
+                  {selectedConv?.customer.phone && (
+                    <p
+                      className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                        selectedConv.customer.smsConsent
+                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                          : "bg-slate-100 text-slate-600 border border-slate-200"
+                      }`}
+                    >
+                      SMS {selectedConv.customer.smsConsent ? "consented" : "not consented"}
+                    </p>
+                  )}
                 </div>
                 {customerActiveJobId && (
                   <a

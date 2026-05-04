@@ -3,10 +3,14 @@ import { prisma } from "@/lib/db";
 import { createSession, getSessionCookieName } from "@/lib/chat-session";
 import { z } from "zod";
 import { getAppFeatures } from "@/lib/app-settings";
+import { buildSmsConsentUpdate } from "@/lib/sms-consent";
 
 export const dynamic = "force-dynamic";
 
-const postBodySchema = z.object({ token: z.string().min(1) });
+const postBodySchema = z.object({
+  token: z.string().min(1),
+  smsConsent: z.boolean().optional().default(false),
+});
 
 function setSessionCookie(response: NextResponse, sessionToken: string) {
   response.cookies.set(getSessionCookieName(), sessionToken, {
@@ -22,7 +26,10 @@ type ConsumeResult =
   | { ok: true; sessionToken: string }
   | { ok: false; reason: "invalid" | "expired" };
 
-async function consumeMagicLink(token: string): Promise<ConsumeResult> {
+async function consumeMagicLink(
+  token: string,
+  opts?: { smsConsent?: boolean }
+): Promise<ConsumeResult> {
   const magicLink = await prisma.magicLinkToken.findUnique({
     where: { token },
     include: { customer: true },
@@ -33,6 +40,13 @@ async function consumeMagicLink(token: string): Promise<ConsumeResult> {
   }
   if (magicLink.expiresAt < new Date()) {
     return { ok: false, reason: "expired" };
+  }
+
+  if (opts?.smsConsent && magicLink.customer.phone) {
+    await prisma.customer.update({
+      where: { id: magicLink.customerId },
+      data: buildSmsConsentUpdate(true, "CHAT_INVITE"),
+    });
   }
 
   const sessionToken = await createSession(magicLink.customerId);
@@ -79,8 +93,8 @@ export async function POST(request: NextRequest) {
   }
   try {
     const body = await request.json();
-    const { token } = postBodySchema.parse(body);
-    const result = await consumeMagicLink(token);
+    const { token, smsConsent } = postBodySchema.parse(body);
+    const result = await consumeMagicLink(token, { smsConsent });
 
     if (!result.ok) {
       const status = result.reason === "expired" ? 410 : 400;
