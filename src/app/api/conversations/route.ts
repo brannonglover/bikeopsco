@@ -51,17 +51,56 @@ export async function POST(request: NextRequest) {
     }
     const body = await request.json();
     const { customerId, jobId } = createSchema.parse(body);
+    const normalizedJobId = jobId ?? null;
 
-    const conversation = await prisma.conversation.create({
-      data: {
-        shopId: shop.id,
-        customerId,
-        jobId: jobId ?? null,
-      },
-      include: {
-        customer: true,
-        job: true,
-      },
+    const customer = await prisma.customer.findFirst({
+      where: { id: customerId, shopId: shop.id },
+      select: { id: true },
+    });
+    if (!customer) {
+      return NextResponse.json({ error: "Customer not found" }, { status: 404 });
+    }
+
+    const conversation = await prisma.$transaction(async (tx) => {
+      const lockKey = `${shop.id}:${customerId}:${normalizedJobId ?? "general"}`;
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+
+      const existing = await tx.conversation.findFirst({
+        where: {
+          shopId: shop.id,
+          customerId,
+          jobId: normalizedJobId,
+          archived: false,
+        },
+        orderBy: { updatedAt: "desc" },
+        include: {
+          customer: true,
+          job: true,
+          messages: {
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            include: { attachments: true, reactions: true },
+          },
+        },
+      });
+      if (existing) return existing;
+
+      return tx.conversation.create({
+        data: {
+          shopId: shop.id,
+          customerId,
+          jobId: normalizedJobId,
+        },
+        include: {
+          customer: true,
+          job: true,
+          messages: {
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            include: { attachments: true, reactions: true },
+          },
+        },
+      });
     });
 
     return NextResponse.json(conversation);
