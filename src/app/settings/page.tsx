@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Upload, X } from "lucide-react";
+import { ExternalLink, KeyRound, MessageSquareText, PhoneCall, ShieldCheck, Upload, X } from "lucide-react";
 import { useTheme, type ThemeMode } from "@/contexts/ThemeContext";
 import { broadcastAppFeaturesUpdated } from "@/contexts/AppFeaturesContext";
 
@@ -44,6 +44,53 @@ const THEME_OPTIONS: { value: ThemeMode; label: string; description: string }[] 
   { value: "dark", label: "Dark", description: "Always use the dark colour scheme" },
   { value: "system", label: "System", description: "Follow your device settings" },
 ];
+
+const INFOBIP_SETUP_STEPS = [
+  {
+    title: "Create and verify the Infobip account",
+    description:
+      "Sign up with the legal business name, billing details, service country, and a monitored admin email. Send a first test SMS from Infobip before connecting it to Bike Ops.",
+  },
+  {
+    title: "Buy or register an SMS sender",
+    description:
+      "Use a leased SMS number when customers need to reply in chat. A branded sender name can work for one-way updates, but replies and STOP/START handling require a real number.",
+  },
+  {
+    title: "Create an API key",
+    description:
+      "Create a restricted API key for Bike Ops with SMS sending access. Store it somewhere secure; Infobip only shows the full secret when the key is created.",
+  },
+  {
+    title: "Add inbound forwarding",
+    description:
+      "Configure the SMS number to push inbound messages to the Bike Ops webhook URL for your workspace so customer replies appear in Chat.",
+  },
+  {
+    title: "Run a live test",
+    description:
+      "Send a booking or job-status test to an opted-in customer number, reply to it from the phone, then confirm the reply appears in Bike Ops Chat.",
+  },
+] as const;
+
+const INFOBIP_ENV_VARS = [
+  {
+    name: "INFOBIP_BASE_URL",
+    detail: "Your Infobip API base URL, for example https://xxxxx.api.infobip.com, without a trailing slash.",
+  },
+  {
+    name: "INFOBIP_API_KEY",
+    detail: "The API key value generated for Bike Ops. Treat this like a password.",
+  },
+  {
+    name: "INFOBIP_SENDER",
+    detail: "The SMS number or sender ID Bike Ops should send from. Use the number format Infobip shows for the resource.",
+  },
+  {
+    name: "INFOBIP_WEBHOOK_SECRET",
+    detail: "Optional shared secret used to reject unknown inbound webhook calls.",
+  },
+] as const;
 
 function ThemeIcon({ mode, active }: { mode: ThemeMode; active: boolean }) {
   const base = active ? "text-primary-500" : "text-text-secondary dark:text-text-secondary";
@@ -624,6 +671,124 @@ export default function SettingsPage() {
             )}
           </div>
         )}
+      </section>
+
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-xl font-bold text-slate-900">Infobip SMS setup</h2>
+          <p className="text-sm text-slate-600">
+            Connect a shop-owned Infobip account so Bike Ops can send service texts and receive customer replies.
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+              <MessageSquareText className="h-5 w-5 text-amber-600" aria-hidden />
+              <h3 className="mt-2 text-sm font-semibold text-slate-900">Service SMS</h3>
+              <p className="mt-1 text-xs leading-5 text-slate-600">
+                Sends booking confirmations, repair updates, payment links, reminders, and chat nudges.
+              </p>
+            </div>
+            <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+              <PhoneCall className="h-5 w-5 text-amber-600" aria-hidden />
+              <h3 className="mt-2 text-sm font-semibold text-slate-900">Two-way replies</h3>
+              <p className="mt-1 text-xs leading-5 text-slate-600">
+                Inbound SMS forwarding lets customer replies land in the Bike Ops chat inbox.
+              </p>
+            </div>
+            <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+              <ShieldCheck className="h-5 w-5 text-amber-600" aria-hidden />
+              <h3 className="mt-2 text-sm font-semibold text-slate-900">Consent aware</h3>
+              <p className="mt-1 text-xs leading-5 text-slate-600">
+                Bike Ops respects customer SMS consent and handles STOP, START, and HELP replies.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-900">
+            Infobip credentials are configured by the Bike Ops workspace admin today. Do not paste API keys into chat or
+            email unless your team has a secure handoff process.
+          </div>
+
+          <div className="mt-5 space-y-3">
+            <h3 className="text-sm font-semibold text-slate-900">Setup checklist</h3>
+            <ol className="space-y-3">
+              {INFOBIP_SETUP_STEPS.map((step, index) => (
+                <li key={step.title} className="flex gap-3">
+                  <span className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white">
+                    {index + 1}
+                  </span>
+                  <span>
+                    <span className="block text-sm font-semibold text-slate-900">{step.title}</span>
+                    <span className="block text-sm leading-6 text-slate-600">{step.description}</span>
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </div>
+
+          <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+            <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+              <div className="flex items-center gap-2">
+                <KeyRound className="h-4 w-4 text-slate-700" aria-hidden />
+                <h3 className="text-sm font-semibold text-slate-900">Values Bike Ops needs</h3>
+              </div>
+              <dl className="mt-3 space-y-3">
+                {INFOBIP_ENV_VARS.map((item) => (
+                  <div key={item.name}>
+                    <dt className="font-mono text-xs font-semibold text-slate-900">{item.name}</dt>
+                    <dd className="mt-0.5 text-xs leading-5 text-slate-600">{item.detail}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+
+            <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+              <h3 className="text-sm font-semibold text-slate-900">Inbound webhook</h3>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Set the forwarding method to HTTP POST and use this URL, replacing the host with the shop workspace:
+              </p>
+              <code className="mt-3 block break-all rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800">
+                https://yourshop.bikeops.co/api/webhooks/infobip/sms?secret=your-secret
+              </code>
+              <p className="mt-3 text-xs leading-5 text-slate-600">
+                If Infobip lets you add custom headers instead, send the same secret as{" "}
+                <span className="font-mono">x-webhook-secret</span>. Use HTTPS only.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-5 flex flex-wrap gap-2">
+            <a
+              href="https://www.infobip.com/docs/sms/get-started/send-test-message"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+            >
+              Test SMS guide
+              <ExternalLink className="h-4 w-4" aria-hidden />
+            </a>
+            <a
+              href="https://www.infobip.com/docs/essentials/api-essentials/api-authorization"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+            >
+              API key scopes
+              <ExternalLink className="h-4 w-4" aria-hidden />
+            </a>
+            <a
+              href="https://www.infobip.com/docs/numbers"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+            >
+              Numbers setup
+              <ExternalLink className="h-4 w-4" aria-hidden />
+            </a>
+          </div>
+        </div>
       </section>
     </div>
   );
