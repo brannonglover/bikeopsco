@@ -29,7 +29,7 @@ function FeatureRedirector() {
       router.replace("/calendar");
     }
     if (!features.reviewsEnabled && pathname.startsWith("/settings/reviews")) {
-      router.replace("/settings");
+      router.replace("/settings/appearance");
     }
   }, [features.chatEnabled, features.reviewsEnabled, pathname, router]);
 
@@ -278,7 +278,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
                 Sign out
               </button>
               <Link
-                href="/settings"
+                href="/settings/appearance"
                 className="flex-shrink-0 p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-600/50 transition-colors"
                 aria-label="Settings"
                 onClick={() => setMobileMenuOpen(false)}
