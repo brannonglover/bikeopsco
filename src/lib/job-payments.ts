@@ -106,16 +106,21 @@ export function getJobPaymentSummary(input: {
 } {
   const subtotal = roundCurrency(input.subtotal);
   const totalPaid = roundCurrency(input.totalPaid);
-  const remainingCents = Math.max(0, toCents(subtotal) - toCents(totalPaid));
+  const currentStatus = String(input.currentStatus ?? "").toUpperCase();
+  const isMarkedPaid = currentStatus === "PAID" && toCents(subtotal) > 0;
+  const rawRemainingCents = Math.max(0, toCents(subtotal) - toCents(totalPaid));
+  const remainingCents = isMarkedPaid || (rawRemainingCents <= 1 && toCents(totalPaid) > 0)
+    ? 0
+    : rawRemainingCents;
   const remaining = remainingCents / 100;
-  const isPaidInFull = remainingCents === 0 && toCents(subtotal) > 0;
+  const isPaidInFull = isMarkedPaid || (remainingCents === 0 && toCents(subtotal) > 0);
 
   let paymentStatus: DerivedPaymentStatus;
   if (isPaidInFull) {
     paymentStatus = "PAID";
   } else if (toCents(totalPaid) > 0) {
     paymentStatus = "PENDING";
-  } else if (String(input.currentStatus ?? "").toUpperCase() === "REFUNDED") {
+  } else if (currentStatus === "REFUNDED") {
     paymentStatus = "REFUNDED";
   } else {
     paymentStatus = "UNPAID";

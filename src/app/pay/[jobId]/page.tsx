@@ -143,7 +143,7 @@ export default function PayPage() {
 
     async function init() {
       try {
-        const jobRes = await fetch(`/api/jobs/${jobId}`);
+        const jobRes = await fetch(`/api/jobs/${jobId}`, { cache: "no-store" });
 
         if (!jobRes.ok) {
           setError("Job not found");

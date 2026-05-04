@@ -6,6 +6,47 @@ import { sendPaymentReceiptEmail } from "@/lib/email";
 import { computeJobSubtotal, computeTotalPaid, getJobPaymentSummary } from "@/lib/job-payments";
 import { syncStripeSubscription, toStripeDate } from "@/lib/billing";
 
+async function refreshJobPaymentStatus(jobId: string) {
+  const jobWithPayments = await prisma.job.findUnique({
+    where: { id: jobId },
+    include: {
+      jobServices: true,
+      jobProducts: true,
+      payments: {
+        select: {
+          amount: true,
+          status: true,
+          stripePaymentIntentId: true,
+          paymentMethod: true,
+        },
+      },
+    },
+  });
+  if (!jobWithPayments) {
+    throw new Error(`Job ${jobId} not found while refreshing payment status`);
+  }
+
+  const subtotal = computeJobSubtotal({
+    jobServices: jobWithPayments.jobServices,
+    jobProducts: jobWithPayments.jobProducts,
+  });
+  const totalPaid = computeTotalPaid(jobWithPayments.payments);
+  const paymentSummary = getJobPaymentSummary({
+    currentStatus: jobWithPayments.paymentStatus,
+    subtotal,
+    totalPaid,
+  });
+
+  await prisma.job.update({
+    where: { id: jobId },
+    data: {
+      paymentStatus: paymentSummary.paymentStatus,
+    },
+  });
+
+  return paymentSummary;
+}
+
 export async function POST(request: NextRequest) {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
   if (!webhookSecret) {
@@ -57,7 +98,8 @@ export async function POST(request: NextRequest) {
         },
       });
       if (existing) {
-        console.log(`Webhook idempotency: payment for ${paymentIntent.id} already recorded, skipping.`);
+        await refreshJobPaymentStatus(jobId);
+        console.log(`Webhook idempotency: payment for ${paymentIntent.id} already recorded, refreshed job payment status.`);
         return NextResponse.json({ received: true });
       }
 
@@ -123,6 +165,7 @@ export async function POST(request: NextRequest) {
           },
         });
       });
+      await refreshJobPaymentStatus(jobId);
 
       const job = await prisma.job.findUnique({
         where: { id: jobId },

@@ -213,7 +213,7 @@ export default function StatusPage() {
   useEffect(() => {
     if (!jobId) return;
 
-    fetch(`/api/jobs/${jobId}`)
+    fetch(`/api/jobs/${jobId}`, { cache: "no-store" })
       .then((res) => {
         if (!res.ok) throw new Error("Job not found");
         return res.json();
