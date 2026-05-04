@@ -68,7 +68,15 @@ function BillingGuard() {
     }
   }, [billing, pathname, router]);
 
-  if (!billing || pathname === "/billing" || billing.hasSubscription || billing.billingExempt) return null;
+  if (
+    !billing ||
+    pathname === "/billing" ||
+    billing.hasSubscription ||
+    billing.billingExempt ||
+    (billing.billingActive && !billing.trialEndsAt)
+  ) {
+    return null;
+  }
 
   const daysLeft = billing.trialEndsAt
     ? Math.max(0, Math.ceil((new Date(billing.trialEndsAt).getTime() - Date.now()) / 86400000))
