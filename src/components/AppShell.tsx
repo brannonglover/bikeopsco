@@ -28,7 +28,7 @@ function FeatureRedirector() {
     if (!features.chatEnabled && (pathname === "/chat" || pathname.startsWith("/chat/"))) {
       router.replace("/calendar");
     }
-    if (!features.reviewsEnabled && pathname.startsWith("/settings/reviews")) {
+    if (!features.reviewsEnabled && (pathname === "/reviews" || pathname.startsWith("/reviews/"))) {
       router.replace("/settings/appearance");
     }
   }, [features.chatEnabled, features.reviewsEnabled, pathname, router]);

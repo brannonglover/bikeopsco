@@ -11,11 +11,11 @@ const NAV_LINKS = [
   { href: "/archive", label: "Archive" },
   { href: "/chat", label: "Chat" },
   { href: "/stats", label: "Stats" },
-  { href: "/settings/customers", label: "Customers" },
-  { href: "/settings/services", label: "Services" },
-  { href: "/settings/products", label: "Products" },
-  { href: "/settings/email-templates", label: "Email Templates" },
-  { href: "/settings/reviews", label: "Reviews" },
+  { href: "/customers", label: "Customers" },
+  { href: "/services", label: "Services" },
+  { href: "/products", label: "Products" },
+  { href: "/email-templates", label: "Email Templates" },
+  { href: "/reviews", label: "Reviews" },
   { href: "/billing", label: "Billing" },
 ] as const;
 
@@ -30,7 +30,7 @@ export function SidebarNav({ onNavigate }: SidebarNavProps) {
 
   const visibleLinks = NAV_LINKS.filter((l) => {
     if (l.href === "/chat" && !features.chatEnabled) return false;
-    if (l.href === "/settings/reviews" && !features.reviewsEnabled) return false;
+    if (l.href === "/reviews" && !features.reviewsEnabled) return false;
     return true;
   });
 

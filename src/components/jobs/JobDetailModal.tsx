@@ -1918,7 +1918,7 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
                   Customer
                 </h3>
                 <Link
-                  href={`/settings/customers?edit=${job.customer.id}`}
+                  href={`/customers?edit=${job.customer.id}`}
                   className="text-sm font-medium text-indigo-600 hover:text-indigo-800 hover:underline shrink-0 touch-manipulation"
                 >
                   Edit

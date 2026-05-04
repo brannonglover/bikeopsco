@@ -571,7 +571,7 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
           {services.length === 0 ? (
             <p className="text-sm text-slate-500 py-2">
               No services defined yet.{" "}
-              <a href="/settings/services" className="text-indigo-600 hover:underline">
+              <a href="/services" className="text-indigo-600 hover:underline">
                 Add services
               </a>{" "}
               first.

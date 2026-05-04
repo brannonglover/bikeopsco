@@ -3,38 +3,21 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Boxes,
   Brush,
   CircleDot,
-  Mail,
   MessageSquareText,
-  Package,
   SlidersHorizontal,
-  Star,
-  Users,
 } from "lucide-react";
-import { useAppFeatures } from "@/contexts/AppFeaturesContext";
 
 const SETTINGS_LINKS = [
   { href: "/settings/appearance", label: "Appearance", icon: Brush },
   { href: "/settings/branding", label: "Branding", icon: CircleDot },
   { href: "/settings/features", label: "Features", icon: SlidersHorizontal },
   { href: "/settings/infobip", label: "Infobip SMS", icon: MessageSquareText },
-  { href: "/settings/customers", label: "Customers", icon: Users },
-  { href: "/settings/services", label: "Services", icon: Boxes },
-  { href: "/settings/products", label: "Products", icon: Package },
-  { href: "/settings/email-templates", label: "Email Templates", icon: Mail },
-  { href: "/settings/reviews", label: "Reviews", icon: Star },
 ] as const;
 
 export function SettingsSectionNav() {
   const pathname = usePathname();
-  const features = useAppFeatures();
-
-  const visibleLinks = SETTINGS_LINKS.filter((link) => {
-    if (link.href === "/settings/reviews" && !features.reviewsEnabled) return false;
-    return true;
-  });
 
   return (
     <aside className="w-full flex-shrink-0 lg:sticky lg:top-6 lg:w-56">
@@ -44,7 +27,7 @@ export function SettingsSectionNav() {
           <p className="mt-0.5 text-xs text-text-secondary">Workspace setup</p>
         </div>
         <nav className="mt-1 flex gap-1 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible lg:pb-0">
-          {visibleLinks.map(({ href, label, icon: Icon }) => {
+          {SETTINGS_LINKS.map(({ href, label, icon: Icon }) => {
             const active = pathname === href || pathname.startsWith(`${href}/`);
             return (
               <Link

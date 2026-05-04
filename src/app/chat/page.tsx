@@ -962,7 +962,7 @@ function ChatPageContent() {
                   <h3 className="font-semibold text-slate-900">
                     {selectedConv ? (
                       <Link
-                        href={`/settings/customers?edit=${encodeURIComponent(selectedConv.customerId)}`}
+                        href={`/customers?edit=${encodeURIComponent(selectedConv.customerId)}`}
                         className="block truncate hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-inset rounded"
                         title="View customer profile"
                       >
