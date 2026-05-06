@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
+import { syncCollectionJobService } from "@/lib/collection-fee";
 
 const updateBikeSchema = z.object({
   make: z.string().min(1).optional(),
@@ -56,6 +57,22 @@ export async function PATCH(
           where: { bikeId },
           data: jobBikeUpdateData,
         });
+
+        if (
+          data.make !== undefined ||
+          data.model !== undefined ||
+          data.bikeType !== undefined
+        ) {
+          const affectedJobBikes = await tx.jobBike.findMany({
+            where: { bikeId },
+            select: { jobId: true, sortOrder: true },
+          });
+          const jobIds = Array.from(new Set(affectedJobBikes.map((jb) => jb.jobId)));
+
+          for (const jobId of jobIds) {
+            await syncCollectionJobService(tx, jobId);
+          }
+        }
 
         // Refresh Job.bikeMake / Job.bikeModel summary for jobs where this
         // bike is the first (lowest sortOrder) JobBike
