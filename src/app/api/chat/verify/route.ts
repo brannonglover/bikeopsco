@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { createSession, getSessionCookieName } from "@/lib/chat-session";
+import {
+  createSession,
+  getSessionCookieMaxAgeSeconds,
+  getSessionCookieName,
+} from "@/lib/chat-session";
 import { z } from "zod";
 import { getAppFeatures } from "@/lib/app-settings";
 import { buildSmsConsentUpdate } from "@/lib/sms-consent";
@@ -17,7 +21,7 @@ function setSessionCookie(response: NextResponse, sessionToken: string) {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
-    maxAge: 60 * 60 * 24 * 30, // 30 days
+    maxAge: getSessionCookieMaxAgeSeconds(),
     path: "/",
   });
 }

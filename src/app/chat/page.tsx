@@ -148,7 +148,7 @@ function CustomerName({ conv }: { conv: Conversation }) {
   );
 }
 
-type InviteStatus = "idle" | "pending" | "active";
+type InviteStatus = "idle" | "pending" | "active" | "sms-active";
 
 function InviteButton({ customerId }: { customerId: string }) {
   const [sending, setSending] = useState(false);
@@ -160,7 +160,10 @@ function InviteButton({ customerId }: { customerId: string }) {
     fetch(`/api/chat/session-status?customerId=${encodeURIComponent(customerId)}`)
       .then((r) => r.json())
       .then((data) => {
-        if (data.expiresAt) {
+        if (data.activeJobSmsAccess) {
+          setDaysLeft(null);
+          setStatus("sms-active");
+        } else if (data.expiresAt) {
           const expires = new Date(data.expiresAt);
           const now = new Date();
           const ms = expires.getTime() - now.getTime();
@@ -213,6 +216,8 @@ function InviteButton({ customerId }: { customerId: string }) {
   const buttonLabel =
     sending
       ? "Sending…"
+      : status === "sms-active"
+        ? "SMS chat active"
       : status === "active" && daysLeft !== null && daysLeft > 0
         ? `${daysLeft} day${daysLeft === 1 ? "" : "s"} left`
         : status === "pending"
@@ -222,7 +227,7 @@ function InviteButton({ customerId }: { customerId: string }) {
   const buttonStyle =
     status === "pending"
       ? "px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-50 rounded-lg hover:bg-amber-100 disabled:opacity-50"
-      : status === "active"
+      : status === "active" || status === "sms-active"
         ? "px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100 disabled:opacity-50"
         : "px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100 disabled:opacity-50";
 
@@ -232,7 +237,7 @@ function InviteButton({ customerId }: { customerId: string }) {
       <button
         type="button"
         onClick={handleClick}
-        disabled={sending}
+        disabled={sending || status === "sms-active"}
         className={buttonStyle}
       >
         {buttonLabel}

@@ -4,6 +4,7 @@ import { sendChatStaffSms } from "@/lib/sms";
 import { sendPushToCustomer, sendPushToAllStaff } from "@/lib/push";
 import { z } from "zod";
 import { getAppFeatures } from "@/lib/app-settings";
+import { customerHasActiveChatJob } from "@/lib/chat-session";
 import { getEffectiveSmsConsent } from "@/lib/sms-consent";
 import { requireCurrentShop } from "@/lib/shop";
 
@@ -191,7 +192,11 @@ export async function POST(
       const hasText = Boolean(bodyText?.trim());
       const hasAtt = Boolean(attachmentIds?.length);
 
-      if (conversation.customer.phone && getEffectiveSmsConsent(conversation.customer)) {
+      if (
+        conversation.customer.phone &&
+        getEffectiveSmsConsent(conversation.customer) &&
+        (await customerHasActiveChatJob(shop.id, conversation.customerId))
+      ) {
         if (hasText) {
           const smsText = hasAtt
             ? `${bodyText!.trim()} (see chat for photos)`

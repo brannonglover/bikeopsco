@@ -16,11 +16,17 @@
 const fs = require("fs");
 const http = require("http");
 const path = require("path");
+const crypto = require("crypto");
 
 const SCOPE = "https://www.googleapis.com/auth/business.manage";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const ACCOUNTS_URL = "https://mybusinessaccountmanagement.googleapis.com/v1/accounts";
 const LOCATIONS_BASE_URL = "https://mybusinessbusinessinformation.googleapis.com/v1";
+const oauthState = randomUrlSafeString(32);
+const pkceVerifier = randomUrlSafeString(96);
+const pkceChallenge = base64UrlEncode(
+  crypto.createHash("sha256").update(pkceVerifier).digest()
+);
 
 function loadEnvFile(filename) {
   const file = path.join(process.cwd(), filename);
@@ -72,6 +78,18 @@ if (!clientId || !clientSecret) {
   process.exit(1);
 }
 
+function base64UrlEncode(buffer) {
+  return buffer
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+function randomUrlSafeString(byteLength) {
+  return base64UrlEncode(crypto.randomBytes(byteLength));
+}
+
 function googleAuthUrl() {
   const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   url.searchParams.set("client_id", clientId);
@@ -80,6 +98,9 @@ function googleAuthUrl() {
   url.searchParams.set("scope", SCOPE);
   url.searchParams.set("access_type", "offline");
   url.searchParams.set("prompt", "consent");
+  url.searchParams.set("state", oauthState);
+  url.searchParams.set("code_challenge", pkceChallenge);
+  url.searchParams.set("code_challenge_method", "S256");
   return url.toString();
 }
 
@@ -103,6 +124,7 @@ async function exchangeCodeForTokens(code) {
     code,
     client_id: clientId,
     client_secret: clientSecret,
+    code_verifier: pkceVerifier,
     redirect_uri: redirectUri,
     grant_type: "authorization_code",
   });
@@ -188,7 +210,7 @@ async function printAccountsAndLocations(accessToken) {
     console.log(`  GOOGLE_BUSINESS_PROFILE_ACCOUNT_ID=${accountId}`);
 
     try {
-      const locationsData = await listLocations(tokens.access_token, account.name);
+      const locationsData = await listLocations(accessToken, account.name);
       const locations = locationsData.locations || [];
       if (locations.length === 0) {
         console.log("  No locations returned for this account.");
@@ -235,6 +257,7 @@ const server = http.createServer(async (req, res) => {
 
   const error = url.searchParams.get("error");
   const code = url.searchParams.get("code");
+  const state = url.searchParams.get("state");
 
   if (error) {
     res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
@@ -252,6 +275,18 @@ const server = http.createServer(async (req, res) => {
       ].join("")
     );
     console.log("Callback received without a code. Open the printed authorization URL first.");
+    return;
+  }
+
+  if (!state || state !== oauthState) {
+    res.writeHead(400, { "Content-Type": "text/html; charset=utf-8" });
+    res.end(
+      [
+        "<h1>OAuth state mismatch</h1>",
+        "<p>The response did not match the authorization request. Return to the terminal and restart the helper.</p>",
+      ].join("")
+    );
+    console.error("OAuth state mismatch. Refusing to exchange the authorization code.");
     return;
   }
 

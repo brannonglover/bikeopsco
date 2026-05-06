@@ -808,6 +808,14 @@ function toDateTimeLocalValue(iso: string | Date | null | undefined): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+function toDateLocalValue(iso: string | Date | null | undefined): string {
+  if (!iso) return "";
+  const d = typeof iso === "string" ? new Date(iso) : iso;
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 function localDateTimeToMillis(local: string): number | null {
   const t = local.trim();
   if (!t) return null;
@@ -830,36 +838,45 @@ function JobDetailsDateFields({
   onJobUpdated?: (job: Job) => void;
   onDateSaved?: (field: "dropOffDate" | "pickupDate" | "collectionWindow", jobId: string) => void;
 }) {
-  const [dropOff, setDropOff] = useState(() => toDateTimeLocalValue(job.dropOffDate));
-  const [pickup, setPickup] = useState(() => toDateTimeLocalValue(job.pickupDate));
+  const isCollection = job.deliveryType === "COLLECTION_SERVICE";
+  const formatDateInputValue = useCallback(
+    (iso: string | Date | null | undefined) => isCollection ? toDateLocalValue(iso) : toDateTimeLocalValue(iso),
+    [isCollection]
+  );
+  const [dropOff, setDropOff] = useState(() => formatDateInputValue(job.dropOffDate));
+  const [pickup, setPickup] = useState(() => formatDateInputValue(job.pickupDate));
   const [windowStart, setWindowStart] = useState(job.collectionWindowStart ?? "");
   const [windowEnd, setWindowEnd] = useState(job.collectionWindowEnd ?? "");
   const [savingField, setSavingField] = useState<"dropOffDate" | "pickupDate" | "collectionWindow" | null>(null);
 
   useEffect(() => {
-    setDropOff(toDateTimeLocalValue(job.dropOffDate));
-    setPickup(toDateTimeLocalValue(job.pickupDate));
+    setDropOff(formatDateInputValue(job.dropOffDate));
+    setPickup(formatDateInputValue(job.pickupDate));
     setWindowStart(job.collectionWindowStart ?? "");
     setWindowEnd(job.collectionWindowEnd ?? "");
-  }, [job.id, job.dropOffDate, job.pickupDate, job.collectionWindowStart, job.collectionWindowEnd]);
+  }, [job.id, job.dropOffDate, job.pickupDate, job.collectionWindowStart, job.collectionWindowEnd, formatDateInputValue]);
 
-  const isCollection = job.deliveryType === "COLLECTION_SERVICE";
   const firstLabel = isCollection ? "Collection pickup" : "Drop-off";
   const secondLabel = isCollection ? "Collection return" : "Pickup";
 
   const persist = async (field: "dropOffDate" | "pickupDate", localVal: string) => {
     if (!onJobUpdated) return;
-    const nextMs = localDateTimeToMillis(localVal);
     const currentIso = field === "dropOffDate" ? job.dropOffDate : job.pickupDate;
+    const trimmed = localVal.trim();
+    const nextMs = localDateTimeToMillis(trimmed);
     const currentMs = jobDateToMillis(currentIso ?? undefined);
-    if (nextMs === currentMs) return;
+    if (isCollection) {
+      if (trimmed === toDateLocalValue(currentIso ?? undefined)) return;
+    } else if (nextMs === currentMs) {
+      return;
+    }
 
     setSavingField(field);
     try {
       const body =
         nextMs === null
           ? { [field]: null }
-          : { [field]: new Date(localVal.trim()).toISOString() };
+          : { [field]: new Date(trimmed).toISOString() };
       const res = await fetch(`/api/jobs/${job.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -947,7 +964,7 @@ function JobDetailsDateFields({
           <div className="min-w-0">
             <label className="block text-xs font-medium text-slate-600 mb-1">{firstLabel}</label>
             <input
-              type="datetime-local"
+              type="date"
               value={dropOff}
               onChange={(e) => setDropOff(e.target.value)}
               onBlur={() => persist("dropOffDate", dropOff)}
@@ -960,7 +977,7 @@ function JobDetailsDateFields({
               <div className="min-w-0 flex-1" style={{ minWidth: "180px" }}>
                 <label className="block text-xs font-medium text-slate-600 mb-1">{secondLabel}</label>
                 <input
-                  type="datetime-local"
+                  type="date"
                   value={pickup}
                   onChange={(e) => setPickup(e.target.value)}
                   onBlur={() => persist("pickupDate", pickup)}
