@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { ChatMessage } from "@/lib/types";
 import { useCustomerChatNotifications } from "@/hooks/useCustomerChatNotifications";
@@ -607,20 +608,25 @@ export default function CustomerChatPage() {
   return (
     <div className="flex-1 flex flex-col min-h-0 w-full min-w-0 flex items-center justify-center px-2 sm:px-3 overflow-x-hidden">
       <div className="w-full max-w-2xl flex flex-col flex-1 min-h-0 min-w-0 rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <header className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50 flex-shrink-0">
+        <header className="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-200 bg-slate-50 flex-shrink-0">
           <h2 className="font-semibold text-slate-900">
             Chat with us
             {customerName && (
               <span className="font-normal text-slate-500 ml-2">· Hi {customerName}</span>
             )}
           </h2>
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="text-sm text-slate-500 hover:text-slate-700"
-          >
-            Sign out
-          </button>
+          <div className="flex shrink-0 items-center gap-3">
+            <Link href="/chat/c/preferences" className="text-sm font-medium text-slate-500 hover:text-slate-700">
+              Settings
+            </Link>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="text-sm text-slate-500 hover:text-slate-700"
+            >
+              Sign out
+            </button>
+          </div>
         </header>
 
         <div className="relative flex-1 min-h-0">

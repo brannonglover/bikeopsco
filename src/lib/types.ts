@@ -28,6 +28,9 @@ export interface Customer {
   lastName: string | null;
   email: string | null;
   phone: string | null;
+  emailUpdatesConsent?: boolean;
+  emailUpdatesConsentSource?: string | null;
+  emailUpdatesConsentUpdatedAt?: string | null;
   smsConsent?: boolean;
   smsConsentSource?: string | null;
   smsConsentUpdatedAt?: string | null;

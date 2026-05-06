@@ -26,6 +26,11 @@ type SmsConsentLike = {
   smsConsentUpdatedAt: Date | string | null;
 };
 
+type EmailUpdatesConsentLike = {
+  email: string | null;
+  emailUpdatesConsent?: boolean | null;
+};
+
 export function buildSmsConsentUpdate(
   smsConsent: boolean,
   smsConsentSource: string
@@ -35,6 +40,24 @@ export function buildSmsConsentUpdate(
     smsConsentSource,
     smsConsentUpdatedAt: new Date(),
   };
+}
+
+export function buildEmailUpdatesConsentUpdate(
+  emailUpdatesConsent: boolean,
+  emailUpdatesConsentSource: string
+) {
+  return {
+    emailUpdatesConsent,
+    emailUpdatesConsentSource,
+    emailUpdatesConsentUpdatedAt: new Date(),
+  };
+}
+
+export function getEffectiveEmailUpdatesConsent(
+  customer: EmailUpdatesConsentLike | null | undefined
+): boolean {
+  if (!customer?.email?.trim()) return false;
+  return customer.emailUpdatesConsent !== false;
 }
 
 /**

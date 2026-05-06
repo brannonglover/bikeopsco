@@ -7,7 +7,7 @@ import { sendJobSms, getTemplateSlugForStage } from "@/lib/sms";
 import { syncCollectionJobService } from "@/lib/collection-fee";
 import { getAppFeatures } from "@/lib/app-settings";
 import { computeJobSubtotal, computeTotalPaid, getJobPaymentSummary } from "@/lib/job-payments";
-import { getEffectiveSmsConsent } from "@/lib/sms-consent";
+import { getEffectiveEmailUpdatesConsent, getEffectiveSmsConsent } from "@/lib/sms-consent";
 import { getShopForHost } from "@/lib/shop";
 import { addCustomerSystemChatMessage } from "@/lib/system-chat";
 
@@ -88,6 +88,7 @@ export async function GET(
       job.customer
         ? {
             ...job.customer,
+            emailUpdatesConsent: getEffectiveEmailUpdatesConsent(job.customer),
             smsConsent: getEffectiveSmsConsent(job.customer),
           }
         : null;
@@ -432,6 +433,7 @@ export async function PATCH(
       data.stage === "CANCELLED" &&
       existingJob?.stage === "PENDING_APPROVAL" &&
       job.customer?.email &&
+      getEffectiveEmailUpdatesConsent(job.customer) &&
       features.notifyCustomerEnabled &&
       data.notifyCustomer !== false
     ) {
@@ -458,7 +460,9 @@ export async function PATCH(
         ? "bike_ready_invoice"
         : getTemplateForStage(data.stage, existingJob.deliveryType);
       const smsTemplateSlug = getTemplateSlugForStage(data.stage, existingJob.deliveryType);
-      const customerEmail = job.customer?.email;
+      const customerEmail = getEffectiveEmailUpdatesConsent(job.customer)
+        ? job.customer?.email
+        : null;
       const customerPhone = job.customer?.phone;
       const canSendSms = getEffectiveSmsConsent(job.customer);
 
@@ -522,6 +526,7 @@ export async function PATCH(
       job.customer
         ? {
             ...job.customer,
+            emailUpdatesConsent: getEffectiveEmailUpdatesConsent(job.customer),
             smsConsent: getEffectiveSmsConsent(job.customer),
           }
         : null;

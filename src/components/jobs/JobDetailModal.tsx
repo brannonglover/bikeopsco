@@ -1426,11 +1426,15 @@ function mergeJobPreservingInvoiceDetails(prev: Job, next: Job): Job {
   const merged = { ...prev, ...next };
   const nextServices = next.jobServices ?? [];
   const nextProducts = next.jobProducts ?? [];
+  const isIncompleteServiceLine = (js: JobService) =>
+    !js.id || (Boolean(js.serviceId) && !js.service) || (!js.serviceId && !js.customServiceName && !js.service);
+  const isIncompleteProductLine = (jp: JobProduct) =>
+    !jp.id || !jp.productId || !jp.product;
 
-  if (nextServices.length > 0 && nextServices.some((js) => !js.id)) {
+  if (nextServices.length > 0 && nextServices.some(isIncompleteServiceLine)) {
     merged.jobServices = prev.jobServices;
   }
-  if (nextProducts.length > 0 && nextProducts.some((jp) => !jp.id || !jp.productId)) {
+  if (nextProducts.length > 0 && nextProducts.some(isIncompleteProductLine)) {
     merged.jobProducts = prev.jobProducts;
   }
 

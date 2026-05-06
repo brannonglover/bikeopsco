@@ -46,11 +46,15 @@ function mergeJobPreservingInvoiceDetails(prev: Job, next: Job): Job {
   const merged = { ...prev, ...next };
   const nextServices = next.jobServices ?? [];
   const nextProducts = next.jobProducts ?? [];
+  const isIncompleteServiceLine = (js: NonNullable<Job["jobServices"]>[number]) =>
+    !js.id || (Boolean(js.serviceId) && !js.service) || (!js.serviceId && !js.customServiceName && !js.service);
+  const isIncompleteProductLine = (jp: NonNullable<Job["jobProducts"]>[number]) =>
+    !jp.id || !jp.productId || !jp.product;
 
-  if (nextServices.length > 0 && nextServices.some((js) => !js.id)) {
+  if (nextServices.length > 0 && nextServices.some(isIncompleteServiceLine)) {
     merged.jobServices = prev.jobServices;
   }
-  if (nextProducts.length > 0 && nextProducts.some((jp) => !jp.id || !jp.productId)) {
+  if (nextProducts.length > 0 && nextProducts.some(isIncompleteProductLine)) {
     merged.jobProducts = prev.jobProducts;
   }
 
@@ -75,6 +79,10 @@ const DISPLAY_STAGES: Stage[] = STAGES.filter(
 );
 
 type ColumnSortUpdate = { id: string; columnSortOrder: number };
+type PendingBoardMove = {
+  stage: Stage;
+  sortOrders: Map<string, number>;
+};
 
 /** Match PATCH semantics so the card does not “snap” again when the server JSON arrives. */
 function withOptimisticStageChange(job: Job, newStage: Stage): Job {
@@ -146,6 +154,7 @@ export function KanbanBoard() {
   const [archiving, setArchiving] = useState(false);
   const [savedToast, setSavedToast] = useState<string | null>(null);
   const dismissDateToastJobIdRef = useRef<string | null>(null);
+  const pendingBoardMovesRef = useRef<Map<string, PendingBoardMove>>(new Map());
   /** Job IDs for which board actions should not send customer email/SMS. */
   const [jobsSkippingCustomerNotify, setJobsSkippingCustomerNotify] = useState<
     Set<string>
@@ -170,12 +179,55 @@ export function KanbanBoard() {
     [features.notifyCustomerEnabled]
   );
 
+  const applyPendingBoardMoves = useCallback((incoming: Job[]): Job[] => {
+    const pending = pendingBoardMovesRef.current;
+    if (pending.size === 0) return incoming;
+
+    const resolvedIds: string[] = [];
+    const resolvedSortIds: string[] = [];
+    const next = incoming.map((job) => {
+      let patched = job;
+
+      const ownMove = pending.get(job.id);
+      if (ownMove) {
+        if (job.stage === ownMove.stage) {
+          resolvedIds.push(job.id);
+        } else {
+          patched = withOptimisticStageChange(job, ownMove.stage);
+        }
+      }
+
+      for (const [moveJobId, move] of pending) {
+        const sortOrder = move.sortOrders.get(job.id);
+        if (sortOrder === undefined) continue;
+        patched = { ...patched, columnSortOrder: sortOrder };
+        if (job.id !== moveJobId || job.stage === move.stage) {
+          resolvedSortIds.push(`${moveJobId}:${job.id}`);
+        }
+      }
+
+      return patched;
+    });
+
+    for (const id of resolvedIds) {
+      pending.delete(id);
+    }
+    for (const key of resolvedSortIds) {
+      const [moveJobId, sortedJobId] = key.split(":");
+      pending.get(moveJobId)?.sortOrders.delete(sortedJobId);
+    }
+
+    return next;
+  }, []);
+
   const fetchJobs = useCallback((opts?: { silent?: boolean }) => {
     if (!opts?.silent) setLoading(true);
     fetch("/api/jobs?view=board", { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => {
-        const next = Array.isArray(data) ? (data as Job[]) : [];
+        const next = applyPendingBoardMoves(
+          Array.isArray(data) ? (data as Job[]) : []
+        );
         setJobs(next);
         // Keep the detail modal in sync if it's open, without clobbering fields
         // that aren't returned by the board view (e.g. jobServices/jobProducts).
@@ -188,7 +240,7 @@ export function KanbanBoard() {
       })
       .catch(() => setJobs([]))
       .finally(() => setLoading(false));
-  }, []);
+  }, [applyPendingBoardMoves]);
 
   useJobNotifications(jobs, () => fetchJobs({ silent: true }));
 
@@ -380,7 +432,13 @@ export function KanbanBoard() {
       });
       if (previousStage === undefined) return;
 
+      pendingBoardMovesRef.current.set(jobId, {
+        stage: newStage,
+        sortOrders: sortMap,
+      });
+
       const revert = () => {
+        pendingBoardMovesRef.current.delete(jobId);
         if (revertSnapshots.size === 0) return;
         setJobs((prev) =>
           prev.map((j) => revertSnapshots.get(j.id) ?? j)
@@ -402,6 +460,10 @@ export function KanbanBoard() {
         });
         if (res.ok) {
           const updated = await res.json();
+          pendingBoardMovesRef.current.set(jobId, {
+            stage: newStage,
+            sortOrders: sortMap,
+          });
           setJobs((prev) =>
             prev.map((j) =>
               j.id === jobId

@@ -6,6 +6,7 @@ import {
   sendChatCustomerReplyReminder,
   sendChatStaffReplyReminder,
 } from "@/lib/email";
+import { getEffectiveEmailUpdatesConsent } from "@/lib/sms-consent";
 import { getAppUrl } from "@/lib/env";
 import { getAppFeatures } from "@/lib/app-settings";
 
@@ -65,6 +66,7 @@ export async function GET(request: NextRequest) {
         if (!last) continue;
 
         if (last.sender === "STAFF") {
+          if (!getEffectiveEmailUpdatesConsent(conv.customer)) continue;
           const email = conv.customer.email?.trim();
           if (!email || !customerChatUrl) continue;
 

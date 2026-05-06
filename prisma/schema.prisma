@@ -60,6 +60,9 @@ model Customer {
   lastName         String?
   email            String?
   phone            String?
+  emailUpdatesConsent Boolean       @default(true)
+  emailUpdatesConsentSource String?
+  emailUpdatesConsentUpdatedAt DateTime?
   smsConsent       Boolean          @default(false)
   smsConsentSource String?
   smsConsentUpdatedAt DateTime?

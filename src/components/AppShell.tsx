@@ -117,6 +117,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
   const isPublicCustomerPage =
     pathname === "/book" ||
     pathname?.startsWith("/pay/") ||
+    pathname?.startsWith("/preferences/") ||
     pathname?.startsWith("/status/") ||
     pathname?.startsWith("/chat/c");
   const isStaffPage = !isLoginPage && !isSignupPage && !isWidgetPage && !isPublicCustomerPage;
@@ -155,8 +156,8 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
   }
 
   if (isPublicCustomerPage) {
-    const isChatPage = pathname?.startsWith("/chat/c");
-    const isStatusOrChat = pathname?.startsWith("/status/") || pathname?.startsWith("/chat/c") || pathname?.startsWith("/pay/");
+    const isChatPage = pathname === "/chat/c";
+    const isStatusOrChat = pathname?.startsWith("/status/") || pathname === "/chat/c" || pathname?.startsWith("/pay/");
     return (
       <div className="min-h-screen flex flex-col w-full min-w-0">
         <header className="flex-shrink-0 py-2 px-3 sm:py-3 sm:px-4 flex items-center justify-between gap-2">

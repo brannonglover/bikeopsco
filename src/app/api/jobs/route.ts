@@ -9,6 +9,7 @@ import { sendPushToAllStaff } from "@/lib/push";
 import { getAppFeatures } from "@/lib/app-settings";
 import { computeJobSubtotal, computeTotalPaid, getJobPaymentSummary } from "@/lib/job-payments";
 import { getShopForHost } from "@/lib/shop";
+import { getEffectiveEmailUpdatesConsent } from "@/lib/sms-consent";
 
 export const dynamic = "force-dynamic";
 
@@ -202,14 +203,41 @@ export async function GET(request: NextRequest) {
           },
           jobServices: {
             select: {
+              id: true,
+              serviceId: true,
+              customServiceName: true,
               quantity: true,
               unitPrice: true,
+              notes: true,
+              jobBikeId: true,
+              service: true,
+              jobBike: {
+                select: {
+                  id: true,
+                  make: true,
+                  model: true,
+                  nickname: true,
+                },
+              },
             },
           },
           jobProducts: {
             select: {
+              id: true,
+              productId: true,
               quantity: true,
               unitPrice: true,
+              notes: true,
+              jobBikeId: true,
+              product: true,
+              jobBike: {
+                select: {
+                  id: true,
+                  make: true,
+                  model: true,
+                  nickname: true,
+                },
+              },
             },
           },
           payments: {
@@ -427,7 +455,9 @@ export async function POST(request: NextRequest) {
     }
 
     const templateSlug = getTemplateForStage("BOOKED_IN", job.deliveryType);
-    const customerEmail = job.customer?.email?.trim();
+    const customerEmail = getEffectiveEmailUpdatesConsent(job.customer)
+      ? job.customer?.email?.trim()
+      : null;
     if (!customerEmail) {
       console.log("[Job created] No customer email – skipping booking confirmation");
     } else if (!templateSlug) {
