@@ -1,5 +1,5 @@
 import Twilio from "twilio";
-import { getCustomerStatusUrl } from "./env";
+import { getCustomerBillUrl, getCustomerStatusUrl } from "./env";
 import { normalizePhone } from "./phone";
 
 type SmsProvider = "infobip" | "twilio";
@@ -208,7 +208,9 @@ const SMS_TEMPLATES: Record<string, string> = {
   waiting_on_parts:
     "{{shopName}}\n\nWaiting on parts for your {{bikeMake}} {{bikeModel}}.\n\nTrack: {{statusUrl}}\n\nReply STOP to opt out.",
   bike_ready:
-    "{{shopName}}\n\nGood news! Your {{bikeMake}} {{bikeModel}} is ready for pickup.\n\nTrack: {{statusUrl}}\n\nReply STOP to opt out.",
+    "{{shopName}}\n\nGood news! Your {{bikeMake}} {{bikeModel}} is ready for pickup.\n\nView your itemized bill: {{billUrl}}\n\nReply STOP to opt out.",
+  bike_ready_invoice:
+    "{{shopName}}\n\nGood news! Your {{bikeMake}} {{bikeModel}} is ready for pickup.\n\nView your itemized bill: {{billUrl}}\n\nReply STOP to opt out.",
 };
 
 export function getTemplateSlugForStage(
@@ -226,7 +228,7 @@ export function getTemplateSlugForStage(
   const map: Record<string, string> = {
     WORKING_ON: "working_on_bike",
     WAITING_ON_PARTS: "waiting_on_parts",
-    BIKE_READY: "bike_ready",
+    BIKE_READY: "bike_ready_invoice",
   };
   return map[stage] ?? null;
 }
@@ -274,6 +276,7 @@ export async function buildJobSmsMessage(
     : "Customer";
 
   const statusUrl = getCustomerStatusUrl(job.id, shopRow?.subdomain);
+  const billUrl = getCustomerBillUrl(job.id, shopRow?.subdomain);
 
   const vars: Record<string, string> = {
     customerName,
@@ -281,6 +284,7 @@ export async function buildJobSmsMessage(
     bikeModel: job.bikeModel,
     shopName,
     statusUrl,
+    billUrl,
   };
 
   return { ok: true, message: mergeTemplateVariables(body, vars) };

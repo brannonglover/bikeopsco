@@ -164,7 +164,12 @@ export default function PayPage() {
         });
 
         if (localPaymentSummary.isPaidInFull || localPaymentSummary.remaining <= 0) {
-          setError("This job is already paid");
+          setPaymentAmount({
+            subtotal: 0,
+            amount: 0,
+            originalSubtotal: localSubtotal,
+            totalPaid: localPaymentSummary.totalPaid,
+          });
           return;
         }
 
@@ -249,6 +254,22 @@ export default function PayPage() {
   const total = paymentAmount?.amount ?? subtotal;
   const hasSurcharge = total > subtotal;
   const hasPartialPayment = totalPaid > 0 && subtotal > 0;
+  const isPaidInFull = paymentSummary.isPaidInFull || subtotal <= 0;
+  const displayedTotal = isPaidInFull ? originalSubtotal : total;
+  const lineItems = [
+    ...(job.jobServices ?? []).map((item) => ({
+      name: item.service?.name ?? item.customServiceName ?? "Service",
+      quantity: item.quantity || 1,
+      unitPrice: Number(item.unitPrice),
+      kind: "Service",
+    })),
+    ...(job.jobProducts ?? []).map((item) => ({
+      name: item.product?.name ?? "Product",
+      quantity: item.quantity || 1,
+      unitPrice: Number(item.unitPrice),
+      kind: "Product",
+    })),
+  ];
 
   const customerName = job.customer
     ? [job.customer.firstName, job.customer.lastName].filter(Boolean).join(" ")
@@ -314,7 +335,7 @@ export default function PayPage() {
               </p>
             </div>
           ) : (
-            <Price amount={total} variant="total" />
+            <Price amount={displayedTotal} variant="total" />
           )}
         </div>
         {!inPerson && (
@@ -330,6 +351,38 @@ export default function PayPage() {
         )}
       </div>
 
+      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold text-slate-900">Itemized bill</h2>
+          <span className="text-sm font-semibold tabular-nums text-slate-700">
+            {originalSubtotal.toLocaleString("en-US", { style: "currency", currency: "USD" })}
+          </span>
+        </div>
+        <div className="divide-y divide-slate-100">
+          {lineItems.length > 0 ? (
+            lineItems.map((item, index) => {
+              const lineTotal = item.unitPrice * item.quantity;
+              return (
+                <div key={`${item.kind}-${item.name}-${index}`} className="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0">
+                  <div className="min-w-0">
+                    <p className="break-words text-sm font-medium text-slate-900">{item.name}</p>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      {item.kind} · Qty {item.quantity} ·{" "}
+                      {item.unitPrice.toLocaleString("en-US", { style: "currency", currency: "USD" })} each
+                    </p>
+                  </div>
+                  <p className="shrink-0 text-sm font-semibold tabular-nums text-slate-800">
+                    {lineTotal.toLocaleString("en-US", { style: "currency", currency: "USD" })}
+                  </p>
+                </div>
+              );
+            })
+          ) : (
+            <p className="py-2 text-sm text-slate-500">No services or products have been added yet.</p>
+          )}
+        </div>
+      </div>
+
       {clientSecret && stripePromise ? (
         <Elements
           stripe={stripePromise}
@@ -343,6 +396,10 @@ export default function PayPage() {
         >
           <PaymentForm jobId={jobId} total={total} customerEmail={job.customer?.email} inPerson={inPerson} />
         </Elements>
+      ) : isPaidInFull ? (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-center text-sm font-medium text-emerald-800">
+          This bill is paid in full.
+        </div>
       ) : null}
     </div>
   );

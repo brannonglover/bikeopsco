@@ -1,7 +1,7 @@
 import { Resend } from "resend";
 import fs from "fs";
 import path from "path";
-import { getAppUrl, getCustomerStatusUrl, getResendApiKey, getShopAppUrl, getStaffJobOpenUrl } from "./env";
+import { getAppUrl, getCustomerBillUrl, getCustomerStatusUrl, getResendApiKey, getShopAppUrl, getStaffJobOpenUrl } from "./env";
 
 function getResend(): Resend | null {
   const key = getResendApiKey();
@@ -1072,13 +1072,13 @@ export interface JobServiceForInvoice {
   service?: { name: string } | null;
   customServiceName?: string | null;
   quantity: number;
-  unitPrice: string | number;
+  unitPrice: string | number | { toString(): string };
 }
 
 export interface JobProductForInvoice {
   product: { name: string };
   quantity: number;
-  unitPrice: string | number;
+  unitPrice: string | number | { toString(): string };
 }
 
 export interface JobForInvoice {
@@ -1181,6 +1181,87 @@ function buildInvoiceInnerHtml(
 <p style="margin:24px 0 0;font-size:14px;color:#64748b">This receipt is for your ${escapeHtml(job.bikeMake)} ${escapeHtml(job.bikeModel)} repair.</p>
 <p style="margin:20px 0 0;font-size:14px;color:#64748b">If you have any questions, please don't hesitate to get in touch.</p>
 <p style="margin:20px 0 0;font-size:12px;color:#94a3b8">Thank you for choosing ${escapeHtml(shopName)}.</p>
+  `.trim();
+}
+
+function buildBikeReadyInvoiceInnerHtml(
+  job: JobForInvoice,
+  subtotal: number,
+  totalPaid: number,
+  shopName: string,
+  billUrl: string
+): string {
+  const customerName = job.customer
+    ? [job.customer.firstName, job.customer.lastName].filter(Boolean).join(" ").trim() || "Customer"
+    : "Customer";
+  const remaining = Math.max(0, subtotal - totalPaid);
+  const serviceRows = (job.jobServices ?? []).map((js) => {
+    const unitPrice = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);
+    const lineTotal = unitPrice * (js.quantity || 1);
+    return `
+      <tr>
+        <td style="padding:14px 18px;border-bottom:1px solid #e2e8f0;color:#334155;font-size:16px">${escapeHtml(js.service?.name ?? js.customServiceName ?? "Service")}</td>
+        <td style="padding:14px 18px;border-bottom:1px solid #e2e8f0;color:#64748b;text-align:center;font-size:16px">${js.quantity}</td>
+        <td style="padding:14px 18px;border-bottom:1px solid #e2e8f0;color:#64748b;text-align:right;font-size:16px">${formatPrice(unitPrice)}</td>
+        <td style="padding:14px 18px;border-bottom:1px solid #e2e8f0;color:#0f172a;font-weight:600;text-align:right;font-size:16px">${formatPrice(lineTotal)}</td>
+      </tr>
+    `;
+  }).join("");
+  const productRows = (job.jobProducts ?? []).map((jp) => {
+    const unitPrice = typeof jp.unitPrice === "string" ? parseFloat(jp.unitPrice) : Number(jp.unitPrice);
+    const lineTotal = unitPrice * (jp.quantity || 1);
+    return `
+      <tr>
+        <td style="padding:14px 18px;border-bottom:1px solid #e2e8f0;color:#334155;font-size:16px">${escapeHtml(jp.product?.name ?? "Product")}</td>
+        <td style="padding:14px 18px;border-bottom:1px solid #e2e8f0;color:#64748b;text-align:center;font-size:16px">${jp.quantity}</td>
+        <td style="padding:14px 18px;border-bottom:1px solid #e2e8f0;color:#64748b;text-align:right;font-size:16px">${formatPrice(unitPrice)}</td>
+        <td style="padding:14px 18px;border-bottom:1px solid #e2e8f0;color:#0f172a;font-weight:600;text-align:right;font-size:16px">${formatPrice(lineTotal)}</td>
+      </tr>
+    `;
+  }).join("");
+  const rows = serviceRows + productRows || `
+    <tr>
+      <td colspan="4" style="padding:14px 18px;border-bottom:1px solid #e2e8f0;color:#64748b;font-size:16px">No line items added yet.</td>
+    </tr>
+  `;
+
+  return `
+<p style="margin:0 0 16px;font-size:16px;color:#475569">Hi ${escapeHtml(customerName)},</p>
+<p style="margin:0 0 24px;font-size:16px;color:#475569">Good news: your ${escapeHtml(job.bikeMake)} ${escapeHtml(job.bikeModel)} is ready for pickup. Here is the itemized bill for the work completed.</p>
+
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom:24px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+  <thead>
+    <tr style="background-color:#f8fafc">
+      <th style="padding:14px 18px;text-align:left;font-size:15px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em">Item</th>
+      <th style="padding:14px 18px;text-align:center;font-size:15px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em">Qty</th>
+      <th style="padding:14px 18px;text-align:right;font-size:15px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em">Unit Price</th>
+      <th style="padding:14px 18px;text-align:right;font-size:15px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em">Total</th>
+    </tr>
+  </thead>
+  <tbody>${rows}</tbody>
+</table>
+
+<div style="padding:16px;background-color:#f1f5f9;border-radius:8px;border:1px solid #e2e8f0;margin-bottom:24px">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+    <tr>
+      <td style="font-size:16px;font-weight:600;color:#475569">Total</td>
+      <td style="font-size:18px;font-weight:700;color:#334155;text-align:right">${formatPrice(subtotal)}</td>
+    </tr>
+    ${totalPaid > 0 ? `
+    <tr>
+      <td style="font-size:15px;font-weight:600;color:#64748b;padding-top:8px">Already paid</td>
+      <td style="font-size:15px;font-weight:600;color:#64748b;text-align:right;padding-top:8px">${formatPrice(totalPaid)}</td>
+    </tr>
+    ` : ""}
+    <tr>
+      <td style="font-size:16px;font-weight:700;color:#475569;padding-top:8px">Balance due</td>
+      <td style="font-size:20px;font-weight:700;color:#0f172a;text-align:right;padding-top:8px">${formatPrice(remaining)}</td>
+    </tr>
+  </table>
+</div>
+
+${billUrl ? buildCustomerEmailCtaButton(billUrl, remaining > 0 ? "View and pay your bill" : "View your bill") : ""}
+<p style="margin:24px 0 0;font-size:14px;color:#64748b">Thanks,<br/>The ${escapeHtml(shopName)} Team</p>
   `.trim();
 }
 
@@ -1442,6 +1523,73 @@ export async function sendPaymentReceiptEmail(
   } catch (e) {
     const err = e instanceof Error ? e.message : "Unknown error";
     return { ok: false, error: err };
+  }
+}
+
+export async function sendBikeReadyInvoiceEmail(
+  job: JobForInvoice,
+  totalPaid = 0
+): Promise<{ ok: boolean; error?: string }> {
+  const resend = getResend();
+  if (!resend) {
+    console.warn("RESEND_API_KEY not set, skipping bike ready invoice email");
+    return { ok: false, error: "Email not configured" };
+  }
+
+  const email = job.customer?.email;
+  if (!email?.trim()) {
+    return { ok: false, error: "No customer email" };
+  }
+
+  const { prisma } = await import("./db");
+  const shopRow = await prisma.shop
+    .findUnique({ where: { id: job.shopId }, select: { name: true, subdomain: true } })
+    .catch(() => null);
+  const shopName = shopRow?.name ?? SHOP_NAME;
+  const subtotal =
+    (job.jobServices ?? []).reduce((sum, js) => {
+      const price = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);
+      return sum + price * (js.quantity || 1);
+    }, 0) +
+    (job.jobProducts ?? []).reduce((sum, jp) => {
+      const price = typeof jp.unitPrice === "string" ? parseFloat(jp.unitPrice) : Number(jp.unitPrice);
+      return sum + price * (jp.quantity || 1);
+    }, 0);
+  const billUrl = getCustomerBillUrl(job.id, shopRow?.subdomain);
+  const subject = `Your bike is ready - bill for ${job.bikeMake} ${job.bikeModel}`;
+
+  const branding = await getCustomerEmailBrandingAssets(job.shopId);
+  const innerHtml = buildBikeReadyInvoiceInnerHtml(job, subtotal, totalPaid, shopName, billUrl);
+  const html = buildReadOnlyCustomerEmailHtml({
+    innerHtml,
+    headerLogoSrc: branding.headerLogoSrc,
+    heading: "Your bike is ready",
+  });
+  const attachments = customerEmailBrandingAttachments(branding);
+
+  try {
+    const { error } = await resend.emails.send({
+      ...getCustomerEmailSendOptions(),
+      to: email,
+      subject,
+      html,
+      ...(attachments && { attachments }),
+    });
+
+    if (error) return { ok: false, error: error.message };
+
+    await prisma.jobEmail.create({
+      data: {
+        shopId: job.shopId,
+        jobId: job.id,
+        templateSlug: "bike_ready_invoice",
+        recipient: email,
+      },
+    });
+
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Unknown error" };
   }
 }
 

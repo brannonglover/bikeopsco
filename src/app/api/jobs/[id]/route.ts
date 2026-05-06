@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { getToken } from "next-auth/jwt";
-import { sendJobEmail, getTemplateForStage, sendBookingDeclinedEmail } from "@/lib/email";
+import { sendBikeReadyInvoiceEmail, sendJobEmail, getTemplateForStage, sendBookingDeclinedEmail } from "@/lib/email";
 import { sendJobSms, getTemplateSlugForStage } from "@/lib/sms";
 import { syncCollectionJobService } from "@/lib/collection-fee";
 import { getAppFeatures } from "@/lib/app-settings";
@@ -454,7 +454,9 @@ export async function PATCH(
       data.stage !== "COMPLETED" &&
       existingJob
     ) {
-      const templateSlug = getTemplateForStage(data.stage, existingJob.deliveryType);
+      const templateSlug = data.stage === "BIKE_READY"
+        ? "bike_ready_invoice"
+        : getTemplateForStage(data.stage, existingJob.deliveryType);
       const smsTemplateSlug = getTemplateSlugForStage(data.stage, existingJob.deliveryType);
       const customerEmail = job.customer?.email;
       const customerPhone = job.customer?.phone;
@@ -479,7 +481,12 @@ export async function PATCH(
             smsPromise,
           ]);
           if (customerEmail && templateSlug && !emailAlreadySent) {
-            sendJobEmail(templateSlug, customerEmail, job).catch(console.error);
+            if (data.stage === "BIKE_READY") {
+              const totalPaid = computeTotalPaid(job.payments);
+              sendBikeReadyInvoiceEmail(job, totalPaid).catch(console.error);
+            } else {
+              sendJobEmail(templateSlug, customerEmail, job).catch(console.error);
+            }
           }
           if (canSendSms && customerPhone && smsTemplateSlug && !smsAlreadySent) {
             sendJobSms(smsTemplateSlug, customerPhone, job)

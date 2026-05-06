@@ -74,6 +74,11 @@ export function getCustomerStatusUrl(jobId: string, shopSubdomain?: string | nul
   return shopUrl ? `${shopUrl}/status/${encodeURIComponent(jobId)}` : "";
 }
 
+export function getCustomerBillUrl(jobId: string, shopSubdomain?: string | null): string {
+  const shopUrl = getShopAppUrl(shopSubdomain);
+  return shopUrl ? `${shopUrl}/pay/${encodeURIComponent(jobId)}` : "";
+}
+
 export function getStaffAppScheme(): string {
   return process.env.STAFF_APP_SCHEME?.trim() || "bikeops";
 }
