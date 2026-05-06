@@ -11,8 +11,9 @@
     <link rel="icon" href="/favicon-32x32.png" sizes="32x32" type="image/png" />
     <link rel="stylesheet" href="/styles.css" />
     <script>
-      var POSTHOG_PROJECT_KEY = "phc_REPLACE_WITH_POSTHOG_PROJECT_KEY";
+      var POSTHOG_PROJECT_KEY = "phc_vKDFFaTih87w8hxDjhefDEiTtJBNdBqkKcB7Hc5SToT4";
       var POSTHOG_API_HOST = "https://us.i.posthog.com";
+      var POSTHOG_SITE = "bikeopsco";
       var POSTHOG_OPT_OUT_STORAGE_KEY = "bikeops_posthog_opt_out";
 
       function syncPostHogOptOutFromUrl() {
@@ -53,7 +54,12 @@
         posthog.init(POSTHOG_PROJECT_KEY, {
           api_host: POSTHOG_API_HOST,
           defaults: "2026-01-30",
-          capture_pageview: true,
+          capture_pageview: false,
+        });
+        posthog.register({ site: POSTHOG_SITE });
+        posthog.capture("$pageview", {
+          site: POSTHOG_SITE,
+          $current_url: window.location.href,
         });
       }
     </script>
@@ -326,7 +332,7 @@
             return;
           }
 
-          window.posthog.capture(eventName, properties);
+          window.posthog.capture(eventName, Object.assign({ site: "bikeopsco" }, properties || {}));
         }
 
         function closestAnchor(target) {
