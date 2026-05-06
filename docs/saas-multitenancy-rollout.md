@@ -43,6 +43,7 @@ This means existing jobs/customers/etc remain intact and are now owned by the de
    - Visit `app.bikeops.co/login`.
    - Enter an existing shop subdomain (for example `bbm`) and confirm it sends you to that tenant login page.
    - Visit `app.bikeops.co/signup` and confirm a new shop can create a tenant workspace.
+   - Point app-owned external webhooks at the app host, for example Stripe should use `https://app.bikeops.co/api/webhooks/stripe` rather than `https://www.bikeops.co/api/webhooks/stripe`.
 
 7. **Move the apex domain to Marketing**
    - Create a separate Vercel “Marketing” project.
