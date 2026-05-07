@@ -367,6 +367,12 @@ model Message {
   body               String?
   /// Twilio inbound MessageSid — dedupes webhook retries
   smsSid             String?
+  smsProvider        String?
+  smsDeliveryStatus  String?
+  smsDeliveryStatusName String?
+  smsDeliveryStatusDescription String?
+  smsDeliveryError   String?
+  smsDeliveredAt     DateTime?
   attachments        MessageAttachment[]
   reactions          MessageReaction[]
   chatReminderEmails ChatReminderEmail[]

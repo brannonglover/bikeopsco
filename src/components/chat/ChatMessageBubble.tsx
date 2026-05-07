@@ -16,6 +16,39 @@ function extractUrls(text: string): string[] {
 
 export const REACTION_EMOJIS = ["\u{1F44D}", "\u{2764}\u{FE0F}", "\u{1F602}", "\u{1F62E}", "\u{1F622}", "\u{1F64F}"];
 
+function getSmsDeliveryLabel(msg: ChatMessage): { label: string; tone: "muted" | "ok" | "bad"; title?: string } | null {
+  if (!msg.smsProvider || !msg.smsDeliveryStatus) return null;
+
+  const status = msg.smsDeliveryStatus.toUpperCase();
+  const statusName = msg.smsDeliveryStatusName?.toUpperCase() ?? "";
+  const title =
+    msg.smsDeliveryError ??
+    msg.smsDeliveryStatusDescription ??
+    msg.smsDeliveryStatusName ??
+    msg.smsDeliveryStatus;
+
+  if (status === "DELIVERED" || statusName === "DELIVERED_TO_HANDSET") {
+    return { label: "SMS delivered", tone: "ok", title };
+  }
+  if (
+    status === "FAILED" ||
+    status === "REJECTED" ||
+    status === "UNDELIVERABLE" ||
+    status === "EXPIRED" ||
+    statusName.includes("FAILED") ||
+    statusName.includes("REJECTED") ||
+    statusName.includes("UNDELIVERABLE") ||
+    statusName.includes("EXPIRED")
+  ) {
+    return { label: "SMS failed", tone: "bad", title };
+  }
+  if (status === "PENDING") {
+    return { label: "SMS pending", tone: "muted", title };
+  }
+
+  return { label: "SMS sent", tone: "muted", title };
+}
+
 type ChatMessageBubbleProps = {
   msg: ChatMessage;
   /** Current user may edit/delete this message */
@@ -190,7 +223,8 @@ export function ChatMessageBubble({
     : undefined;
   const hasReactions = Object.keys(aggregated).length > 0;
   const deliveryState = isOwn && !editing ? msg.clientDeliveryState : undefined;
-  const showDeliveryState = Boolean(deliveryState);
+  const smsDelivery = isOwn && !editing ? getSmsDeliveryLabel(msg) : null;
+  const showDeliveryState = Boolean(deliveryState || smsDelivery);
 
   return (
     <>
@@ -456,11 +490,34 @@ export function ChatMessageBubble({
           className={`mt-1 flex items-center gap-1 text-[11px] ${
             align === "end" ? "justify-end" : "justify-start"
           } ${
-            deliveryState === "FAILED" ? "text-red-600" : "text-slate-400"
+            deliveryState === "FAILED" || smsDelivery?.tone === "bad"
+              ? "text-red-600"
+              : smsDelivery?.tone === "ok"
+                ? "text-emerald-600"
+                : "text-slate-400"
           }`}
           aria-live="polite"
+          title={smsDelivery?.title}
         >
-          {deliveryState === "SENDING" ? (
+          {smsDelivery ? (
+            <svg
+              className="h-3 w-3"
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              aria-hidden
+            >
+              {smsDelivery.tone === "bad" ? (
+                <>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M10 6v5m0 3h.01" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M10 18a8 8 0 100-16 8 8 0 000 16z" />
+                </>
+              ) : (
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16 6l-7.5 8L4 10" />
+              )}
+            </svg>
+          ) : deliveryState === "SENDING" ? (
             <span
               className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-slate-200 border-t-slate-500"
               aria-hidden
@@ -490,10 +547,12 @@ export function ChatMessageBubble({
             </svg>
           )}
           <span>
-            {deliveryState === "SENDING"
+            {smsDelivery
+              ? smsDelivery.label
+              : deliveryState === "SENDING"
               ? "Sending…"
               : deliveryState === "DELIVERED"
-                ? "Delivered"
+                ? "Sent"
                 : "Not delivered"}
           </span>
         </div>

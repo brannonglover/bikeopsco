@@ -1,5 +1,5 @@
 import Twilio from "twilio";
-import { getCustomerBillUrl, getCustomerStatusUrl } from "./env";
+import { getCustomerBillUrl, getCustomerStatusUrl, getShopAppUrl } from "./env";
 import { normalizePhone } from "./phone";
 
 type SmsProvider = "infobip" | "twilio";
@@ -7,8 +7,17 @@ type SmsProvider = "infobip" | "twilio";
 interface SmsSendResult {
   ok: boolean;
   error?: string;
+  provider?: SmsProvider;
   externalMessageId?: string;
+  externalStatus?: string;
+  externalStatusName?: string;
+  externalStatusDescription?: string;
 }
+
+type SmsSendOptions = {
+  notifyUrl?: string;
+  callbackData?: string;
+};
 
 const twilio =
   process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN
@@ -90,7 +99,8 @@ function getInfobipErrorMessage(payload: unknown): string | null {
 
 async function sendInfobipSms(
   to: string,
-  text: string
+  text: string,
+  opts?: SmsSendOptions
 ): Promise<SmsSendResult> {
   if (!INFOBIP_BASE_URL || !INFOBIP_API_KEY || !INFOBIP_SENDER) {
     console.warn(
@@ -100,6 +110,19 @@ async function sendInfobipSms(
   }
 
   try {
+    const messagePayload: Record<string, unknown> = {
+      sender: formatInfobipAddress(INFOBIP_SENDER),
+      destinations: [{ to: formatInfobipAddress(to) }],
+      content: { text },
+    };
+    if (opts?.notifyUrl) {
+      messagePayload.notifyUrl = opts.notifyUrl;
+      messagePayload.notifyContentType = "application/json";
+    }
+    if (opts?.callbackData) {
+      messagePayload.callbackData = opts.callbackData;
+    }
+
     const response = await fetch(`${INFOBIP_BASE_URL}/sms/3/messages`, {
       method: "POST",
       headers: {
@@ -108,19 +131,20 @@ async function sendInfobipSms(
         Accept: "application/json",
       },
       body: JSON.stringify({
-        messages: [
-          {
-            sender: formatInfobipAddress(INFOBIP_SENDER),
-            destinations: [{ to: formatInfobipAddress(to) }],
-            content: { text },
-          },
-        ],
+        messages: [messagePayload],
       }),
     });
 
     const payload = (await response.json().catch(() => null)) as
       | {
-          messages?: Array<{ messageId?: string }>;
+          messages?: Array<{
+            messageId?: string;
+            status?: {
+              groupName?: string;
+              name?: string;
+              description?: string;
+            };
+          }>;
           requestError?: unknown;
           message?: string;
           error?: string;
@@ -137,7 +161,11 @@ async function sendInfobipSms(
 
     return {
       ok: true,
+      provider: "infobip",
       externalMessageId: payload?.messages?.[0]?.messageId,
+      externalStatus: payload?.messages?.[0]?.status?.groupName,
+      externalStatusName: payload?.messages?.[0]?.status?.name,
+      externalStatusDescription: payload?.messages?.[0]?.status?.description,
     };
   } catch (e) {
     const err = e instanceof Error ? e.message : "Unknown error";
@@ -164,7 +192,7 @@ async function sendTwilioSms(
       to,
     });
 
-    return { ok: true, externalMessageId: response.sid };
+    return { ok: true, provider: "twilio", externalMessageId: response.sid };
   } catch (e) {
     const err = e instanceof Error ? e.message : "Unknown error";
     console.error("Twilio SMS send error:", err);
@@ -174,7 +202,8 @@ async function sendTwilioSms(
 
 async function sendSms(
   phoneNumber: string,
-  text: string
+  text: string,
+  opts?: SmsSendOptions
 ): Promise<SmsSendResult> {
   const provider = getConfiguredSmsProvider();
   if (!provider) {
@@ -187,7 +216,7 @@ async function sendSms(
   }
 
   if (provider === "infobip") {
-    return sendInfobipSms(normalized, text);
+    return sendInfobipSms(normalized, text, opts);
   }
 
   return sendTwilioSms(normalized, text);
@@ -336,8 +365,8 @@ const CHAT_SMS_MAX_LEN = 1500;
 export async function sendChatStaffSms(
   phoneNumber: string,
   messageText: string,
-  opts?: { attachmentOnly?: boolean }
-): Promise<{ ok: boolean; error?: string }> {
+  opts?: { attachmentOnly?: boolean; shopSubdomain?: string; messageId?: string }
+): Promise<SmsSendResult> {
   const shopName = process.env.SHOP_NAME || "Basement Bike Mechanic";
   let body: string;
   if (opts?.attachmentOnly) {
@@ -352,11 +381,25 @@ export async function sendChatStaffSms(
   if (body.length > CHAT_SMS_MAX_LEN) {
     body = body.slice(0, CHAT_SMS_MAX_LEN - 3) + "...";
   }
-  const result = await sendSms(phoneNumber, body);
+  const result = await sendSms(phoneNumber, body, {
+    notifyUrl: getInfobipSmsDeliveryNotifyUrl(opts?.shopSubdomain),
+    callbackData: opts?.messageId,
+  });
   if (!result.ok) {
     console.error("Chat SMS send error:", result.error);
   }
   return result;
+}
+
+function getInfobipSmsDeliveryNotifyUrl(shopSubdomain?: string | null): string | undefined {
+  if (!isInfobipConfigured()) return undefined;
+  const base = getShopAppUrl(shopSubdomain);
+  if (!base) return undefined;
+
+  const url = new URL("/api/webhooks/infobip/sms/delivery", base);
+  const secret = process.env.INFOBIP_WEBHOOK_SECRET?.trim();
+  if (secret) url.searchParams.set("secret", secret);
+  return url.toString();
 }
 
 /** One-off test send (no JobSms row). Uses the configured SMS provider sender. */

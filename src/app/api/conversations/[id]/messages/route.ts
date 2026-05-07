@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { sendChatStaffSms } from "@/lib/sms";
+import { getConfiguredSmsProvider, sendChatStaffSms } from "@/lib/sms";
 import { sendPushToCustomer, sendPushToAllStaff } from "@/lib/push";
 import { z } from "zod";
 import { getAppFeatures } from "@/lib/app-settings";
@@ -197,17 +197,43 @@ export async function POST(
         getEffectiveSmsConsent(conversation.customer) &&
         (await customerHasActiveChatJob(shop.id, conversation.customerId))
       ) {
+        const updateSmsDelivery = (smsText: string, attachmentOnly = false) => {
+          sendChatStaffSms(conversation.customer.phone!, smsText, {
+            attachmentOnly,
+            shopSubdomain: shop.subdomain,
+            messageId: message.id,
+          })
+            .then((result) =>
+              prisma.message.update({
+                where: { id: message.id },
+                data: {
+                  smsProvider: result.provider ?? getConfiguredSmsProvider(),
+                  smsSid: result.externalMessageId,
+                  smsDeliveryStatus: result.ok
+                    ? result.externalStatus ?? "SENT"
+                    : "FAILED",
+                  smsDeliveryStatusName: result.ok
+                    ? result.externalStatusName ?? null
+                    : "SEND_FAILED",
+                  smsDeliveryStatusDescription: result.ok
+                    ? result.externalStatusDescription ?? null
+                    : result.error ?? null,
+                  smsDeliveryError: result.ok ? null : result.error ?? "SMS send failed",
+                },
+              })
+            )
+            .catch((err) =>
+              console.error("Chat SMS delivery persistence failed:", err)
+            );
+        };
+
         if (hasText) {
           const smsText = hasAtt
             ? `${bodyText!.trim()} (see chat for photos)`
             : bodyText!.trim();
-          sendChatStaffSms(conversation.customer.phone, smsText).catch((err) =>
-            console.error("Chat SMS notify:", err)
-          );
+          updateSmsDelivery(smsText);
         } else if (hasAtt) {
-          sendChatStaffSms(conversation.customer.phone, "", {
-            attachmentOnly: true,
-          }).catch((err) => console.error("Chat SMS notify:", err));
+          updateSmsDelivery("", true);
         }
       }
 
