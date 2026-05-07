@@ -135,7 +135,7 @@ export async function POST(request: NextRequest) {
   );
 
   try {
-    await prisma.message.create({
+    const message = await prisma.message.create({
       data: {
         shopId: shop.id,
         conversationId: conversation.id,
@@ -147,7 +147,11 @@ export async function POST(request: NextRequest) {
 
     await prisma.conversation.update({
       where: { id: conversation.id },
-      data: { updatedAt: new Date(), customerTypingAt: null },
+      data: {
+        updatedAt: new Date(),
+        customerTypingAt: null,
+        customerLastReadAt: message.createdAt,
+      },
     });
   } catch (e) {
     console.error("Twilio SMS webhook: failed to save message", e);

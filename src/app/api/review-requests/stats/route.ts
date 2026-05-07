@@ -3,6 +3,8 @@ import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/db";
 import { getShopForHost } from "@/lib/shop";
 
+export const dynamic = "force-dynamic";
+
 async function getAuthorizedShopId(request: NextRequest): Promise<string | null> {
   const token = await getToken({ req: request });
   if (!token?.shopId || typeof token.shopId !== "string") return null;

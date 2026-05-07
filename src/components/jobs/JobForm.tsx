@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import type { Job } from "@/lib/types";
 import { Price } from "@/components/ui/Price";
 import { useAppFeatures } from "@/contexts/AppFeaturesContext";
+import { JOBS_REFRESH_EVENT } from "@/lib/jobs-refresh";
 
 interface JobFormProps {
   onSuccess?: (job: Job) => void;
@@ -101,6 +102,7 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
   const dropdownRef = useRef<HTMLDivElement>(null);
   /** Prevents double submit before RHF sets isSubmitting (e.g. double tap / rapid clicks). */
   const jobCreateLockRef = useRef(false);
+  const customerBikesRequestSeqRef = useRef(0);
 
   const {
     register,
@@ -181,6 +183,22 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
       .finally(() => setIsSearching(false));
   }, []);
 
+  const fetchCustomerBikes = useCallback((customerId: string) => {
+    const requestSeq = ++customerBikesRequestSeqRef.current;
+    fetch(`/api/customers/${customerId}/bikes`, { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (requestSeq === customerBikesRequestSeqRef.current) {
+          setCustomerBikes(Array.isArray(data) ? data : []);
+        }
+      })
+      .catch(() => {
+        if (requestSeq === customerBikesRequestSeqRef.current) {
+          setCustomerBikes([]);
+        }
+      });
+  }, []);
+
   useEffect(() => {
     const timer = setTimeout(() => searchCustomers(customerInput), 200);
     return () => clearTimeout(timer);
@@ -188,13 +206,23 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
 
   useEffect(() => {
     if (resolvedCustomerIdForBikes) {
-      fetch(`/api/customers/${resolvedCustomerIdForBikes}/bikes`)
-        .then((res) => res.json())
-        .then((data) => setCustomerBikes(Array.isArray(data) ? data : []));
+      fetchCustomerBikes(resolvedCustomerIdForBikes);
     } else {
+      customerBikesRequestSeqRef.current++;
       setCustomerBikes([]);
     }
-  }, [resolvedCustomerIdForBikes]);
+  }, [fetchCustomerBikes, resolvedCustomerIdForBikes]);
+
+  useEffect(() => {
+    if (!resolvedCustomerIdForBikes) return;
+    const handleJobsRefresh = () => {
+      fetchCustomerBikes(resolvedCustomerIdForBikes);
+    };
+    window.addEventListener(JOBS_REFRESH_EVENT, handleJobsRefresh);
+    return () => {
+      window.removeEventListener(JOBS_REFRESH_EVENT, handleJobsRefresh);
+    };
+  }, [fetchCustomerBikes, resolvedCustomerIdForBikes]);
 
   useEffect(() => {
     fetch("/api/services")

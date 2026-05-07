@@ -9,6 +9,7 @@ import { getGooglePlacesApiKey, getYelpApiKey } from "@/lib/env";
 import { ReviewCarousel } from "./ReviewCarousel";
 import { AutoResize } from "./AutoResize";
 import { getAppFeatures } from "@/lib/app-settings";
+import { requireCurrentShop } from "@/lib/shop";
 import { notFound } from "next/navigation";
 import { YelpBurstIcon } from "@/components/icons/YelpBurstIcon";
 
@@ -120,9 +121,10 @@ export default async function ReviewWidget({
 }: {
   searchParams: { theme?: string | string[]; bg?: string | string[] };
 }) {
-  const features = await getAppFeatures();
+  const shop = await requireCurrentShop();
+  const features = await getAppFeatures(shop.id);
   if (!features.reviewsEnabled) notFound();
-  const settings = await prisma.reviewSettings.findUnique({ where: { id: "default" } });
+  const settings = await prisma.reviewSettings.findUnique({ where: { shopId: shop.id } });
 
   const googleApiKey = getGooglePlacesApiKey();
   const yelpApiKey = getYelpApiKey();

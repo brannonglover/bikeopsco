@@ -9,6 +9,7 @@ import {
 import { getGooglePlacesApiKey, getYelpApiKey } from "@/lib/env";
 import { getAppFeatures } from "@/lib/app-settings";
 import { addWidgetCorsHeaders } from "@/lib/widget-cors";
+import { getShopForHost } from "@/lib/shop";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,17 @@ export async function GET(request: NextRequest) {
   const origin = request.headers.get("origin");
 
   try {
-    const features = await getAppFeatures();
+    const shop = await getShopForHost(request.headers.get("host"));
+    if (!shop) {
+      const res = NextResponse.json({ error: "Shop not found" }, { status: 404 });
+      res.headers.set("Cache-Control", "public, s-maxage=3600, stale-while-revalidate=7200");
+      return addWidgetCorsHeaders(res, origin, {
+        methods: "GET, OPTIONS",
+        allowHeaders: "Content-Type, Authorization",
+      });
+    }
+
+    const features = await getAppFeatures(shop.id);
     if (!features.reviewsEnabled) {
       const res = NextResponse.json({ error: "Reviews are disabled" }, { status: 404 });
       res.headers.set("Cache-Control", "public, s-maxage=3600, stale-while-revalidate=7200");
@@ -36,8 +47,8 @@ export async function GET(request: NextRequest) {
       });
     }
     const [settings, totalSent] = await Promise.all([
-      prisma.reviewSettings.findUnique({ where: { id: "default" } }),
-      prisma.reviewRequest.count(),
+      prisma.reviewSettings.findUnique({ where: { shopId: shop.id } }),
+      prisma.reviewRequest.count({ where: { shopId: shop.id } }),
     ]);
 
     const googleApiKey = getGooglePlacesApiKey();

@@ -61,6 +61,11 @@ export async function GET(
       return NextResponse.json({ error: "Shop not found" }, { status: 404 });
     }
 
+    const features = await getAppFeatures(shop.id);
+    if (features.collectionServiceEnabled) {
+      await prisma.$transaction((tx) => syncCollectionJobService(tx, id));
+    }
+
     const job = await prisma.job.findFirst({
       where: { id, shopId: shop.id },
       include: {

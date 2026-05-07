@@ -22,7 +22,7 @@ export async function GET(
   }
 
   const reviewSettings = await prisma.reviewSettings.findUnique({
-    where: { id: "default" },
+    where: { shopId: reviewRequest.shopId },
   });
 
   const destinationUrl =
