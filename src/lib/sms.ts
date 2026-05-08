@@ -19,6 +19,21 @@ type SmsSendOptions = {
   callbackData?: string;
 };
 
+export type InfobipSmsDeliveryReport = {
+  messageId?: string;
+  doneAt?: string;
+  status?: {
+    groupName?: string;
+    name?: string;
+    description?: string;
+  };
+  error?: {
+    groupName?: string;
+    name?: string;
+    description?: string;
+  };
+};
+
 const twilio =
   process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN
     ? Twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
@@ -95,6 +110,45 @@ function getInfobipErrorMessage(payload: unknown): string | null {
   }
 
   return null;
+}
+
+export async function getInfobipSmsDeliveryReport(
+  messageId: string
+): Promise<{ ok: boolean; report?: InfobipSmsDeliveryReport; error?: string }> {
+  if (!INFOBIP_BASE_URL || !INFOBIP_API_KEY) {
+    return { ok: false, error: getSmsNotConfiguredError() };
+  }
+
+  try {
+    const url = new URL(`${INFOBIP_BASE_URL}/sms/3/reports`);
+    url.searchParams.set("messageId", messageId);
+
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `App ${INFOBIP_API_KEY}`,
+        Accept: "application/json",
+      },
+    });
+    const payload = (await response.json().catch(() => null)) as
+      | { results?: InfobipSmsDeliveryReport[]; requestError?: unknown; message?: string; error?: string }
+      | null;
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        error:
+          getInfobipErrorMessage(payload) ??
+          `Infobip delivery report request failed with ${response.status}`,
+      };
+    }
+
+    return { ok: true, report: payload?.results?.[0] };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Unknown error",
+    };
+  }
 }
 
 async function sendInfobipSms(

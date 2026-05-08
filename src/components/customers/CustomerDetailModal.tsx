@@ -904,6 +904,23 @@ function EditBikeForm({
   );
 }
 
+function normalizeAddressForMap(address: string): string {
+  return address
+    .replace(/\s+/g, " ")
+    .replace(/\b(?:apt|apartment|unit|ste|suite|#)\s*[a-z0-9-]+/gi, "")
+    .replace(/\b(?:bldg|building)\s*[a-z0-9-]+/gi, "")
+    .replace(/\s*,\s*/g, ", ")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+,/g, ",")
+    .trim();
+}
+
+function mapSearchQueries(address: string): string[] {
+  const trimmed = address.trim();
+  const normalized = normalizeAddressForMap(trimmed);
+  return Array.from(new Set([trimmed, normalized].filter(Boolean)));
+}
+
 function CustomerMap({ address }: { address: string }) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -922,16 +939,20 @@ function CustomerMap({ address }: { address: string }) {
       try {
         const L = (await import("leaflet")).default;
 
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`,
-          {
-            headers: {
-              Accept: "application/json",
-              "User-Agent": "Bike Ops/1.0 (bike repair shop management)",
-            },
-          }
-        );
-        const data = await res.json();
+        let data: Array<{ lat: string; lon: string }> = [];
+        for (const query of mapSearchQueries(address)) {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`,
+            {
+              headers: {
+                Accept: "application/json",
+                "User-Agent": "Bike Ops/1.0 (bike repair shop management)",
+              },
+            }
+          );
+          data = await res.json();
+          if (Array.isArray(data) && data.length > 0) break;
+        }
 
         if (!mounted || !mapRef.current) return;
 
