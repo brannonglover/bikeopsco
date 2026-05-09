@@ -291,9 +291,9 @@ const SMS_TEMPLATES: Record<string, string> = {
   waiting_on_parts:
     "{{shopName}}\n\nWaiting on parts for your {{bikeMake}} {{bikeModel}}.\n\nTrack: {{statusUrl}}\n\nReply STOP to opt out.",
   bike_ready:
-    "{{shopName}}\n\nGood news! Your {{bikeMake}} {{bikeModel}} is ready for pickup.\n\nView your itemized bill: {{billUrl}}\n\nReply STOP to opt out.",
+    "{{shopName}}\n\n{{bikeReadyMessage}}\n\nView your itemized bill: {{billUrl}}\n\nReply STOP to opt out.",
   bike_ready_invoice:
-    "{{shopName}}\n\nGood news! Your {{bikeMake}} {{bikeModel}} is ready for pickup.\n\nView your itemized bill: {{billUrl}}\n\nReply STOP to opt out.",
+    "{{shopName}}\n\n{{bikeReadyMessage}}\n\nView your itemized bill: {{billUrl}}\n\nReply STOP to opt out.",
 };
 
 export function getTemplateSlugForStage(
@@ -335,7 +335,16 @@ export interface JobForSms {
   shopId: string;
   bikeMake: string;
   bikeModel: string;
+  deliveryType?: string;
   customer: { firstName: string; lastName: string | null } | null;
+}
+
+function getBikeReadySmsMessage(job: JobForSms): string {
+  const bikeName = `${job.bikeMake} ${job.bikeModel}`.trim();
+  if (job.deliveryType === "COLLECTION_SERVICE") {
+    return `Good news! Your ${bikeName} is ready and raring to roll. We'll be in touch to schedule its return home.`;
+  }
+  return `Good news! Your ${bikeName} is ready for pickup.`;
 }
 
 export async function buildJobSmsMessage(
@@ -365,6 +374,7 @@ export async function buildJobSmsMessage(
     customerName,
     bikeMake: job.bikeMake,
     bikeModel: job.bikeModel,
+    bikeReadyMessage: getBikeReadySmsMessage(job),
     shopName,
     statusUrl,
     billUrl,

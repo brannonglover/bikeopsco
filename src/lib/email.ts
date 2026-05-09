@@ -1086,6 +1086,7 @@ export interface JobForInvoice {
   shopId: string;
   bikeMake: string;
   bikeModel: string;
+  deliveryType?: string;
   customer: { firstName: string; lastName: string | null; email: string | null } | null;
   jobServices: JobServiceForInvoice[];
   jobProducts?: JobProductForInvoice[];
@@ -1195,6 +1196,10 @@ function buildBikeReadyInvoiceInnerHtml(
     ? [job.customer.firstName, job.customer.lastName].filter(Boolean).join(" ").trim() || "Customer"
     : "Customer";
   const remaining = Math.max(0, subtotal - totalPaid);
+  const readyMessage =
+    job.deliveryType === "COLLECTION_SERVICE"
+      ? `Good news: your ${escapeHtml(job.bikeMake)} ${escapeHtml(job.bikeModel)} is ready and raring to roll. Since this was a collection, we'll be in touch to schedule its return home. Here is the itemized bill for the work completed.`
+      : `Good news: your ${escapeHtml(job.bikeMake)} ${escapeHtml(job.bikeModel)} is ready for pickup. Here is the itemized bill for the work completed.`;
   const serviceRows = (job.jobServices ?? []).map((js) => {
     const unitPrice = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);
     const lineTotal = unitPrice * (js.quantity || 1);
@@ -1227,7 +1232,7 @@ function buildBikeReadyInvoiceInnerHtml(
 
   return `
 <p style="margin:0 0 16px;font-size:16px;color:#475569">Hi ${escapeHtml(customerName)},</p>
-<p style="margin:0 0 24px;font-size:16px;color:#475569">Good news: your ${escapeHtml(job.bikeMake)} ${escapeHtml(job.bikeModel)} is ready for pickup. Here is the itemized bill for the work completed.</p>
+<p style="margin:0 0 24px;font-size:16px;color:#475569">${readyMessage}</p>
 
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom:24px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
   <thead>
