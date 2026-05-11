@@ -122,7 +122,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const [message] = await Promise.all([
+  const [message, customer] = await Promise.all([
     prisma.message.create({
       data: {
         shopId: shop.id,
@@ -136,25 +136,25 @@ export async function POST(request: NextRequest) {
       },
       include: { attachments: true, reactions: true },
     }),
+    prisma.customer.findUnique({
+      where: { id: customerId },
+      select: { firstName: true, lastName: true },
+    }),
     prisma.conversation.update({
       where: { id: conversation.id },
       data: { updatedAt: new Date(), customerTypingAt: null },
     }),
-    prisma.customer.findUnique({
-      where: { id: customerId },
-      select: { firstName: true, lastName: true },
-    }).then((customer) => {
-      const customerName = customer
-        ? [customer.firstName, customer.lastName].filter(Boolean).join(" ")
-        : "Customer";
-      const pushBody = bodyText?.trim() || "Sent a photo";
-      sendPushToAllStaff(shop.id, {
-        title: `New message from ${customerName}`,
-        body: pushBody,
-        data: { type: "new_message", conversationId: conversation.id },
-      }).catch((err) => console.error("Push notify staff:", err));
-    }),
   ]);
+
+  const customerName = customer
+    ? [customer.firstName, customer.lastName].filter(Boolean).join(" ")
+    : "Customer";
+  const pushBody = bodyText?.trim() || "Sent a photo";
+  await sendPushToAllStaff(shop.id, {
+    title: `New message from ${customerName}`,
+    body: pushBody,
+    data: { type: "new_message", conversationId: conversation.id },
+  }).catch((err) => console.error("Push notify staff:", err));
 
   return NextResponse.json(message);
 }

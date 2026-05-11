@@ -63,7 +63,7 @@ export function StageColumn({
   return (
     <div
       ref={setNodeRef}
-      className={`flex-1 min-w-[200px] sm:min-w-[160px] flex-shrink-0 flex flex-col rounded-xl border transition-all duration-200 min-h-[320px] sm:min-h-[calc(100vh-14rem)] ${
+      className={`flex-1 min-w-[200px] sm:min-w-[160px] flex-shrink-0 flex flex-col rounded-xl border transition-all duration-200 min-h-[320px] h-full ${
         isOver
           ? "border-indigo-400 bg-indigo-50/60 shadow-glow"
           : "border-slate-200/80 bg-white/60 shadow-soft"
@@ -79,7 +79,7 @@ export function StageColumn({
           {jobs.length}
         </span>
       </div>
-      <div className="p-3 flex flex-col gap-3 overflow-y-auto overflow-x-hidden flex-1 min-h-[400px] min-w-0">
+      <div className="p-3 flex flex-col gap-3 overflow-y-auto overflow-x-hidden flex-1 min-h-0 min-w-0">
         <SortableContext items={jobs.map((j) => j.id)} strategy={verticalListSortingStrategy}>
           {jobs.length > 0 ? (
             jobs.map((job) => (

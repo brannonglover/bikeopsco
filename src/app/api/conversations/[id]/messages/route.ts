@@ -315,7 +315,7 @@ export async function POST(
         : hasAtt
           ? "Sent a photo"
           : "New message";
-      sendPushToCustomer(shop.id, conversation.customerId, {
+      await sendPushToCustomer(shop.id, conversation.customerId, {
         title: shopName,
         body: pushBody,
         data: { type: "new_message", conversationId },
@@ -330,7 +330,7 @@ export async function POST(
         .filter(Boolean)
         .join(" ");
       const pushBody = bodyText?.trim() || "Sent a photo";
-      sendPushToAllStaff(shop.id, {
+      await sendPushToAllStaff(shop.id, {
         title: `New message from ${customerName}`,
         body: pushBody,
         data: { type: "new_message", conversationId },

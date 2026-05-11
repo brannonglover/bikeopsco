@@ -817,7 +817,7 @@ export function KanbanBoard() {
         <p className="md:hidden text-xs font-medium text-slate-400 -mb-1 flex-shrink-0">
           Swipe columns to browse — on mobile, use Status on a card to move it
         </p>
-        <div className="flex flex-1 gap-4 overflow-x-auto overflow-y-hidden pb-4 min-h-0 w-full -mx-4 px-4 sm:mx-0 sm:px-0 overscroll-x-contain">
+        <div className="flex flex-1 gap-4 overflow-x-auto overflow-y-hidden pb-4 min-h-0 h-0 w-full -mx-4 px-4 sm:mx-0 sm:px-0 overscroll-x-contain">
           {DISPLAY_STAGES.map((stage) => (
             <StageColumn
               key={stage}
@@ -853,7 +853,7 @@ export function KanbanBoard() {
               </svg>
             </button>
             {cancelledExpanded && (
-              <div className="mt-3 flex flex-wrap gap-3">
+              <div className="mt-3 flex flex-wrap gap-3 max-h-[200px] overflow-y-auto">
                 {jobsByStage.CANCELLED.map((job) => (
                   <div
                     key={job.id}
