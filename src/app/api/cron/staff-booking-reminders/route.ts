@@ -139,7 +139,7 @@ function buildJobTableRows(jobs: JobRow[]): string {
   if (jobs.length === 0) return "";
 
   const rows = jobs
-    .map((job) => {
+    .map((job, i) => {
       const customerName = job.customer
         ? [job.customer.firstName, job.customer.lastName]
             .filter(Boolean)
@@ -177,19 +177,19 @@ function buildJobTableRows(jobs: JobRow[]): string {
       }
 
       return `
-    <tr>
-      <td style="padding:12px 16px;font-size:14px;color:#0f172a;border-bottom:1px solid #e2e8f0;font-weight:600">${escapeHtml(customerName)}</td>
-      <td style="padding:12px 16px;font-size:14px;color:#334155;border-bottom:1px solid #e2e8f0">${escapeHtml(job.bikeMake)} ${escapeHtml(job.bikeModel)}</td>
-      <td style="padding:12px 16px;font-size:14px;color:#64748b;border-bottom:1px solid #e2e8f0">${escapeHtml(deliveryLabel)}${escapeHtml(windowText)}</td>
-      <td style="padding:12px 16px;font-size:13px;color:#94a3b8;border-bottom:1px solid #e2e8f0">${escapeHtml(contact)}</td>
+    <tr class="email-table-row${i % 2 === 1 ? " email-table-row-alt" : ""}">
+      <td class="email-table-value" style="padding:12px 16px;font-size:14px;color:#0f172a;border-bottom:1px solid #e2e8f0;font-weight:600">${escapeHtml(customerName)}</td>
+      <td class="email-table-value" style="padding:12px 16px;font-size:14px;color:#334155;border-bottom:1px solid #e2e8f0">${escapeHtml(job.bikeMake)} ${escapeHtml(job.bikeModel)}</td>
+      <td class="email-table-label" style="padding:12px 16px;font-size:14px;color:#64748b;border-bottom:1px solid #e2e8f0">${escapeHtml(deliveryLabel)}${escapeHtml(windowText)}</td>
+      <td class="email-muted" style="padding:12px 16px;font-size:13px;color:#94a3b8;border-bottom:1px solid #e2e8f0">${escapeHtml(contact)}</td>
     </tr>`;
     })
     .join("");
 
   return `
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom:24px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="email-table" style="margin-bottom:24px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
   <thead>
-    <tr style="background-color:#f8fafc">
+    <tr class="email-table-header" style="background-color:#f8fafc">
       <th style="padding:10px 16px;text-align:left;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#64748b">Customer</th>
       <th style="padding:10px 16px;text-align:left;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#64748b">Bike</th>
       <th style="padding:10px 16px;text-align:left;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#64748b">Type</th>
@@ -321,22 +321,22 @@ export async function GET(request: NextRequest) {
     let innerHtml = "";
 
     if (totalJobs === 0) {
-      innerHtml = `<p style="margin:0 0 16px;color:#64748b">No customers are booked in for today (${escapeHtml(formatShortDate(todayStart, timezone))}) or tomorrow (${escapeHtml(formatShortDate(tomorrowStart, timezone))}).</p>`;
+      innerHtml = `<p class="email-muted" style="margin:0 0 16px;color:#64748b">No customers are booked in for today (${escapeHtml(formatShortDate(todayStart, timezone))}) or tomorrow (${escapeHtml(formatShortDate(tomorrowStart, timezone))}).</p>`;
     } else {
       if (todayJobs.length > 0) {
         innerHtml += `
-<h2 style="margin:0 0 12px;font-size:17px;font-weight:700;color:#0f172a">Today — ${escapeHtml(todayLabel)}</h2>
+<h2 class="email-heading" style="margin:0 0 12px;font-size:17px;font-weight:700;color:#0f172a">Today — ${escapeHtml(todayLabel)}</h2>
 ${buildJobTableRows(todayJobs)}`;
       } else {
-        innerHtml += `<p style="margin:0 0 20px;color:#64748b">No customers booked for today (${escapeHtml(formatShortDate(todayStart, timezone))}).</p>`;
+        innerHtml += `<p class="email-muted" style="margin:0 0 20px;color:#64748b">No customers booked for today (${escapeHtml(formatShortDate(todayStart, timezone))}).</p>`;
       }
 
       if (tomorrowJobs.length > 0) {
         innerHtml += `
-<h2 style="margin:${todayJobs.length > 0 ? "8px" : "0"} 0 12px;font-size:17px;font-weight:700;color:#0f172a">Tomorrow — ${escapeHtml(tomorrowLabel)}</h2>
+<h2 class="email-heading" style="margin:${todayJobs.length > 0 ? "8px" : "0"} 0 12px;font-size:17px;font-weight:700;color:#0f172a">Tomorrow — ${escapeHtml(tomorrowLabel)}</h2>
 ${buildJobTableRows(tomorrowJobs)}`;
       } else {
-        innerHtml += `<p style="margin:0 0 20px;color:#64748b">No customers booked for tomorrow (${escapeHtml(formatShortDate(tomorrowStart, timezone))}).</p>`;
+        innerHtml += `<p class="email-muted" style="margin:0 0 20px;color:#64748b">No customers booked for tomorrow (${escapeHtml(formatShortDate(tomorrowStart, timezone))}).</p>`;
       }
     }
 

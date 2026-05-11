@@ -161,6 +161,21 @@ const BIKE_OPS_EMAIL = {
   accentBar: "#4f46e5",
 } as const;
 
+const BIKE_OPS_EMAIL_DARK = {
+  bgPage: "#111118",
+  bgCard: "#1a1a24",
+  bgFooter: "#15151f",
+  border: "#2a2a3a",
+  text: "#d1d5db",
+  heading: "#f1f1f4",
+  muted: "#9ca3af",
+  accentBar: "#6366f1",
+  primary: "#818cf8",
+  tableBg: "#1e1e2a",
+  tableHeaderBg: "#22222e",
+  tableRowAlt: "#1a1a26",
+} as const;
+
 const CUSTOMER_EMAIL_FOOTER_BRAND = "Basement Bike Mechanic";
 
 function bikeOpsEmailShopSubtitle(): string | null {
@@ -220,55 +235,83 @@ export function buildCustomerEmailHtml(options: {
   const headingRow = heading
     ? `<tr>
     <td style="padding:8px 40px 4px;font-family:${font};color:${headColor};text-align:center">
-      <h1 style="margin:0;font-size:26px;line-height:1.25;font-weight:700;letter-spacing:-0.02em;color:${headColor}">${escapeHtml(heading)}</h1>
+      <h1 class="email-heading" style="margin:0;font-size:26px;line-height:1.25;font-weight:700;letter-spacing:-0.02em;color:${headColor}">${escapeHtml(heading)}</h1>
     </td>
   </tr>`
     : "";
 
   const shopSub = bikeOpsEmailShopSubtitle();
   const footerSecondary = shopSub
-    ? `<p style="margin:6px 0 0;font-family:${font};font-size:13px;line-height:1.5;color:${muted}">${escapeHtml(shopSub)}</p>`
+    ? `<p class="email-footer-secondary" style="margin:6px 0 0;font-family:${font};font-size:13px;line-height:1.5;color:${muted}">${escapeHtml(shopSub)}</p>`
     : "";
+
+  const dk = BIKE_OPS_EMAIL_DARK;
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="color-scheme" content="light" />
-  <meta name="supported-color-schemes" content="light" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="supported-color-schemes" content="light dark" />
   <title>${escapeHtml(CUSTOMER_EMAIL_FOOTER_BRAND)}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&amp;display=swap" rel="stylesheet" />
+  <style>
+    :root { color-scheme: light dark; }
+    @media (prefers-color-scheme: dark) {
+      body, .email-body { background-color: ${dk.bgPage} !important; }
+      .email-card { background-color: ${dk.bgCard} !important; border-color: ${dk.border} !important; }
+      .email-accent-bar { background-color: ${dk.accentBar} !important; }
+      .email-body-cell { color: ${dk.text} !important; }
+      .email-heading { color: ${dk.heading} !important; }
+      .email-footer { background-color: ${dk.bgFooter} !important; border-color: ${dk.border} !important; }
+      .email-footer-brand { color: ${dk.heading} !important; }
+      .email-footer-secondary, .email-muted { color: ${dk.muted} !important; }
+      .email-disclaimer { color: ${dk.muted} !important; }
+      .email-table { border-color: ${dk.border} !important; }
+      .email-table-header { background-color: ${dk.tableHeaderBg} !important; }
+      .email-table-header td, .email-table-header th { color: ${dk.muted} !important; border-color: ${dk.border} !important; }
+      .email-table-row td { border-color: ${dk.border} !important; color: ${dk.text} !important; }
+      .email-table-row-alt { background-color: ${dk.tableRowAlt} !important; }
+      .email-table-label { color: ${dk.muted} !important; }
+      .email-table-value { color: ${dk.heading} !important; }
+      .email-cta-btn { background-color: ${dk.primary} !important; }
+      .email-summary-box { background-color: ${dk.tableHeaderBg} !important; border-color: ${dk.border} !important; }
+      .email-quote-box { background-color: ${dk.tableHeaderBg} !important; border-left-color: ${dk.primary} !important; color: ${dk.text} !important; }
+      a { color: ${dk.primary} !important; }
+      .email-cta-btn a { color: #ffffff !important; }
+    }
+  </style>
 </head>
-<body style="margin:0;padding:0;background-color:${bgPage};-webkit-text-size-adjust:100%">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:${bgPage}">
+<body class="email-body" style="margin:0;padding:0;background-color:${bgPage};-webkit-text-size-adjust:100%">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="email-body" style="background-color:${bgPage}">
   <tbody><tr><td align="center" style="padding:28px 16px 40px">
-    <table role="presentation" width="640" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:640px;background-color:${bgCard};border:1px solid ${border};border-radius:12px;overflow:hidden">
+    <table role="presentation" width="640" cellpadding="0" cellspacing="0" border="0" class="email-card" style="width:100%;max-width:640px;background-color:${bgCard};border:1px solid ${border};border-radius:12px;overflow:hidden">
       <tbody>
         <tr>
-          <td style="height:4px;line-height:4px;font-size:0;background-color:${accentBar};mso-line-height-rule:exactly">&nbsp;</td>
+          <td class="email-accent-bar" style="height:4px;line-height:4px;font-size:0;background-color:${accentBar};mso-line-height-rule:exactly">&nbsp;</td>
         </tr>
         <tr>
           <td align="center" style="padding:28px 40px 12px">${headerBlock}</td>
         </tr>
         ${headingRow}
         <tr>
-          <td style="padding:${heading ? "16px" : "8px"} 40px 8px;font-family:${font};font-size:15px;line-height:1.65;color:${text}">
+          <td class="email-body-cell" style="padding:${heading ? "16px" : "8px"} 40px 8px;font-family:${font};font-size:15px;line-height:1.65;color:${text}">
             ${innerHtml}
           </td>
         </tr>
         <tr>
-          <td style="padding:24px 40px 28px;background-color:${bgFooter};border-top:1px solid ${border}">
-            <p style="margin:0;font-family:${font};font-size:14px;line-height:1.5;font-weight:600;color:${headColor}">${escapeHtml(CUSTOMER_EMAIL_FOOTER_BRAND)}</p>
+          <td class="email-footer" style="padding:24px 40px 28px;background-color:${bgFooter};border-top:1px solid ${border}">
+            <p class="email-footer-brand" style="margin:0;font-family:${font};font-size:14px;line-height:1.5;font-weight:600;color:${headColor}">${escapeHtml(CUSTOMER_EMAIL_FOOTER_BRAND)}</p>
             ${footerSecondary}
-            <p style="margin:10px 0 0;font-family:${font};font-size:12px;line-height:1.5;color:${muted}">Thanks for choosing us for your bike care.</p>
+            <p class="email-muted" style="margin:10px 0 0;font-family:${font};font-size:12px;line-height:1.5;color:${muted}">Thanks for choosing us for your bike care.</p>
           </td>
         </tr>
       </tbody>
     </table>
-    <p style="margin:16px 0 0;font-family:${font};font-size:11px;line-height:1.4;color:${muted};max-width:640px">
+    <p class="email-disclaimer" style="margin:16px 0 0;font-family:${font};font-size:11px;line-height:1.4;color:${muted};max-width:640px">
       You are receiving this because you booked or interacted with our shop. If this was not you, you can ignore this message.
     </p>
   </td></tr></tbody>
@@ -278,7 +321,7 @@ export function buildCustomerEmailHtml(options: {
 }
 
 function buildCustomerReadOnlyNoticeHtml(): string {
-  return `<p style="margin:24px 0 0;font-size:12px;line-height:1.6;color:#64748b">This inbox is not monitored. Please do not reply to this email — use the links in this email or contact the shop directly if you need help.</p>`;
+  return `<p class="email-muted" style="margin:24px 0 0;font-size:12px;line-height:1.6;color:#64748b">This inbox is not monitored. Please do not reply to this email — use the links in this email or contact the shop directly if you need help.</p>`;
 }
 
 function getCustomerReadOnlyNoticeText(): string {
@@ -302,9 +345,9 @@ export function buildCustomerEmailCtaButton(href: string, label: string): string
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:24px auto 0;border-collapse:separate;width:100%;max-width:100%">
   <tbody><tr>
     <td align="center" style="padding:0">
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:400px;border-collapse:separate">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" class="email-cta-btn" style="width:100%;max-width:400px;border-collapse:separate">
         <tbody><tr>
-          <td align="center" bgcolor="${primary}" style="background-color:${primary};border-radius:10px;mso-padding-alt:0">
+          <td align="center" bgcolor="${primary}" class="email-cta-btn" style="background-color:${primary};border-radius:10px;mso-padding-alt:0">
             <a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" style="display:block;padding:14px 28px;font-family:${font};font-size:15px;font-weight:600;line-height:1.25;color:#ffffff;text-decoration:none;border-radius:10px">${escapeHtml(label)}</a>
           </td>
         </tr></tbody>
@@ -658,54 +701,54 @@ export async function sendBookingRequestNotification(
   const innerHtml = `
 <p style="margin:0 0 20px">A new booking request has been submitted and is awaiting your approval.</p>
 
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom:20px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="email-table" style="margin-bottom:20px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
   <tbody>
-    <tr style="background-color:#f8fafc">
+    <tr class="email-table-header" style="background-color:#f8fafc">
       <td colspan="2" style="padding:12px 16px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#64748b">Customer</td>
     </tr>
-    <tr>
-      <td style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;width:40%;border-top:1px solid #e2e8f0">Name</td>
-      <td style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(customerName)}</td>
+    <tr class="email-table-row">
+      <td class="email-table-label" style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;width:40%;border-top:1px solid #e2e8f0">Name</td>
+      <td class="email-table-value" style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(customerName)}</td>
     </tr>
-    <tr style="background-color:#f8fafc">
-      <td style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;border-top:1px solid #e2e8f0">Email</td>
-      <td style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(job.customer?.email ?? "—")}</td>
+    <tr class="email-table-row email-table-row-alt" style="background-color:#f8fafc">
+      <td class="email-table-label" style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;border-top:1px solid #e2e8f0">Email</td>
+      <td class="email-table-value" style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(job.customer?.email ?? "—")}</td>
     </tr>
-    <tr>
-      <td style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;border-top:1px solid #e2e8f0">Phone</td>
-      <td style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(job.customer?.phone ?? "—")}</td>
+    <tr class="email-table-row">
+      <td class="email-table-label" style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;border-top:1px solid #e2e8f0">Phone</td>
+      <td class="email-table-value" style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(job.customer?.phone ?? "—")}</td>
     </tr>
   </tbody>
 </table>
 
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom:20px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="email-table" style="margin-bottom:20px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
   <tbody>
-    <tr style="background-color:#f8fafc">
+    <tr class="email-table-header" style="background-color:#f8fafc">
       <td colspan="2" style="padding:12px 16px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#64748b">Booking details</td>
     </tr>
-    <tr>
-      <td style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;width:40%;border-top:1px solid #e2e8f0">Bike</td>
-      <td style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(job.bikeMake)} ${escapeHtml(job.bikeModel)}</td>
+    <tr class="email-table-row">
+      <td class="email-table-label" style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;width:40%;border-top:1px solid #e2e8f0">Bike</td>
+      <td class="email-table-value" style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(job.bikeMake)} ${escapeHtml(job.bikeModel)}</td>
     </tr>
-    <tr style="background-color:#f8fafc">
-      <td style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;border-top:1px solid #e2e8f0">Delivery</td>
-      <td style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${job.deliveryType === "COLLECTION_SERVICE" ? "Collection service" : "Drop-off at shop"}</td>
+    <tr class="email-table-row email-table-row-alt" style="background-color:#f8fafc">
+      <td class="email-table-label" style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;border-top:1px solid #e2e8f0">Delivery</td>
+      <td class="email-table-value" style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${job.deliveryType === "COLLECTION_SERVICE" ? "Collection service" : "Drop-off at shop"}</td>
     </tr>
-    <tr>
-      <td style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;border-top:1px solid #e2e8f0">Preferred drop-off</td>
-      <td style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(dropOff)}${collectionWindowLine}</td>
+    <tr class="email-table-row">
+      <td class="email-table-label" style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;border-top:1px solid #e2e8f0">Preferred drop-off</td>
+      <td class="email-table-value" style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(dropOff)}${collectionWindowLine}</td>
     </tr>
-    <tr style="background-color:#f8fafc">
-      <td style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;border-top:1px solid #e2e8f0">Preferred pickup</td>
-      <td style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(pickup)}</td>
+    <tr class="email-table-row email-table-row-alt" style="background-color:#f8fafc">
+      <td class="email-table-label" style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;border-top:1px solid #e2e8f0">Preferred pickup</td>
+      <td class="email-table-value" style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(pickup)}</td>
     </tr>
-    <tr>
-      <td style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;border-top:1px solid #e2e8f0">Services</td>
-      <td style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(servicesList)}</td>
+    <tr class="email-table-row">
+      <td class="email-table-label" style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;border-top:1px solid #e2e8f0">Services</td>
+      <td class="email-table-value" style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(servicesList)}</td>
     </tr>
-    ${job.customerNotes ? `<tr style="background-color:#f8fafc">
-      <td style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;border-top:1px solid #e2e8f0">Notes</td>
-      <td style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(job.customerNotes)}</td>
+    ${job.customerNotes ? `<tr class="email-table-row email-table-row-alt" style="background-color:#f8fafc">
+      <td class="email-table-label" style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;border-top:1px solid #e2e8f0">Notes</td>
+      <td class="email-table-value" style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(job.customerNotes)}</td>
     </tr>` : ""}
   </tbody>
 </table>
@@ -912,19 +955,19 @@ export async function sendBookingReceivedEmail(
 
   let scheduleLines = "";
   if (isCollection) {
-    scheduleLines += `<tr><td style="padding:10px 16px;font-size:14px;color:#64748b;border-bottom:1px solid #e2e8f0;white-space:nowrap;width:40%"><strong>Collection date</strong></td><td style="padding:10px 16px;font-size:14px;color:#334155;border-bottom:1px solid #e2e8f0">${escapeHtml(formatDate(job.dropOffDate))}</td></tr>`;
+    scheduleLines += `<tr class="email-table-row"><td class="email-table-label" style="padding:10px 16px;font-size:14px;color:#64748b;border-bottom:1px solid #e2e8f0;white-space:nowrap;width:40%"><strong>Collection date</strong></td><td class="email-table-value" style="padding:10px 16px;font-size:14px;color:#334155;border-bottom:1px solid #e2e8f0">${escapeHtml(formatDate(job.dropOffDate))}</td></tr>`;
     if (job.collectionAddress) {
-      scheduleLines += `<tr><td style="padding:10px 16px;font-size:14px;color:#64748b;border-bottom:1px solid #e2e8f0;white-space:nowrap"><strong>Address</strong></td><td style="padding:10px 16px;font-size:14px;color:#334155;border-bottom:1px solid #e2e8f0">${escapeHtml(job.collectionAddress)}</td></tr>`;
+      scheduleLines += `<tr class="email-table-row email-table-row-alt"><td class="email-table-label" style="padding:10px 16px;font-size:14px;color:#64748b;border-bottom:1px solid #e2e8f0;white-space:nowrap"><strong>Address</strong></td><td class="email-table-value" style="padding:10px 16px;font-size:14px;color:#334155;border-bottom:1px solid #e2e8f0">${escapeHtml(job.collectionAddress)}</td></tr>`;
     }
     if (job.collectionWindowStart || job.collectionWindowEnd) {
       const s = job.collectionWindowStart ? formatWindowTime(job.collectionWindowStart) : null;
       const e = job.collectionWindowEnd ? formatWindowTime(job.collectionWindowEnd) : null;
       const windowText = s && e ? `${s} – ${e}` : s ? `from ${s}` : `until ${e}`;
-      scheduleLines += `<tr><td style="padding:10px 16px;font-size:14px;color:#64748b;border-bottom:1px solid #e2e8f0;white-space:nowrap"><strong>Collection window</strong></td><td style="padding:10px 16px;font-size:14px;color:#334155;border-bottom:1px solid #e2e8f0">${escapeHtml(windowText)}</td></tr>`;
+      scheduleLines += `<tr class="email-table-row"><td class="email-table-label" style="padding:10px 16px;font-size:14px;color:#64748b;border-bottom:1px solid #e2e8f0;white-space:nowrap"><strong>Collection window</strong></td><td class="email-table-value" style="padding:10px 16px;font-size:14px;color:#334155;border-bottom:1px solid #e2e8f0">${escapeHtml(windowText)}</td></tr>`;
     }
   } else {
-    scheduleLines += `<tr><td style="padding:10px 16px;font-size:14px;color:#64748b;border-bottom:1px solid #e2e8f0;white-space:nowrap;width:40%"><strong>Drop-off date</strong></td><td style="padding:10px 16px;font-size:14px;color:#334155;border-bottom:1px solid #e2e8f0">${escapeHtml(formatDate(job.dropOffDate))}</td></tr>`;
-    scheduleLines += `<tr><td style="padding:10px 16px;font-size:14px;color:#64748b;white-space:nowrap"><strong>Est. pick-up date</strong></td><td style="padding:10px 16px;font-size:14px;color:#334155">${escapeHtml(formatDate(job.pickupDate))}</td></tr>`;
+    scheduleLines += `<tr class="email-table-row"><td class="email-table-label" style="padding:10px 16px;font-size:14px;color:#64748b;border-bottom:1px solid #e2e8f0;white-space:nowrap;width:40%"><strong>Drop-off date</strong></td><td class="email-table-value" style="padding:10px 16px;font-size:14px;color:#334155;border-bottom:1px solid #e2e8f0">${escapeHtml(formatDate(job.dropOffDate))}</td></tr>`;
+    scheduleLines += `<tr class="email-table-row email-table-row-alt"><td class="email-table-label" style="padding:10px 16px;font-size:14px;color:#64748b;white-space:nowrap"><strong>Est. pick-up date</strong></td><td class="email-table-value" style="padding:10px 16px;font-size:14px;color:#334155">${escapeHtml(formatDate(job.pickupDate))}</td></tr>`;
   }
 
   const ctaButton = statusUrl
@@ -935,21 +978,21 @@ export async function sendBookingReceivedEmail(
 <p style="margin:0 0 20px">Hi ${escapeHtml(customerName)},</p>
 <p style="margin:0 0 20px">Thanks for submitting your booking request — we've received it and will review it shortly. You'll get a confirmation email once it's approved.</p>
 
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom:20px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="email-table" style="margin-bottom:20px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
   <tbody>
-    <tr style="background-color:#f8fafc">
+    <tr class="email-table-header" style="background-color:#f8fafc">
       <td colspan="2" style="padding:12px 16px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#64748b">Your booking</td>
     </tr>
-    <tr>
-      <td style="padding:10px 16px;font-size:14px;color:#64748b;border-bottom:1px solid #e2e8f0;white-space:nowrap;width:40%"><strong>Bike</strong></td>
-      <td style="padding:10px 16px;font-size:14px;color:#334155;border-bottom:1px solid #e2e8f0">${escapeHtml(job.bikeMake)} ${escapeHtml(job.bikeModel)}</td>
+    <tr class="email-table-row">
+      <td class="email-table-label" style="padding:10px 16px;font-size:14px;color:#64748b;border-bottom:1px solid #e2e8f0;white-space:nowrap;width:40%"><strong>Bike</strong></td>
+      <td class="email-table-value" style="padding:10px 16px;font-size:14px;color:#334155;border-bottom:1px solid #e2e8f0">${escapeHtml(job.bikeMake)} ${escapeHtml(job.bikeModel)}</td>
     </tr>
-    ${servicesList ? `<tr><td style="padding:10px 16px;font-size:14px;color:#64748b;border-bottom:1px solid #e2e8f0;white-space:nowrap"><strong>Services</strong></td><td style="padding:10px 16px;font-size:14px;color:#334155;border-bottom:1px solid #e2e8f0">${escapeHtml(servicesList)}</td></tr>` : ""}
+    ${servicesList ? `<tr class="email-table-row email-table-row-alt"><td class="email-table-label" style="padding:10px 16px;font-size:14px;color:#64748b;border-bottom:1px solid #e2e8f0;white-space:nowrap"><strong>Services</strong></td><td class="email-table-value" style="padding:10px 16px;font-size:14px;color:#334155;border-bottom:1px solid #e2e8f0">${escapeHtml(servicesList)}</td></tr>` : ""}
     ${scheduleLines}
   </tbody>
 </table>
 
-${job.customerNotes ? `<p style="margin:0 0 20px;font-size:14px;color:#64748b"><strong>Your notes:</strong> ${escapeHtml(job.customerNotes)}</p>` : ""}
+${job.customerNotes ? `<p class="email-muted" style="margin:0 0 20px;font-size:14px;color:#64748b"><strong>Your notes:</strong> ${escapeHtml(job.customerNotes)}</p>` : ""}
 ${ctaButton}
 `;
 
@@ -1118,39 +1161,40 @@ function buildInvoiceInnerHtml(
     day: "numeric",
   });
 
-  const serviceRows = (job.jobServices ?? []).map((js) => {
+  const serviceRows = (job.jobServices ?? []).map((js, i) => {
     const unitPrice = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);
     const lineTotal = unitPrice * (js.quantity || 1);
     return `
-      <tr>
-        <td style="padding: 14px 18px; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 16px;">${escapeHtml(js.service?.name ?? js.customServiceName ?? "Service")}</td>
-        <td style="padding: 14px 18px; border-bottom: 1px solid #e2e8f0; color: #64748b; text-align: center; font-size: 16px;">${js.quantity}</td>
-        <td style="padding: 14px 18px; border-bottom: 1px solid #e2e8f0; color: #64748b; text-align: right; font-size: 16px;">${formatPrice(unitPrice)}</td>
-        <td style="padding: 14px 18px; border-bottom: 1px solid #e2e8f0; color: #0f172a; font-weight: 600; text-align: right; font-size: 16px;">${formatPrice(lineTotal)}</td>
+      <tr class="email-table-row${i % 2 === 1 ? " email-table-row-alt" : ""}">
+        <td class="email-table-value" style="padding: 14px 18px; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 16px;">${escapeHtml(js.service?.name ?? js.customServiceName ?? "Service")}</td>
+        <td class="email-table-label" style="padding: 14px 18px; border-bottom: 1px solid #e2e8f0; color: #64748b; text-align: center; font-size: 16px;">${js.quantity}</td>
+        <td class="email-table-label" style="padding: 14px 18px; border-bottom: 1px solid #e2e8f0; color: #64748b; text-align: right; font-size: 16px;">${formatPrice(unitPrice)}</td>
+        <td class="email-table-value" style="padding: 14px 18px; border-bottom: 1px solid #e2e8f0; color: #0f172a; font-weight: 600; text-align: right; font-size: 16px;">${formatPrice(lineTotal)}</td>
       </tr>
     `;
   }).join("");
-  const productRows = (job.jobProducts ?? []).map((jp) => {
+  const svcCount = (job.jobServices ?? []).length;
+  const productRows = (job.jobProducts ?? []).map((jp, i) => {
     const unitPrice = typeof jp.unitPrice === "string" ? parseFloat(jp.unitPrice) : Number(jp.unitPrice);
     const lineTotal = unitPrice * (jp.quantity || 1);
     return `
-      <tr>
-        <td style="padding: 14px 18px; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 16px;">${escapeHtml(jp.product?.name ?? "Product")}</td>
-        <td style="padding: 14px 18px; border-bottom: 1px solid #e2e8f0; color: #64748b; text-align: center; font-size: 16px;">${jp.quantity}</td>
-        <td style="padding: 14px 18px; border-bottom: 1px solid #e2e8f0; color: #64748b; text-align: right; font-size: 16px;">${formatPrice(unitPrice)}</td>
-        <td style="padding: 14px 18px; border-bottom: 1px solid #e2e8f0; color: #0f172a; font-weight: 600; text-align: right; font-size: 16px;">${formatPrice(lineTotal)}</td>
+      <tr class="email-table-row${(svcCount + i) % 2 === 1 ? " email-table-row-alt" : ""}">
+        <td class="email-table-value" style="padding: 14px 18px; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 16px;">${escapeHtml(jp.product?.name ?? "Product")}</td>
+        <td class="email-table-label" style="padding: 14px 18px; border-bottom: 1px solid #e2e8f0; color: #64748b; text-align: center; font-size: 16px;">${jp.quantity}</td>
+        <td class="email-table-label" style="padding: 14px 18px; border-bottom: 1px solid #e2e8f0; color: #64748b; text-align: right; font-size: 16px;">${formatPrice(unitPrice)}</td>
+        <td class="email-table-value" style="padding: 14px 18px; border-bottom: 1px solid #e2e8f0; color: #0f172a; font-weight: 600; text-align: right; font-size: 16px;">${formatPrice(lineTotal)}</td>
       </tr>
     `;
   }).join("");
   const rows = serviceRows + productRows;
 
   return `
-<p style="margin:0 0 20px;font-size:16px;color:#64748b">Thank you for your payment, ${escapeHtml(customerName)}.</p>
-<p style="margin:0 0 24px;font-size:14px;color:#64748b">${escapeHtml(date)}</p>
+<p class="email-muted" style="margin:0 0 20px;font-size:16px;color:#64748b">Thank you for your payment, ${escapeHtml(customerName)}.</p>
+<p class="email-muted" style="margin:0 0 24px;font-size:14px;color:#64748b">${escapeHtml(date)}</p>
 
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom:24px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="email-table" style="margin-bottom:24px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
   <thead>
-    <tr style="background-color:#f8fafc">
+    <tr class="email-table-header" style="background-color:#f8fafc">
       <th style="padding:14px 18px;text-align:left;font-size:15px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em">Item</th>
       <th style="padding:14px 18px;text-align:center;font-size:15px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em">Qty</th>
       <th style="padding:14px 18px;text-align:right;font-size:15px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em">Unit Price</th>
@@ -1160,28 +1204,28 @@ function buildInvoiceInnerHtml(
   <tbody>${rows}</tbody>
 </table>
 
-<div style="padding:16px;background-color:#f1f5f9;border-radius:8px;border:1px solid #e2e8f0">
+<div class="email-summary-box" style="padding:16px;background-color:#f1f5f9;border-radius:8px;border:1px solid #e2e8f0">
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
     ${hasSurcharge ? `
     <tr>
-      <td style="font-size:16px;font-weight:600;color:#475569">Subtotal</td>
-      <td style="font-size:16px;font-weight:600;color:#334155;text-align:right">${formatPrice(subtotal)}</td>
+      <td class="email-table-label" style="font-size:16px;font-weight:600;color:#475569">Subtotal</td>
+      <td class="email-table-value" style="font-size:16px;font-weight:600;color:#334155;text-align:right">${formatPrice(subtotal)}</td>
     </tr>
     <tr>
-      <td style="font-size:16px;font-weight:600;color:#475569;padding-top:8px">Card processing fee</td>
-      <td style="font-size:16px;font-weight:600;color:#334155;text-align:right;padding-top:8px">${formatPrice(totalPaid - subtotal)}</td>
+      <td class="email-table-label" style="font-size:16px;font-weight:600;color:#475569;padding-top:8px">Card processing fee</td>
+      <td class="email-table-value" style="font-size:16px;font-weight:600;color:#334155;text-align:right;padding-top:8px">${formatPrice(totalPaid - subtotal)}</td>
     </tr>
     ` : ""}
     <tr>
-      <td style="font-size:16px;font-weight:700;color:#475569;padding-top:${hasSurcharge ? "8px" : "0"}">Total paid</td>
-      <td style="font-size:20px;font-weight:700;color:#334155;text-align:right;padding-top:${hasSurcharge ? "8px" : "0"}">${formatPrice(totalPaid)}</td>
+      <td class="email-table-label" style="font-size:16px;font-weight:700;color:#475569;padding-top:${hasSurcharge ? "8px" : "0"}">Total paid</td>
+      <td class="email-heading" style="font-size:20px;font-weight:700;color:#334155;text-align:right;padding-top:${hasSurcharge ? "8px" : "0"}">${formatPrice(totalPaid)}</td>
     </tr>
   </table>
 </div>
 
-<p style="margin:24px 0 0;font-size:14px;color:#64748b">This receipt is for your ${escapeHtml(job.bikeMake)} ${escapeHtml(job.bikeModel)} repair.</p>
-<p style="margin:20px 0 0;font-size:14px;color:#64748b">If you have any questions, please don't hesitate to get in touch.</p>
-<p style="margin:20px 0 0;font-size:12px;color:#94a3b8">Thank you for choosing ${escapeHtml(shopName)}.</p>
+<p class="email-muted" style="margin:24px 0 0;font-size:14px;color:#64748b">This receipt is for your ${escapeHtml(job.bikeMake)} ${escapeHtml(job.bikeModel)} repair.</p>
+<p class="email-muted" style="margin:20px 0 0;font-size:14px;color:#64748b">If you have any questions, please don't hesitate to get in touch.</p>
+<p class="email-muted" style="margin:20px 0 0;font-size:12px;color:#94a3b8">Thank you for choosing ${escapeHtml(shopName)}.</p>
   `.trim();
 }
 
@@ -1200,43 +1244,44 @@ function buildBikeReadyInvoiceInnerHtml(
     job.deliveryType === "COLLECTION_SERVICE"
       ? `Good news: your ${escapeHtml(job.bikeMake)} ${escapeHtml(job.bikeModel)} is ready and raring to roll. Since this was a collection, we'll be in touch to schedule its return home. Here is the itemized bill for the work completed.`
       : `Good news: your ${escapeHtml(job.bikeMake)} ${escapeHtml(job.bikeModel)} is ready for pickup. Here is the itemized bill for the work completed.`;
-  const serviceRows = (job.jobServices ?? []).map((js) => {
+  const serviceRows = (job.jobServices ?? []).map((js, i) => {
     const unitPrice = typeof js.unitPrice === "string" ? parseFloat(js.unitPrice) : Number(js.unitPrice);
     const lineTotal = unitPrice * (js.quantity || 1);
     return `
-      <tr>
-        <td style="padding:14px 18px;border-bottom:1px solid #e2e8f0;color:#334155;font-size:16px">${escapeHtml(js.service?.name ?? js.customServiceName ?? "Service")}</td>
-        <td style="padding:14px 18px;border-bottom:1px solid #e2e8f0;color:#64748b;text-align:center;font-size:16px">${js.quantity}</td>
-        <td style="padding:14px 18px;border-bottom:1px solid #e2e8f0;color:#64748b;text-align:right;font-size:16px">${formatPrice(unitPrice)}</td>
-        <td style="padding:14px 18px;border-bottom:1px solid #e2e8f0;color:#0f172a;font-weight:600;text-align:right;font-size:16px">${formatPrice(lineTotal)}</td>
+      <tr class="email-table-row${i % 2 === 1 ? " email-table-row-alt" : ""}">
+        <td class="email-table-value" style="padding:14px 18px;border-bottom:1px solid #e2e8f0;color:#334155;font-size:16px">${escapeHtml(js.service?.name ?? js.customServiceName ?? "Service")}</td>
+        <td class="email-table-label" style="padding:14px 18px;border-bottom:1px solid #e2e8f0;color:#64748b;text-align:center;font-size:16px">${js.quantity}</td>
+        <td class="email-table-label" style="padding:14px 18px;border-bottom:1px solid #e2e8f0;color:#64748b;text-align:right;font-size:16px">${formatPrice(unitPrice)}</td>
+        <td class="email-table-value" style="padding:14px 18px;border-bottom:1px solid #e2e8f0;color:#0f172a;font-weight:600;text-align:right;font-size:16px">${formatPrice(lineTotal)}</td>
       </tr>
     `;
   }).join("");
-  const productRows = (job.jobProducts ?? []).map((jp) => {
+  const svcCount = (job.jobServices ?? []).length;
+  const productRows = (job.jobProducts ?? []).map((jp, i) => {
     const unitPrice = typeof jp.unitPrice === "string" ? parseFloat(jp.unitPrice) : Number(jp.unitPrice);
     const lineTotal = unitPrice * (jp.quantity || 1);
     return `
-      <tr>
-        <td style="padding:14px 18px;border-bottom:1px solid #e2e8f0;color:#334155;font-size:16px">${escapeHtml(jp.product?.name ?? "Product")}</td>
-        <td style="padding:14px 18px;border-bottom:1px solid #e2e8f0;color:#64748b;text-align:center;font-size:16px">${jp.quantity}</td>
-        <td style="padding:14px 18px;border-bottom:1px solid #e2e8f0;color:#64748b;text-align:right;font-size:16px">${formatPrice(unitPrice)}</td>
-        <td style="padding:14px 18px;border-bottom:1px solid #e2e8f0;color:#0f172a;font-weight:600;text-align:right;font-size:16px">${formatPrice(lineTotal)}</td>
+      <tr class="email-table-row${(svcCount + i) % 2 === 1 ? " email-table-row-alt" : ""}">
+        <td class="email-table-value" style="padding:14px 18px;border-bottom:1px solid #e2e8f0;color:#334155;font-size:16px">${escapeHtml(jp.product?.name ?? "Product")}</td>
+        <td class="email-table-label" style="padding:14px 18px;border-bottom:1px solid #e2e8f0;color:#64748b;text-align:center;font-size:16px">${jp.quantity}</td>
+        <td class="email-table-label" style="padding:14px 18px;border-bottom:1px solid #e2e8f0;color:#64748b;text-align:right;font-size:16px">${formatPrice(unitPrice)}</td>
+        <td class="email-table-value" style="padding:14px 18px;border-bottom:1px solid #e2e8f0;color:#0f172a;font-weight:600;text-align:right;font-size:16px">${formatPrice(lineTotal)}</td>
       </tr>
     `;
   }).join("");
   const rows = serviceRows + productRows || `
-    <tr>
-      <td colspan="4" style="padding:14px 18px;border-bottom:1px solid #e2e8f0;color:#64748b;font-size:16px">No line items added yet.</td>
+    <tr class="email-table-row">
+      <td colspan="4" class="email-muted" style="padding:14px 18px;border-bottom:1px solid #e2e8f0;color:#64748b;font-size:16px">No line items added yet.</td>
     </tr>
   `;
 
   return `
-<p style="margin:0 0 16px;font-size:16px;color:#475569">Hi ${escapeHtml(customerName)},</p>
-<p style="margin:0 0 24px;font-size:16px;color:#475569">${readyMessage}</p>
+<p class="email-body-cell" style="margin:0 0 16px;font-size:16px;color:#475569">Hi ${escapeHtml(customerName)},</p>
+<p class="email-body-cell" style="margin:0 0 24px;font-size:16px;color:#475569">${readyMessage}</p>
 
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom:24px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="email-table" style="margin-bottom:24px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
   <thead>
-    <tr style="background-color:#f8fafc">
+    <tr class="email-table-header" style="background-color:#f8fafc">
       <th style="padding:14px 18px;text-align:left;font-size:15px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em">Item</th>
       <th style="padding:14px 18px;text-align:center;font-size:15px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em">Qty</th>
       <th style="padding:14px 18px;text-align:right;font-size:15px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em">Unit Price</th>
@@ -1246,27 +1291,27 @@ function buildBikeReadyInvoiceInnerHtml(
   <tbody>${rows}</tbody>
 </table>
 
-<div style="padding:16px;background-color:#f1f5f9;border-radius:8px;border:1px solid #e2e8f0;margin-bottom:24px">
+<div class="email-summary-box" style="padding:16px;background-color:#f1f5f9;border-radius:8px;border:1px solid #e2e8f0;margin-bottom:24px">
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
     <tr>
-      <td style="font-size:16px;font-weight:600;color:#475569">Total</td>
-      <td style="font-size:18px;font-weight:700;color:#334155;text-align:right">${formatPrice(subtotal)}</td>
+      <td class="email-table-label" style="font-size:16px;font-weight:600;color:#475569">Total</td>
+      <td class="email-table-value" style="font-size:18px;font-weight:700;color:#334155;text-align:right">${formatPrice(subtotal)}</td>
     </tr>
     ${totalPaid > 0 ? `
     <tr>
-      <td style="font-size:15px;font-weight:600;color:#64748b;padding-top:8px">Already paid</td>
-      <td style="font-size:15px;font-weight:600;color:#64748b;text-align:right;padding-top:8px">${formatPrice(totalPaid)}</td>
+      <td class="email-muted" style="font-size:15px;font-weight:600;color:#64748b;padding-top:8px">Already paid</td>
+      <td class="email-muted" style="font-size:15px;font-weight:600;color:#64748b;text-align:right;padding-top:8px">${formatPrice(totalPaid)}</td>
     </tr>
     ` : ""}
     <tr>
-      <td style="font-size:16px;font-weight:700;color:#475569;padding-top:8px">Balance due</td>
-      <td style="font-size:20px;font-weight:700;color:#0f172a;text-align:right;padding-top:8px">${formatPrice(remaining)}</td>
+      <td class="email-table-label" style="font-size:16px;font-weight:700;color:#475569;padding-top:8px">Balance due</td>
+      <td class="email-heading" style="font-size:20px;font-weight:700;color:#0f172a;text-align:right;padding-top:8px">${formatPrice(remaining)}</td>
     </tr>
   </table>
 </div>
 
 ${billUrl ? buildCustomerEmailCtaButton(billUrl, remaining > 0 ? "View and pay your bill" : "View your bill") : ""}
-<p style="margin:24px 0 0;font-size:14px;color:#64748b">Thanks,<br/>The ${escapeHtml(shopName)} Team</p>
+<p class="email-muted" style="margin:24px 0 0;font-size:14px;color:#64748b">Thanks,<br/>The ${escapeHtml(shopName)} Team</p>
   `.trim();
 }
 
@@ -1288,11 +1333,11 @@ export async function sendChatMagicLinkEmail(
   const subject = `Sign in to chat with ${shopName}`;
   const branding = await getCustomerEmailBrandingAssets(shopId);
   const innerHtml = `
-<p style="margin:0 0 12px;color:#475569">Click the button below to sign in and start chatting with us. This link expires in 15 minutes.</p>
-<p style="margin:0 0 24px;color:#475569">Before chat opens, you can also opt into service-related text updates if you want them. No marketing.</p>
+<p class="email-body-cell" style="margin:0 0 12px;color:#475569">Click the button below to sign in and start chatting with us. This link expires in 15 minutes.</p>
+<p class="email-body-cell" style="margin:0 0 24px;color:#475569">Before chat opens, you can also opt into service-related text updates if you want them. No marketing.</p>
 ${buildCustomerEmailCtaButton(magicLinkUrl, "Sign in to chat")}
-<p style="margin:24px 0 0;font-size:12px;color:#6b7280">If you didn't request this email, you can safely ignore it.</p>
-<p style="margin:12px 0 0;font-size:12px;color:#64748b;word-break:break-all">Or copy this link: <a href="${escapeHtml(magicLinkUrl)}" style="color:#4f46e5;text-decoration:underline">${escapeHtml(magicLinkUrl)}</a></p>
+<p class="email-muted" style="margin:24px 0 0;font-size:12px;color:#6b7280">If you didn't request this email, you can safely ignore it.</p>
+<p class="email-muted" style="margin:12px 0 0;font-size:12px;color:#64748b;word-break:break-all">Or copy this link: <a href="${escapeHtml(magicLinkUrl)}" style="color:#4f46e5;text-decoration:underline">${escapeHtml(magicLinkUrl)}</a></p>
 `.trim();
   const html = buildReadOnlyCustomerEmailHtml({
     innerHtml,
@@ -1346,11 +1391,11 @@ export async function sendChatCustomerReplyReminder(
   const hasLatestInBody = trimmedBody.length > 0 || files.length > 0;
 
   const latestMessageHtml = hasLatestInBody
-    ? `<div style="margin: 0 0 24px; padding: 16px; background: #f1f5f9; border-radius: 8px; border-left: 4px solid #4f46e5; font-size: 15px; color: #334155;">
+    ? `<div class="email-quote-box" style="margin: 0 0 24px; padding: 16px; background: #f1f5f9; border-radius: 8px; border-left: 4px solid #4f46e5; font-size: 15px; color: #334155;">
         ${trimmedBody.length > 0 ? `<div style="white-space: pre-wrap; word-break: break-word;">${escapeHtml(trimmedBody)}</div>` : ""}
-        ${files.length > 0 ? `<p style="margin: ${trimmedBody.length > 0 ? "12px" : "0"} 0 0; font-size: 14px; color: #475569;"><span style="color: #64748b;">Included:</span> ${files.map((f) => escapeHtml(f)).join(", ")}</p>` : ""}
+        ${files.length > 0 ? `<p class="email-muted" style="margin: ${trimmedBody.length > 0 ? "12px" : "0"} 0 0; font-size: 14px; color: #475569;"><span style="color: #64748b;">Included:</span> ${files.map((f) => escapeHtml(f)).join(", ")}</p>` : ""}
       </div>`
-    : `<p style="margin: 0 0 24px; font-size: 16px; color: #475569;">We sent you a message in chat at least ${reminderMinutes} minute${reminderMinutes === 1 ? "" : "s"} ago. When you have a moment, please open the conversation and reply.</p>`;
+    : `<p class="email-body-cell" style="margin: 0 0 24px; font-size: 16px; color: #475569;">We sent you a message in chat at least ${reminderMinutes} minute${reminderMinutes === 1 ? "" : "s"} ago. When you have a moment, please open the conversation and reply.</p>`;
 
   const intro = hasLatestInBody
     ? `<p style="margin: 0 0 16px; font-size: 16px; color: #475569;">We sent you a message in chat at least ${reminderMinutes} minute${reminderMinutes === 1 ? "" : "s"} ago. Here is the latest message:</p>`

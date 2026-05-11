@@ -144,6 +144,8 @@ model Job {
   collectionAddress     String?
   collectionWindowStart String?
   collectionWindowEnd   String?
+  collectionReturnWindowStart String?
+  collectionReturnWindowEnd   String?
   customerId        String?
   customer          Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
   notes             String?
@@ -567,6 +569,8 @@ model WaitlistEntry {
   collectionAddress    String?
   collectionWindowStart String?
   collectionWindowEnd  String?
+  collectionReturnWindowStart String?
+  collectionReturnWindowEnd   String?
   customerNotes        String?
   /// Array of Service ids selected in the booking widget (catalog items only).
   serviceIds           Json?          @default("[]")
