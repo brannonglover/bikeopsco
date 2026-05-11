@@ -87,6 +87,12 @@ export function getStaffJobDeepLink(jobId: string): string {
   return `${getStaffAppScheme()}:///(staff)/(jobs)/${encodeURIComponent(jobId)}`;
 }
 
+export function getStaffChatUrl(baseUrl: string, conversationId?: string): string {
+  if (!baseUrl) return "";
+  if (conversationId) return `${baseUrl}/staff/chat/${encodeURIComponent(conversationId)}`;
+  return `${baseUrl}/staff/chat`;
+}
+
 export function getStaffJobOpenUrl(jobId: string): string {
   const appUrl = getAppUrl();
   return appUrl ? `${appUrl}/open/staff/jobs/${encodeURIComponent(jobId)}` : "";

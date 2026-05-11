@@ -1,0 +1,11 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "8NQ9435B38.com.brannonglover.bikeops.app",
+        "paths": ["/staff/chat/*"]
+      }
+    ]
+  }
+}

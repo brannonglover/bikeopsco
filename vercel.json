@@ -1,5 +1,13 @@
 {
   "installCommand": "npm install --legacy-peer-deps",
+  "headers": [
+    {
+      "source": "/.well-known/apple-app-site-association",
+      "headers": [
+        { "key": "Content-Type", "value": "application/json" }
+      ]
+    }
+  ],
   "crons": [
     {
       "path": "/api/cron/send-follow-ups",
