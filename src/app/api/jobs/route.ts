@@ -68,51 +68,72 @@ export async function GET(request: NextRequest) {
 
     const where: Record<string, unknown> = { shopId };
 
-    if (archived) {
-      where.archivedAt = { not: null };
-    } else {
-      where.archivedAt = null;
-    }
-
     if (customerIdFilter) {
       where.customerId = customerIdFilter;
+    }
+
+    const andClauses: Record<string, unknown>[] = [];
+
+    if (archived) {
+      if (view === "board") {
+        // Archive page (board payload): archived completions plus active cancelled jobs (no board column).
+        andClauses.push({
+          OR: [{ archivedAt: { not: null } }, { stage: Stage.CANCELLED }],
+        });
+      } else {
+        where.archivedAt = { not: null };
+      }
+    } else {
+      where.archivedAt = null;
+      if (view === "board") {
+        andClauses.push({ stage: { not: Stage.CANCELLED } });
+      }
     }
 
     if (weekStart && weekEnd) {
       const start = new Date(weekStart);
       const end = new Date(weekEnd);
-      where.OR = [
-        {
-          dropOffDate: {
-            gte: start,
-            lte: end,
+      andClauses.push({
+        OR: [
+          {
+            dropOffDate: {
+              gte: start,
+              lte: end,
+            },
           },
-        },
-        {
-          pickupDate: {
-            gte: start,
-            lte: end,
+          {
+            pickupDate: {
+              gte: start,
+              lte: end,
+            },
           },
-        },
-        {
-          dropOffDate: null,
-          pickupDate: null,
-          createdAt: {
-            gte: start,
-            lte: end,
+          {
+            dropOffDate: null,
+            pickupDate: null,
+            createdAt: {
+              gte: start,
+              lte: end,
+            },
           },
-        },
-      ];
+        ],
+      });
+    }
+
+    if (andClauses.length > 0) {
+      where.AND = andClauses;
     }
     // No week filter: returns all jobs so the board shows everything in one view
 
-    const orderBy = archived
-      ? { archivedAt: "desc" as const }
-      : [
-          { columnSortOrder: { sort: "asc" as const, nulls: "last" as const } },
-          { dropOffDate: { sort: "asc" as const, nulls: "last" as const } },
-          { createdAt: "asc" as const },
-        ];
+    const orderBy =
+      archived && view === "board"
+        ? { updatedAt: "desc" as const }
+        : archived
+          ? { archivedAt: "desc" as const }
+          : [
+              { columnSortOrder: { sort: "asc" as const, nulls: "last" as const } },
+              { dropOffDate: { sort: "asc" as const, nulls: "last" as const } },
+              { createdAt: "asc" as const },
+            ];
 
     if (summary) {
       const jobs = await prisma.job.findMany({

@@ -73,7 +73,7 @@ const STAGES: Stage[] = [
   "CANCELLED",
 ];
 
-/** Main board columns - Pending approvals + Cancelled are shown outside the main scroll columns. */
+/** Main board columns — pending approvals live above the columns; cancelled jobs are on Archive. */
 const DISPLAY_STAGES: Stage[] = STAGES.filter(
   (s) => s !== "CANCELLED" && s !== "PENDING_APPROVAL"
 );
@@ -145,7 +145,6 @@ export function KanbanBoard() {
   const openJobId = searchParams.get("openJob");
   const [showPaidBanner, setShowPaidBanner] = useState(!!paidJobId);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
-  const [cancelledExpanded, setCancelledExpanded] = useState(false);
   const [newJobModalOpen, setNewJobModalOpen] = useState(false);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [rejectingJob, setRejectingJob] = useState<Job | null>(null);
@@ -314,10 +313,7 @@ export function KanbanBoard() {
           body: JSON.stringify(body),
         });
         if (res.ok) {
-          const updated = await res.json();
-          setJobs((prev) =>
-            prev.map((j) => (j.id === jobId ? updated : j))
-          );
+          setJobs((prev) => prev.filter((j) => j.id !== jobId));
           if (selectedJob?.id === jobId) setSelectedJob(null);
         }
       } catch (e) {
@@ -632,8 +628,8 @@ export function KanbanBoard() {
           dismissDateToastJobIdRef.current = selectedJob?.id ?? null;
         }}
         onJobUpdated={(updated) => {
-          // If the job was archived, it no longer belongs on the active board list.
-          if (updated.archivedAt) {
+          // Archived or cancelled jobs are not shown on the active board.
+          if (updated.archivedAt || updated.stage === "CANCELLED") {
             setSelectedJob(null);
             setJobs((prev) => prev.filter((j) => j.id !== updated.id));
             return;
@@ -832,49 +828,6 @@ export function KanbanBoard() {
             />
           ))}
         </div>
-
-        {jobsByStage.CANCELLED?.length ? (
-          <div className="flex-shrink-0 border-t border-slate-200 pt-4 mt-2">
-            <button
-              type="button"
-              onClick={() => setCancelledExpanded((e) => !e)}
-              className="flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors"
-            >
-              <span className="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-red-100 text-red-800">
-                Cancelled ({jobsByStage.CANCELLED.length})
-              </span>
-              <svg
-                className={`w-4 h-4 transition-transform ${cancelledExpanded ? "rotate-180" : ""}`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-            {cancelledExpanded && (
-              <div className="mt-3 flex flex-wrap gap-3 max-h-[200px] overflow-y-auto">
-                {jobsByStage.CANCELLED.map((job) => (
-                  <div
-                    key={job.id}
-                    onClick={() => setSelectedJob(job)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        setSelectedJob(job);
-                      }
-                    }}
-                    role="button"
-                    tabIndex={0}
-                    className="cursor-pointer hover:ring-2 hover:ring-red-200 rounded-xl transition-shadow"
-                  >
-                    <JobCardContent job={job} />
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        ) : null}
 
         <DragOverlay dropAnimation={{ duration: 0 }}>
           {(() => {

@@ -16,6 +16,17 @@ function formatArchivedDate(d: Date | string | null) {
   });
 }
 
+/** Active board jobs use updatedAt ordering from the archive API — show when archivedAt is absent. */
+function formatActivityDate(d: Date | string | null | undefined) {
+  if (!d) return "—";
+  const date = typeof d === "string" ? new Date(d) : d;
+  return date.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
 export default function ArchivePage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,13 +73,33 @@ export default function ArchivePage() {
     });
   }, [jobs, query]);
 
+  const archivedCompletedJobs = useMemo(() => {
+    const list = filtered.filter((j) => j.stage !== "CANCELLED");
+    return [...list].sort((a, b) => {
+      const ta = new Date(a.archivedAt ?? 0).getTime();
+      const tb = new Date(b.archivedAt ?? 0).getTime();
+      return tb - ta;
+    });
+  }, [filtered]);
+
+  const archivedCancelledJobs = useMemo(() => {
+    const list = filtered.filter((j) => j.stage === "CANCELLED");
+    return [...list].sort((a, b) => {
+      const ta = new Date(a.updatedAt ?? a.createdAt ?? 0).getTime();
+      const tb = new Date(b.updatedAt ?? b.createdAt ?? 0).getTime();
+      return tb - ta;
+    });
+  }, [filtered]);
+
+  const shownCounts = archivedCompletedJobs.length + archivedCancelledJobs.length;
+
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground mb-1">Archive</h1>
           <p className="text-text-secondary">
-            Completed jobs archived for later reference.
+            Completed jobs you have archived and cancelled jobs for reference — they no longer appear on the Job Board.
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
@@ -104,7 +135,11 @@ export default function ArchivePage() {
         <p className="text-sm text-slate-500">
           {loading
             ? "Loading…"
-            : `${filtered.length} job${filtered.length === 1 ? "" : "s"} shown${query.trim() ? ` (of ${jobs.length})` : ""}`}
+            : `${shownCounts} job${shownCounts === 1 ? "" : "s"} shown${query.trim() ? ` (of ${jobs.length})` : ""}${
+                !loading && jobs.length > 0 && !query.trim()
+                  ? ` (${archivedCompletedJobs.length} completed, ${archivedCancelledJobs.length} cancelled)`
+                  : ""
+              }`}
         </p>
       </div>
 
@@ -123,36 +158,89 @@ export default function ArchivePage() {
           </div>
           <h2 className="mt-4 text-lg font-semibold text-slate-900">No archived jobs yet</h2>
           <p className="mt-1 text-sm text-slate-600">
-            Archive jobs from a job’s details, or use &quot;Archive&quot; on the Job Board when you’re done for the day.
+            Completed jobs appear here once archived from job details or the Job Board. Cancelled jobs appear here automatically.
           </p>
         </div>
-      ) : filtered.length === 0 ? (
+      ) : shownCounts === 0 ? (
         <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center shadow-sm">
           <p className="text-slate-700 font-semibold">No matches</p>
           <p className="mt-1 text-sm text-slate-500">Try a different search.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          {filtered.map((job) => (
-            <button
-              key={job.id}
-              type="button"
-              onClick={() => setSelectedJob(job)}
-              className="text-left rounded-2xl border border-slate-200 bg-white p-5 shadow-soft hover:shadow-soft-lg hover:border-slate-300 transition-all"
-            >
-              <div className="min-w-0">
-                <JobCardContent job={job} variant="plain" />
+        <div className="space-y-8">
+          {archivedCompletedJobs.length > 0 && (
+            <section aria-labelledby="archive-completed-heading" className="space-y-3">
+              <h2 id="archive-completed-heading" className="text-sm font-semibold text-slate-700">
+                Completed
+              </h2>
+              <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                {archivedCompletedJobs.map((job) => (
+                  <button
+                    key={job.id}
+                    type="button"
+                    onClick={() => setSelectedJob(job)}
+                    className="text-left rounded-2xl border border-slate-200 bg-white p-5 shadow-soft hover:shadow-soft-lg hover:border-slate-300 transition-all"
+                  >
+                    <div className="mb-3 flex flex-wrap items-center gap-2">
+                      <span className="inline-flex rounded-lg bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">
+                        Completed
+                      </span>
+                    </div>
+                    <div className="min-w-0">
+                      <JobCardContent job={job} variant="plain" />
+                    </div>
+                    <div className="mt-3 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                      <span className="text-xs font-medium text-slate-500">
+                        Archived {job.archivedAt ? formatArchivedDate(job.archivedAt) : "—"}
+                      </span>
+                      <span className="text-xs font-medium text-slate-400">#{job.id.slice(-6)}</span>
+                    </div>
+                  </button>
+                ))}
               </div>
-              <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between gap-3">
-                <span className="text-xs font-medium text-slate-500">
-                  Archived {job.archivedAt ? formatArchivedDate(job.archivedAt) : "—"}
-                </span>
-                <span className="text-xs font-medium text-slate-400">
-                  #{job.id.slice(-6)}
-                </span>
+            </section>
+          )}
+          {archivedCancelledJobs.length > 0 && (
+            <section aria-labelledby="archive-cancelled-heading" className="space-y-3">
+              <h2 id="archive-cancelled-heading" className="text-sm font-semibold text-slate-700">
+                Cancelled
+              </h2>
+              <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                {archivedCancelledJobs.map((job) => (
+                  <button
+                    key={job.id}
+                    type="button"
+                    onClick={() => setSelectedJob(job)}
+                    className="text-left rounded-2xl border border-red-100 bg-white p-5 shadow-soft hover:shadow-soft-lg hover:border-red-200 transition-all"
+                  >
+                    <div className="mb-3 flex flex-wrap items-center gap-2">
+                      <span className="inline-flex rounded-lg bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">
+                        Cancelled
+                      </span>
+                      {job.archivedAt ? (
+                        <span className="text-xs font-medium text-slate-500">Archived</span>
+                      ) : (
+                        <span className="text-xs font-medium text-slate-500">On archive list</span>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <JobCardContent job={job} variant="plain" />
+                    </div>
+                    <div className="mt-3 flex items-center justify-between gap-3 border-t border-red-50 pt-3">
+                      <span className="text-xs font-medium text-slate-500">
+                        {job.archivedAt ? (
+                          <>Archived {formatArchivedDate(job.archivedAt)}</>
+                        ) : (
+                          <>Updated {formatActivityDate(job.updatedAt)}</>
+                        )}
+                      </span>
+                      <span className="text-xs font-medium text-slate-400">#{job.id.slice(-6)}</span>
+                    </div>
+                  </button>
+                ))}
               </div>
-            </button>
-          ))}
+            </section>
+          )}
         </div>
       )}
 
@@ -164,8 +252,9 @@ export default function ArchivePage() {
           dismissDateToastJobIdRef.current = selectedJob?.id ?? null;
         }}
         onJobUpdated={(updated) => {
-          // If the job was unarchived, it no longer belongs in this list.
-          if (!updated.archivedAt) {
+          const staysInArchive =
+            Boolean(updated.archivedAt) || updated.stage === "CANCELLED";
+          if (!staysInArchive) {
             setSelectedJob(null);
             setJobs((prev) => prev.filter((j) => j.id !== updated.id));
             return;
