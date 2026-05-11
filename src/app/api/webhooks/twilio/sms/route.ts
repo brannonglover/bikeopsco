@@ -8,6 +8,7 @@ import {
 } from "@/lib/chat-sms";
 import { normalizePhone } from "@/lib/phone";
 import { buildSmsConsentUpdate, parseSmsConsentKeyword } from "@/lib/sms-consent";
+import { sendPushToAllStaff } from "@/lib/push";
 import { getShopForHost } from "@/lib/shop";
 
 export const runtime = "nodejs";
@@ -153,6 +154,20 @@ export async function POST(request: NextRequest) {
         customerLastReadAt: message.createdAt,
       },
     });
+
+    const customer = await prisma.customer.findUnique({
+      where: { id: customerId },
+      select: { firstName: true, lastName: true },
+    });
+    const customerName = [customer?.firstName, customer?.lastName]
+      .filter(Boolean)
+      .join(" ");
+    const pushBody = bodyText?.trim() || "Sent a photo";
+    await sendPushToAllStaff(shop.id, {
+      title: `New message from ${customerName}`,
+      body: pushBody,
+      data: { type: "new_message", conversationId: conversation.id },
+    }).catch((err) => console.error("Push notify staff:", err));
   } catch (e) {
     console.error("Twilio SMS webhook: failed to save message", e);
     return new NextResponse("Error", { status: 500 });

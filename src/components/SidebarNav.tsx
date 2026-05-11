@@ -67,7 +67,7 @@ export function SidebarNav({ onNavigate }: SidebarNavProps) {
             <span className="truncate">{label}</span>
             {showChatBadge && (
               <span
-                className="flex-shrink-0 min-w-[1.25rem] h-5 px-1.5 inline-flex items-center justify-center rounded-full bg-amber-500 text-slate-900 text-xs font-semibold tabular-nums"
+                className="flex-shrink-0 min-h-6 min-w-[1.5rem] px-2 inline-flex items-center justify-center rounded-full bg-amber-800 text-white text-sm font-bold tabular-nums shadow-sm ring-1 ring-black/15"
                 aria-hidden
               >
                 {chatWaitingCount > 99 ? "99+" : chatWaitingCount}
