@@ -58,21 +58,21 @@ export function SidebarNav({ onNavigate }: SidebarNavProps) {
             href={href}
             onClick={onNavigate}
             aria-label={chatLabel}
-            className={`px-3 py-3 rounded-lg font-medium transition-colors text-base touch-manipulation flex items-center justify-between gap-2 min-w-0 ${
+            className={`px-3 py-3 rounded-lg font-medium transition-colors text-base touch-manipulation flex items-center gap-2 min-w-0 ${
               isActive
                 ? "text-white bg-slate-600 shadow-[inset_3px_0_0_#e49a32]"
                 : "text-slate-200 hover:text-white hover:bg-slate-600/50 active:bg-slate-600/70"
             }`}
           >
-            <span className="truncate">{label}</span>
-            {showChatBadge && (
-              <span
-                className="flex-shrink-0 min-h-6 min-w-[1.5rem] px-2 inline-flex items-center justify-center rounded-full bg-amber-800 text-white text-sm font-bold tabular-nums shadow-sm ring-1 ring-black/15"
-                aria-hidden
-              >
-                {chatWaitingCount > 99 ? "99+" : chatWaitingCount}
-              </span>
-            )}
+            <span className="flex min-w-0 flex-1 items-center gap-2">
+              <span className="truncate">{label}</span>
+              {showChatBadge && (
+                <span
+                  className="h-2.5 w-2.5 shrink-0 rounded-full bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.65)] ring-2 ring-white/35 animate-pulse"
+                  aria-hidden
+                />
+              )}
+            </span>
           </Link>
         );
       })}
