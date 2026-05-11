@@ -68,7 +68,7 @@ export function SidebarNav({ onNavigate }: SidebarNavProps) {
               <span className="truncate">{label}</span>
               {showChatBadge && (
                 <span
-                  className="h-2.5 w-2.5 shrink-0 rounded-full bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.65)] ring-2 ring-white/35 animate-pulse"
+                  className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.65)] ring-2 ring-white/35 animate-pulse"
                   aria-hidden
                 />
               )}
