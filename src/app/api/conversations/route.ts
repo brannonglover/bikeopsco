@@ -11,15 +11,35 @@ const createSchema = z.object({
   jobId: z.string().optional().nullable(),
 });
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const shop = await requireCurrentShop();
     const features = await getAppFeatures(shop.id);
     if (!features.chatEnabled) {
       return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
     }
+    const query = request.nextUrl.searchParams.get("q")?.trim() ?? "";
+    const terms = query.split(/\s+/).filter(Boolean).slice(0, 8);
     const conversations = await prisma.conversation.findMany({
-      where: { shopId: shop.id, archived: false },
+      where: {
+        shopId: shop.id,
+        archived: false,
+        ...(terms.length > 0
+          ? {
+              AND: terms.map((term) => ({
+                OR: [
+                  { customer: { firstName: { contains: term, mode: "insensitive" as const } } },
+                  { customer: { lastName: { contains: term, mode: "insensitive" as const } } },
+                  { customer: { email: { contains: term, mode: "insensitive" as const } } },
+                  { customer: { phone: { contains: term, mode: "insensitive" as const } } },
+                  { job: { bikeMake: { contains: term, mode: "insensitive" as const } } },
+                  { job: { bikeModel: { contains: term, mode: "insensitive" as const } } },
+                  { messages: { some: { body: { contains: term, mode: "insensitive" as const } } } },
+                ],
+              })),
+            }
+          : {}),
+      },
       orderBy: { updatedAt: "desc" },
       include: {
         customer: true,

@@ -1725,6 +1725,8 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
   const mapsUrl = address
     ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`
     : null;
+  const smsConsentKnown =
+    job.customer?.smsConsent === true || job.customer?.smsConsent === false;
 
   return (
     <>
@@ -1972,16 +1974,24 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
                     <span className="text-xs font-medium text-slate-600">SMS consent</span>
                     <span
                       className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
-                        job.customer.smsConsent
+                        !smsConsentKnown
+                          ? "bg-slate-50 text-slate-500 border border-slate-200"
+                          : job.customer.smsConsent
                           ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                           : "bg-slate-100 text-slate-600 border border-slate-200"
                       }`}
                     >
-                      {job.customer.smsConsent ? "Consented" : "Not consented"}
+                      {!smsConsentKnown
+                        ? "Checking..."
+                        : job.customer.smsConsent
+                          ? "Consented"
+                          : "Not consented"}
                     </span>
                   </div>
                   <p className="mt-1 text-xs text-slate-500">
-                    {job.customer.smsConsent
+                    {!smsConsentKnown
+                      ? "Loading the customer's SMS preference."
+                      : job.customer.smsConsent
                       ? `Customer opted in${
                           job.customer.smsConsentSource
                             ? ` via ${job.customer.smsConsentSource.replace(/_/g, " ").toLowerCase()}`

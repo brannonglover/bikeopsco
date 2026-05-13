@@ -262,6 +262,10 @@ function ChatPageContent() {
   const [showNewConvModal, setShowNewConvModal] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customerSearch, setCustomerSearch] = useState("");
+  const [chatSearch, setChatSearch] = useState("");
+  const [debouncedChatSearch, setDebouncedChatSearch] = useState("");
+  const [searchResults, setSearchResults] = useState<Conversation[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const composerTextareaRef = useRef<HTMLTextAreaElement>(null);
   const sendingRef = useRef(false);
@@ -377,6 +381,48 @@ function ChatPageContent() {
       setConversations(data);
     }
   }, []);
+
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      setDebouncedChatSearch(chatSearch.trim());
+    }, 250);
+    return () => window.clearTimeout(id);
+  }, [chatSearch]);
+
+  useEffect(() => {
+    if (!debouncedChatSearch) {
+      setSearchResults([]);
+      setSearchLoading(false);
+      return;
+    }
+
+    const ac = new AbortController();
+    setSearchLoading(true);
+    fetch(`/api/conversations?q=${encodeURIComponent(debouncedChatSearch)}`, {
+      signal: ac.signal,
+    })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => {
+        if (ac.signal.aborted) return;
+        setSearchResults(Array.isArray(data) ? data : []);
+      })
+      .catch((e: unknown) => {
+        if (
+          e &&
+          typeof e === "object" &&
+          "name" in e &&
+          (e as { name: string }).name === "AbortError"
+        ) {
+          return;
+        }
+        setSearchResults([]);
+      })
+      .finally(() => {
+        if (!ac.signal.aborted) setSearchLoading(false);
+      });
+
+    return () => ac.abort();
+  }, [debouncedChatSearch]);
 
   const fetchMessages = useCallback(async (convId: string, options?: { signal?: AbortSignal }) => {
     let res: Response;
@@ -540,6 +586,7 @@ function ChatPageContent() {
         });
         if (res.ok) {
           setConversations((prev) => prev.filter((c) => c.id !== id));
+          setSearchResults((prev) => prev.filter((c) => c.id !== id));
           setSelectedId((cur) => (cur === id ? null : cur));
           setSwipeOpenId(null);
         } else {
@@ -554,6 +601,7 @@ function ChatPageContent() {
   );
 
   const selectedConv = conversations.find((c) => c.id === selectedId);
+  const visibleConversations = debouncedChatSearch ? searchResults : conversations;
   const typingSignal =
     customerTypingAt ?? selectedConv?.customerTypingAt ?? null;
   const showCustomerTyping =
@@ -906,6 +954,28 @@ function ChatPageContent() {
         >
           <div className="p-3 border-b border-slate-200 flex-shrink-0">
             <h2 className="text-lg font-semibold text-slate-900">Chat</h2>
+            <div className="relative mt-2">
+              <input
+                type="search"
+                value={chatSearch}
+                onChange={(e) => setChatSearch(e.target.value)}
+                placeholder="Search chats"
+                aria-label="Search chats by customer name or message words"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 pr-9 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+              />
+              {chatSearch && (
+                <button
+                  type="button"
+                  onClick={() => setChatSearch("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                  aria-label="Clear chat search"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
             <button
               type="button"
               onClick={openNewConvModal}
@@ -915,11 +985,17 @@ function ChatPageContent() {
             </button>
           </div>
           <div className="flex-1 overflow-y-auto">
-            {conversations.length === 0 ? (
-              <p className="p-4 text-slate-500 text-sm">No conversations yet. Start one above.</p>
+            {searchLoading ? (
+              <p className="p-4 text-slate-500 text-sm">Searching…</p>
+            ) : visibleConversations.length === 0 ? (
+              <p className="p-4 text-slate-500 text-sm">
+                {debouncedChatSearch
+                  ? `No chats found for "${debouncedChatSearch}".`
+                  : "No conversations yet. Start one above."}
+              </p>
             ) : (
               <ul className="divide-y divide-slate-200">
-                {conversations.map((conv) => (
+                {visibleConversations.map((conv) => (
                   <ConversationListRow
                     key={conv.id}
                     conv={conv}

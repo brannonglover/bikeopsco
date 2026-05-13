@@ -9,7 +9,7 @@ import { sendPushToAllStaff } from "@/lib/push";
 import { getAppFeatures } from "@/lib/app-settings";
 import { computeJobSubtotal, computeTotalPaid, getJobPaymentSummary } from "@/lib/job-payments";
 import { getShopForHost } from "@/lib/shop";
-import { getEffectiveEmailUpdatesConsent } from "@/lib/sms-consent";
+import { getEffectiveEmailUpdatesConsent, getEffectiveSmsConsent } from "@/lib/sms-consent";
 
 export const dynamic = "force-dynamic";
 
@@ -179,6 +179,12 @@ export async function GET(request: NextRequest) {
               lastName: true,
               email: true,
               phone: true,
+              emailUpdatesConsent: true,
+              emailUpdatesConsentSource: true,
+              emailUpdatesConsentUpdatedAt: true,
+              smsConsent: true,
+              smsConsentSource: true,
+              smsConsentUpdatedAt: true,
               address: true,
               notes: true,
               createdAt: true,
@@ -285,6 +291,13 @@ export async function GET(request: NextRequest) {
         });
         return {
           ...job,
+          customer: job.customer
+            ? {
+                ...job.customer,
+                emailUpdatesConsent: getEffectiveEmailUpdatesConsent(job.customer),
+                smsConsent: getEffectiveSmsConsent(job.customer),
+              }
+            : null,
           paymentStatus: paymentSummary.paymentStatus,
           totalPaid,
           payments: undefined,
