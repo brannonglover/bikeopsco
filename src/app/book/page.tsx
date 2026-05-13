@@ -14,6 +14,11 @@ interface Service {
   price: number;
 }
 
+type ClosedDate = {
+  date: string;
+  reason?: string;
+};
+
 type BikeEntry = {
   make: string;
   model: string; // kept as string in local state; sent as null when empty
@@ -38,6 +43,20 @@ function formatUsd(amount: number): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount);
 }
 
+function getCalendarDate(value: string): string | null {
+  const match = value.match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : null;
+}
+
+function formatClosedDate(date: string): string {
+  const [year, month, day] = date.split("-").map(Number);
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  }).format(new Date(year, month - 1, day));
+}
+
 function BookForm() {
   const searchParams = useSearchParams();
   const embed = searchParams?.get("embed") === "1";
@@ -47,6 +66,7 @@ function BookForm() {
   const [collectionRadiusMiles, setCollectionRadiusMiles] = useState(5);
   const [collectionFeeRegular, setCollectionFeeRegular] = useState(20);
   const [collectionFeeEbike, setCollectionFeeEbike] = useState(30);
+  const [closedDates, setClosedDates] = useState<ClosedDate[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState<
@@ -107,6 +127,16 @@ function BookForm() {
           }
           if (typeof obj.collectionFeeEbike === "number" && Number.isFinite(obj.collectionFeeEbike)) {
             setCollectionFeeEbike(obj.collectionFeeEbike);
+          }
+          if (Array.isArray(obj.closedDates)) {
+            setClosedDates(
+              obj.closedDates.filter(
+                (item): item is ClosedDate =>
+                  typeof item === "object" &&
+                  item !== null &&
+                  typeof (item as ClosedDate).date === "string"
+              )
+            );
           }
         }
       })
@@ -180,9 +210,29 @@ function BookForm() {
     }));
   };
 
+  const selectedClosedDate = useMemo(() => {
+    const byDate = new Map(closedDates.map((item) => [item.date, item]));
+    const dates = [getCalendarDate(form.dropOffDate), getCalendarDate(form.pickupDate)].filter(Boolean) as string[];
+    for (const date of dates) {
+      const closed = byDate.get(date);
+      if (closed) return closed;
+    }
+    return null;
+  }, [closedDates, form.dropOffDate, form.pickupDate]);
+
+  const closedDateMessage = selectedClosedDate
+    ? selectedClosedDate.reason
+      ? `The shop is closed on ${formatClosedDate(selectedClosedDate.date)} (${selectedClosedDate.reason}).`
+      : `The shop is closed on ${formatClosedDate(selectedClosedDate.date)}.`
+    : null;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    if (closedDateMessage) {
+      setError(`${closedDateMessage} Please choose another date.`);
+      return;
+    }
     if (
       collectionServiceEnabled &&
       form.deliveryType === "COLLECTION_SERVICE" &&
@@ -606,6 +656,12 @@ function BookForm() {
           </div>
         </div>
 
+        {closedDateMessage && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+            {closedDateMessage} Please choose another date.
+          </div>
+        )}
+
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-700">
             Any additional info
@@ -629,6 +685,7 @@ function BookForm() {
           type="submit"
           disabled={
             submitting ||
+            Boolean(closedDateMessage) ||
             (collectionServiceEnabled &&
               form.deliveryType === "COLLECTION_SERVICE" &&
               collectionEligibility?.ok === true &&

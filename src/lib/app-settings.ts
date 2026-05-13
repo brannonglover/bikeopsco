@@ -6,6 +6,7 @@ import { requireCurrentShop } from "@/lib/shop";
 export type AppFeatures = {
   bookingsEnabled: boolean;
   maxActiveBikes: number;
+  closedDates: ClosedDate[];
   collectionServiceEnabled: boolean;
   collectionRadiusMiles: number;
   collectionFeeRegular: number;
@@ -15,14 +16,22 @@ export type AppFeatures = {
   reviewsEnabled: boolean;
 };
 
+export type ClosedDate = {
+  date: string;
+  reason?: string;
+};
+
 export type AppBranding = {
   logoUrl: string | null;
   logoAlt: string;
 };
 
+const CLOSED_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 const DEFAULT_FEATURES: AppFeatures = {
   bookingsEnabled: true,
   maxActiveBikes: 5,
+  closedDates: [],
   collectionServiceEnabled: true,
   collectionRadiusMiles: 5,
   collectionFeeRegular: 20,
@@ -31,6 +40,26 @@ const DEFAULT_FEATURES: AppFeatures = {
   chatEnabled: true,
   reviewsEnabled: true,
 };
+
+function normalizeClosedDates(value: unknown): ClosedDate[] {
+  if (!Array.isArray(value)) return [];
+
+  const byDate = new Map<string, ClosedDate>();
+  for (const item of value) {
+    if (!item || typeof item !== "object") continue;
+    const rawDate = (item as { date?: unknown }).date;
+    if (typeof rawDate !== "string" || !CLOSED_DATE_RE.test(rawDate)) continue;
+
+    const rawReason = (item as { reason?: unknown }).reason;
+    const reason =
+      typeof rawReason === "string" && rawReason.trim()
+        ? rawReason.trim().slice(0, 80)
+        : undefined;
+    byDate.set(rawDate, reason ? { date: rawDate, reason } : { date: rawDate });
+  }
+
+  return Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date));
+}
 
 export const DEFAULT_BRANDING: AppBranding = {
   logoUrl: null,
@@ -45,6 +74,7 @@ export async function getAppFeatures(shopId?: string): Promise<AppFeatures> {
     return {
       bookingsEnabled: row.bookingsEnabled,
       maxActiveBikes: row.maxActiveBikes,
+      closedDates: normalizeClosedDates(row.closedDates),
       collectionServiceEnabled: row.collectionServiceEnabled,
       collectionRadiusMiles: row.collectionRadiusMiles,
       collectionFeeRegular: Number(row.collectionFeeRegular),
@@ -63,18 +93,25 @@ export async function upsertAppFeatures(
   shopId: string,
   next: Partial<AppFeatures>,
 ): Promise<AppFeatures> {
+  const normalizedNext = {
+    ...next,
+    ...(next.closedDates !== undefined
+      ? { closedDates: normalizeClosedDates(next.closedDates) }
+      : {}),
+  };
   const updated = await prisma.appSettings.upsert({
     where: { shopId },
     create: {
       shopId,
       ...DEFAULT_FEATURES,
-      ...next,
+      ...normalizedNext,
     },
-    update: next,
+    update: normalizedNext,
   });
   return {
     bookingsEnabled: updated.bookingsEnabled,
     maxActiveBikes: updated.maxActiveBikes,
+    closedDates: normalizeClosedDates(updated.closedDates),
     collectionServiceEnabled: updated.collectionServiceEnabled,
     collectionRadiusMiles: updated.collectionRadiusMiles,
     collectionFeeRegular: Number(updated.collectionFeeRegular),

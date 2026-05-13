@@ -1,0 +1,1 @@
+ALTER TABLE "AppSettings" ADD COLUMN "closedDates" JSONB NOT NULL DEFAULT '[]';

@@ -37,6 +37,32 @@ type WaitlistTxnResult = {
   };
 };
 
+function getSubmittedCalendarDate(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const match = trimmed.match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : null;
+}
+
+function findClosedBookingDate(
+  closedDates: { date: string; reason?: string }[],
+  data: { dropOffDate?: string | null; pickupDate?: string | null },
+): { date: string; reason?: string } | null {
+  const blocked = new Map(closedDates.map((item) => [item.date, item]));
+  const submittedDates = [
+    getSubmittedCalendarDate(data.dropOffDate),
+    getSubmittedCalendarDate(data.pickupDate),
+  ].filter(Boolean) as string[];
+
+  for (const date of submittedDates) {
+    const closed = blocked.get(date);
+    if (closed) return closed;
+  }
+
+  return null;
+}
+
 const bikeItemSchema = z.object({
   make: z.string().min(1, "Bike make is required"),
   model: z.string().min(1).optional().nullable(),
@@ -121,6 +147,18 @@ export async function POST(request: NextRequest) {
 
     const data = bookSchema.parse(body);
     const features = await getAppFeatures(shop.id);
+    const closedDate = findClosedBookingDate(features.closedDates, data);
+
+    if (closedDate) {
+      const message = closedDate.reason
+        ? `The shop is closed on ${closedDate.date} (${closedDate.reason}). Please choose another date.`
+        : `The shop is closed on ${closedDate.date}. Please choose another date.`;
+      const res = NextResponse.json({ error: message }, { status: 400 });
+      return addWidgetCorsHeaders(res, origin, {
+        methods: "POST, OPTIONS",
+        allowHeaders: "Content-Type, Authorization",
+      });
+    }
 
     if (data.deliveryType === "COLLECTION_SERVICE") {
       if (!features.collectionServiceEnabled) {

@@ -526,6 +526,8 @@ model AppSettings {
   bookingsEnabled          Boolean  @default(true)
   /// Maximum number of bikes allowed to be active (RECEIVED + WORKING_ON) before new bookings are waitlisted.
   maxActiveBikes           Int      @default(5)
+  /// Array of closed calendar dates ({ date: "YYYY-MM-DD", reason?: string }) that cannot be booked.
+  closedDates              Json     @default("[]")
   collectionServiceEnabled Boolean  @default(true)
   /// Collection eligibility radius, in miles
   collectionRadiusMiles    Float    @default(5)

@@ -6,6 +6,7 @@ import { broadcastAppFeaturesUpdated } from "@/contexts/AppFeaturesContext";
 type AppFeatures = {
   bookingsEnabled: boolean;
   maxActiveBikes: number;
+  closedDates: ClosedDate[];
   collectionServiceEnabled: boolean;
   collectionRadiusMiles: number;
   collectionFeeRegular: number;
@@ -15,9 +16,22 @@ type AppFeatures = {
   reviewsEnabled: boolean;
 };
 
+type ClosedDate = {
+  date: string;
+  reason?: string;
+};
+
+type FeatureFlagKey =
+  | "bookingsEnabled"
+  | "collectionServiceEnabled"
+  | "notifyCustomerEnabled"
+  | "chatEnabled"
+  | "reviewsEnabled";
+
 const DEFAULT_FEATURES: AppFeatures = {
   bookingsEnabled: true,
   maxActiveBikes: 5,
+  closedDates: [],
   collectionServiceEnabled: true,
   collectionRadiusMiles: 5,
   collectionFeeRegular: 20,
@@ -71,6 +85,9 @@ export default function FeatureSettingsPage() {
   const [collectionFeeRegularInput, setCollectionFeeRegularInput] = useState(String(DEFAULT_FEATURES.collectionFeeRegular));
   const [collectionFeeEbikeInput, setCollectionFeeEbikeInput] = useState(String(DEFAULT_FEATURES.collectionFeeEbike));
   const [collectionDirty, setCollectionDirty] = useState(false);
+  const [closedDateInput, setClosedDateInput] = useState("");
+  const [closedDateReasonInput, setClosedDateReasonInput] = useState("");
+  const [bookingSettingsSaving, setBookingSettingsSaving] = useState(false);
 
   const fetchFeatures = useCallback(async () => {
     setFeaturesError(null);
@@ -87,6 +104,8 @@ export default function FeatureSettingsPage() {
       setCollectionFeeRegularInput(String(next.collectionFeeRegular));
       setCollectionFeeEbikeInput(String(next.collectionFeeEbike));
       setCollectionDirty(false);
+      setClosedDateInput("");
+      setClosedDateReasonInput("");
     } catch {
       setFeaturesError("Failed to load settings.");
     } finally {
@@ -122,16 +141,18 @@ export default function FeatureSettingsPage() {
       setCollectionFeeRegularInput(String(updated.collectionFeeRegular));
       setCollectionFeeEbikeInput(String(updated.collectionFeeEbike));
       setCollectionDirty(false);
+      setBookingSettingsSaving(false);
       setFeaturesSaved(true);
       window.setTimeout(() => setFeaturesSaved(false), 1500);
     } catch {
       setFeaturesError("Failed to save.");
     } finally {
+      setBookingSettingsSaving(false);
       setFeaturesSaving(false);
     }
   };
 
-  const setFeatureFlag = (key: keyof AppFeatures, value: boolean) => {
+  const setFeatureFlag = (key: FeatureFlagKey, value: boolean) => {
     const next = { ...features, [key]: value };
     setFeatures(next);
     void saveFeatures(next);
@@ -178,7 +199,51 @@ export default function FeatureSettingsPage() {
     };
     setFeatures(next);
     setBookingDirty(false);
+    setBookingSettingsSaving(true);
     void saveFeatures(next);
+  };
+
+  const addClosedDate = () => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(closedDateInput)) {
+      setFeaturesError("Choose a valid closed date.");
+      return;
+    }
+
+    const reason = closedDateReasonInput.trim();
+    const nextClosedDates = [
+      ...features.closedDates.filter((d) => d.date !== closedDateInput),
+      {
+        date: closedDateInput,
+        ...(reason ? { reason: reason.slice(0, 80) } : {}),
+      },
+    ].sort((a, b) => a.date.localeCompare(b.date));
+
+    const next: AppFeatures = { ...features, closedDates: nextClosedDates };
+    setFeatures(next);
+    setClosedDateInput("");
+    setClosedDateReasonInput("");
+    setBookingSettingsSaving(true);
+    void saveFeatures(next);
+  };
+
+  const removeClosedDate = (date: string) => {
+    const next: AppFeatures = {
+      ...features,
+      closedDates: features.closedDates.filter((d) => d.date !== date),
+    };
+    setFeatures(next);
+    setBookingSettingsSaving(true);
+    void saveFeatures(next);
+  };
+
+  const formatClosedDate = (date: string) => {
+    const [year, month, day] = date.split("-").map(Number);
+    return new Intl.DateTimeFormat("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }).format(new Date(year, month - 1, day));
   };
 
   return (
@@ -239,6 +304,71 @@ export default function FeatureSettingsPage() {
                 >
                   Save booking settings
                 </button>
+              </div>
+            </div>
+            <div className="mt-4 border-t border-surface-border pt-4">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)_auto]">
+                <div>
+                  <label className="block text-xs font-medium text-foreground">Closed date</label>
+                  <input
+                    type="date"
+                    value={closedDateInput}
+                    disabled={featuresSaving}
+                    onChange={(e) => setClosedDateInput(e.target.value)}
+                    className="mt-1 w-full rounded-lg border border-surface-border bg-background px-3 py-2 text-sm text-foreground"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-foreground">Reason</label>
+                  <input
+                    type="text"
+                    value={closedDateReasonInput}
+                    maxLength={80}
+                    disabled={featuresSaving}
+                    onChange={(e) => setClosedDateReasonInput(e.target.value)}
+                    placeholder="Holiday, staff training, inventory..."
+                    className="mt-1 w-full rounded-lg border border-surface-border bg-background px-3 py-2 text-sm text-foreground"
+                  />
+                </div>
+                <div className="flex items-end">
+                  <button
+                    type="button"
+                    onClick={addClosedDate}
+                    disabled={featuresSaving || !closedDateInput}
+                    className={`h-10 w-full rounded-lg px-3 text-sm font-semibold transition-colors md:w-auto ${
+                      featuresSaving || !closedDateInput
+                        ? "cursor-not-allowed bg-surface-border text-text-muted"
+                        : "bg-amber-600 text-white hover:bg-amber-700"
+                    }`}
+                  >
+                    Add closed date
+                  </button>
+                </div>
+              </div>
+              <div className="mt-3 space-y-2">
+                {features.closedDates.length === 0 ? (
+                  <p className="text-xs text-text-secondary">No closed dates set.</p>
+                ) : (
+                  features.closedDates.map((item) => (
+                    <div
+                      key={item.date}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-surface-border bg-background px-3 py-2"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-foreground">{formatClosedDate(item.date)}</p>
+                        {item.reason && <p className="text-xs text-text-secondary">{item.reason}</p>}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeClosedDate(item.date)}
+                        disabled={featuresSaving || bookingSettingsSaving}
+                        className="rounded-md px-2 py-1 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:text-text-muted dark:text-red-300 dark:hover:bg-red-950/40"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>
