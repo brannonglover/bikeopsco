@@ -46,16 +46,6 @@ function formatDate(d: Date | string | null) {
   });
 }
 
-function formatDateFull(d: Date | string | null) {
-  if (!d) return null;
-  const date = typeof d === "string" ? new Date(d) : d;
-  return date.toLocaleDateString("en-GB", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-  });
-}
-
 export function JobCardContent({
   job,
   onAccept,
@@ -126,11 +116,6 @@ export function JobCardContent({
             </span>
           ) : null}
         </div>
-        {job.dropOffDate && (
-          <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-indigo-100 text-indigo-800" title="Drop-off date">
-            {formatDateFull(job.dropOffDate)}
-          </span>
-        )}
       </div>
       <h3 className="font-semibold text-slate-900">
         {getJobBikeDisplayTitle(job)}
@@ -190,9 +175,20 @@ export function JobCardContent({
             : job.customer.firstName}
         </p>
       )}
-      {(job.pickupDate || (!job.dropOffDate && job.createdAt)) && (
+      {(job.dropOffDate || job.pickupDate || (!job.dropOffDate && job.createdAt)) && (
         <div className="mt-3 space-y-1 text-xs text-slate-500">
-          {job.pickupDate && <p>Pickup: {formatDate(job.pickupDate)}</p>}
+          {job.dropOffDate && (
+            <p>
+              {job.deliveryType === "COLLECTION_SERVICE" ? "Collection" : "Drop-off"}:{" "}
+              {formatDate(job.dropOffDate)}
+            </p>
+          )}
+          {job.pickupDate && (
+            <p>
+              {job.deliveryType === "COLLECTION_SERVICE" ? "Return" : "Pickup"}:{" "}
+              {formatDate(job.pickupDate)}
+            </p>
+          )}
           {!job.dropOffDate && job.createdAt && (
             <p>Added: {formatDate(job.createdAt)}</p>
           )}

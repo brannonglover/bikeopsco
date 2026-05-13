@@ -3,6 +3,7 @@ import { unstable_noStore as noStore } from "next/cache";
 import { getServerSession } from "next-auth";
 import { AppShell } from "@/components/AppShell";
 import { AuthProvider } from "@/components/AuthProvider";
+import { PostHogProvider } from "@/components/PostHogProvider";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { authOptions } from "@/lib/auth";
 import { getAppBranding } from "@/lib/app-settings";
@@ -57,7 +58,9 @@ export default async function RootLayout({
       <body className="antialiased bg-mesh text-foreground min-h-screen font-sans flex">
         <ThemeProvider>
           <AuthProvider>
-            <AppShell initialBranding={initialBranding}>{children}</AppShell>
+            <PostHogProvider>
+              <AppShell initialBranding={initialBranding}>{children}</AppShell>
+            </PostHogProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>
