@@ -20,6 +20,9 @@ export async function POST(
     const job = await prisma.job.findUnique({
       where: { id: jobId },
       include: {
+        shop: { select: { id: true, name: true, subdomain: true } },
+        customer: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
+        jobBikes: { select: { make: true, model: true } },
         jobServices: { include: { service: true } },
         jobProducts: { include: { product: true } },
         payments: {
@@ -74,6 +77,36 @@ export async function POST(
     const amountToCharge = computeAmountWithSurcharge(paymentSummary.remaining, mode);
     const amountInCents = toCents(amountToCharge);
 
+    const customerName = [job.customer?.firstName, job.customer?.lastName]
+      .filter(Boolean)
+      .join(" ");
+    const bikesSummary = job.jobBikes
+      .map((b) => [b.make, b.model].filter(Boolean).join(" "))
+      .join(", ");
+
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.VERCEL_URL;
+    const metadata: Record<string, string> = {
+      jobId,
+      mode,
+      shopId: job.shop.id,
+      shopName: job.shop.name,
+      shopSubdomain: job.shop.subdomain,
+      ...(job.customer && { customerId: job.customer.id }),
+      ...(customerName && { customerName }),
+      ...(job.customer?.email && { customerEmail: job.customer.email }),
+      ...(job.customer?.phone && { customerPhone: job.customer.phone }),
+      ...(bikesSummary && { bikes: bikesSummary.slice(0, 500) }),
+      ...(appUrl && { jobUrl: `${appUrl}/jobs?job=${jobId}` }),
+    };
+
+    const description = [
+      customerName || "Walk-in",
+      bikesSummary ? `— ${bikesSummary}` : "",
+      `(${job.shop.name})`,
+    ]
+      .filter(Boolean)
+      .join(" ");
+
     const stripe = getStripe();
     const paymentIntent = await stripe.paymentIntents.create(
       mode === "terminal"
@@ -82,13 +115,15 @@ export async function POST(
             currency: "usd",
             payment_method_types: ["card_present"],
             capture_method: "automatic",
-            metadata: { jobId, mode },
+            description,
+            metadata,
           }
         : {
             amount: amountInCents,
             currency: "usd",
             automatic_payment_methods: { enabled: true, allow_redirects: "never" },
-            metadata: { jobId, mode },
+            description,
+            metadata,
           }
     );
 
