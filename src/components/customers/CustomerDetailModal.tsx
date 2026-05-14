@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { formatCustomerName } from "@/lib/customer";
-import { broadcastJobsRefresh } from "@/lib/jobs-refresh";
+import { broadcastJobsRefresh, JOBS_REFRESH_EVENT } from "@/lib/jobs-refresh";
 
 // ── Types for job history ──────────────────────────────────────────────────
 type HistoryJobService = {
@@ -221,14 +221,29 @@ function CustomerJobHistory({ customerId }: { customerId: string }) {
   const [jobs, setJobs] = useState<HistoryJob[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const fetchHistory = useCallback(
+    (opts?: { silent?: boolean }) => {
+      if (!opts?.silent) setLoading(true);
+      fetch(`/api/customers/${customerId}/history`, { cache: "no-store" })
+        .then((r) => r.json())
+        .then((data) => setJobs(Array.isArray(data) ? data : []))
+        .catch(() => setJobs([]))
+        .finally(() => setLoading(false));
+    },
+    [customerId]
+  );
+
   useEffect(() => {
-    setLoading(true);
-    fetch(`/api/customers/${customerId}/history`)
-      .then((r) => r.json())
-      .then((data) => setJobs(Array.isArray(data) ? data : []))
-      .catch(() => setJobs([]))
-      .finally(() => setLoading(false));
-  }, [customerId]);
+    fetchHistory();
+  }, [fetchHistory]);
+
+  useEffect(() => {
+    const handleJobsRefresh = () => fetchHistory({ silent: true });
+    window.addEventListener(JOBS_REFRESH_EVENT, handleJobsRefresh);
+    return () => {
+      window.removeEventListener(JOBS_REFRESH_EVENT, handleJobsRefresh);
+    };
+  }, [fetchHistory]);
 
   if (loading) {
     return <p className="text-slate-500 text-sm py-2">Loading history...</p>;
