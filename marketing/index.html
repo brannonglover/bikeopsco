@@ -63,34 +63,55 @@
       var POSTHOG_PROJECT_KEY = "phc_vKDFFaTih87w8hxDjhefDEiTtJBNdBqkKcB7Hc5SToT4";
       var POSTHOG_API_HOST = "https://us.i.posthog.com";
       var POSTHOG_SITE = "bikeopsco";
-      var POSTHOG_OPT_OUT_STORAGE_KEY = "bikeops_posthog_opt_out";
+      var POSTHOG_OPT_OUT_COOKIE = "bikeops_posthog_opt_out";
+      var OPT_OUT_COOKIE_MAX_AGE = 60 * 60 * 24 * 365 * 2; // 2 years
 
-      function syncPostHogOptOutFromUrl() {
+      function getCookieDomain() {
+        var host = window.location.hostname;
+        if (host === "localhost" || host === "127.0.0.1") return "";
+        var parts = host.split(".");
+        return parts.length >= 2
+          ? "." + parts.slice(-2).join(".")
+          : "." + host;
+      }
+
+      function setOptOutCookie(value) {
+        var domain = getCookieDomain();
+        var domainAttr = domain ? "; domain=" + domain : "";
+        if (value) {
+          document.cookie = POSTHOG_OPT_OUT_COOKIE + "=1; path=/; max-age=" + OPT_OUT_COOKIE_MAX_AGE + "; SameSite=Lax" + domainAttr;
+        } else {
+          document.cookie = POSTHOG_OPT_OUT_COOKIE + "=; path=/; max-age=0; SameSite=Lax" + domainAttr;
+        }
+      }
+
+      function readOptOutCookie() {
+        return document.cookie.split("; ").some(function (c) { return c === POSTHOG_OPT_OUT_COOKIE + "=1"; });
+      }
+
+      function isLocalDev() {
+        var host = window.location.hostname;
+        return host === "localhost" || host === "127.0.0.1";
+      }
+
+      function hasPostHogOptedOut() {
+        if (isLocalDev()) {
+          return true;
+        }
+
         var params = new URLSearchParams(window.location.search);
         var optOut = params.get("posthog_opt_out");
 
         try {
           if (optOut === "1" || optOut === "true") {
-            window.localStorage.setItem(POSTHOG_OPT_OUT_STORAGE_KEY, "1");
+            setOptOutCookie(true);
           } else if (optOut === "0" || optOut === "false") {
-            window.localStorage.removeItem(POSTHOG_OPT_OUT_STORAGE_KEY);
+            setOptOutCookie(false);
           }
+
+          return readOptOutCookie();
         } catch (error) {
           return optOut === "1" || optOut === "true";
-        }
-
-        return false;
-      }
-
-      function hasPostHogOptedOut() {
-        if (syncPostHogOptOutFromUrl()) {
-          return true;
-        }
-
-        try {
-          return window.localStorage.getItem(POSTHOG_OPT_OUT_STORAGE_KEY) === "1";
-        } catch (error) {
-          return false;
         }
       }
 
