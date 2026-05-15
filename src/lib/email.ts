@@ -1330,19 +1330,19 @@ export async function sendChatMagicLinkEmail(
   }
 
   const shopName = SHOP_NAME;
-  const subject = `Sign in to chat with ${shopName}`;
+  const subject = `Sign in to ${shopName}`;
   const branding = await getCustomerEmailBrandingAssets(shopId);
   const innerHtml = `
-<p class="email-body-cell" style="margin:0 0 12px;color:#475569">Click the button below to sign in and start chatting with us. This link expires in 15 minutes.</p>
-<p class="email-body-cell" style="margin:0 0 24px;color:#475569">Before chat opens, you can also opt into service-related text updates if you want them. No marketing.</p>
-${buildCustomerEmailCtaButton(magicLinkUrl, "Sign in to chat")}
+<p class="email-body-cell" style="margin:0 0 12px;color:#475569">Click the button below to sign in to your account. This link expires in 15 minutes.</p>
+<p class="email-body-cell" style="margin:0 0 24px;color:#475569">Once signed in, you can view your repairs, chat with us, and more.</p>
+${buildCustomerEmailCtaButton(magicLinkUrl, "Sign in to your account")}
 <p class="email-muted" style="margin:24px 0 0;font-size:12px;color:#6b7280">If you didn't request this email, you can safely ignore it.</p>
 <p class="email-muted" style="margin:12px 0 0;font-size:12px;color:#64748b;word-break:break-all">Or copy this link: <a href="${escapeHtml(magicLinkUrl)}" style="color:#4f46e5;text-decoration:underline">${escapeHtml(magicLinkUrl)}</a></p>
 `.trim();
   const html = buildReadOnlyCustomerEmailHtml({
     innerHtml,
     headerLogoSrc: branding.headerLogoSrc,
-    heading: `Chat with ${shopName}`,
+    heading: `Sign in to ${shopName}`,
   });
   const attachments = customerEmailBrandingAttachments(branding);
 
