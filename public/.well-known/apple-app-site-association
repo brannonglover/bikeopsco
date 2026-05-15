@@ -4,7 +4,7 @@
     "details": [
       {
         "appID": "8NQ9435B38.com.brannonglover.bikeops.app",
-        "paths": ["/staff/chat/*", "/chat/c", "/open/login"]
+        "paths": ["/staff/chat/*", "/open/staff/chat/*", "/chat/c", "/open/login"]
       }
     ]
   }
