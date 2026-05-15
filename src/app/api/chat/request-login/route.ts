@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
       data: { shopId: shop.id, token, customerId: customer.id, expiresAt },
     });
 
-    const magicLinkUrl = `${baseUrl}/chat/c#token=${encodeURIComponent(token)}`;
+    const magicLinkUrl = `${baseUrl}/open/login#token=${encodeURIComponent(token)}`;
 
     const apiKey = getResendApiKey();
     console.log("[request-login] apiKey present:", !!apiKey, "| baseUrl:", baseUrl || "(empty)");
