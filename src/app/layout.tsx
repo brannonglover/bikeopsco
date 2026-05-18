@@ -1,7 +1,6 @@
 import { Plus_Jakarta_Sans } from "next/font/google";
 import { unstable_noStore as noStore } from "next/cache";
 import { getServerSession } from "next-auth";
-import Script from "next/script";
 import { AppShell } from "@/components/AppShell";
 import { AuthProvider } from "@/components/AuthProvider";
 import { PostHogProvider } from "@/components/PostHogProvider";
@@ -65,18 +64,6 @@ export default async function RootLayout({
           </AuthProvider>
         </ThemeProvider>
       </body>
-      <Script
-        src="https://www.googletagmanager.com/gtag/js?id=AW-16578987654"
-        strategy="afterInteractive"
-      />
-      <Script id="google-ads-tag" strategy="afterInteractive">
-        {`
-          window.dataLayer = window.dataLayer || [];
-          function gtag(){dataLayer.push(arguments);}
-          gtag('js', new Date());
-          gtag('config', 'AW-16578987654');
-        `}
-      </Script>
     </html>
   );
 }
