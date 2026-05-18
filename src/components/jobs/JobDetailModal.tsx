@@ -3261,15 +3261,12 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
               </svg>
               {paymentSummary.totalPaid > 0 ? "Pay remaining balance" : "Pay online"}
             </a>
-            <a
-              href={`/pay/${job.id}?mode=in_person`}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
+            <span className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-600">
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
               </svg>
-              Collect in person
-            </a>
+              Use mobile app for Tap to Pay
+            </span>
             <RecordCashButton jobId={job.id} onRecorded={onJobUpdated} total={remaining} />
           </div>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1">

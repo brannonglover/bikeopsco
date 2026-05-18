@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { getStripe } from "@/lib/stripe";
 import { prisma } from "@/lib/db";
+import { requireStaffShop } from "@/lib/api-auth";
 import { sendPaymentReceiptEmail } from "@/lib/email";
 import { computeJobSubtotal, computeTotalPaid, getJobPaymentSummary } from "@/lib/job-payments";
 
@@ -10,6 +11,8 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   const { id: jobId } = params;
+  const auth = await requireStaffShop(request);
+  if (!auth.ok) return auth.response;
 
   let paymentIntentId: string;
   try {
@@ -26,8 +29,8 @@ export async function POST(
     );
   }
 
-  const job = await prisma.job.findUnique({
-    where: { id: jobId },
+  const job = await prisma.job.findFirst({
+    where: { id: jobId, shopId: auth.shop.id },
     include: {
       customer: true,
       jobServices: { include: { service: true } },
@@ -79,6 +82,13 @@ export async function POST(
   if (paymentIntent.metadata?.jobId !== jobId) {
     return NextResponse.json(
       { error: "This Payment Intent does not belong to this job" },
+      { status: 400 }
+    );
+  }
+
+  if (paymentIntent.metadata?.shopId && paymentIntent.metadata.shopId !== auth.shop.id) {
+    return NextResponse.json(
+      { error: "This Payment Intent does not belong to this shop" },
       { status: 400 }
     );
   }

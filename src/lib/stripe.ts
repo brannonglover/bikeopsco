@@ -11,7 +11,7 @@ function getStripeClient(): Stripe {
     throw new Error("STRIPE_SECRET_KEY is still the placeholder. Replace with your real key from Stripe Dashboard → Developers → API keys.");
   }
   return new Stripe(key, {
-    apiVersion: "2026-02-25.clover",
+    apiVersion: "2026-04-22.dahlia",
     typescript: true,
   });
 }

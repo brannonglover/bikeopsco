@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { getRequestShop, requireStaffShop } from "@/lib/api-auth";
 import { computeAmountWithSurcharge, getStripe, toCents } from "@/lib/stripe";
 import { computeJobSubtotal, computeTotalPaid, getJobPaymentSummary } from "@/lib/job-payments";
 import { z } from "zod";
 
 const bodySchema = z.object({
-  mode: z.enum(["online", "in_person", "terminal"]).optional().default("online"),
+  mode: z.enum(["online", "terminal"]).optional().default("online"),
 });
 
 export async function POST(
@@ -17,8 +18,20 @@ export async function POST(
     const body = await request.json().catch(() => ({}));
     const { mode } = bodySchema.parse(body);
 
-    const job = await prisma.job.findUnique({
-      where: { id: jobId },
+    const shopAuth = mode === "terminal"
+      ? await requireStaffShop(request)
+      : { ok: true as const, shop: await getRequestShop(request) };
+
+    if (!shopAuth.ok) {
+      return shopAuth.response;
+    }
+
+    if (!shopAuth.shop) {
+      return NextResponse.json({ error: "Shop not found" }, { status: 404 });
+    }
+
+    const job = await prisma.job.findFirst({
+      where: { id: jobId, shopId: shopAuth.shop.id },
       include: {
         shop: { select: { id: true, name: true, subdomain: true } },
         customer: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },

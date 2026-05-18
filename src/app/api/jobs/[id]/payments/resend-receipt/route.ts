@@ -1,16 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { requireStaffShop } from "@/lib/api-auth";
 import { sendPaymentReceiptEmail } from "@/lib/email";
 
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
+    const auth = await requireStaffShop(request);
+    if (!auth.ok) return auth.response;
+
     const { id: jobId } = params;
 
-    const job = await prisma.job.findUnique({
-      where: { id: jobId },
+    const job = await prisma.job.findFirst({
+      where: { id: jobId, shopId: auth.shop.id },
       include: {
         customer: true,
         jobServices: { include: { service: true } },
