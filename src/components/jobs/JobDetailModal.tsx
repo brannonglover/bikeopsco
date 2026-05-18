@@ -829,6 +829,9 @@ function jobDateToMillis(iso: string | null | undefined): number | null {
   return Number.isNaN(ms) ? null : ms;
 }
 
+type JobDateField = "dropOffDate" | "pickupDate";
+type JobDateSavingField = JobDateField | "collectionWindow";
+
 function JobDetailsDateFields({
   job,
   onJobUpdated,
@@ -836,7 +839,7 @@ function JobDetailsDateFields({
 }: {
   job: Job;
   onJobUpdated?: (job: Job) => void;
-  onDateSaved?: (field: "dropOffDate" | "pickupDate" | "collectionWindow", jobId: string) => void;
+  onDateSaved?: (field: JobDateSavingField, jobId: string) => void;
 }) {
   const isCollection = job.deliveryType === "COLLECTION_SERVICE";
   const formatDateInputValue = useCallback(
@@ -847,36 +850,109 @@ function JobDetailsDateFields({
   const [pickup, setPickup] = useState(() => formatDateInputValue(job.pickupDate));
   const [windowStart, setWindowStart] = useState(job.collectionWindowStart ?? "");
   const [windowEnd, setWindowEnd] = useState(job.collectionWindowEnd ?? "");
-  const [savingField, setSavingField] = useState<"dropOffDate" | "pickupDate" | "collectionWindow" | null>(null);
+  const [savingFields, setSavingFields] = useState<Set<JobDateSavingField>>(() => new Set());
+  const pendingFieldsRef = useRef<Set<JobDateSavingField>>(new Set());
+  const dirtyFieldsRef = useRef<Set<JobDateSavingField>>(new Set());
+  const saveVersionsRef = useRef<Record<JobDateSavingField, number>>({
+    dropOffDate: 0,
+    pickupDate: 0,
+    collectionWindow: 0,
+  });
+  const latestDraftRef = useRef({ dropOff, pickup, windowStart, windowEnd });
 
   useEffect(() => {
-    setDropOff(formatDateInputValue(job.dropOffDate));
-    setPickup(formatDateInputValue(job.pickupDate));
-    setWindowStart(job.collectionWindowStart ?? "");
-    setWindowEnd(job.collectionWindowEnd ?? "");
+    latestDraftRef.current = { dropOff, pickup, windowStart, windowEnd };
+  }, [dropOff, pickup, windowStart, windowEnd]);
+
+  useEffect(() => {
+    const blocked = (field: JobDateSavingField) =>
+      pendingFieldsRef.current.has(field) || dirtyFieldsRef.current.has(field);
+
+    if (!blocked("dropOffDate")) {
+      setDropOff(formatDateInputValue(job.dropOffDate));
+    }
+    if (!blocked("pickupDate")) {
+      setPickup(formatDateInputValue(job.pickupDate));
+    }
+    if (!blocked("collectionWindow")) {
+      setWindowStart(job.collectionWindowStart ?? "");
+      setWindowEnd(job.collectionWindowEnd ?? "");
+    }
   }, [job.id, job.dropOffDate, job.pickupDate, job.collectionWindowStart, job.collectionWindowEnd, formatDateInputValue]);
 
   const firstLabel = isCollection ? "Collection pickup" : "Drop-off";
   const secondLabel = isCollection ? "Collection return" : "Pickup";
 
-  const persist = async (field: "dropOffDate" | "pickupDate", localVal: string) => {
+  const markDirty = (field: JobDateSavingField) => {
+    dirtyFieldsRef.current.add(field);
+  };
+
+  const setFieldSaving = (field: JobDateSavingField, saving: boolean) => {
+    if (saving) {
+      pendingFieldsRef.current.add(field);
+    } else {
+      pendingFieldsRef.current.delete(field);
+    }
+    setSavingFields((prev) => {
+      const next = new Set(prev);
+      if (saving) {
+        next.add(field);
+      } else {
+        next.delete(field);
+      }
+      return next;
+    });
+  };
+
+  const withPendingDrafts = (updated: Job, completedField: JobDateSavingField): Job => {
+    const draft = latestDraftRef.current;
+    const preserve = (field: JobDateSavingField) =>
+      field !== completedField &&
+      (pendingFieldsRef.current.has(field) || dirtyFieldsRef.current.has(field));
+    const next: Job = { ...updated };
+
+    if (preserve("dropOffDate")) {
+      const ms = localDateTimeToMillis(draft.dropOff);
+      next.dropOffDate = ms === null ? null : new Date(draft.dropOff).toISOString();
+    }
+    if (preserve("pickupDate")) {
+      const ms = localDateTimeToMillis(draft.pickup);
+      next.pickupDate = ms === null ? null : new Date(draft.pickup).toISOString();
+    }
+    if (preserve("collectionWindow")) {
+      next.collectionWindowStart = draft.windowStart || null;
+      next.collectionWindowEnd = draft.windowEnd || null;
+    }
+
+    return next;
+  };
+
+  const persist = async (field: JobDateField, localVal: string) => {
     if (!onJobUpdated) return;
     const currentIso = field === "dropOffDate" ? job.dropOffDate : job.pickupDate;
     const trimmed = localVal.trim();
     const nextMs = localDateTimeToMillis(trimmed);
     const currentMs = jobDateToMillis(currentIso ?? undefined);
     if (isCollection) {
-      if (trimmed === toDateLocalValue(currentIso ?? undefined)) return;
+      if (trimmed === toDateLocalValue(currentIso ?? undefined)) {
+        dirtyFieldsRef.current.delete(field);
+        return;
+      }
     } else if (nextMs === currentMs) {
+      dirtyFieldsRef.current.delete(field);
       return;
     }
 
-    setSavingField(field);
+    const version = saveVersionsRef.current[field] + 1;
+    saveVersionsRef.current[field] = version;
+    setFieldSaving(field, true);
+    const body =
+      nextMs === null
+        ? { [field]: null }
+        : { [field]: new Date(trimmed).toISOString() };
+    onJobUpdated({ ...job, ...body, updatedAt: new Date().toISOString() });
+
     try {
-      const body =
-        nextMs === null
-          ? { [field]: null }
-          : { [field]: new Date(trimmed).toISOString() };
       const res = await fetch(`/api/jobs/${job.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -884,34 +960,56 @@ function JobDetailsDateFields({
       });
       if (res.ok) {
         const updated = (await res.json()) as Job;
-        onJobUpdated(updated);
+        onJobUpdated(withPendingDrafts(updated, field));
         onDateSaved?.(field, job.id);
       }
     } finally {
-      setSavingField(null);
+      if (saveVersionsRef.current[field] === version) {
+        setFieldSaving(field, false);
+        if (latestDraftRef.current[field === "dropOffDate" ? "dropOff" : "pickup"] === localVal) {
+          dirtyFieldsRef.current.delete(field);
+        }
+      }
     }
   };
 
   const persistWindow = async (start: string, end: string) => {
     if (!onJobUpdated) return;
-    if (start === (job.collectionWindowStart ?? "") && end === (job.collectionWindowEnd ?? "")) return;
-    setSavingField("collectionWindow");
+    if (start === (job.collectionWindowStart ?? "") && end === (job.collectionWindowEnd ?? "")) {
+      dirtyFieldsRef.current.delete("collectionWindow");
+      return;
+    }
+    const field: JobDateSavingField = "collectionWindow";
+    const version = saveVersionsRef.current[field] + 1;
+    saveVersionsRef.current[field] = version;
+    setFieldSaving(field, true);
+    const body = {
+      collectionWindowStart: start || null,
+      collectionWindowEnd: end || null,
+    };
+    onJobUpdated({ ...job, ...body, updatedAt: new Date().toISOString() });
+
     try {
       const res = await fetch(`/api/jobs/${job.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          collectionWindowStart: start || null,
-          collectionWindowEnd: end || null,
-        }),
+        body: JSON.stringify(body),
       });
       if (res.ok) {
         const updated = (await res.json()) as Job;
-        onJobUpdated(updated);
+        onJobUpdated(withPendingDrafts(updated, field));
         onDateSaved?.("collectionWindow", job.id);
       }
     } finally {
-      setSavingField(null);
+      if (saveVersionsRef.current[field] === version) {
+        setFieldSaving(field, false);
+        if (
+          latestDraftRef.current.windowStart === start &&
+          latestDraftRef.current.windowEnd === end
+        ) {
+          dirtyFieldsRef.current.delete(field);
+        }
+      }
     }
   };
 
@@ -966,9 +1064,12 @@ function JobDetailsDateFields({
             <input
               type="date"
               value={dropOff}
-              onChange={(e) => setDropOff(e.target.value)}
+              onChange={(e) => {
+                markDirty("dropOffDate");
+                setDropOff(e.target.value);
+              }}
               onBlur={() => persist("dropOffDate", dropOff)}
-              disabled={savingField !== null}
+              aria-busy={savingFields.has("dropOffDate")}
               className="w-full max-w-full min-w-0 px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none disabled:opacity-60 box-border"
             />
           </div>
@@ -979,9 +1080,12 @@ function JobDetailsDateFields({
                 <input
                   type="date"
                   value={pickup}
-                  onChange={(e) => setPickup(e.target.value)}
+                  onChange={(e) => {
+                    markDirty("pickupDate");
+                    setPickup(e.target.value);
+                  }}
                   onBlur={() => persist("pickupDate", pickup)}
-                  disabled={savingField !== null}
+                  aria-busy={savingFields.has("pickupDate")}
                   className="w-full max-w-full min-w-0 px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none disabled:opacity-60 box-border"
                 />
               </div>
@@ -991,9 +1095,12 @@ function JobDetailsDateFields({
                   <input
                     type="time"
                     value={windowStart}
-                    onChange={(e) => setWindowStart(e.target.value)}
+                    onChange={(e) => {
+                      markDirty("collectionWindow");
+                      setWindowStart(e.target.value);
+                    }}
                     onBlur={() => persistWindow(windowStart, windowEnd)}
-                    disabled={savingField !== null}
+                    aria-busy={savingFields.has("collectionWindow")}
                     className="w-[110px] max-w-full min-w-0 px-2 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none disabled:opacity-60 box-border"
                   />
                 </div>
@@ -1003,9 +1110,12 @@ function JobDetailsDateFields({
                   <input
                     type="time"
                     value={windowEnd}
-                    onChange={(e) => setWindowEnd(e.target.value)}
+                    onChange={(e) => {
+                      markDirty("collectionWindow");
+                      setWindowEnd(e.target.value);
+                    }}
                     onBlur={() => persistWindow(windowStart, windowEnd)}
-                    disabled={savingField !== null}
+                    aria-busy={savingFields.has("collectionWindow")}
                     className="w-[110px] max-w-full min-w-0 px-2 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none disabled:opacity-60 box-border"
                   />
                 </div>
@@ -1020,9 +1130,12 @@ function JobDetailsDateFields({
             <input
               type="datetime-local"
               value={dropOff}
-              onChange={(e) => setDropOff(e.target.value)}
+              onChange={(e) => {
+                markDirty("dropOffDate");
+                setDropOff(e.target.value);
+              }}
               onBlur={() => persist("dropOffDate", dropOff)}
-              disabled={savingField !== null}
+              aria-busy={savingFields.has("dropOffDate")}
               className="w-full max-w-full min-w-0 px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none disabled:opacity-60 box-border"
             />
           </div>
@@ -1031,9 +1144,12 @@ function JobDetailsDateFields({
             <input
               type="datetime-local"
               value={pickup}
-              onChange={(e) => setPickup(e.target.value)}
+              onChange={(e) => {
+                markDirty("pickupDate");
+                setPickup(e.target.value);
+              }}
               onBlur={() => persist("pickupDate", pickup)}
-              disabled={savingField !== null}
+              aria-busy={savingFields.has("pickupDate")}
               className="w-full max-w-full min-w-0 px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none disabled:opacity-60 box-border"
             />
           </div>
