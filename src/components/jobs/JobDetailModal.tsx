@@ -1111,6 +1111,17 @@ function PaidStatusBlock({ job }: { job: Job }) {
   );
 }
 
+function PartialPaymentStatusBlock() {
+  return (
+    <div className="mt-4 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-amber-700">
+      <svg className="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+      <span className="font-medium">Partial payment</span>
+    </div>
+  );
+}
+
 function RecordCashButton({
   jobId,
   total,
@@ -3249,6 +3260,7 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
         <PaidStatusBlock job={job} />
       ) : (
         <div className="mt-4 flex flex-col gap-2">
+          {paymentSummary.totalPaid > 0 && <PartialPaymentStatusBlock />}
           <div className="flex flex-wrap gap-2">
             <a
               href={`/pay/${job.id}`}

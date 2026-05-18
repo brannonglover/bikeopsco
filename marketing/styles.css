@@ -26,6 +26,7 @@ html {
 
 body {
   margin: 0;
+  overflow-x: hidden;
   color: var(--ink);
   background:
     linear-gradient(180deg, #f9fcff 0%, var(--wash) 36%, #eef7f3 100%);
@@ -1421,36 +1422,60 @@ footer {
 
 @media (max-width: 820px) {
   .site-header {
-    align-items: flex-start;
+    align-items: center;
     flex-direction: column;
+    gap: 12px;
+    padding: 14px 16px;
+    text-align: center;
+  }
+
+  .brand img {
+    width: clamp(118px, 36vw, 148px);
   }
 
   nav {
     width: 100%;
     flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px 14px;
+    font-size: 0.84rem;
+    line-height: 1.2;
+  }
+
+  .button-small {
+    min-height: 34px;
+    padding: 0 12px;
   }
 
   .hero {
     min-height: auto;
-    place-items: start;
-    text-align: left;
+    place-items: center;
+    text-align: center;
   }
 
   .hero-inner {
-    text-align: left;
+    text-align: center;
   }
 
   .hero-logo-mark,
   .hero-logo-title img {
     max-width: min(380px, 86vw);
     max-height: 160px;
-    margin-right: 0;
-    margin-left: 0;
+    margin-right: auto;
+    margin-left: auto;
   }
 
   .hero-actions,
   .tenant-preview {
-    justify-content: flex-start;
+    justify-content: center;
+  }
+
+  .seo-hero-copy {
+    text-align: center;
+  }
+
+  .seo-hero .hero-actions {
+    justify-content: center;
   }
 
   .seo-hero,
