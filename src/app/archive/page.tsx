@@ -16,6 +16,8 @@ function formatArchivedDate(d: Date | string | null) {
   });
 }
 
+type ArchiveTab = "completed" | "cancelled";
+
 /** Active board jobs use updatedAt ordering from the archive API — show when archivedAt is absent. */
 function formatActivityDate(d: Date | string | null | undefined) {
   if (!d) return "—";
@@ -32,6 +34,7 @@ export default function ArchivePage() {
   const [loading, setLoading] = useState(true);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [query, setQuery] = useState("");
+  const [activeTab, setActiveTab] = useState<ArchiveTab>("completed");
   const [savedToast, setSavedToast] = useState<string | null>(null);
   const dismissDateToastJobIdRef = useRef<string | null>(null);
 
@@ -91,7 +94,8 @@ export default function ArchivePage() {
     });
   }, [filtered]);
 
-  const shownCounts = archivedCompletedJobs.length + archivedCancelledJobs.length;
+  const activeJobs =
+    activeTab === "completed" ? archivedCompletedJobs : archivedCancelledJobs;
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -131,15 +135,60 @@ export default function ArchivePage() {
         </div>
       </div>
 
+      {!loading && jobs.length > 0 && (
+        <div
+          role="tablist"
+          aria-label="Archive categories"
+          className="flex border-b border-slate-200"
+        >
+          <button
+            type="button"
+            id="archive-tab-completed"
+            role="tab"
+            aria-selected={activeTab === "completed"}
+            onClick={() => setActiveTab("completed")}
+            className={`px-4 py-3 text-sm font-medium transition-colors touch-manipulation ${
+              activeTab === "completed"
+                ? "text-blue-600 border-b-2 border-blue-600 -mb-px"
+                : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            Completed
+            <span className="ml-1.5 tabular-nums text-slate-400 font-normal">
+              ({archivedCompletedJobs.length})
+            </span>
+          </button>
+          <button
+            type="button"
+            id="archive-tab-cancelled"
+            role="tab"
+            aria-selected={activeTab === "cancelled"}
+            onClick={() => setActiveTab("cancelled")}
+            className={`px-4 py-3 text-sm font-medium transition-colors touch-manipulation ${
+              activeTab === "cancelled"
+                ? "text-blue-600 border-b-2 border-blue-600 -mb-px"
+                : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            Cancelled
+            <span className="ml-1.5 tabular-nums text-slate-400 font-normal">
+              ({archivedCancelledJobs.length})
+            </span>
+          </button>
+        </div>
+      )}
+
       <div className="flex items-center justify-between gap-4">
         <p className="text-sm text-slate-500">
           {loading
             ? "Loading…"
-            : `${shownCounts} job${shownCounts === 1 ? "" : "s"} shown${query.trim() ? ` (of ${jobs.length})` : ""}${
-                !loading && jobs.length > 0 && !query.trim()
-                  ? ` (${archivedCompletedJobs.length} completed, ${archivedCancelledJobs.length} cancelled)`
-                  : ""
-              }`}
+            : activeJobs.length === 0
+              ? activeTab === "completed"
+                ? `No completed jobs${query.trim() ? " match your search" : ""}`
+                : `No cancelled jobs${query.trim() ? " match your search" : ""}`
+              : `${activeJobs.length} ${activeTab === "completed" ? "completed" : "cancelled"} job${
+                  activeJobs.length === 1 ? "" : "s"
+                }${query.trim() ? ` (of ${jobs.length} total)` : ""}`}
         </p>
       </div>
 
@@ -161,86 +210,87 @@ export default function ArchivePage() {
             Completed jobs appear here once archived from job details or the Job Board. Cancelled jobs appear here automatically.
           </p>
         </div>
-      ) : shownCounts === 0 ? (
+      ) : activeJobs.length === 0 ? (
         <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center shadow-sm">
-          <p className="text-slate-700 font-semibold">No matches</p>
-          <p className="mt-1 text-sm text-slate-500">Try a different search.</p>
+          <p className="text-slate-700 font-semibold">
+            {query.trim() ? "No matches" : activeTab === "completed" ? "No completed jobs" : "No cancelled jobs"}
+          </p>
+          <p className="mt-1 text-sm text-slate-500">
+            {query.trim()
+              ? "Try a different search."
+              : activeTab === "completed"
+                ? "Archived completed jobs will appear here."
+                : "Cancelled jobs are added here automatically."}
+          </p>
+        </div>
+      ) : activeTab === "completed" ? (
+        <div
+          role="tabpanel"
+          aria-labelledby="archive-tab-completed"
+          className="grid grid-cols-1 gap-3 lg:grid-cols-2"
+        >
+          {archivedCompletedJobs.map((job) => (
+            <button
+              key={job.id}
+              type="button"
+              onClick={() => setSelectedJob(job)}
+              className="text-left rounded-2xl border border-slate-200 bg-white p-5 shadow-soft hover:shadow-soft-lg hover:border-slate-300 transition-all"
+            >
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <span className="inline-flex rounded-lg bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">
+                  Completed
+                </span>
+              </div>
+              <div className="min-w-0">
+                <JobCardContent job={job} variant="plain" />
+              </div>
+              <div className="mt-3 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                <span className="text-xs font-medium text-slate-500">
+                  Archived {job.archivedAt ? formatArchivedDate(job.archivedAt) : "—"}
+                </span>
+                <span className="text-xs font-medium text-slate-400">#{job.id.slice(-6)}</span>
+              </div>
+            </button>
+          ))}
         </div>
       ) : (
-        <div className="space-y-8">
-          {archivedCompletedJobs.length > 0 && (
-            <section aria-labelledby="archive-completed-heading" className="space-y-3">
-              <h2 id="archive-completed-heading" className="text-sm font-semibold text-slate-700">
-                Completed
-              </h2>
-              <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                {archivedCompletedJobs.map((job) => (
-                  <button
-                    key={job.id}
-                    type="button"
-                    onClick={() => setSelectedJob(job)}
-                    className="text-left rounded-2xl border border-slate-200 bg-white p-5 shadow-soft hover:shadow-soft-lg hover:border-slate-300 transition-all"
-                  >
-                    <div className="mb-3 flex flex-wrap items-center gap-2">
-                      <span className="inline-flex rounded-lg bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">
-                        Completed
-                      </span>
-                    </div>
-                    <div className="min-w-0">
-                      <JobCardContent job={job} variant="plain" />
-                    </div>
-                    <div className="mt-3 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
-                      <span className="text-xs font-medium text-slate-500">
-                        Archived {job.archivedAt ? formatArchivedDate(job.archivedAt) : "—"}
-                      </span>
-                      <span className="text-xs font-medium text-slate-400">#{job.id.slice(-6)}</span>
-                    </div>
-                  </button>
-                ))}
+        <div
+          role="tabpanel"
+          aria-labelledby="archive-tab-cancelled"
+          className="grid grid-cols-1 gap-3 lg:grid-cols-2"
+        >
+          {archivedCancelledJobs.map((job) => (
+            <button
+              key={job.id}
+              type="button"
+              onClick={() => setSelectedJob(job)}
+              className="text-left rounded-2xl border border-red-100 bg-white p-5 shadow-soft hover:shadow-soft-lg hover:border-red-200 transition-all"
+            >
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <span className="inline-flex rounded-lg bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">
+                  Cancelled
+                </span>
+                {job.archivedAt ? (
+                  <span className="text-xs font-medium text-slate-500">Archived</span>
+                ) : (
+                  <span className="text-xs font-medium text-slate-500">On archive list</span>
+                )}
               </div>
-            </section>
-          )}
-          {archivedCancelledJobs.length > 0 && (
-            <section aria-labelledby="archive-cancelled-heading" className="space-y-3">
-              <h2 id="archive-cancelled-heading" className="text-sm font-semibold text-slate-700">
-                Cancelled
-              </h2>
-              <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                {archivedCancelledJobs.map((job) => (
-                  <button
-                    key={job.id}
-                    type="button"
-                    onClick={() => setSelectedJob(job)}
-                    className="text-left rounded-2xl border border-red-100 bg-white p-5 shadow-soft hover:shadow-soft-lg hover:border-red-200 transition-all"
-                  >
-                    <div className="mb-3 flex flex-wrap items-center gap-2">
-                      <span className="inline-flex rounded-lg bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">
-                        Cancelled
-                      </span>
-                      {job.archivedAt ? (
-                        <span className="text-xs font-medium text-slate-500">Archived</span>
-                      ) : (
-                        <span className="text-xs font-medium text-slate-500">On archive list</span>
-                      )}
-                    </div>
-                    <div className="min-w-0">
-                      <JobCardContent job={job} variant="plain" />
-                    </div>
-                    <div className="mt-3 flex items-center justify-between gap-3 border-t border-red-50 pt-3">
-                      <span className="text-xs font-medium text-slate-500">
-                        {job.archivedAt ? (
-                          <>Archived {formatArchivedDate(job.archivedAt)}</>
-                        ) : (
-                          <>Updated {formatActivityDate(job.updatedAt)}</>
-                        )}
-                      </span>
-                      <span className="text-xs font-medium text-slate-400">#{job.id.slice(-6)}</span>
-                    </div>
-                  </button>
-                ))}
+              <div className="min-w-0">
+                <JobCardContent job={job} variant="plain" />
               </div>
-            </section>
-          )}
+              <div className="mt-3 flex items-center justify-between gap-3 border-t border-red-50 pt-3">
+                <span className="text-xs font-medium text-slate-500">
+                  {job.archivedAt ? (
+                    <>Archived {formatArchivedDate(job.archivedAt)}</>
+                  ) : (
+                    <>Updated {formatActivityDate(job.updatedAt)}</>
+                  )}
+                </span>
+                <span className="text-xs font-medium text-slate-400">#{job.id.slice(-6)}</span>
+              </div>
+            </button>
+          ))}
         </div>
       )}
 
