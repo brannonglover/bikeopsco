@@ -113,6 +113,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const isLoginPage = pathname === "/login";
   const isSignupPage = pathname === "/signup";
+  const isAdminPage = pathname?.startsWith("/admin");
   const isWidgetPage = pathname?.startsWith("/widget");
   const isPublicCustomerPage =
     pathname === "/book" ||
@@ -120,7 +121,8 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
     pathname?.startsWith("/preferences/") ||
     pathname?.startsWith("/status/") ||
     pathname?.startsWith("/chat/c");
-  const isStaffPage = !isLoginPage && !isSignupPage && !isWidgetPage && !isPublicCustomerPage;
+  const isStaffPage =
+    !isLoginPage && !isSignupPage && !isAdminPage && !isWidgetPage && !isPublicCustomerPage;
   const { status } = useSession();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -151,7 +153,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
     };
   }, [mobileMenuOpen]);
 
-  if (isLoginPage || isSignupPage || isWidgetPage) {
+  if (isLoginPage || isSignupPage || isAdminPage || isWidgetPage) {
     return <>{children}</>;
   }
 
