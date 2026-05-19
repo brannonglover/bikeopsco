@@ -780,6 +780,120 @@ ${staffJobUrl ? buildCustomerEmailCtaButton(staffJobUrl, "Review & accept or rej
   }
 }
 
+const DEFAULT_PLATFORM_SIGNUP_NOTIFY_EMAIL = "support@basementbikemechanic.com";
+
+function getPlatformSignupNotifyEmail(): string {
+  return (
+    process.env.PLATFORM_SIGNUP_NOTIFY_EMAIL?.trim() ||
+    process.env.SHOP_NOTIFY_EMAIL?.trim() ||
+    DEFAULT_PLATFORM_SIGNUP_NOTIFY_EMAIL
+  );
+}
+
+export async function sendPlatformSignupNotification(details: {
+  shopName: string;
+  subdomain: string;
+  ownerName: string;
+  ownerEmail: string;
+  trialEndsAt: Date | null;
+  loginUrl: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const resend = getResend();
+  if (!resend) {
+    console.warn("RESEND_API_KEY not set, skipping platform signup notification");
+    return { ok: false, error: "Email not configured" };
+  }
+
+  const notifyEmail = getPlatformSignupNotifyEmail();
+  if (!notifyEmail) {
+    return { ok: false, error: "No notification email configured" };
+  }
+
+  const trialEnds = details.trialEndsAt
+    ? details.trialEndsAt.toLocaleDateString("en-US", {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+    : "Not set";
+
+  const signedUpAt = new Date().toLocaleString("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+
+  const subject = `New Bike Ops trial signup: ${details.shopName}`;
+  const innerHtml = `
+<p style="margin:0 0 20px">A new shop signed up for a Bike Ops trial.</p>
+
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="email-table" style="margin-bottom:20px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+  <tbody>
+    <tr class="email-table-header" style="background-color:#f8fafc">
+      <td colspan="2" style="padding:12px 16px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#64748b">Shop</td>
+    </tr>
+    <tr class="email-table-row">
+      <td class="email-table-label" style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;width:40%;border-top:1px solid #e2e8f0">Name</td>
+      <td class="email-table-value" style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(details.shopName)}</td>
+    </tr>
+    <tr class="email-table-row email-table-row-alt" style="background-color:#f8fafc">
+      <td class="email-table-label" style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;border-top:1px solid #e2e8f0">Subdomain</td>
+      <td class="email-table-value" style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(details.subdomain)}</td>
+    </tr>
+    <tr class="email-table-row">
+      <td class="email-table-label" style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;border-top:1px solid #e2e8f0">Trial ends</td>
+      <td class="email-table-value" style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(trialEnds)}</td>
+    </tr>
+    <tr class="email-table-row email-table-row-alt" style="background-color:#f8fafc">
+      <td class="email-table-label" style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;border-top:1px solid #e2e8f0">Signed up</td>
+      <td class="email-table-value" style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(signedUpAt)}</td>
+    </tr>
+  </tbody>
+</table>
+
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="email-table" style="margin-bottom:20px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+  <tbody>
+    <tr class="email-table-header" style="background-color:#f8fafc">
+      <td colspan="2" style="padding:12px 16px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#64748b">Owner</td>
+    </tr>
+    <tr class="email-table-row">
+      <td class="email-table-label" style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;width:40%;border-top:1px solid #e2e8f0">Name</td>
+      <td class="email-table-value" style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(details.ownerName)}</td>
+    </tr>
+    <tr class="email-table-row email-table-row-alt" style="background-color:#f8fafc">
+      <td class="email-table-label" style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;border-top:1px solid #e2e8f0">Email</td>
+      <td class="email-table-value" style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0"><a href="mailto:${escapeHtml(details.ownerEmail)}" style="color:#4f46e5;text-decoration:underline">${escapeHtml(details.ownerEmail)}</a></td>
+    </tr>
+  </tbody>
+</table>
+
+${buildCustomerEmailCtaButton(details.loginUrl, "Open shop login")}
+`.trim();
+
+  const branding = await getCustomerEmailBrandingAssets();
+  const html = buildCustomerEmailHtml({
+    innerHtml,
+    headerLogoSrc: branding.headerLogoSrc,
+    heading: "New trial signup",
+  });
+  const attachments = customerEmailBrandingAttachments(branding);
+
+  try {
+    const { error } = await resend.emails.send({
+      from: getFromEmail(),
+      to: notifyEmail,
+      subject,
+      html,
+      ...(attachments && { attachments }),
+    });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (e) {
+    const err = e instanceof Error ? e.message : "Unknown error";
+    return { ok: false, error: err };
+  }
+}
+
 export async function sendWaitlistRequestNotification(entry: {
   shopId?: string;
   id: string;

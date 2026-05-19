@@ -2,8 +2,6 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { DEFAULT_ROOT_DOMAIN, getSubdomainFromHost, isSharedAppHost } from "@/lib/tenant-domain";
-import { getPlatformAdminSession } from "@/lib/platform-admin-session";
-import { isPlatformAdminHost } from "@/lib/platform-admin-host";
 
 function buildTenantUrl(req: NextRequest, subdomain: string) {
   const url = req.nextUrl.clone();
@@ -22,41 +20,8 @@ function buildTenantUrl(req: NextRequest, subdomain: string) {
   return url;
 }
 
-function isPublicPlatformAdminPath(pathname: string): boolean {
-  return pathname === "/admin/login" || pathname === "/api/platform/auth/login";
-}
-
-function isPlatformAdminPath(pathname: string): boolean {
-  return pathname === "/admin" || pathname.startsWith("/admin/") || pathname.startsWith("/api/platform/");
-}
-
 export async function middleware(req: NextRequest) {
   const rootDomain = process.env.ROOT_DOMAIN ?? DEFAULT_ROOT_DOMAIN;
-  const pathname = req.nextUrl.pathname;
-
-  if (isPlatformAdminPath(pathname)) {
-    if (!isPlatformAdminHost(req.headers.get("host"))) {
-      if (pathname.startsWith("/api/")) {
-        return NextResponse.json({ error: "Not found" }, { status: 404 });
-      }
-      return new NextResponse("Not found", { status: 404 });
-    }
-
-    if (!isPublicPlatformAdminPath(pathname)) {
-      const platformSession = await getPlatformAdminSession(req);
-      if (!platformSession) {
-        if (pathname.startsWith("/api/")) {
-          return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        }
-        const loginUrl = new URL("/admin/login", req.url);
-        loginUrl.searchParams.set("callbackUrl", pathname);
-        return NextResponse.redirect(loginUrl);
-      }
-    }
-
-    return NextResponse.next();
-  }
-
   const token = await getToken({ req });
   const requestSubdomain = getSubdomainFromHost(req.headers.get("host"), {
     rootDomain,
@@ -104,8 +69,8 @@ export async function middleware(req: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Protect staff routes. Public: login, pay, status, chat/c, open, api/auth, webhooks, jobs, chat, cron
+     * Protect staff routes. Public: login, signup, admin, platform APIs, pay, status, chat/c, open, api/auth, webhooks, jobs, chat, cron
      */
-    "/((?!_next|favicon|login|signup|pay|status|chat/c|open|book|widget|api/auth|api/signup|api/webhooks|api/jobs/|api/chat|api/cron|api/booking|api/widget|api/og-preview|api/push-tokens|api/review-requests/.+/redirect).*)",
+    "/((?!_next|favicon|login|signup|admin|api/platform|pay|status|chat/c|open|book|widget|api/auth|api/signup|api/webhooks|api/jobs/|api/chat|api/cron|api/booking|api/widget|api/og-preview|api/push-tokens|api/review-requests/.+/redirect).*)",
   ],
 };

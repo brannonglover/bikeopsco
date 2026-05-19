@@ -9,6 +9,7 @@ import {
 } from "@/lib/tenant-domain";
 import { provisionShopDefaults } from "@/lib/shop-provisioning";
 import { addTrialDays } from "@/lib/billing";
+import { sendPlatformSignupNotification } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
 
@@ -101,6 +102,16 @@ export async function POST(request: NextRequest) {
     });
 
     const loginUrl = buildTenantUrl(request, shop.subdomain, "/login");
+
+    void sendPlatformSignupNotification({
+      shopName: shop.name,
+      subdomain: shop.subdomain,
+      ownerName,
+      ownerEmail: email,
+      trialEndsAt: shop.trialEndsAt,
+      loginUrl,
+    }).catch((err) => console.error("[Signup] Platform notification email failed:", err));
+
     return NextResponse.json(
       {
         shop: {
