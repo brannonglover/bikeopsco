@@ -5,6 +5,8 @@
  * automatic vars as fallbacks.
  */
 
+import { DEFAULT_ROOT_DOMAIN } from "./tenant-domain";
+
 export function getGooglePlacesApiKey(): string | null {
   return process.env.GOOGLE_PLACES_API_KEY?.trim() || null;
 }
@@ -45,28 +47,37 @@ export function getAppUrl(): string {
 }
 
 export function getShopAppUrl(shopSubdomain?: string | null): string {
+  const subdomain = shopSubdomain?.trim().toLowerCase();
+  if (!subdomain) return getAppUrl();
+
+  const rootDomain = (process.env.ROOT_DOMAIN ?? DEFAULT_ROOT_DOMAIN).toLowerCase();
   const base = getAppUrl();
-  if (!base || !shopSubdomain?.trim()) return base;
 
-  try {
-    const url = new URL(base);
-    const subdomain = shopSubdomain.trim().toLowerCase();
-    const rootDomain = process.env.ROOT_DOMAIN ?? "bikeops.co";
+  if (base) {
+    try {
+      const url = new URL(base);
 
-    if (url.hostname === "localhost" || url.hostname.endsWith(".localhost")) {
-      url.hostname = `${subdomain}.localhost`;
-    } else if (url.hostname.endsWith(".lvh.me")) {
-      url.hostname = `${subdomain}.lvh.me`;
-    } else if (url.hostname === rootDomain || url.hostname.endsWith(`.${rootDomain}`)) {
-      url.protocol = "https:";
-      url.hostname = `${subdomain}.${rootDomain}`;
-      url.port = "";
+      if (url.hostname === "localhost" || url.hostname.endsWith(".localhost")) {
+        url.hostname = `${subdomain}.localhost`;
+        return url.toString().replace(/\/$/, "");
+      }
+      if (url.hostname.endsWith(".lvh.me")) {
+        url.hostname = `${subdomain}.lvh.me`;
+        return url.toString().replace(/\/$/, "");
+      }
+      if (url.hostname === rootDomain || url.hostname.endsWith(`.${rootDomain}`)) {
+        url.protocol = "https:";
+        url.hostname = `${subdomain}.${rootDomain}`;
+        url.port = "";
+        return url.toString().replace(/\/$/, "");
+      }
+    } catch {
+      // Fall through to tenant URL below.
     }
-
-    return url.toString().replace(/\/$/, "");
-  } catch {
-    return base;
   }
+
+  // Cron/email links must not depend on a stale NEXT_PUBLIC_APP_URL or Vercel host.
+  return `https://${subdomain}.${rootDomain}`;
 }
 
 export function getCustomerStatusUrl(jobId: string, shopSubdomain?: string | null): string {

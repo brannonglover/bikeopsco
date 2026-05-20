@@ -7,7 +7,7 @@ import {
   sendChatStaffReplyReminder,
 } from "@/lib/email";
 import { getEffectiveEmailUpdatesConsent } from "@/lib/sms-consent";
-import { getAppUrl, getStaffChatUrl } from "@/lib/env";
+import { getShopAppUrl, getStaffChatUrl } from "@/lib/env";
 import { getAppFeatures } from "@/lib/app-settings";
 
 export async function GET(request: NextRequest) {
@@ -40,12 +40,8 @@ export async function GET(request: NextRequest) {
       const features = await getAppFeatures(shop.id);
       if (!features.chatEnabled) continue;
 
-      const baseUrl =
-        getAppUrl() ||
-        (process.env.ROOT_DOMAIN
-          ? `https://${shop.subdomain}.${process.env.ROOT_DOMAIN}`
-          : "");
-      const customerChatUrl = baseUrl ? `${baseUrl}/chat/c` : "";
+      const shopBaseUrl = getShopAppUrl(shop.subdomain);
+      const customerChatUrl = shopBaseUrl ? `${shopBaseUrl}/chat/c` : "";
 
       const conversations = await prisma.conversation.findMany({
         where: { shopId: shop.id, archived: false },
@@ -118,7 +114,7 @@ export async function GET(request: NextRequest) {
             nudgesCustomer++;
           }
         } else {
-          const staffChatUrl = getStaffChatUrl(baseUrl, conv.id);
+          const staffChatUrl = getStaffChatUrl(shopBaseUrl, conv.id);
           if (!staffEmail || !staffChatUrl) continue;
 
           // Find the earliest customer message staff hasn't read yet.
