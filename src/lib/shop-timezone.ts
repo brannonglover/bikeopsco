@@ -15,5 +15,5 @@ export async function getShopTimezone(shopId: string): Promise<string> {
   } catch {
     // Fall through to env default.
   }
-  return normalizeIANATimezone(process.env.SHOP_TIMEZONE);
+  return normalizeIANATimezone(process.env.SHOP_TIMEZONE ?? DEFAULT_SHOP_TIMEZONE);
 }
