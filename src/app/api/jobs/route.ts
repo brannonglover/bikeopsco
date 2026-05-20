@@ -160,6 +160,8 @@ export async function GET(request: NextRequest) {
           collectionAddress: true,
           collectionWindowStart: true,
           collectionWindowEnd: true,
+          collectionReturnWindowStart: true,
+          collectionReturnWindowEnd: true,
           customerId: true,
           customerNotes: true,
           notes: true,

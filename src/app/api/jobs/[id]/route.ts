@@ -44,6 +44,8 @@ const updateJobSchema = z.object({
   collectionAddress: z.string().optional().nullable(),
   collectionWindowStart: z.string().optional().nullable(),
   collectionWindowEnd: z.string().optional().nullable(),
+  collectionReturnWindowStart: z.string().optional().nullable(),
+  collectionReturnWindowEnd: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
   internalNotes: z.string().optional().nullable(),
 });
@@ -175,6 +177,12 @@ export async function PATCH(
     if (data.collectionAddress !== undefined) updateData.collectionAddress = data.collectionAddress;
     if (data.collectionWindowStart !== undefined) updateData.collectionWindowStart = data.collectionWindowStart;
     if (data.collectionWindowEnd !== undefined) updateData.collectionWindowEnd = data.collectionWindowEnd;
+    if (data.collectionReturnWindowStart !== undefined) {
+      updateData.collectionReturnWindowStart = data.collectionReturnWindowStart;
+    }
+    if (data.collectionReturnWindowEnd !== undefined) {
+      updateData.collectionReturnWindowEnd = data.collectionReturnWindowEnd;
+    }
     if (data.notes !== undefined) updateData.notes = data.notes;
     if (data.internalNotes !== undefined) updateData.internalNotes = data.internalNotes;
     if (data.workingOnJobBikeId !== undefined) updateData.workingOnJobBikeId = data.workingOnJobBikeId;

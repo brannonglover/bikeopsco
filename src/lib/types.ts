@@ -185,6 +185,8 @@ export interface Job {
   collectionAddress: string | null;
   collectionWindowStart: string | null;
   collectionWindowEnd: string | null;
+  collectionReturnWindowStart: string | null;
+  collectionReturnWindowEnd: string | null;
   customerId: string | null;
   customer: Customer | null;
   notes: string | null;

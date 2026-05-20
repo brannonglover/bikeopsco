@@ -320,7 +320,9 @@ export default function ArchivePage() {
               ? "Pickup date"
               : field === "dropOffDate"
                 ? "Drop-off date"
-                : "Collection window";
+                : field === "collectionReturnWindow"
+                  ? "Return window"
+                  : "Pickup window";
           showSavedToast(`${label} updated`);
         }}
         onJobDeleted={(jobId) => {
