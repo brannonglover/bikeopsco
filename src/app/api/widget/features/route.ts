@@ -35,6 +35,7 @@ export async function GET(request: NextRequest) {
       collectionFeeRegular: features.collectionFeeRegular,
       collectionFeeEbike: features.collectionFeeEbike,
       closedDates: features.closedDates,
+      timezone: features.timezone,
       chatEnabled: features.chatEnabled,
       reviewsEnabled: features.reviewsEnabled,
     });

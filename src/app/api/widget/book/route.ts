@@ -17,6 +17,7 @@ import { addWidgetCorsHeaders } from "@/lib/widget-cors";
 import { buildSmsConsentUpdate } from "@/lib/sms-consent";
 import { getShopForHost } from "@/lib/shop";
 import { getCustomerStatusUrl } from "@/lib/env";
+import { normalizeJobCollectionWindowsForStorage } from "@/lib/normalize-job-collection-windows";
 
 export const dynamic = "force-dynamic";
 
@@ -147,6 +148,16 @@ export async function POST(request: NextRequest) {
 
     const data = bookSchema.parse(body);
     const features = await getAppFeatures(shop.id);
+    const dropOffDate = data.dropOffDate ? new Date(data.dropOffDate) : null;
+    const pickupDate = data.pickupDate ? new Date(data.pickupDate) : null;
+    const collectionWindows = await normalizeJobCollectionWindowsForStorage(
+      shop.id,
+      {
+        collectionWindowStart: data.collectionWindowStart,
+        collectionWindowEnd: data.collectionWindowEnd,
+      },
+      { dropOffDate, pickupDate }
+    );
     const closedDate = findClosedBookingDate(features.closedDates, data);
 
     if (closedDate) {
@@ -285,8 +296,8 @@ export async function POST(request: NextRequest) {
               dropOffDate: data.dropOffDate ? new Date(data.dropOffDate) : null,
               pickupDate: data.pickupDate ? new Date(data.pickupDate) : null,
               collectionAddress: data.collectionAddress ?? null,
-              collectionWindowStart: data.collectionWindowStart ?? null,
-              collectionWindowEnd: data.collectionWindowEnd ?? null,
+              collectionWindowStart: collectionWindows.collectionWindowStart ?? null,
+              collectionWindowEnd: collectionWindows.collectionWindowEnd ?? null,
               customerNotes: data.customerNotes ?? null,
               serviceIds: data.serviceIds ?? [],
               bikes: {
@@ -446,8 +457,8 @@ export async function POST(request: NextRequest) {
           dropOffDate: data.dropOffDate ? new Date(data.dropOffDate) : null,
           pickupDate: data.pickupDate ? new Date(data.pickupDate) : null,
           collectionAddress: data.collectionAddress ?? null,
-          collectionWindowStart: data.collectionWindowStart ?? null,
-          collectionWindowEnd: data.collectionWindowEnd ?? null,
+          collectionWindowStart: collectionWindows.collectionWindowStart ?? null,
+          collectionWindowEnd: collectionWindows.collectionWindowEnd ?? null,
           customerNotes: data.customerNotes ?? null,
         },
       });

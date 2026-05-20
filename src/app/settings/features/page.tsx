@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { broadcastAppFeaturesUpdated } from "@/contexts/AppFeaturesContext";
+import { US_SHOP_TIMEZONES } from "@/lib/timezone";
 
 type AppFeatures = {
   bookingsEnabled: boolean;
@@ -14,6 +15,7 @@ type AppFeatures = {
   notifyCustomerEnabled: boolean;
   chatEnabled: boolean;
   reviewsEnabled: boolean;
+  timezone: string;
 };
 
 type ClosedDate = {
@@ -39,6 +41,7 @@ const DEFAULT_FEATURES: AppFeatures = {
   notifyCustomerEnabled: true,
   chatEnabled: true,
   reviewsEnabled: true,
+  timezone: "America/New_York",
 };
 
 function ToggleRow({
@@ -257,6 +260,29 @@ export default function FeatureSettingsPage() {
         <div className="rounded-xl border border-surface-border bg-surface p-4 text-sm text-text-secondary">Loading...</div>
       ) : (
         <section className="space-y-4 rounded-xl border border-surface-border bg-surface p-4">
+          <div>
+            <label className="block text-sm font-semibold text-foreground">Shop timezone</label>
+            <p className="mt-0.5 text-sm text-text-secondary">
+              Booking dates, collection windows, and customer emails use this timezone. Times are stored in UTC
+              and shown in your shop&apos;s local time.
+            </p>
+            <select
+              value={features.timezone}
+              disabled={featuresSaving}
+              onChange={(e) => {
+                const next = { ...features, timezone: e.target.value };
+                setFeatures(next);
+                void saveFeatures(next);
+              }}
+              className="mt-2 w-full max-w-md rounded-lg border border-surface-border bg-background px-3 py-2 text-sm text-foreground"
+            >
+              {US_SHOP_TIMEZONES.map((tz) => (
+                <option key={tz.value} value={tz.value}>
+                  {tz.label}
+                </option>
+              ))}
+            </select>
+          </div>
           <ToggleRow
             title="Accept bookings"
             description="When off, new booking requests will be added to the waitlist instead of creating a job."

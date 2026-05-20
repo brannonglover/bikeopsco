@@ -10,6 +10,7 @@ import { computeJobSubtotal, computeTotalPaid, getJobPaymentSummary } from "@/li
 import { getEffectiveEmailUpdatesConsent, getEffectiveSmsConsent } from "@/lib/sms-consent";
 import { getShopForHost } from "@/lib/shop";
 import { addCustomerSystemChatMessage } from "@/lib/system-chat";
+import { normalizeJobCollectionWindowsForStorage } from "@/lib/normalize-job-collection-windows";
 
 const bikeSchema = z.object({
   make: z.string().min(1),
@@ -175,13 +176,49 @@ export async function PATCH(
     if (data.dropOffDate !== undefined) updateData.dropOffDate = data.dropOffDate ? new Date(data.dropOffDate) : null;
     if (data.pickupDate !== undefined) updateData.pickupDate = data.pickupDate ? new Date(data.pickupDate) : null;
     if (data.collectionAddress !== undefined) updateData.collectionAddress = data.collectionAddress;
-    if (data.collectionWindowStart !== undefined) updateData.collectionWindowStart = data.collectionWindowStart;
-    if (data.collectionWindowEnd !== undefined) updateData.collectionWindowEnd = data.collectionWindowEnd;
-    if (data.collectionReturnWindowStart !== undefined) {
-      updateData.collectionReturnWindowStart = data.collectionReturnWindowStart;
-    }
-    if (data.collectionReturnWindowEnd !== undefined) {
-      updateData.collectionReturnWindowEnd = data.collectionReturnWindowEnd;
+    const hasWindowUpdate =
+      data.collectionWindowStart !== undefined ||
+      data.collectionWindowEnd !== undefined ||
+      data.collectionReturnWindowStart !== undefined ||
+      data.collectionReturnWindowEnd !== undefined;
+
+    if (hasWindowUpdate) {
+      const refDrop =
+        data.dropOffDate !== undefined
+          ? data.dropOffDate
+            ? new Date(data.dropOffDate)
+            : null
+          : existingJob.dropOffDate;
+      const refPickup =
+        data.pickupDate !== undefined
+          ? data.pickupDate
+            ? new Date(data.pickupDate)
+            : null
+          : existingJob.pickupDate;
+
+      const normalized = await normalizeJobCollectionWindowsForStorage(
+        shop.id,
+        {
+          collectionWindowStart: data.collectionWindowStart,
+          collectionWindowEnd: data.collectionWindowEnd,
+          collectionReturnWindowStart: data.collectionReturnWindowStart,
+          collectionReturnWindowEnd: data.collectionReturnWindowEnd,
+        },
+        { dropOffDate: refDrop, pickupDate: refPickup }
+      );
+
+      if (data.collectionWindowStart !== undefined) {
+        updateData.collectionWindowStart = normalized.collectionWindowStart;
+      }
+      if (data.collectionWindowEnd !== undefined) {
+        updateData.collectionWindowEnd = normalized.collectionWindowEnd;
+      }
+      if (data.collectionReturnWindowStart !== undefined) {
+        updateData.collectionReturnWindowStart = normalized.collectionReturnWindowStart;
+      }
+      if (data.collectionReturnWindowEnd !== undefined) {
+        updateData.collectionReturnWindowEnd = normalized.collectionReturnWindowEnd;
+      }
     }
     if (data.notes !== undefined) updateData.notes = data.notes;
     if (data.internalNotes !== undefined) updateData.internalNotes = data.internalNotes;

@@ -10,6 +10,7 @@ import { getAppFeatures } from "@/lib/app-settings";
 import { computeJobSubtotal, computeTotalPaid, getJobPaymentSummary } from "@/lib/job-payments";
 import { getShopForHost } from "@/lib/shop";
 import { getEffectiveEmailUpdatesConsent, getEffectiveSmsConsent } from "@/lib/sms-consent";
+import { normalizeJobCollectionWindowsForStorage } from "@/lib/normalize-job-collection-windows";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,8 @@ const createJobSchema = z.object({
   collectionAddress: z.string().optional().nullable(),
   collectionWindowStart: z.string().optional().nullable(),
   collectionWindowEnd: z.string().optional().nullable(),
+  collectionReturnWindowStart: z.string().optional().nullable(),
+  collectionReturnWindowEnd: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
   internalNotes: z.string().optional().nullable(),
   customerNotes: z.string().optional().nullable(),
@@ -388,6 +391,19 @@ export async function POST(request: NextRequest) {
     const bikes = data.bikes && data.bikes.length > 0 ? data.bikes : [{ make: data.bikeMake, model: data.bikeModel }];
     const customerId = data.customerId ?? null;
 
+    const dropOffDate = data.dropOffDate ? new Date(data.dropOffDate) : null;
+    const pickupDate = data.pickupDate ? new Date(data.pickupDate) : null;
+    const collectionWindows = await normalizeJobCollectionWindowsForStorage(
+      shopId,
+      {
+        collectionWindowStart: data.collectionWindowStart,
+        collectionWindowEnd: data.collectionWindowEnd,
+        collectionReturnWindowStart: data.collectionReturnWindowStart,
+        collectionReturnWindowEnd: data.collectionReturnWindowEnd,
+      },
+      { dropOffDate, pickupDate }
+    );
+
     const job = await prisma.$transaction(async (tx) => {
       const newJob = await tx.job.create({
         data: {
@@ -397,11 +413,13 @@ export async function POST(request: NextRequest) {
           bikeModel: bikes.length === 1 ? (bikes[0].model ?? "") : `${bikes.length} bikes`,
           customer: customerId ? { connect: { id: customerId, shopId } } : undefined,
           deliveryType: data.deliveryType as "DROP_OFF_AT_SHOP" | "COLLECTION_SERVICE",
-          dropOffDate: data.dropOffDate ? new Date(data.dropOffDate) : null,
-          pickupDate: data.pickupDate ? new Date(data.pickupDate) : null,
+          dropOffDate,
+          pickupDate,
           collectionAddress: data.collectionAddress ?? null,
-          collectionWindowStart: data.collectionWindowStart ?? null,
-          collectionWindowEnd: data.collectionWindowEnd ?? null,
+          collectionWindowStart: collectionWindows.collectionWindowStart ?? null,
+          collectionWindowEnd: collectionWindows.collectionWindowEnd ?? null,
+          collectionReturnWindowStart: collectionWindows.collectionReturnWindowStart ?? null,
+          collectionReturnWindowEnd: collectionWindows.collectionReturnWindowEnd ?? null,
           notes: data.notes ?? null,
           internalNotes: data.internalNotes ?? null,
           customerNotes: data.customerNotes ?? null,

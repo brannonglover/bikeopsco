@@ -67,6 +67,7 @@ function BookForm() {
   const [collectionFeeRegular, setCollectionFeeRegular] = useState(20);
   const [collectionFeeEbike, setCollectionFeeEbike] = useState(30);
   const [closedDates, setClosedDates] = useState<ClosedDate[]>([]);
+  const [shopTimezone, setShopTimezone] = useState("America/New_York");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState<
@@ -137,6 +138,9 @@ function BookForm() {
                   typeof (item as ClosedDate).date === "string"
               )
             );
+          }
+          if (typeof obj.timezone === "string" && obj.timezone.trim()) {
+            setShopTimezone(obj.timezone.trim());
           }
         }
       })
@@ -605,7 +609,8 @@ function BookForm() {
                 Preferred collection window
               </label>
               <p className="mb-2 text-xs text-slate-500">
-                What time range works best for the collection?
+                What time range works best for the collection? Times are in your shop&apos;s local timezone (
+                {shopTimezone.replace(/_/g, " ").replace("America/", "")}).
               </p>
               <div className="grid grid-cols-2 gap-3">
                 <div className="min-w-0 overflow-hidden">

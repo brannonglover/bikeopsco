@@ -1,6 +1,8 @@
 import { Resend } from "resend";
 import fs from "fs";
 import path from "path";
+import { formatCollectionWindowRange } from "./format-collection-window";
+import { getShopTimezone } from "./shop-timezone";
 import { getAppUrl, getCustomerBillUrl, getCustomerStatusUrl, getResendApiKey, getShopAppUrl, getStaffJobOpenUrl } from "./env";
 
 function getResend(): Resend | null {
@@ -546,6 +548,7 @@ export async function sendJobEmail(
   const statusButtonHtml = statusUrl
     ? buildCustomerEmailCtaButton(statusUrl, "Track your repair status")
     : "";
+  const shopTimeZone = await getShopTimezone(shopId);
 
   const formatDate = (d: Date | string | null | undefined): string => {
     if (!d) return "";
@@ -572,21 +575,11 @@ export async function sendJobEmail(
     statusButtonHtml,
     dropOffDate: formatDate(job.dropOffDate),
     pickupDate: formatDate(job.pickupDate),
-    collectionWindow: (() => {
-      const s = job.collectionWindowStart;
-      const e = job.collectionWindowEnd;
-      if (!s && !e) return "";
-      const fmt = (t: string) => {
-        const [h, m] = t.split(":");
-        const hour = parseInt(h, 10);
-        const ampm = hour >= 12 ? "pm" : "am";
-        const h12 = hour % 12 || 12;
-        return m === "00" ? `${h12}${ampm}` : `${h12}:${m}${ampm}`;
-      };
-      if (s && e) return `${fmt(s)} – ${fmt(e)}`;
-      if (s) return `from ${fmt(s)}`;
-      return `until ${fmt(e!)}`;
-    })(),
+    collectionWindow:
+      formatCollectionWindowRange(job.collectionWindowStart, job.collectionWindowEnd, {
+        shopTimeZone,
+        referenceDate: job.dropOffDate,
+      }) ?? "",
   };
 
   const subject = mergeTemplateVariables(template.subject, vars);
@@ -682,20 +675,15 @@ export async function sendBookingRequestNotification(
       })
     : "Not set";
 
-  const formatWindowTime = (t: string) => {
-    const [h, m] = t.split(":");
-    const hour = parseInt(h, 10);
-    const ampm = hour >= 12 ? "pm" : "am";
-    const h12 = hour % 12 || 12;
-    return m === "00" ? `${h12}${ampm}` : `${h12}:${m}${ampm}`;
-  };
-  let collectionWindowLine = "";
-  if (job.deliveryType === "COLLECTION_SERVICE" && (job.collectionWindowStart || job.collectionWindowEnd)) {
-    const s = job.collectionWindowStart ? formatWindowTime(job.collectionWindowStart) : null;
-    const e = job.collectionWindowEnd ? formatWindowTime(job.collectionWindowEnd) : null;
-    const windowText = s && e ? `${s} – ${e}` : s ? `from ${s}` : `until ${e}`;
-    collectionWindowLine = `<br/><strong>Collection window:</strong> ${windowText}`;
-  }
+  const shopTimeZone = await getShopTimezone(job.shopId ?? "shop_default");
+  const pickupWindowText = formatCollectionWindowRange(
+    job.collectionWindowStart,
+    job.collectionWindowEnd,
+    { shopTimeZone, referenceDate: job.dropOffDate }
+  );
+  const collectionWindowLine = pickupWindowText
+    ? `<br/><strong>Collection window:</strong> ${pickupWindowText}`
+    : "";
 
   const subject = `New booking request: ${job.bikeMake} ${job.bikeModel}`;
   const innerHtml = `
@@ -1052,20 +1040,13 @@ export async function sendBookingReceivedEmail(
     });
   };
 
-  const formatWindowTime = (t: string) => {
-    const [h, m] = t.split(":");
-    const hour = parseInt(h, 10);
-    const ampm = hour >= 12 ? "pm" : "am";
-    const h12 = hour % 12 || 12;
-    return m === "00" ? `${h12}${ampm}` : `${h12}:${m}${ampm}`;
-  };
-
   const servicesList =
     job.jobServices
       ?.map((js) => `${js.service?.name ?? js.customServiceName ?? "Service"}${js.quantity > 1 ? ` × ${js.quantity}` : ""}`)
       .join(", ") || null;
 
   const isCollection = job.deliveryType === "COLLECTION_SERVICE";
+  const shopTimeZone = await getShopTimezone(job.shopId ?? "shop_default");
 
   let scheduleLines = "";
   if (isCollection) {
@@ -1073,10 +1054,12 @@ export async function sendBookingReceivedEmail(
     if (job.collectionAddress) {
       scheduleLines += `<tr class="email-table-row email-table-row-alt"><td class="email-table-label" style="padding:10px 16px;font-size:14px;color:#64748b;border-bottom:1px solid #e2e8f0;white-space:nowrap"><strong>Address</strong></td><td class="email-table-value" style="padding:10px 16px;font-size:14px;color:#334155;border-bottom:1px solid #e2e8f0">${escapeHtml(job.collectionAddress)}</td></tr>`;
     }
-    if (job.collectionWindowStart || job.collectionWindowEnd) {
-      const s = job.collectionWindowStart ? formatWindowTime(job.collectionWindowStart) : null;
-      const e = job.collectionWindowEnd ? formatWindowTime(job.collectionWindowEnd) : null;
-      const windowText = s && e ? `${s} – ${e}` : s ? `from ${s}` : `until ${e}`;
+    const windowText = formatCollectionWindowRange(
+      job.collectionWindowStart,
+      job.collectionWindowEnd,
+      { shopTimeZone, referenceDate: job.dropOffDate }
+    );
+    if (windowText) {
       scheduleLines += `<tr class="email-table-row"><td class="email-table-label" style="padding:10px 16px;font-size:14px;color:#64748b;border-bottom:1px solid #e2e8f0;white-space:nowrap"><strong>Collection window</strong></td><td class="email-table-value" style="padding:10px 16px;font-size:14px;color:#334155;border-bottom:1px solid #e2e8f0">${escapeHtml(windowText)}</td></tr>`;
     }
   } else {

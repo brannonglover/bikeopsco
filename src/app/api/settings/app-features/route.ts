@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { z } from "zod";
 import { getAppFeatures, upsertAppFeatures } from "@/lib/app-settings";
+import { US_SHOP_TIMEZONES } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,13 @@ const updateSchema = z.object({
   notifyCustomerEnabled: z.boolean().optional(),
   chatEnabled: z.boolean().optional(),
   reviewsEnabled: z.boolean().optional(),
+  timezone: z
+    .string()
+    .trim()
+    .refine((tz) => US_SHOP_TIMEZONES.some((row) => row.value === tz), {
+      message: "Invalid timezone",
+    })
+    .optional(),
 });
 
 export async function GET(request: NextRequest) {

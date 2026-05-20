@@ -538,6 +538,8 @@ model AppSettings {
   notifyCustomerEnabled    Boolean  @default(true)
   chatEnabled              Boolean  @default(true)
   reviewsEnabled           Boolean  @default(true)
+  /// IANA timezone for shop scheduling (e.g. America/New_York).
+  timezone                 String   @default("America/New_York")
   logoUrl                  String?
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt

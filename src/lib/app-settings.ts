@@ -2,6 +2,7 @@ import "server-only";
 
 import { prisma } from "@/lib/db";
 import { requireCurrentShop } from "@/lib/shop";
+import { DEFAULT_SHOP_TIMEZONE, normalizeIANATimezone } from "@/lib/timezone";
 
 export type AppFeatures = {
   bookingsEnabled: boolean;
@@ -14,6 +15,7 @@ export type AppFeatures = {
   notifyCustomerEnabled: boolean;
   chatEnabled: boolean;
   reviewsEnabled: boolean;
+  timezone: string;
 };
 
 export type ClosedDate = {
@@ -39,6 +41,7 @@ const DEFAULT_FEATURES: AppFeatures = {
   notifyCustomerEnabled: true,
   chatEnabled: true,
   reviewsEnabled: true,
+  timezone: DEFAULT_SHOP_TIMEZONE,
 };
 
 function normalizeClosedDates(value: unknown): ClosedDate[] {
@@ -82,6 +85,7 @@ export async function getAppFeatures(shopId?: string): Promise<AppFeatures> {
       notifyCustomerEnabled: row.notifyCustomerEnabled,
       chatEnabled: row.chatEnabled,
       reviewsEnabled: row.reviewsEnabled,
+      timezone: normalizeIANATimezone(row.timezone),
     };
   } catch (e) {
     console.warn("[app-settings] Failed to load AppSettings; using defaults:", e);
@@ -119,6 +123,7 @@ export async function upsertAppFeatures(
     notifyCustomerEnabled: updated.notifyCustomerEnabled,
     chatEnabled: updated.chatEnabled,
     reviewsEnabled: updated.reviewsEnabled,
+    timezone: normalizeIANATimezone(updated.timezone),
   };
 }
 

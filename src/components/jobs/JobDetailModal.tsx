@@ -15,6 +15,12 @@ import {
 } from "@/lib/job-display";
 import { getJobPaymentSummary } from "@/lib/job-payments";
 import { formatPhoneDisplay, phoneTelHref } from "@/lib/phone";
+import {
+  decodeCollectionWindowForInput,
+  encodeCollectionWindowPairForStorage,
+} from "@/lib/collection-window-storage";
+import { formatCollectionWindowRange } from "@/lib/format-collection-window";
+import { toCalendarDateInTimezone } from "@/lib/timezone";
 
 function formatChatPreviewTime(iso: string): string {
   const d = new Date(iso);
@@ -832,26 +838,6 @@ function jobDateToMillis(iso: string | null | undefined): number | null {
 type JobDateField = "dropOffDate" | "pickupDate";
 type JobDateSavingField = JobDateField | "collectionWindow" | "collectionReturnWindow";
 
-function formatCollectionWindowDisplay(start: string | null, end: string | null): string | null {
-  if (!start && !end) return null;
-  const fmt = (value: string) => {
-    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-      return new Date(`${value}T12:00:00`).toLocaleDateString("en-GB", {
-        day: "numeric",
-        month: "short",
-      });
-    }
-    const [h, m] = value.split(":");
-    const hour = parseInt(h, 10);
-    if (Number.isNaN(hour)) return value;
-    const ampm = hour >= 12 ? "pm" : "am";
-    const h12 = hour % 12 || 12;
-    return m === "00" ? `${h12}${ampm}` : `${h12}:${m}${ampm}`;
-  };
-  if (start && end) return `${fmt(start)} – ${fmt(end)}`;
-  if (start) return `from ${fmt(start)}`;
-  return `until ${fmt(end!)}`;
-}
 
 function JobDetailsDateFields({
   job,
@@ -862,17 +848,33 @@ function JobDetailsDateFields({
   onJobUpdated?: (job: Job) => void;
   onDateSaved?: (field: JobDateSavingField, jobId: string) => void;
 }) {
+  const { timezone: shopTimezone } = useAppFeatures();
   const isCollection = job.deliveryType === "COLLECTION_SERVICE";
   const formatDateInputValue = useCallback(
-    (iso: string | Date | null | undefined) => isCollection ? toDateLocalValue(iso) : toDateTimeLocalValue(iso),
-    [isCollection]
+    (iso: string | Date | null | undefined) => {
+      if (!iso) return "";
+      return isCollection ? toCalendarDateInTimezone(iso, shopTimezone) : toDateTimeLocalValue(iso);
+    },
+    [isCollection, shopTimezone]
   );
   const [dropOff, setDropOff] = useState(() => formatDateInputValue(job.dropOffDate));
   const [pickup, setPickup] = useState(() => formatDateInputValue(job.pickupDate));
-  const [windowStart, setWindowStart] = useState(job.collectionWindowStart ?? "");
-  const [windowEnd, setWindowEnd] = useState(job.collectionWindowEnd ?? "");
-  const [returnWindowStart, setReturnWindowStart] = useState(job.collectionReturnWindowStart ?? "");
-  const [returnWindowEnd, setReturnWindowEnd] = useState(job.collectionReturnWindowEnd ?? "");
+  const [windowStart, setWindowStart] = useState(() =>
+    decodeCollectionWindowForInput(job.collectionWindowStart, job.dropOffDate, shopTimezone)
+  );
+  const [windowEnd, setWindowEnd] = useState(() =>
+    decodeCollectionWindowForInput(job.collectionWindowEnd, job.dropOffDate, shopTimezone)
+  );
+  const [returnWindowStart, setReturnWindowStart] = useState(() =>
+    decodeCollectionWindowForInput(
+      job.collectionReturnWindowStart,
+      job.pickupDate,
+      shopTimezone
+    )
+  );
+  const [returnWindowEnd, setReturnWindowEnd] = useState(() =>
+    decodeCollectionWindowForInput(job.collectionReturnWindowEnd, job.pickupDate, shopTimezone)
+  );
   const [savingFields, setSavingFields] = useState<Set<JobDateSavingField>>(() => new Set());
   const pendingFieldsRef = useRef<Set<JobDateSavingField>>(new Set());
   const dirtyFieldsRef = useRef<Set<JobDateSavingField>>(new Set());
@@ -913,12 +915,32 @@ function JobDetailsDateFields({
       setPickup(formatDateInputValue(job.pickupDate));
     }
     if (!blocked("collectionWindow")) {
-      setWindowStart(job.collectionWindowStart ?? "");
-      setWindowEnd(job.collectionWindowEnd ?? "");
+      setWindowStart(
+        decodeCollectionWindowForInput(
+          job.collectionWindowStart,
+          job.dropOffDate,
+          shopTimezone
+        )
+      );
+      setWindowEnd(
+        decodeCollectionWindowForInput(job.collectionWindowEnd, job.dropOffDate, shopTimezone)
+      );
     }
     if (!blocked("collectionReturnWindow")) {
-      setReturnWindowStart(job.collectionReturnWindowStart ?? "");
-      setReturnWindowEnd(job.collectionReturnWindowEnd ?? "");
+      setReturnWindowStart(
+        decodeCollectionWindowForInput(
+          job.collectionReturnWindowStart,
+          job.pickupDate,
+          shopTimezone
+        )
+      );
+      setReturnWindowEnd(
+        decodeCollectionWindowForInput(
+          job.collectionReturnWindowEnd,
+          job.pickupDate,
+          shopTimezone
+        )
+      );
     }
   }, [
     job.id,
@@ -929,6 +951,7 @@ function JobDetailsDateFields({
     job.collectionReturnWindowStart,
     job.collectionReturnWindowEnd,
     formatDateInputValue,
+    shopTimezone,
   ]);
 
   const firstLabel = isCollection ? "Collection pickup" : "Drop-off";
@@ -1081,41 +1104,59 @@ function JobDetailsDateFields({
     }
   };
 
-  const persistPickupWindow = (start: string, end: string) =>
-    persistWindow(
+  const persistPickupWindow = (start: string, end: string) => {
+    const encoded = encodeCollectionWindowPairForStorage(
+      start,
+      end,
+      dropOff || job.dropOffDate,
+      shopTimezone
+    );
+    return persistWindow(
       "collectionWindow",
       start,
       end,
       {
-        collectionWindowStart: start || null,
-        collectionWindowEnd: end || null,
+        collectionWindowStart: encoded.start,
+        collectionWindowEnd: encoded.end,
       },
       (draft) => draft.windowStart === start && draft.windowEnd === end
     );
+  };
 
-  const persistReturnWindow = (start: string, end: string) =>
-    persistWindow(
+  const persistReturnWindow = (start: string, end: string) => {
+    const encoded = encodeCollectionWindowPairForStorage(
+      start,
+      end,
+      pickup || job.pickupDate,
+      shopTimezone
+    );
+    return persistWindow(
       "collectionReturnWindow",
       start,
       end,
       {
-        collectionReturnWindowStart: start || null,
-        collectionReturnWindowEnd: end || null,
+        collectionReturnWindowStart: encoded.start,
+        collectionReturnWindowEnd: encoded.end,
       },
       (draft) => draft.returnWindowStart === start && draft.returnWindowEnd === end
     );
+  };
 
-  const windowInputClass =
-    "w-full max-w-full min-w-0 px-2 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none disabled:opacity-60 box-border";
+  const windowTimeInputClass =
+    "w-[110px] max-w-full min-w-0 px-2 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none disabled:opacity-60 box-border";
 
   if (!onJobUpdated) {
     const pickupWindowDisplay = isCollection
-      ? formatCollectionWindowDisplay(job.collectionWindowStart, job.collectionWindowEnd)
+      ? formatCollectionWindowRange(job.collectionWindowStart, job.collectionWindowEnd, {
+          shopTimeZone: shopTimezone,
+          referenceDate: job.dropOffDate,
+        })
       : null;
     const returnWindowDisplay = isCollection
-      ? formatCollectionWindowDisplay(
+      ? formatCollectionWindowRange(
           job.collectionReturnWindowStart,
-          job.collectionReturnWindowEnd
+          job.collectionReturnWindowEnd,
+          { shopTimeZone: shopTimezone, referenceDate: job.pickupDate }
         )
       : null;
     return (
@@ -1173,10 +1214,10 @@ function JobDetailsDateFields({
                 />
               </div>
               <div className="flex items-end gap-1 flex-shrink-0">
-                <div className="min-w-0" style={{ minWidth: "130px" }}>
+                <div className="min-w-0">
                   <label className="block text-[11px] text-slate-500 mb-1">Window from</label>
                   <input
-                    type="date"
+                    type="time"
                     value={windowStart}
                     onChange={(e) => {
                       markDirty("collectionWindow");
@@ -1184,14 +1225,14 @@ function JobDetailsDateFields({
                     }}
                     onBlur={() => persistPickupWindow(windowStart, windowEnd)}
                     aria-busy={savingFields.has("collectionWindow")}
-                    className={windowInputClass}
+                    className={windowTimeInputClass}
                   />
                 </div>
                 <span className="text-slate-400 pb-2.5 text-sm">–</span>
-                <div className="min-w-0" style={{ minWidth: "130px" }}>
+                <div className="min-w-0">
                   <label className="block text-[11px] text-slate-500 mb-1">To</label>
                   <input
-                    type="date"
+                    type="time"
                     value={windowEnd}
                     onChange={(e) => {
                       markDirty("collectionWindow");
@@ -1199,7 +1240,7 @@ function JobDetailsDateFields({
                     }}
                     onBlur={() => persistPickupWindow(windowStart, windowEnd)}
                     aria-busy={savingFields.has("collectionWindow")}
-                    className={windowInputClass}
+                    className={windowTimeInputClass}
                   />
                 </div>
               </div>
@@ -1222,10 +1263,10 @@ function JobDetailsDateFields({
                 />
               </div>
               <div className="flex items-end gap-1 flex-shrink-0">
-                <div className="min-w-0" style={{ minWidth: "130px" }}>
+                <div className="min-w-0">
                   <label className="block text-[11px] text-slate-500 mb-1">Window from</label>
                   <input
-                    type="date"
+                    type="time"
                     value={returnWindowStart}
                     onChange={(e) => {
                       markDirty("collectionReturnWindow");
@@ -1233,14 +1274,14 @@ function JobDetailsDateFields({
                     }}
                     onBlur={() => persistReturnWindow(returnWindowStart, returnWindowEnd)}
                     aria-busy={savingFields.has("collectionReturnWindow")}
-                    className={windowInputClass}
+                    className={windowTimeInputClass}
                   />
                 </div>
                 <span className="text-slate-400 pb-2.5 text-sm">–</span>
-                <div className="min-w-0" style={{ minWidth: "130px" }}>
+                <div className="min-w-0">
                   <label className="block text-[11px] text-slate-500 mb-1">To</label>
                   <input
-                    type="date"
+                    type="time"
                     value={returnWindowEnd}
                     onChange={(e) => {
                       markDirty("collectionReturnWindow");
@@ -1248,7 +1289,7 @@ function JobDetailsDateFields({
                     }}
                     onBlur={() => persistReturnWindow(returnWindowStart, returnWindowEnd)}
                     aria-busy={savingFields.has("collectionReturnWindow")}
-                    className={windowInputClass}
+                    className={windowTimeInputClass}
                   />
                 </div>
               </div>

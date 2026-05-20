@@ -13,6 +13,7 @@ export type AppFeatures = {
   notifyCustomerEnabled: boolean;
   chatEnabled: boolean;
   reviewsEnabled: boolean;
+  timezone: string;
 };
 
 const APP_FEATURES_UPDATED_EVENT = "bikeops:app-features-updated";
@@ -28,6 +29,7 @@ const DEFAULTS: AppFeatures = {
   notifyCustomerEnabled: true,
   chatEnabled: true,
   reviewsEnabled: true,
+  timezone: "America/New_York",
 };
 
 const AppFeaturesContext = createContext<AppFeatures>(DEFAULTS);

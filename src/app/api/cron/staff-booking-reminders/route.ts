@@ -7,6 +7,8 @@ import {
   getCustomerEmailBrandingAssets,
   customerEmailBrandingAttachments,
 } from "@/lib/email";
+import { formatCollectionWindowRange } from "@/lib/format-collection-window";
+import { getShopTimezone } from "@/lib/shop-timezone";
 import { sendPushToAllStaff } from "@/lib/push";
 import { getAppUrl } from "@/lib/env";
 
@@ -135,7 +137,7 @@ interface JobRow {
   } | null;
 }
 
-function buildJobTableRows(jobs: JobRow[]): string {
+function buildJobTableRows(jobs: JobRow[], shopTimeZone: string): string {
   if (jobs.length === 0) return "";
 
   const rows = jobs
@@ -153,28 +155,15 @@ function buildJobTableRows(jobs: JobRow[]): string {
           ? "Collection"
           : "Drop-off";
 
-      let windowText = "";
-      if (
-        job.deliveryType === "COLLECTION_SERVICE" &&
-        (job.collectionWindowStart || job.collectionWindowEnd)
-      ) {
-        const fmt = (t: string) => {
-          const [h, m] = t.split(":");
-          const hour = parseInt(h, 10);
-          const ampm = hour >= 12 ? "pm" : "am";
-          const h12 = hour % 12 || 12;
-          return m === "00" ? `${h12}${ampm}` : `${h12}:${m}${ampm}`;
-        };
-        const s = job.collectionWindowStart
-          ? fmt(job.collectionWindowStart)
+      const windowRange =
+        job.deliveryType === "COLLECTION_SERVICE"
+          ? formatCollectionWindowRange(
+              job.collectionWindowStart,
+              job.collectionWindowEnd,
+              { shopTimeZone, referenceDate: job.dropOffDate }
+            )
           : null;
-        const e = job.collectionWindowEnd
-          ? fmt(job.collectionWindowEnd)
-          : null;
-        if (s && e) windowText = ` (${s} – ${e})`;
-        else if (s) windowText = ` (from ${s})`;
-        else if (e) windowText = ` (until ${e})`;
-      }
+      const windowText = windowRange ? ` (${windowRange})` : "";
 
       return `
     <tr class="email-table-row${i % 2 === 1 ? " email-table-row-alt" : ""}">
@@ -221,8 +210,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const timezone =
-      process.env.SHOP_TIMEZONE?.trim() || "America/New_York";
+    const timezone = await getShopTimezone(DEFAULT_SHOP_ID);
 
     const localHour = getLocalHour(timezone);
     if (localHour !== 8) {
@@ -326,7 +314,7 @@ export async function GET(request: NextRequest) {
       if (todayJobs.length > 0) {
         innerHtml += `
 <h2 class="email-heading" style="margin:0 0 12px;font-size:17px;font-weight:700;color:#0f172a">Today — ${escapeHtml(todayLabel)}</h2>
-${buildJobTableRows(todayJobs)}`;
+${buildJobTableRows(todayJobs, timezone)}`;
       } else {
         innerHtml += `<p class="email-muted" style="margin:0 0 20px;color:#64748b">No customers booked for today (${escapeHtml(formatShortDate(todayStart, timezone))}).</p>`;
       }
@@ -334,7 +322,7 @@ ${buildJobTableRows(todayJobs)}`;
       if (tomorrowJobs.length > 0) {
         innerHtml += `
 <h2 class="email-heading" style="margin:${todayJobs.length > 0 ? "8px" : "0"} 0 12px;font-size:17px;font-weight:700;color:#0f172a">Tomorrow — ${escapeHtml(tomorrowLabel)}</h2>
-${buildJobTableRows(tomorrowJobs)}`;
+${buildJobTableRows(tomorrowJobs, timezone)}`;
       } else {
         innerHtml += `<p class="email-muted" style="margin:0 0 20px;color:#64748b">No customers booked for tomorrow (${escapeHtml(formatShortDate(tomorrowStart, timezone))}).</p>`;
       }
