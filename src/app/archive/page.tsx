@@ -2,8 +2,11 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { JobDetailModal } from "@/components/jobs/JobDetailModal";
-import { JobCardContent } from "@/components/calendar/JobCard";
+import { ArchiveJobCard } from "@/components/archive/ArchiveJobCard";
+import { ArchivePagination } from "@/components/archive/ArchivePagination";
 import type { Job } from "@/lib/types";
+
+const ARCHIVE_PAGE_SIZE = 12;
 
 function formatArchivedDate(d: Date | string | null) {
   if (!d) return "—";
@@ -29,12 +32,20 @@ function formatActivityDate(d: Date | string | null | undefined) {
   });
 }
 
+function cancelledFooterPrimary(job: Job) {
+  if (job.archivedAt) {
+    return `Archived ${formatArchivedDate(job.archivedAt)}`;
+  }
+  return `Updated ${formatActivityDate(job.updatedAt)}`;
+}
+
 export default function ArchivePage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [query, setQuery] = useState("");
   const [activeTab, setActiveTab] = useState<ArchiveTab>("completed");
+  const [currentPage, setCurrentPage] = useState(1);
   const [savedToast, setSavedToast] = useState<string | null>(null);
   const dismissDateToastJobIdRef = useRef<string | null>(null);
 
@@ -96,6 +107,23 @@ export default function ArchivePage() {
 
   const activeJobs =
     activeTab === "completed" ? archivedCompletedJobs : archivedCancelledJobs;
+
+  const totalPages = Math.max(1, Math.ceil(activeJobs.length / ARCHIVE_PAGE_SIZE));
+
+  const paginatedJobs = useMemo(() => {
+    const start = (currentPage - 1) * ARCHIVE_PAGE_SIZE;
+    return activeJobs.slice(start, start + ARCHIVE_PAGE_SIZE);
+  }, [activeJobs, currentPage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, query]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -223,74 +251,36 @@ export default function ArchivePage() {
                 : "Cancelled jobs are added here automatically."}
           </p>
         </div>
-      ) : activeTab === "completed" ? (
-        <div
-          role="tabpanel"
-          aria-labelledby="archive-tab-completed"
-          className="grid grid-cols-1 gap-3 lg:grid-cols-2"
-        >
-          {archivedCompletedJobs.map((job) => (
-            <button
-              key={job.id}
-              type="button"
-              onClick={() => setSelectedJob(job)}
-              className="text-left rounded-2xl border border-slate-200 bg-white p-5 shadow-soft hover:shadow-soft-lg hover:border-slate-300 transition-all"
-            >
-              <div className="mb-3 flex flex-wrap items-center gap-2">
-                <span className="inline-flex rounded-lg bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">
-                  Completed
-                </span>
-              </div>
-              <div className="min-w-0">
-                <JobCardContent job={job} variant="plain" />
-              </div>
-              <div className="mt-3 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
-                <span className="text-xs font-medium text-slate-500">
-                  Archived {job.archivedAt ? formatArchivedDate(job.archivedAt) : "—"}
-                </span>
-                <span className="text-xs font-medium text-slate-400">#{job.id.slice(-6)}</span>
-              </div>
-            </button>
-          ))}
-        </div>
       ) : (
         <div
           role="tabpanel"
-          aria-labelledby="archive-tab-cancelled"
-          className="grid grid-cols-1 gap-3 lg:grid-cols-2"
+          aria-labelledby={
+            activeTab === "completed" ? "archive-tab-completed" : "archive-tab-cancelled"
+          }
+          className="space-y-4"
         >
-          {archivedCancelledJobs.map((job) => (
-            <button
-              key={job.id}
-              type="button"
-              onClick={() => setSelectedJob(job)}
-              className="text-left rounded-2xl border border-red-100 bg-white p-5 shadow-soft hover:shadow-soft-lg hover:border-red-200 transition-all"
-            >
-              <div className="mb-3 flex flex-wrap items-center gap-2">
-                <span className="inline-flex rounded-lg bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">
-                  Cancelled
-                </span>
-                {job.archivedAt ? (
-                  <span className="text-xs font-medium text-slate-500">Archived</span>
-                ) : (
-                  <span className="text-xs font-medium text-slate-500">On archive list</span>
-                )}
-              </div>
-              <div className="min-w-0">
-                <JobCardContent job={job} variant="plain" />
-              </div>
-              <div className="mt-3 flex items-center justify-between gap-3 border-t border-red-50 pt-3">
-                <span className="text-xs font-medium text-slate-500">
-                  {job.archivedAt ? (
-                    <>Archived {formatArchivedDate(job.archivedAt)}</>
-                  ) : (
-                    <>Updated {formatActivityDate(job.updatedAt)}</>
-                  )}
-                </span>
-                <span className="text-xs font-medium text-slate-400">#{job.id.slice(-6)}</span>
-              </div>
-            </button>
-          ))}
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {paginatedJobs.map((job) => (
+              <ArchiveJobCard
+                key={job.id}
+                job={job}
+                variant={activeTab}
+                footerPrimary={
+                  activeTab === "completed"
+                    ? `Archived ${job.archivedAt ? formatArchivedDate(job.archivedAt) : "—"}`
+                    : cancelledFooterPrimary(job)
+                }
+                onClick={() => setSelectedJob(job)}
+              />
+            ))}
+          </div>
+          <ArchivePagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={activeJobs.length}
+            pageSize={ARCHIVE_PAGE_SIZE}
+            onPageChange={setCurrentPage}
+          />
         </div>
       )}
 

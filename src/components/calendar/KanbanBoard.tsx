@@ -634,8 +634,23 @@ export function KanbanBoard() {
             setJobs((prev) => prev.filter((j) => j.id !== updated.id));
             return;
           }
-          setSelectedJob((prev) => (prev?.id === updated.id ? updated : prev));
-          setJobs((prev) => prev.map((j) => (j.id === updated.id ? updated : j)));
+          const applyUpdate = (prev: Job | null) => {
+            if (!prev || prev.id !== updated.id) return prev;
+            const merged = mergeJobPreservingInvoiceDetails(prev, updated);
+            return prev.stage !== updated.stage
+              ? withOptimisticStageChange(merged, updated.stage)
+              : merged;
+          };
+          setSelectedJob(applyUpdate);
+          setJobs((prev) =>
+            prev.map((j) => {
+              if (j.id !== updated.id) return j;
+              const merged = mergeJobPreservingInvoiceDetails(j, updated);
+              return j.stage !== updated.stage
+                ? withOptimisticStageChange(merged, updated.stage)
+                : merged;
+            })
+          );
         }}
         onJobDateSaved={(field, jobId) => {
           if (dismissDateToastJobIdRef.current !== jobId) return;

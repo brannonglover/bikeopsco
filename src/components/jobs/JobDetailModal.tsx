@@ -283,13 +283,6 @@ function WrenchIcon({ className }: { className?: string }) {
   );
 }
 
-function shouldLeaveWaitingOnPartsColumn(job: Job, exceptBikeId: string): boolean {
-  if (job.stage !== "WAITING_ON_PARTS") return false;
-  return !(job.jobBikes ?? []).some(
-    (b) => b.id !== exceptBikeId && !!b.waitingOnPartsAt && !b.completedAt
-  );
-}
-
 function JobBikeSection({
   job,
   onJobUpdated,
@@ -443,7 +436,7 @@ function JobBikeSection({
         unwaitForPartsJobBikeId: bikeId,
         workingOnJobBikeId: bikeId,
       };
-      if (shouldLeaveWaitingOnPartsColumn(job, bikeId)) {
+      if (job.stage !== "WORKING_ON") {
         body.stage = "WORKING_ON";
         body.notifyCustomer = false;
       }
@@ -466,7 +459,7 @@ function JobBikeSection({
     setSavingWaiting(bikeId);
     try {
       const body: Record<string, unknown> = { unwaitForPartsJobBikeId: bikeId };
-      if (shouldLeaveWaitingOnPartsColumn(job, bikeId)) {
+      if (job.stage !== "WORKING_ON") {
         body.stage = "WORKING_ON";
         body.notifyCustomer = false;
       }
