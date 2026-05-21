@@ -21,6 +21,10 @@ import {
 } from "@/lib/collection-window-storage";
 import { formatCollectionWindowRange } from "@/lib/format-collection-window";
 import { toCalendarDateInTimezone } from "@/lib/timezone";
+import {
+  EBIKE_SERVICE_HIGHLIGHT_ROW_CLASS,
+  serviceNameMentionsEbike,
+} from "@/lib/service-name";
 
 function formatChatPreviewTime(iso: string): string {
   const d = new Date(iso);
@@ -3079,13 +3083,20 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                         const isExpanded = expandedServiceIds.has(js.id);
                         const isSystemLine = Boolean(js.service?.isSystem);
                         const qtyBusy = updatingServiceQty === js.id;
+                        const serviceLabel =
+                          js.service?.name ?? js.customServiceName ?? "Unknown service";
+                        const isEbikeService = serviceNameMentionsEbike(serviceLabel);
                         return (
                           <div
                             key={`service-${js.id}`}
                             className="bg-white overflow-hidden"
                           >
                             <div
-                              className="flex justify-between items-center py-2 px-3 group cursor-pointer hover:bg-slate-50"
+                              className={`flex justify-between items-center py-2 px-3 group cursor-pointer ${
+                                isEbikeService
+                                  ? EBIKE_SERVICE_HIGHLIGHT_ROW_CLASS
+                                  : "hover:bg-slate-50"
+                              }`}
                               onClick={() => toggleServiceExpanded(js.id)}
                             >
                               <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -3101,7 +3112,7 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                                   Service
                                 </span>
                                 <p className="font-medium text-slate-900 min-w-0 truncate">
-                                  {js.service?.name ?? js.customServiceName ?? "Unknown service"}
+                                  {serviceLabel}
                                   {qty > 1 && (
                                     <span className="text-slate-500 font-normal"> × {qty}</span>
                                   )}
@@ -3431,7 +3442,11 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                       key={s.id}
                       type="button"
                       onClick={() => handleAddService(s.id)}
-                      className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50 last:rounded-b-lg flex flex-col items-start min-w-0"
+                      className={`w-full px-3 py-2 text-left text-sm last:rounded-b-lg flex flex-col items-start min-w-0 ${
+                        serviceNameMentionsEbike(s.name)
+                          ? EBIKE_SERVICE_HIGHLIGHT_ROW_CLASS
+                          : "hover:bg-slate-50"
+                      }`}
                     >
                       <span className="font-medium truncate w-full">{s.name}</span>
                       <span className="text-slate-500 text-xs">
@@ -3443,7 +3458,11 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                     <button
                       type="button"
                       onClick={() => void handleAddCustomService(serviceSearch)}
-                      className="w-full px-3 py-2 text-left text-sm hover:bg-violet-50 last:rounded-b-lg flex items-center gap-2 min-w-0 text-violet-700"
+                      className={`w-full px-3 py-2 text-left text-sm last:rounded-b-lg flex items-center gap-2 min-w-0 ${
+                        serviceNameMentionsEbike(serviceSearch.trim())
+                          ? `${EBIKE_SERVICE_HIGHLIGHT_ROW_CLASS} text-slate-900`
+                          : "hover:bg-violet-50 text-violet-700"
+                      }`}
                     >
                       <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
