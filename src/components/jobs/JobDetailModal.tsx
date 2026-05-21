@@ -2575,6 +2575,7 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
   const [removing, setRemoving] = useState<string | null>(null);
   const [removingProduct, setRemovingProduct] = useState<string | null>(null);
   const [updatingServiceQty, setUpdatingServiceQty] = useState<string | null>(null);
+  const [updatingProductQty, setUpdatingProductQty] = useState<string | null>(null);
   const [updatingServicePrice, setUpdatingServicePrice] = useState<string | null>(null);
   const [updatingServiceBike, setUpdatingServiceBike] = useState<string | null>(null);
   const [updatingProductBike, setUpdatingProductBike] = useState<string | null>(null);
@@ -2870,6 +2871,24 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
       }
     } finally {
       setUpdatingServicePrice(null);
+    }
+  };
+
+  const adjustProductQuantity = async (jobProductId: string, quantity: number) => {
+    if (quantity < 1) return;
+    setUpdatingProductQty(jobProductId);
+    try {
+      const res = await fetch(`/api/jobs/${job.id}/products`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobProductId, quantity }),
+      });
+      if (res.ok) {
+        const updatedJob = await fetch(`/api/jobs/${job.id}`).then((r) => r.json());
+        onJobUpdated?.(updatedJob);
+      }
+    } finally {
+      setUpdatingProductQty(null);
     }
   };
 
@@ -3254,8 +3273,10 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                       })}
                       {group.products.map((jp) => {
                         const price = typeof jp.unitPrice === "string" ? parseFloat(jp.unitPrice) : Number(jp.unitPrice);
-                        const lineTotal = price * (jp.quantity || 1);
+                        const qty = jp.quantity || 1;
+                        const lineTotal = price * qty;
                         const isExpanded = expandedProductIds.has(jp.id);
+                        const qtyBusy = updatingProductQty === jp.id;
                         return (
                           <div
                             key={`product-${jp.id}`}
@@ -3279,12 +3300,35 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                                 </span>
                                 <p className="font-medium text-slate-900 min-w-0 truncate">
                                   {jp.product?.name ?? "Unknown product"}
-                                  {jp.quantity > 1 && (
-                                    <span className="text-slate-500 font-normal"> × {jp.quantity}</span>
+                                  {qty > 1 && (
+                                    <span className="text-slate-500 font-normal"> × {qty}</span>
                                   )}
                                 </p>
                               </div>
                               <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex items-center rounded-md border border-slate-200 bg-white">
+                                  <button
+                                    type="button"
+                                    aria-label="Decrease quantity"
+                                    disabled={qty <= 1 || qtyBusy}
+                                    onClick={() => adjustProductQuantity(jp.id, qty - 1)}
+                                    className="px-2 py-1 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-transparent rounded-l-md text-sm leading-none"
+                                  >
+                                    −
+                                  </button>
+                                  <span className="min-w-[1.75rem] text-center text-sm tabular-nums text-slate-800 px-0.5">
+                                    {qtyBusy ? "…" : qty}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    aria-label="Increase quantity"
+                                    disabled={qtyBusy}
+                                    onClick={() => adjustProductQuantity(jp.id, qty + 1)}
+                                    className="px-2 py-1 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-transparent rounded-r-md text-sm leading-none"
+                                  >
+                                    +
+                                  </button>
+                                </div>
                                 <Price amount={lineTotal} variant="inline" />
                                 <button
                                   onClick={() => handleRemoveProduct(jp.id)}
@@ -3335,7 +3379,7 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                                     </div>
                                     <div className="flex justify-between gap-4">
                                       <dt>Quantity</dt>
-                                      <dd>{jp.quantity}</dd>
+                                      <dd>{qty}</dd>
                                     </div>
                                     {jp.notes && (
                                       <div>
