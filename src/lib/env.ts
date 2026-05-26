@@ -99,13 +99,22 @@ export function getStaffJobDeepLink(jobId: string): string {
 }
 
 export function getStaffChatDeepLink(conversationId: string): string {
-  return `${getStaffAppScheme()}:///(staff)/(chat)/${encodeURIComponent(conversationId)}`;
+  // Must match Expo route app/(staff)/chat/[id].tsx — "chat" is a segment, not a (group).
+  return `${getStaffAppScheme()}:///(staff)/chat/${encodeURIComponent(conversationId)}`;
 }
 
 export function getStaffChatUrl(baseUrl: string, conversationId?: string): string {
   if (!baseUrl) return "";
   if (conversationId) return `${baseUrl}/open/staff/chat/${encodeURIComponent(conversationId)}`;
   return `${baseUrl}/open/staff/chat`;
+}
+
+/** HTTPS trampoline for staff chat (email / SMS). Uses app host like job open links. */
+export function getStaffChatOpenUrl(conversationId: string): string {
+  const appUrl = getAppUrl();
+  return appUrl
+    ? `${appUrl}/open/staff/chat/${encodeURIComponent(conversationId)}`
+    : "";
 }
 
 export function getStaffJobOpenUrl(jobId: string): string {

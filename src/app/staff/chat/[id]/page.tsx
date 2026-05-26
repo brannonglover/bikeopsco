@@ -1,11 +1,14 @@
 import { redirect } from "next/navigation";
 
 /**
- * Web fallback for the mobile app deep link.
- * When the BikeOps app is installed, iOS/Android intercept this URL and open
- * the app directly. When the app is not installed, the browser lands here and
- * we redirect to the staff web chat page.
+ * Universal Link target (/staff/chat/:id). iOS/Android open the native app when
+ * installed. Otherwise send the browser through the /open trampoline (correct
+ * native scheme + web fallback).
  */
-export default async function StaffChatDeepLinkPage() {
-  redirect("/chat");
+export default async function StaffChatDeepLinkPage({
+  params,
+}: {
+  params: { id: string };
+}) {
+  redirect(`/open/staff/chat/${encodeURIComponent(params.id)}`);
 }

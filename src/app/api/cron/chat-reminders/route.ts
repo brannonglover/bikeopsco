@@ -7,7 +7,7 @@ import {
   sendChatStaffReplyReminder,
 } from "@/lib/email";
 import { getEffectiveEmailUpdatesConsent } from "@/lib/sms-consent";
-import { getShopAppUrl, getStaffChatUrl } from "@/lib/env";
+import { getShopAppUrl, getStaffChatOpenUrl } from "@/lib/env";
 import { getAppFeatures } from "@/lib/app-settings";
 
 export async function GET(request: NextRequest) {
@@ -114,7 +114,7 @@ export async function GET(request: NextRequest) {
             nudgesCustomer++;
           }
         } else {
-          const staffChatUrl = getStaffChatUrl(shopBaseUrl, conv.id);
+          const staffChatUrl = getStaffChatOpenUrl(conv.id);
           if (!staffEmail || !staffChatUrl) continue;
 
           // Find the earliest customer message staff hasn't read yet.
