@@ -318,7 +318,7 @@ export async function POST(
       await sendPushToCustomer(shop.id, conversation.customerId, {
         title: shopName,
         body: pushBody,
-        data: { type: "new_message", conversationId },
+        data: { type: "new_message", conversationId, messageId: message.id },
       }).catch((err) => console.error("Push notify customer:", err));
     }
 
@@ -333,7 +333,7 @@ export async function POST(
       await sendPushToAllStaff(shop.id, {
         title: `New message from ${customerName}`,
         body: pushBody,
-        data: { type: "new_message", conversationId },
+        data: { type: "new_message", conversationId, messageId: message.id },
       }).catch((err) => console.error("Push notify staff:", err));
     }
 

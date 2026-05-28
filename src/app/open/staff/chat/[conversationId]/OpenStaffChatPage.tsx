@@ -9,6 +9,19 @@ type OpenStaffChatPageProps = {
   webUrl: string;
 };
 
+function tryOpenNativeApp(nativeUrl: string) {
+  // Avoid assigning window.location to a custom scheme — Safari shows "Can't open page"
+  // and replaces the trampoline. A hidden iframe is the standard pattern on iOS.
+  const iframe = document.createElement("iframe");
+  iframe.style.display = "none";
+  iframe.setAttribute("aria-hidden", "true");
+  iframe.src = nativeUrl;
+  document.body.appendChild(iframe);
+  window.setTimeout(() => {
+    iframe.remove();
+  }, 2000);
+}
+
 export function OpenStaffChatPage({
   appUrl,
   conversationId,
@@ -19,21 +32,26 @@ export function OpenStaffChatPage({
 
   const displayUrl = useMemo(() => {
     try {
-      return new URL(webUrl).host;
+      return new URL(webUrl, window.location.origin).host;
     } catch {
-      return appUrl || "BikeOps";
+      try {
+        return new URL(webUrl).host;
+      } catch {
+        return appUrl || "BikeOps";
+      }
     }
   }, [appUrl, webUrl]);
 
   useEffect(() => {
-    const fallbackTimer = window.setTimeout(() => setShowFallback(true), 1200);
+    setShowFallback(false);
+    tryOpenNativeApp(nativeUrl);
+
+    const fallbackTimer = window.setTimeout(() => setShowFallback(true), 900);
     const webFallbackTimer = window.setTimeout(() => {
       if (document.visibilityState === "visible") {
-        window.location.href = webUrl;
+        window.location.assign(webUrl);
       }
-    }, 3200);
-
-    window.location.href = nativeUrl;
+    }, 3500);
 
     return () => {
       window.clearTimeout(fallbackTimer);

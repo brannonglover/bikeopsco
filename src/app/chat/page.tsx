@@ -250,7 +250,9 @@ function ChatPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const customerIdFromUrl = searchParams.get("customer");
+  const conversationIdFromUrl = searchParams.get("conversation");
   const deepLinkCustomerRef = useRef<string | null>(null);
+  const deepLinkConversationRef = useRef<string | null>(null);
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -467,6 +469,25 @@ function ChatPageContent() {
   useEffect(() => {
     deepLinkCustomerRef.current = null;
   }, [customerIdFromUrl]);
+
+  useEffect(() => {
+    deepLinkConversationRef.current = null;
+  }, [conversationIdFromUrl]);
+
+  useEffect(() => {
+    if (loading || !conversationIdFromUrl) return;
+
+    const existing = conversations.find((c) => c.id === conversationIdFromUrl);
+    if (existing) {
+      setSelectedId(existing.id);
+      deepLinkConversationRef.current = conversationIdFromUrl;
+      router.replace("/chat", { scroll: false });
+      return;
+    }
+
+    if (deepLinkConversationRef.current === conversationIdFromUrl) return;
+    deepLinkConversationRef.current = conversationIdFromUrl;
+  }, [loading, conversationIdFromUrl, conversations, router]);
 
   useEffect(() => {
     if (loading || !customerIdFromUrl) return;

@@ -5,7 +5,33 @@
  * automatic vars as fallbacks.
  */
 
-import { DEFAULT_ROOT_DOMAIN } from "./tenant-domain";
+import {
+  DEFAULT_ROOT_DOMAIN,
+  SHARED_APP_SUBDOMAIN,
+} from "./tenant-domain";
+
+/** Marketing-only hosts — no /open/staff/chat routes (causes Vercel 404). */
+function isMarketingOnlyHost(hostname: string): boolean {
+  const root = DEFAULT_ROOT_DOMAIN.toLowerCase();
+  const h = hostname.toLowerCase();
+  return h === root || h === `www.${root}`;
+}
+
+/** App host for email/SMS links; never the bare marketing apex domain. */
+export function getCanonicalAppBaseUrl(): string {
+  const appUrl = getAppUrl();
+  if (appUrl) {
+    try {
+      const url = new URL(appUrl);
+      if (!isMarketingOnlyHost(url.hostname)) {
+        return appUrl.replace(/\/$/, "");
+      }
+    } catch {
+      // fall through
+    }
+  }
+  return `https://${SHARED_APP_SUBDOMAIN}.${DEFAULT_ROOT_DOMAIN}`;
+}
 
 export function getGooglePlacesApiKey(): string | null {
   return process.env.GOOGLE_PLACES_API_KEY?.trim() || null;
@@ -95,26 +121,41 @@ export function getStaffAppScheme(): string {
 }
 
 export function getStaffJobDeepLink(jobId: string): string {
-  return `${getStaffAppScheme()}:///(staff)/(jobs)/${encodeURIComponent(jobId)}`;
+  // Route groups are omitted from custom-scheme paths (see Expo Router docs).
+  return `${getStaffAppScheme()}://jobs/${encodeURIComponent(jobId)}`;
 }
 
-export function getStaffChatDeepLink(conversationId: string): string {
-  // Must match Expo route app/(staff)/chat/[id].tsx — "chat" is a segment, not a (group).
-  return `${getStaffAppScheme()}:///(staff)/chat/${encodeURIComponent(conversationId)}`;
+export function getStaffChatDeepLink(
+  conversationId: string,
+  messageId?: string
+): string {
+  const base = `${getStaffAppScheme()}://chat/${encodeURIComponent(conversationId)}`;
+  return messageId
+    ? `${base}?messageId=${encodeURIComponent(messageId)}`
+    : base;
 }
 
-export function getStaffChatUrl(baseUrl: string, conversationId?: string): string {
+export function getStaffChatUrl(
+  baseUrl: string,
+  conversationId?: string,
+  messageId?: string
+): string {
   if (!baseUrl) return "";
-  if (conversationId) return `${baseUrl}/open/staff/chat/${encodeURIComponent(conversationId)}`;
-  return `${baseUrl}/open/staff/chat`;
+  const path = conversationId
+    ? `/open/staff/chat/${encodeURIComponent(conversationId)}`
+    : "/open/staff/chat";
+  const qs = messageId ? `?messageId=${encodeURIComponent(messageId)}` : "";
+  return `${baseUrl.replace(/\/$/, "")}${path}${qs}`;
 }
 
-/** HTTPS trampoline for staff chat (email / SMS). Uses app host like job open links. */
-export function getStaffChatOpenUrl(conversationId: string): string {
-  const appUrl = getAppUrl();
-  return appUrl
-    ? `${appUrl}/open/staff/chat/${encodeURIComponent(conversationId)}`
-    : "";
+/** HTTPS trampoline for staff chat (email / SMS). Prefer shop tenant host. */
+export function getStaffChatOpenUrl(
+  conversationId: string,
+  shopSubdomain?: string | null,
+  messageId?: string
+): string {
+  const base = getShopAppUrl(shopSubdomain) || getCanonicalAppBaseUrl();
+  return getStaffChatUrl(base, conversationId, messageId);
 }
 
 export function getStaffJobOpenUrl(jobId: string): string {

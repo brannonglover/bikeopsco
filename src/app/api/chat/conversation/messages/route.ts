@@ -153,7 +153,11 @@ export async function POST(request: NextRequest) {
   await sendPushToAllStaff(shop.id, {
     title: `New message from ${customerName}`,
     body: pushBody,
-    data: { type: "new_message", conversationId: conversation.id },
+    data: {
+      type: "new_message",
+      conversationId: conversation.id,
+      messageId: message.id,
+    },
   }).catch((err) => console.error("Push notify staff:", err));
 
   return NextResponse.json(message);

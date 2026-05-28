@@ -1,4 +1,21 @@
 {
   "cleanUrls": true,
-  "trailingSlash": false
+  "trailingSlash": false,
+  "redirects": [
+    {
+      "source": "/open/staff/chat/:conversationId*",
+      "destination": "https://app.bikeops.co/open/staff/chat/:conversationId*",
+      "permanent": false
+    },
+    {
+      "source": "/open/staff/chat",
+      "destination": "https://app.bikeops.co/open/staff/chat",
+      "permanent": false
+    },
+    {
+      "source": "/staff/chat/:conversationId*",
+      "destination": "https://app.bikeops.co/open/staff/chat/:conversationId*",
+      "permanent": false
+    }
+  ]
 }

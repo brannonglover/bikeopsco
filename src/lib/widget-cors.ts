@@ -18,7 +18,7 @@ function safeParseOriginHostname(origin: string): string | null {
 }
 
 function getAllowedWidgetHostSuffixes(): string[] {
-  const suffixes: string[] = ["basementbikemechanic.com"];
+  const suffixes: string[] = ["bikeops.co", "basementbikemechanic.com"];
   const raw = process.env.WIDGET_ALLOWED_HOST_SUFFIXES?.trim() ?? "";
   if (!raw) return suffixes;
   for (const part of raw.split(",")) {

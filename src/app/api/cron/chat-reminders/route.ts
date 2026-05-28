@@ -114,8 +114,7 @@ export async function GET(request: NextRequest) {
             nudgesCustomer++;
           }
         } else {
-          const staffChatUrl = getStaffChatOpenUrl(conv.id);
-          if (!staffEmail || !staffChatUrl) continue;
+          if (!staffEmail) continue;
 
           // Find the earliest customer message staff hasn't read yet.
           const firstUnread = await prisma.message.findFirst({
@@ -131,6 +130,13 @@ export async function GET(request: NextRequest) {
           });
 
           if (!firstUnread || firstUnread.createdAt > cutoff) continue;
+
+          const staffChatUrl = getStaffChatOpenUrl(
+            conv.id,
+            shop.subdomain,
+            firstUnread.id
+          );
+          if (!staffChatUrl) continue;
 
           const existing = await prisma.chatReminderEmail.findUnique({
             where: {

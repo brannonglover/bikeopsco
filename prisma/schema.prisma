@@ -643,3 +643,42 @@ model ImportedRevenue {
   @@index([source])
   @@index([shopId])
 }
+
+/// Marketing-site (bikeops.co) visitor chat synced with Quo SMS.
+model SiteChatConversation {
+  id           String            @id @default(cuid())
+  sessionToken String            @unique
+  visitorName  String
+  visitorPhone String
+  smsConsent   Boolean           @default(false)
+  smsConsentAt DateTime?
+  messages     SiteChatMessage[]
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@index([visitorPhone])
+}
+
+model SiteChatMessage {
+  id             String               @id @default(cuid())
+  conversationId String
+  conversation   SiteChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         SiteChatSender
+  body           String
+  /// Quo message id — dedupes webhook retries and API echo
+  quoMessageId   String?              @unique
+  source         SiteChatMessageSource
+  createdAt      DateTime             @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+enum SiteChatSender {
+  VISITOR
+  STAFF
+}
+
+enum SiteChatMessageSource {
+  WIDGET
+  QUO
+}

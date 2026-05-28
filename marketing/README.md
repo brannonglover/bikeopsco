@@ -11,6 +11,16 @@ This folder is intended to be deployed as the separate Vercel Marketing project.
 
 The static page links signup and login traffic to `https://app.bikeops.co`.
 
+## Site chat (Quo)
+
+The marketing pages load `site-chat.js`, which talks to `https://app.bikeops.co/api/site-chat/*`.
+
+On the **app** Vercel project, set `QUO_API_KEY`, `QUO_PHONE_NUMBER`, and `QUO_WEBHOOK_SECRET`, then register a Quo message webhook pointing at:
+
+`https://app.bikeops.co/api/webhooks/quo/messages?secret=YOUR_QUO_WEBHOOK_SECRET`
+
+Staff reply in the Quo app; visitors see replies in the website widget (and may also receive SMS).
+
 ## PostHog setup
 
 - `index.html` uses the shared PostHog project key for account-wide reporting with the Basement Bike Mechanic site.
