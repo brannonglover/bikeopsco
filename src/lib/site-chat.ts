@@ -5,9 +5,16 @@ import { prisma } from "@/lib/db";
 import { normalizePhone } from "@/lib/phone";
 import {
   formatSiteChatQuoRelay,
+  getQuoFromNumber,
   isQuoConfigured,
   sendQuoTextMessage,
 } from "@/lib/quo";
+
+function shouldRelaySmsToVisitor(): boolean {
+  const flag = process.env.SITE_CHAT_RELAY_SMS_TO_VISITOR?.trim().toLowerCase();
+  if (flag === "false" || flag === "0" || flag === "no") return false;
+  return true;
+}
 
 export function createSiteChatSessionToken(): string {
   return randomBytes(32).toString("hex");
@@ -47,6 +54,22 @@ export async function relayVisitorMessageToQuo(params: {
 }): Promise<{ quoMessageId: string | null; error: string | null }> {
   if (!isQuoConfigured()) {
     return { quoMessageId: null, error: "Quo is not configured" };
+  }
+
+  const businessLine = getQuoFromNumber();
+  if (
+    businessLine &&
+    !businessLine.startsWith("PN") &&
+    phonesMatchForSiteChat(params.visitorPhoneE164, businessLine)
+  ) {
+    return {
+      quoMessageId: null,
+      error: "Visitor phone matches business line; use a different test number",
+    };
+  }
+
+  if (!shouldRelaySmsToVisitor()) {
+    return { quoMessageId: null, error: null };
   }
 
   const content = formatSiteChatQuoRelay(params.visitorName, params.body);

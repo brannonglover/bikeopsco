@@ -68,6 +68,8 @@ export async function sendQuoTextMessage(params: {
     return { ok: false, error: "Quo is not configured" };
   }
 
+  // Omit userId unless explicitly set — assigning a user can route sends through
+  // the wrong line in multi-number workspaces.
   const userId = getQuoUserId();
   const payload: Record<string, unknown> = {
     content: params.content,

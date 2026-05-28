@@ -15,20 +15,28 @@ The static page links signup and login traffic to `https://app.bikeops.co`.
 
 The marketing pages load `site-chat.js`, which talks to `https://app.bikeops.co/api/site-chat/*`.
 
-On the **app** Vercel project, set `QUO_API_KEY`, `QUO_PHONE_NUMBER`, and `QUO_WEBHOOK_SECRET`, then register a Quo message webhook pointing at:
+On the **app** Vercel project, set:
 
-`https://app.bikeops.co/api/webhooks/quo/messages?secret=YOUR_QUO_WEBHOOK_SECRET`
+- `QUO_API_KEY`
+- `QUO_PHONE_NUMBER` — your **business** Quo line (E.164)
+- `QUO_WEBHOOK_SIGNING_KEY` — from Quo **Settings → Webhooks → your webhook → Reveal signing secret**
 
-Staff reply in the Quo app; visitors see replies in the website widget (and may also receive SMS).
+Register a Quo message webhook (in the Quo app, not only the API):
+
+- URL: `https://app.bikeops.co/api/webhooks/quo/messages` (no `?secret=` needed)
+- Events: **message.received** and **message.delivered**
+- Resources: select your **business** phone number only
+
+Staff reply in the Quo app on that business thread; visitors see replies in the website widget.
 
 ### Troubleshooting Quo
 
-1. **Env vars on the app project** (not marketing): `QUO_API_KEY`, `QUO_PHONE_NUMBER` (E.164, same as your Quo line).
-2. **Deploy the app** with the site-chat API routes and run `npx prisma migrate deploy`.
-3. **Check config**: `https://app.bikeops.co/api/site-chat/status` should return `"quoConfigured": true`.
-4. **Where messages appear in Quo**: open the conversation for the visitor’s phone number. Website messages show as an **outgoing** SMS prefixed with `[Bike Ops web]` (not as a new inbound).
-5. **A2P / carrier registration** must be approved in Quo for US SMS, or the API returns an error.
-6. **Email backup**: each new chat also emails `SITE_CHAT_NOTIFY_EMAIL` (or platform signup notify email) via Resend.
+1. **Replies not in the widget** — almost always missing or wrong `QUO_WEBHOOK_SIGNING_KEY`. App webhooks use the `openphone-signature` header, not a URL query secret.
+2. **Texts from personal number** — set `QUO_PHONE_NUMBER` to the business line; remove `QUO_USER_ID`; reply in Quo under the business inbox, not a personal line.
+3. **You got an SMS of your own message** — the site relays into Quo by texting the visitor’s phone. When testing, use a number that isn’t your business line, or set `SITE_CHAT_RELAY_SMS_TO_VISITOR=false`.
+4. **Missed call** — usually a Quo `call.ringing` event (unrelated to chat). Ignore or disable call webhooks on that URL.
+5. **Where messages appear in Quo**: conversation for the visitor’s phone; website posts show as **outgoing** `[Bike Ops web] …`.
+6. **Email backup**: each new chat emails `SITE_CHAT_NOTIFY_EMAIL` (or platform signup notify email).
 
 ## PostHog setup
 
