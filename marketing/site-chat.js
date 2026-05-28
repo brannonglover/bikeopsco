@@ -21,9 +21,8 @@
     "</div>" +
     '<button type="button" class="site-chat-close" aria-label="Close chat">&times;</button>' +
     "</header>" +
-    '<form class="site-chat-form" id="site-chat-form">' +
+    '<form class="site-chat-form" id="site-chat-form" novalidate>' +
     '<input class="site-chat-honeypot" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" />' +
-    '<p class="site-chat-error" id="site-chat-error" hidden></p>' +
     '<div class="site-chat-body">' +
     '<div class="site-chat-welcome" id="site-chat-welcome">' +
     "<strong>Start a conversation</strong>" +
@@ -32,22 +31,23 @@
     '<div class="site-chat-intake" id="site-chat-intake">' +
     '<div class="site-chat-field">' +
     '<span class="site-chat-field-label" id="site-chat-name-label">Your name</span>' +
-    '<input id="site-chat-name" name="name" type="text" autocomplete="name" required maxlength="80" placeholder="Jane Smith" aria-labelledby="site-chat-name-label" />' +
+    '<input id="site-chat-name" name="name" type="text" autocomplete="name" maxlength="80" placeholder="Jane Smith" aria-labelledby="site-chat-name-label" />' +
     "</div>" +
     '<div class="site-chat-field">' +
     '<span class="site-chat-field-label" id="site-chat-phone-label">Mobile number</span>' +
-    '<input id="site-chat-phone" name="phone" type="tel" autocomplete="tel" required maxlength="30" placeholder="(555) 123-4567" aria-labelledby="site-chat-phone-label" />' +
+    '<input id="site-chat-phone" name="phone" type="tel" autocomplete="tel" maxlength="30" placeholder="(555) 123-4567" aria-labelledby="site-chat-phone-label" />' +
     "</div>" +
     '<div class="site-chat-consent-box">' +
     '<label class="site-chat-consent-label" for="site-chat-consent">' +
-    '<input id="site-chat-consent" name="smsConsent" type="checkbox" required />' +
+    '<input id="site-chat-consent" name="smsConsent" type="checkbox" />' +
     "<span>Text me about this chat. Msg &amp; data rates may apply. Reply STOP to opt out.</span>" +
     "</label>" +
     "</div>" +
     '<div class="site-chat-field" id="site-chat-message-field">' +
     '<span class="site-chat-field-label" id="site-chat-message-label">Your message</span>' +
-    '<textarea id="site-chat-input" name="message" required maxlength="2000" rows="3" placeholder="What would you like to know?" aria-labelledby="site-chat-message-label"></textarea>' +
+    '<textarea id="site-chat-input" name="message" maxlength="2000" rows="3" placeholder="What would you like to know?" aria-labelledby="site-chat-message-label"></textarea>' +
     "</div>" +
+    '<p class="site-chat-error" id="site-chat-error" hidden></p>' +
     '<button type="submit" class="site-chat-send" id="site-chat-send">Start chat</button>' +
     "</div>" +
     '<div class="site-chat-messages" id="site-chat-messages" aria-live="polite"></div>' +
@@ -94,10 +94,18 @@
 
   function mountIntakeComposer() {
     messageField.appendChild(inputEl);
-    intakeEl.appendChild(sendBtn);
+    if (errorEl.nextSibling !== sendBtn) {
+      intakeEl.insertBefore(errorEl, sendBtn);
+    }
+    if (sendBtn.parentElement !== intakeEl) {
+      intakeEl.appendChild(sendBtn);
+    }
   }
 
   function mountChatComposer() {
+    if (errorEl.parentElement !== composerEl) {
+      composerEl.insertBefore(errorEl, composerWrap);
+    }
     composerWrap.appendChild(inputEl);
     composerWrap.appendChild(sendBtn);
   }
@@ -158,6 +166,68 @@
     }
     errorEl.hidden = false;
     errorEl.textContent = message;
+    errorEl.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+
+  function setSendingUi(sending) {
+    state.sending = sending;
+    sendBtn.disabled = sending;
+    sendBtn.setAttribute("aria-busy", sending ? "true" : "false");
+    if (sending) {
+      sendBtn.dataset.label = sendBtn.textContent || "Send";
+      sendBtn.textContent = state.started ? "Sending…" : "Starting…";
+    } else {
+      sendBtn.textContent =
+        sendBtn.dataset.label || (state.started ? "Send" : "Start chat");
+    }
+  }
+
+  function clearSession() {
+    state.sessionToken = null;
+    state.started = false;
+    state.messages = [];
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (_e) {
+      /* ignore */
+    }
+    setMode("intake");
+    renderMessages();
+  }
+
+  function parseApiResponse(res) {
+    return res.text().then(function (text) {
+      var data = null;
+      if (text) {
+        try {
+          data = JSON.parse(text);
+        } catch (_e) {
+          data = { error: "Unexpected server response." };
+        }
+      }
+      return { ok: res.ok, status: res.status, data: data || {} };
+    });
+  }
+
+  function validateIntake() {
+    var name = nameEl.value.trim();
+    var phone = phoneEl.value.trim();
+    if (!name) {
+      setError("Please enter your name.");
+      nameEl.focus();
+      return false;
+    }
+    if (!phone) {
+      setError("Please enter your mobile number.");
+      phoneEl.focus();
+      return false;
+    }
+    if (!consentEl.checked) {
+      setError("Please check the box to allow text updates about this chat.");
+      consentEl.focus();
+      return false;
+    }
+    return true;
   }
 
   function setOpen(open) {
@@ -183,8 +253,11 @@
     }
     state.messages.forEach(function (msg) {
       var bubble = document.createElement("div");
+      var pending = String(msg.id).indexOf("pending-") === 0;
       bubble.className =
-        "site-chat-bubble " + (msg.sender === "staff" ? "staff" : "visitor");
+        "site-chat-bubble " +
+        (msg.sender === "staff" ? "staff" : "visitor") +
+        (pending ? " pending" : "");
       bubble.textContent = msg.body;
       messagesEl.appendChild(bubble);
     });
@@ -228,12 +301,12 @@
       encodeURIComponent(latestSince());
 
     apiFetch(url, { method: "GET", credentials: "omit" })
-      .then(function (res) {
-        return res.json().then(function (data) {
-          return { ok: res.ok, data: data };
-        });
-      })
+      .then(parseApiResponse)
       .then(function (result) {
+        if (result.status === 404) {
+          clearSession();
+          return;
+        }
         if (!result.ok) return;
         mergeMessages(result.data.messages || []);
       })
@@ -269,11 +342,7 @@
       credentials: "omit",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
-    }).then(function (res) {
-      return res.json().then(function (data) {
-        return { ok: res.ok, data: data };
-      });
-    });
+    }).then(parseApiResponse);
   }
 
   function warnIfQuoRelayFailed(data) {
@@ -296,36 +365,33 @@
       credentials: "omit",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
-    }).then(function (res) {
-      return res.json().then(function (data) {
-        return { ok: res.ok, data: data };
-      });
-    });
+    }).then(parseApiResponse);
   }
 
-  form.addEventListener("submit", function (event) {
-    event.preventDefault();
+  function submitChat() {
     if (state.sending) return;
 
     setError("");
     var text = inputEl.value.trim();
-    if (!text) return;
+    if (!text) {
+      setError("Please type a message.");
+      inputEl.focus();
+      return;
+    }
 
-    state.sending = true;
-    sendBtn.disabled = true;
+    if (!state.started && !validateIntake()) {
+      return;
+    }
 
-    var done = function () {
-      state.sending = false;
-      sendBtn.disabled = false;
-    };
+    if (state.started && !state.sessionToken) {
+      clearSession();
+      setError("Session expired. Please fill in your details and start again.");
+      return;
+    }
+
+    setSendingUi(true);
 
     if (!state.started) {
-      if (!consentEl.checked) {
-        setError("Please check the box to allow text updates about this chat.");
-        done();
-        return;
-      }
-
       handleStart({
         name: nameEl.value.trim(),
         phone: phoneEl.value.trim(),
@@ -348,9 +414,22 @@
         .catch(function () {
           setError("Network error. Please try again.");
         })
-        .finally(done);
+        .finally(function () {
+          setSendingUi(false);
+        });
       return;
     }
+
+    var pendingId = "pending-" + Date.now();
+    var optimistic = {
+      id: pendingId,
+      sender: "visitor",
+      body: text,
+      createdAt: new Date().toISOString(),
+    };
+    state.messages.push(optimistic);
+    renderMessages();
+    inputEl.value = "";
 
     handleSend({
       sessionToken: state.sessionToken,
@@ -358,18 +437,40 @@
       website: honeypot.value,
     })
       .then(function (result) {
+        state.messages = state.messages.filter(function (m) {
+          return m.id !== pendingId;
+        });
+        if (result.status === 404) {
+          clearSession();
+          inputEl.value = text;
+          setError("Session expired. Please start the chat again.");
+          return;
+        }
         if (!result.ok) {
+          renderMessages();
+          inputEl.value = text;
           setError(result.data.error || "Could not send message.");
           return;
         }
         mergeMessages([result.data.message]);
-        inputEl.value = "";
         warnIfQuoRelayFailed(result.data);
       })
       .catch(function () {
+        state.messages = state.messages.filter(function (m) {
+          return m.id !== pendingId;
+        });
+        renderMessages();
+        inputEl.value = text;
         setError("Network error. Please try again.");
       })
-      .finally(done);
+      .finally(function () {
+        setSendingUi(false);
+      });
+  }
+
+  form.addEventListener("submit", function (event) {
+    event.preventDefault();
+    submitChat();
   });
 
   launcher.addEventListener("click", function () {
@@ -389,12 +490,12 @@
         encodeURIComponent(state.sessionToken),
       { method: "GET", credentials: "omit" }
     )
-      .then(function (res) {
-        return res.json().then(function (data) {
-          return { ok: res.ok, data: data };
-        });
-      })
+      .then(parseApiResponse)
       .then(function (result) {
+        if (result.status === 404) {
+          clearSession();
+          return;
+        }
         if (result.ok) {
           state.messages = result.data.messages || [];
           renderMessages();

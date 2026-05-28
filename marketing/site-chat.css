@@ -298,6 +298,10 @@
   border-bottom-right-radius: 0.25rem;
 }
 
+.site-chat-bubble.pending {
+  opacity: 0.75;
+}
+
 .site-chat-bubble.staff {
   align-self: flex-start;
   background: var(--sc-paper);
@@ -322,13 +326,12 @@
   margin: 0;
 }
 
-.site-chat-error {
-  flex-shrink: 0;
-  margin: 0 1rem;
+.site-chat-intake > .site-chat-error:not([hidden]) {
+  margin: 0.15rem 0 0;
 }
 
-.site-chat-error:not([hidden]) {
-  margin-top: 0.5rem;
+.site-chat-composer > .site-chat-error:not([hidden]) {
+  margin: 0 0 0.5rem;
 }
 
 /* Composer (active chat only) — not a <footer> so global site footer flex rules do not apply */
