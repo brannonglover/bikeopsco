@@ -10,38 +10,55 @@
   apiBase = apiBase.replace(/\/$/, "");
 
   var root = document.createElement("div");
-  root.className = "site-chat-root";
-  root.setAttribute("aria-live", "polite");
+  root.className = "site-chat-root is-intake";
 
   root.innerHTML =
-    '<div class="site-chat-panel" role="dialog" aria-label="Chat with Bike Ops">' +
-    '<div class="site-chat-header">' +
-    "<div><h2>Chat with us</h2><p>We typically reply within a few hours.</p></div>" +
-    '<button type="button" class="site-chat-close" aria-label="Close chat">&times;</button>' +
+    '<div class="site-chat-panel" role="dialog" aria-modal="true" aria-labelledby="site-chat-title">' +
+    '<header class="site-chat-header">' +
+    '<div class="site-chat-header-text">' +
+    '<h2 id="site-chat-title">Chat with Bike Ops</h2>' +
+    "<p>Questions about shop software? We're here to help.</p>" +
     "</div>" +
-    '<div class="site-chat-messages" id="site-chat-messages"></div>' +
-    '<p class="site-chat-hint" id="site-chat-hint" hidden>Replies may also arrive by text if you step away from this page.</p>' +
+    '<button type="button" class="site-chat-close" aria-label="Close chat">&times;</button>' +
+    "</header>" +
     '<form class="site-chat-form" id="site-chat-form">' +
+    '<input class="site-chat-honeypot" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" />' +
     '<p class="site-chat-error" id="site-chat-error" hidden></p>' +
-    '<div id="site-chat-intake">' +
-    '<label for="site-chat-name">Name</label>' +
-    '<input id="site-chat-name" name="name" type="text" autocomplete="name" required maxlength="80" />' +
-    '<label for="site-chat-phone">Mobile phone</label>' +
-    '<input id="site-chat-phone" name="phone" type="tel" autocomplete="tel" required maxlength="30" />' +
-    '<label class="site-chat-consent">' +
+    '<div class="site-chat-body">' +
+    '<div class="site-chat-welcome" id="site-chat-welcome">' +
+    "<strong>Start a conversation</strong>" +
+    "<p>Tell us what you're looking for. We usually reply within a few hours on business days.</p>" +
+    "</div>" +
+    '<div class="site-chat-intake" id="site-chat-intake">' +
+    '<div class="site-chat-field">' +
+    '<span class="site-chat-field-label" id="site-chat-name-label">Your name</span>' +
+    '<input id="site-chat-name" name="name" type="text" autocomplete="name" required maxlength="80" placeholder="Jane Smith" aria-labelledby="site-chat-name-label" />' +
+    "</div>" +
+    '<div class="site-chat-field">' +
+    '<span class="site-chat-field-label" id="site-chat-phone-label">Mobile number</span>' +
+    '<input id="site-chat-phone" name="phone" type="tel" autocomplete="tel" required maxlength="30" placeholder="(555) 123-4567" aria-labelledby="site-chat-phone-label" />' +
+    "</div>" +
+    '<div class="site-chat-consent-box">' +
+    '<label class="site-chat-consent-label" for="site-chat-consent">' +
     '<input id="site-chat-consent" name="smsConsent" type="checkbox" required />' +
-    "<span>I agree to receive SMS about this conversation from Bike Ops. Message &amp; data rates may apply. Reply STOP to opt out.</span>" +
+    "<span>Text me about this chat. Msg &amp; data rates may apply. Reply STOP to opt out.</span>" +
     "</label>" +
     "</div>" +
-    '<label for="site-chat-input">Message</label>' +
-    '<textarea id="site-chat-input" name="message" required maxlength="2000" placeholder="How can we help?"></textarea>' +
-    '<input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;opacity:0;height:0;width:0" />' +
-    '<div class="site-chat-actions">' +
-    '<button type="submit" class="site-chat-send" id="site-chat-send">Send</button>' +
+    '<div class="site-chat-field" id="site-chat-message-field">' +
+    '<span class="site-chat-field-label" id="site-chat-message-label">Your message</span>' +
+    '<textarea id="site-chat-input" name="message" required maxlength="2000" rows="3" placeholder="What would you like to know?" aria-labelledby="site-chat-message-label"></textarea>' +
     "</div>" +
+    '<button type="submit" class="site-chat-send" id="site-chat-send">Start chat</button>' +
+    "</div>" +
+    '<div class="site-chat-messages" id="site-chat-messages" aria-live="polite"></div>' +
+    "</div>" +
+    '<footer class="site-chat-composer" id="site-chat-composer" hidden>' +
+    '<div class="site-chat-input-wrap" id="site-chat-composer-wrap"></div>' +
+    '<p class="site-chat-hint" id="site-chat-hint">You may also get replies by text if you leave this page.</p>' +
+    "</footer>" +
     "</form>" +
     "</div>" +
-    '<button type="button" class="site-chat-launcher" aria-expanded="false" aria-controls="site-chat-panel">' +
+    '<button type="button" class="site-chat-launcher" aria-expanded="false">' +
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">' +
     '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>' +
     "</svg>" +
@@ -56,6 +73,10 @@
   var messagesEl = root.querySelector("#site-chat-messages");
   var form = root.querySelector("#site-chat-form");
   var intakeEl = root.querySelector("#site-chat-intake");
+  var welcomeEl = root.querySelector("#site-chat-welcome");
+  var messageField = root.querySelector("#site-chat-message-field");
+  var composerEl = root.querySelector("#site-chat-composer");
+  var composerWrap = root.querySelector("#site-chat-composer-wrap");
   var errorEl = root.querySelector("#site-chat-error");
   var hintEl = root.querySelector("#site-chat-hint");
   var sendBtn = root.querySelector("#site-chat-send");
@@ -72,6 +93,38 @@
     polling: null,
     sending: false,
   };
+
+  function mountIntakeComposer() {
+    messageField.appendChild(inputEl);
+    intakeEl.appendChild(sendBtn);
+  }
+
+  function mountChatComposer() {
+    composerWrap.appendChild(inputEl);
+    composerWrap.appendChild(sendBtn);
+  }
+
+  function setMode(mode) {
+    var isChat = mode === "chat";
+    root.classList.toggle("is-intake", !isChat);
+    root.classList.toggle("is-chat", isChat);
+    sendBtn.textContent = isChat ? "Send" : "Start chat";
+    inputEl.placeholder = isChat
+      ? "Type a message…"
+      : "What would you like to know?";
+    inputEl.rows = isChat ? 1 : 3;
+    if (isChat) {
+      mountChatComposer();
+      intakeEl.setAttribute("hidden", "");
+      welcomeEl.setAttribute("hidden", "");
+      composerEl.hidden = false;
+    } else {
+      mountIntakeComposer();
+      intakeEl.removeAttribute("hidden");
+      welcomeEl.removeAttribute("hidden");
+      composerEl.hidden = true;
+    }
+  }
 
   function loadSession() {
     try {
@@ -113,7 +166,8 @@
     root.classList.toggle("is-open", open);
     launcher.setAttribute("aria-expanded", open ? "true" : "false");
     if (open) {
-      inputEl.focus();
+      if (state.started) inputEl.focus();
+      else nameEl.focus();
       if (state.started) startPolling();
     } else {
       stopPolling();
@@ -122,6 +176,13 @@
 
   function renderMessages() {
     messagesEl.innerHTML = "";
+    if (!state.messages.length) {
+      var empty = document.createElement("p");
+      empty.className = "site-chat-empty-thread";
+      empty.textContent = "No messages yet. Say hello!";
+      messagesEl.appendChild(empty);
+      return;
+    }
     state.messages.forEach(function (msg) {
       var bubble = document.createElement("div");
       bubble.className =
@@ -197,10 +258,11 @@
 
   function enterChatMode() {
     state.started = true;
-    intakeEl.hidden = true;
-    hintEl.hidden = false;
+    setMode("chat");
     saveSession();
     startPolling();
+    renderMessages();
+    inputEl.focus();
   }
 
   function handleStart(body) {
@@ -240,14 +302,14 @@
     state.sending = true;
     sendBtn.disabled = true;
 
-  var done = function () {
+    var done = function () {
       state.sending = false;
       sendBtn.disabled = false;
     };
 
     if (!state.started) {
       if (!consentEl.checked) {
-        setError("Please agree to receive SMS about this conversation.");
+        setError("Please check the box to allow text updates about this chat.");
         done();
         return;
       }
@@ -262,7 +324,7 @@
       })
         .then(function (result) {
           if (!result.ok) {
-            setError(result.data.error || "Could not start chat.");
+            setError(result.data.error || "Could not start chat. Try again.");
             return;
           }
           state.sessionToken = result.data.sessionToken;
@@ -307,8 +369,7 @@
   loadSession();
 
   if (state.started) {
-    intakeEl.hidden = true;
-    hintEl.hidden = false;
+    setMode("chat");
     apiFetch(
       "/api/site-chat/messages?sessionToken=" +
         encodeURIComponent(state.sessionToken),
@@ -328,5 +389,7 @@
       .catch(function () {
         /* ignore */
       });
+  } else {
+    setMode("intake");
   }
 })();
