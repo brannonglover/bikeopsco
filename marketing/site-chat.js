@@ -52,10 +52,9 @@
     "</div>" +
     '<div class="site-chat-messages" id="site-chat-messages" aria-live="polite"></div>' +
     "</div>" +
-    '<footer class="site-chat-composer" id="site-chat-composer" hidden>' +
+    '<div class="site-chat-composer" id="site-chat-composer" role="region" aria-label="Message composer" hidden>' +
     '<div class="site-chat-input-wrap" id="site-chat-composer-wrap"></div>' +
-    '<p class="site-chat-hint" id="site-chat-hint">You may also get replies by text if you leave this page.</p>' +
-    "</footer>" +
+    "</div>" +
     "</form>" +
     "</div>" +
     '<button type="button" class="site-chat-launcher" aria-expanded="false">' +
@@ -78,7 +77,6 @@
   var composerEl = root.querySelector("#site-chat-composer");
   var composerWrap = root.querySelector("#site-chat-composer-wrap");
   var errorEl = root.querySelector("#site-chat-error");
-  var hintEl = root.querySelector("#site-chat-hint");
   var sendBtn = root.querySelector("#site-chat-send");
   var inputEl = root.querySelector("#site-chat-input");
   var nameEl = root.querySelector("#site-chat-name");
@@ -278,6 +276,20 @@
     });
   }
 
+  function warnIfQuoRelayFailed(data) {
+    if (data && data.quoRelayed === false) {
+      if (data.quoError === "Quo is not configured") {
+        setError(
+          "We saved your message and emailed our team. SMS to Quo is not configured on the server yet."
+        );
+      } else if (data.quoError) {
+        setError(
+          "We saved your message and emailed our team. Quo SMS failed: " + data.quoError
+        );
+      }
+    }
+  }
+
   function handleSend(body) {
     return apiFetch("/api/site-chat/messages", {
       method: "POST",
@@ -330,6 +342,7 @@
           state.sessionToken = result.data.sessionToken;
           mergeMessages(result.data.messages || []);
           inputEl.value = "";
+          warnIfQuoRelayFailed(result.data);
           enterChatMode();
         })
         .catch(function () {
@@ -351,6 +364,7 @@
         }
         mergeMessages([result.data.message]);
         inputEl.value = "";
+        warnIfQuoRelayFailed(result.data);
       })
       .catch(function () {
         setError("Network error. Please try again.");

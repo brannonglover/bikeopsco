@@ -778,6 +778,78 @@ function getPlatformSignupNotifyEmail(): string {
   );
 }
 
+function getSiteChatNotifyEmail(): string {
+  return (
+    process.env.SITE_CHAT_NOTIFY_EMAIL?.trim() ||
+    getPlatformSignupNotifyEmail()
+  );
+}
+
+/** Email backup when someone starts a marketing-site chat (bikeops.co). */
+export async function sendSiteChatLeadNotification(details: {
+  visitorName: string;
+  visitorPhone: string;
+  message: string;
+  quoRelayed: boolean;
+  quoError?: string | null;
+}): Promise<{ ok: boolean; error?: string }> {
+  const resend = getResend();
+  if (!resend) {
+    console.warn("RESEND_API_KEY not set, skipping site chat notification");
+    return { ok: false, error: "Email not configured" };
+  }
+
+  const notifyEmail = getSiteChatNotifyEmail();
+  if (!notifyEmail) {
+    return { ok: false, error: "No notification email configured" };
+  }
+
+  const quoLine = details.quoRelayed
+    ? "<p style=\"margin:0 0 16px;color:#166534\">Also relayed to Quo SMS on the visitor’s thread.</p>"
+    : `<p style="margin:0 0 16px;color:#b45309">Quo SMS relay did not run${
+        details.quoError ? ` (${escapeHtml(details.quoError)})` : ""
+      }. Check QUO_API_KEY and QUO_PHONE_NUMBER on the app deployment.</p>`;
+
+  const subject = `Bike Ops website chat: ${details.visitorName}`;
+  const innerHtml = `
+<p style="margin:0 0 16px">Someone started a chat on <strong>bikeops.co</strong>.</p>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom:16px;border:1px solid #e2e8f0;border-radius:8px">
+  <tr><td style="padding:10px 16px;font-size:14px;color:#475569;width:35%">Name</td><td style="padding:10px 16px;font-size:14px;color:#0f172a">${escapeHtml(details.visitorName)}</td></tr>
+  <tr style="background:#f8fafc"><td style="padding:10px 16px;font-size:14px;color:#475569">Phone</td><td style="padding:10px 16px;font-size:14px;color:#0f172a">${escapeHtml(details.visitorPhone)}</td></tr>
+  <tr><td style="padding:10px 16px;font-size:14px;color:#475569;vertical-align:top">Message</td><td style="padding:10px 16px;font-size:14px;color:#0f172a;white-space:pre-wrap">${escapeHtml(details.message)}</td></tr>
+</table>
+${quoLine}
+<p style="margin:0;font-size:13px;color:#64748b">In Quo, open the conversation with ${escapeHtml(details.visitorPhone)} — website messages appear as an <strong>outgoing</strong> text prefixed with <code>[Bike Ops web]</code>.</p>
+`;
+
+  const branding = await getCustomerEmailBrandingAssets();
+  const html = buildCustomerEmailHtml({
+    innerHtml,
+    headerLogoSrc: branding.headerLogoSrc,
+    heading: "Website chat",
+  });
+  const attachments = customerEmailBrandingAttachments(branding);
+
+  try {
+    const { error } = await resend.emails.send({
+      from: getFromEmail(),
+      to: notifyEmail,
+      subject,
+      html,
+      ...(attachments && { attachments }),
+    });
+    if (error) {
+      console.error("Site chat notification email failed:", error);
+      return { ok: false, error: error.message };
+    }
+    return { ok: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Email send failed";
+    console.error("Site chat notification email:", message);
+    return { ok: false, error: message };
+  }
+}
+
 export async function sendPlatformSignupNotification(details: {
   shopName: string;
   subdomain: string;

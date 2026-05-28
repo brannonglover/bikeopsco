@@ -21,6 +21,15 @@ On the **app** Vercel project, set `QUO_API_KEY`, `QUO_PHONE_NUMBER`, and `QUO_W
 
 Staff reply in the Quo app; visitors see replies in the website widget (and may also receive SMS).
 
+### Troubleshooting Quo
+
+1. **Env vars on the app project** (not marketing): `QUO_API_KEY`, `QUO_PHONE_NUMBER` (E.164, same as your Quo line).
+2. **Deploy the app** with the site-chat API routes and run `npx prisma migrate deploy`.
+3. **Check config**: `https://app.bikeops.co/api/site-chat/status` should return `"quoConfigured": true`.
+4. **Where messages appear in Quo**: open the conversation for the visitor’s phone number. Website messages show as an **outgoing** SMS prefixed with `[Bike Ops web]` (not as a new inbound).
+5. **A2P / carrier registration** must be approved in Quo for US SMS, or the API returns an error.
+6. **Email backup**: each new chat also emails `SITE_CHAT_NOTIFY_EMAIL` (or platform signup notify email) via Resend.
+
 ## PostHog setup
 
 - `index.html` uses the shared PostHog project key for account-wide reporting with the Basement Bike Mechanic site.

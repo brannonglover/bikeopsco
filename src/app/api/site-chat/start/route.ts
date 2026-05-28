@@ -10,6 +10,7 @@ import {
   relayVisitorMessageToQuo,
   toSiteChatMessageDto,
 } from "@/lib/site-chat";
+import { sendSiteChatLeadNotification } from "@/lib/email";
 import { siteChatOptionsResponse, withSiteChatCors } from "@/lib/site-chat-cors";
 
 export const dynamic = "force-dynamic";
@@ -110,12 +111,21 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    void sendSiteChatLeadNotification({
+      visitorName: data.name,
+      visitorPhone: phoneE164,
+      message: data.message,
+      quoRelayed: Boolean(relay.quoMessageId),
+      quoError: relay.error,
+    });
+
     return withSiteChatCors(
       NextResponse.json({
         sessionToken,
         conversationId: conversation.id,
         messages: [toSiteChatMessageDto(visitorMessage)],
         quoRelayed: Boolean(relay.quoMessageId),
+        quoError: relay.error,
       }),
       origin
     );

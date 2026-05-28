@@ -114,6 +114,7 @@ export async function POST(request: NextRequest) {
       NextResponse.json({
         message: toSiteChatMessageDto(visitorMessage),
         quoRelayed: Boolean(relay.quoMessageId),
+        quoError: relay.error,
       }),
       origin
     );

@@ -1,4 +1,13 @@
+import { normalizePhone } from "@/lib/phone";
+
 const QUO_API_BASE = "https://api.openphone.com/v1";
+
+type QuoApiErrorBody = {
+  message?: string;
+  title?: string;
+  description?: string;
+  errors?: { message?: string }[];
+};
 
 export type QuoSendMessageResult =
   | { ok: true; messageId: string }
@@ -13,7 +22,19 @@ export function getQuoApiKey(): string | null {
 }
 
 export function getQuoFromNumber(): string | null {
-  return process.env.QUO_PHONE_NUMBER?.trim() || null;
+  const raw = process.env.QUO_PHONE_NUMBER?.trim();
+  if (!raw) return null;
+  if (raw.startsWith("PN")) return raw;
+  return normalizePhone(raw) ?? raw;
+}
+
+function formatQuoApiError(status: number, data: QuoApiErrorBody | null): string {
+  if (data?.title && data?.message) return `${data.title}: ${data.message}`;
+  if (data?.description && data?.message) return `${data.message} (${data.description})`;
+  if (data?.message) return data.message;
+  const detail = data?.errors?.[0]?.message;
+  if (detail) return detail;
+  return `Quo API error (${status})`;
 }
 
 export function getQuoUserId(): string | null {
@@ -66,15 +87,12 @@ export async function sendQuoTextMessage(params: {
     });
 
     const data = (await response.json().catch(() => null)) as
-      | { data?: { id?: string }; id?: string; message?: string }
+      | ({ data?: { id?: string }; id?: string } & QuoApiErrorBody)
       | null;
 
     if (!response.ok) {
-      const message =
-        (data && "message" in data && typeof data.message === "string"
-          ? data.message
-          : null) ?? `Quo API error (${response.status})`;
-      return { ok: false, error: message };
+      console.error("Quo send message failed:", response.status, data);
+      return { ok: false, error: formatQuoApiError(response.status, data) };
     }
 
     const messageId =
