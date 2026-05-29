@@ -11,6 +11,11 @@ This folder is intended to be deployed as the separate Vercel Marketing project.
 
 The static page links signup and login traffic to `https://app.bikeops.co`.
 
+Legal and support pages (for App Store Connect and compliance):
+
+- `https://bikeops.co/support` — shop and customer help, contact email, site chat
+- `https://bikeops.co/privacy` — privacy policy
+
 ## Site chat (Quo)
 
 The marketing pages load `site-chat.js`, which talks to `https://app.bikeops.co/api/site-chat/*`.
