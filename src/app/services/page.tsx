@@ -2,10 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Price } from "@/components/ui/Price";
-import {
-  EBIKE_SERVICE_HIGHLIGHT_ROW_CLASS,
-  serviceNameMentionsEbike,
-} from "@/lib/service-name";
+import { ServiceName } from "@/components/ui/ServiceName";
 
 interface Service {
   id: string;
@@ -603,16 +600,14 @@ export default function ServicesPage() {
           services.map((s) => (
             <div
               key={s.id}
-              className={`border border-slate-200 rounded-lg p-4 shadow-sm ${
-                serviceNameMentionsEbike(s.name) ? EBIKE_SERVICE_HIGHLIGHT_ROW_CLASS : "bg-white"
-              }`}
+              className="border border-slate-200 rounded-lg p-4 shadow-sm bg-white"
             >
               <div className="flex items-start justify-between gap-4">
                 {editing !== s.id ? (
                   <>
                     <div className="flex-1 min-w-0">
                       <h3 className="font-semibold text-slate-900 flex flex-wrap items-center gap-2">
-                        {s.name}
+                        <ServiceName name={s.name} />
                         {s.isSystem && (
                           <span className="text-xs font-medium px-2 py-0.5 rounded bg-slate-100 text-slate-600">
                             Auto
