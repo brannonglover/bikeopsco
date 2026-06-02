@@ -19,7 +19,10 @@ import {
   decodeCollectionWindowForInput,
   encodeCollectionWindowPairForStorage,
 } from "@/lib/collection-window-storage";
-import { formatCollectionWindowRange } from "@/lib/format-collection-window";
+import {
+  formatCollectionWindowRangeOrMissing,
+  NO_TIME_SLOT_SELECTED,
+} from "@/lib/format-collection-window";
 import { toCalendarDateInTimezone } from "@/lib/timezone";
 import { ServiceName } from "@/components/ui/ServiceName";
 
@@ -1141,18 +1144,19 @@ function JobDetailsDateFields({
 
   if (!onJobUpdated) {
     const pickupWindowDisplay = isCollection
-      ? formatCollectionWindowRange(job.collectionWindowStart, job.collectionWindowEnd, {
+      ? formatCollectionWindowRangeOrMissing(job.collectionWindowStart, job.collectionWindowEnd, {
           shopTimeZone: shopTimezone,
           referenceDate: job.dropOffDate,
         })
       : null;
     const returnWindowDisplay = isCollection
-      ? formatCollectionWindowRange(
+      ? formatCollectionWindowRangeOrMissing(
           job.collectionReturnWindowStart,
           job.collectionReturnWindowEnd,
           { shopTimeZone: shopTimezone, referenceDate: job.pickupDate }
         )
       : null;
+    const missingSlotClass = "text-slate-400 italic";
     return (
       <div>
         <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">Dates</h3>
@@ -1160,24 +1164,48 @@ function JobDetailsDateFields({
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
             <div>
               <dt className="text-slate-500 inline">{firstLabel}:</dt>{" "}
-              <dd className="inline text-slate-900">{formatDate(job.dropOffDate)}</dd>
+              <dd className="inline text-slate-900">
+                {job.dropOffDate ? (
+                  formatDate(job.dropOffDate)
+                ) : (
+                  <span className={missingSlotClass}>{NO_TIME_SLOT_SELECTED}</span>
+                )}
+              </dd>
             </div>
-            {pickupWindowDisplay && (
+            {isCollection && job.dropOffDate && (
               <dd className="inline-flex items-center gap-1 text-slate-600">
                 <span className="text-slate-400 text-xs">·</span>
-                <span>{pickupWindowDisplay}</span>
+                <span
+                  className={
+                    pickupWindowDisplay === NO_TIME_SLOT_SELECTED ? missingSlotClass : undefined
+                  }
+                >
+                  {pickupWindowDisplay}
+                </span>
               </dd>
             )}
           </div>
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
             <div>
               <dt className="text-slate-500 inline">{secondLabel}:</dt>{" "}
-              <dd className="inline text-slate-900">{formatDate(job.pickupDate)}</dd>
+              <dd className="inline text-slate-900">
+                {job.pickupDate ? (
+                  formatDate(job.pickupDate)
+                ) : (
+                  <span className={missingSlotClass}>{NO_TIME_SLOT_SELECTED}</span>
+                )}
+              </dd>
             </div>
-            {returnWindowDisplay && (
+            {isCollection && job.pickupDate && (
               <dd className="inline-flex items-center gap-1 text-slate-600">
                 <span className="text-slate-400 text-xs">·</span>
-                <span>{returnWindowDisplay}</span>
+                <span
+                  className={
+                    returnWindowDisplay === NO_TIME_SLOT_SELECTED ? missingSlotClass : undefined
+                  }
+                >
+                  {returnWindowDisplay}
+                </span>
               </dd>
             )}
           </div>
@@ -1239,6 +1267,9 @@ function JobDetailsDateFields({
                 </div>
               </div>
             </div>
+            {!windowStart && !windowEnd && (
+              <p className="text-[11px] text-slate-400 italic mt-1">{NO_TIME_SLOT_SELECTED}</p>
+            )}
           </div>
           <div className="min-w-0">
             <div className="flex flex-wrap items-end gap-2">
@@ -1288,6 +1319,9 @@ function JobDetailsDateFields({
                 </div>
               </div>
             </div>
+            {!returnWindowStart && !returnWindowEnd && (
+              <p className="text-[11px] text-slate-400 italic mt-1">{NO_TIME_SLOT_SELECTED}</p>
+            )}
           </div>
         </div>
       ) : (
@@ -2581,6 +2615,8 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
   const [productsDropdownOpen, setProductsDropdownOpen] = useState(false);
   const [serviceSearch, setServiceSearch] = useState("");
   const [productSearch, setProductSearch] = useState("");
+  /** When set, new catalog/custom services are created for this job bike (multi-bike jobs). */
+  const [serviceTargetBikeId, setServiceTargetBikeId] = useState<string | null>(null);
   const [expandedServiceIds, setExpandedServiceIds] = useState<Set<string>>(new Set());
   const [expandedProductIds, setExpandedProductIds] = useState<Set<string>>(new Set());
   const [expandedBikeIds, setExpandedBikeIds] = useState<Set<string>>(() => {
@@ -2704,6 +2740,9 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
   const jobServices: JobService[] = job.jobServices ?? [];
   const jobProductsList: JobProduct[] = job.jobProducts ?? [];
   const attachedProductIds = new Set(jobProductsList.map((jp) => jp.productId));
+  const attachedServiceIds = new Set(
+    jobServices.map((js) => js.serviceId).filter((id): id is string => Boolean(id))
+  );
   const filteredServices = serviceSearch.trim()
     ? services.filter((s) => s.name.toLowerCase().includes(serviceSearch.trim().toLowerCase()))
     : services;
@@ -2714,6 +2753,21 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
   const jobBikesList: JobBike[] = job.jobBikes ?? [];
   const isMultiBike = jobBikesList.length > 1;
   const invoiceCustomerBikes = job.customer?.bikes;
+
+  const isInvoiceBikeKey = (key: string) => key !== "__unassigned__" && key !== "__legacy__";
+
+  const serviceLineOnBike = (serviceId: string, bikeKey: string) =>
+    jobServices.some((js) => js.serviceId === serviceId && js.jobBikeId === bikeKey);
+
+  const canAddCatalogService = (serviceId: string) => {
+    if (!isMultiBike) {
+      return !attachedServiceIds.has(serviceId);
+    }
+    if (serviceTargetBikeId && isInvoiceBikeKey(serviceTargetBikeId)) {
+      return !serviceLineOnBike(serviceId, serviceTargetBikeId);
+    }
+    return true;
+  };
 
   const calcGroupSubtotal = (svcs: JobService[], prods: JobProduct[]) =>
     svcs.reduce((s, js) => {
@@ -2770,6 +2824,7 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
       if (servicesDropdownRef.current && !servicesDropdownRef.current.contains(e.target as Node)) {
         setServicesDropdownOpen(false);
         setServiceSearch("");
+        setServiceTargetBikeId(null);
       }
       if (productsDropdownRef.current && !productsDropdownRef.current.contains(e.target as Node)) {
         setProductsDropdownOpen(false);
@@ -2784,11 +2839,14 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
     setAdding(true);
     setServicesDropdownOpen(false);
     setServiceSearch("");
+    const jobBikeId =
+      serviceTargetBikeId && isInvoiceBikeKey(serviceTargetBikeId) ? serviceTargetBikeId : undefined;
+    setServiceTargetBikeId(null);
     try {
       const res = await fetch(`/api/jobs/${job.id}/services`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ serviceId }),
+        body: JSON.stringify({ serviceId, ...(jobBikeId ? { jobBikeId } : {}) }),
       });
       if (res.ok) {
         const updatedJob = await fetch(`/api/jobs/${job.id}`).then((r) => r.json());
@@ -2805,11 +2863,18 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
     setAdding(true);
     setServicesDropdownOpen(false);
     setServiceSearch("");
+    const jobBikeId =
+      serviceTargetBikeId && isInvoiceBikeKey(serviceTargetBikeId) ? serviceTargetBikeId : undefined;
+    setServiceTargetBikeId(null);
     try {
       const res = await fetch(`/api/jobs/${job.id}/services`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customServiceName: trimmed, unitPrice: 0 }),
+        body: JSON.stringify({
+          customServiceName: trimmed,
+          unitPrice: 0,
+          ...(jobBikeId ? { jobBikeId } : {}),
+        }),
       });
       if (res.ok) {
         const updatedJob = await fetch(`/api/jobs/${job.id}`).then((r) => r.json());
@@ -3089,7 +3154,24 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
               >
                 <div className="min-h-0 overflow-hidden">
                   {itemCount === 0 ? (
-                    <p className="text-slate-400 text-sm px-3 py-3">No services or products assigned to this bike yet.</p>
+                    <div className="px-3 py-3 space-y-2">
+                      <p className="text-slate-400 text-sm">No services or products assigned to this bike yet.</p>
+                      {isMultiBike && group.bike && (
+                        <button
+                          type="button"
+                          disabled={adding}
+                          onClick={() => {
+                            setProductsDropdownOpen(false);
+                            setProductSearch("");
+                            setServiceTargetBikeId(group.key);
+                            setServicesDropdownOpen(true);
+                          }}
+                          className="text-sm text-violet-700 hover:text-violet-900 font-medium disabled:opacity-50"
+                        >
+                          + Add service to this bike
+                        </button>
+                      )}
+                    </div>
                   ) : (
                     <div className="space-y-px bg-slate-100 border-t border-slate-200">
                       {group.services.map((js) => {
@@ -3441,7 +3523,12 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                 setProductsDropdownOpen(false);
                 setProductSearch("");
                 setServicesDropdownOpen((o) => {
-                  if (o) setServiceSearch("");
+                  if (o) {
+                    setServiceSearch("");
+                    setServiceTargetBikeId(null);
+                  } else {
+                    setServiceTargetBikeId(null);
+                  }
                   return !o;
                 });
               }}
@@ -3473,21 +3560,35 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                   />
                 </div>
                 <div className="max-h-48 overflow-y-auto">
-                  {filteredServices.map((s) => (
+                  {filteredServices.map((s) => {
+                    const canAdd = canAddCatalogService(s.id);
+                    const isAttached = attachedServiceIds.has(s.id);
+                    return (
                     <button
                       key={s.id}
                       type="button"
-                      onClick={() => handleAddService(s.id)}
-                      className="w-full px-3 py-2 text-left text-sm last:rounded-b-lg flex flex-col items-start min-w-0 hover:bg-slate-50"
+                      onClick={() => {
+                        if (canAdd) void handleAddService(s.id);
+                      }}
+                      disabled={!canAdd || adding}
+                      className="w-full px-3 py-2 text-left text-sm last:rounded-b-lg flex flex-col items-start min-w-0 hover:bg-slate-50 disabled:hover:bg-white disabled:cursor-not-allowed"
                     >
-                      <span className="font-medium truncate w-full">
+                      <span className={`font-medium truncate w-full ${!canAdd ? "text-slate-400" : "text-slate-900"}`}>
                         <ServiceName name={s.name} />
                       </span>
                       <span className="text-slate-500 text-xs">
                         ${Number(s.price).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {!canAdd
+                          ? serviceTargetBikeId && isInvoiceBikeKey(serviceTargetBikeId)
+                            ? " · Already on this bike"
+                            : " · Already added"
+                          : isAttached && isMultiBike
+                            ? " · Add to another bike"
+                            : ""}
                       </span>
                     </button>
-                  ))}
+                    );
+                  })}
                   {serviceSearch.trim() && filteredServices.length === 0 && (
                     <button
                       type="button"

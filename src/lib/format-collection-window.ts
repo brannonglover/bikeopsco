@@ -6,6 +6,8 @@ import {
   normalizeIANATimezone,
 } from "@/lib/timezone";
 
+export const NO_TIME_SLOT_SELECTED = "No time slot selected";
+
 export type FormatCollectionWindowOptions = {
   /** Shop IANA timezone used when decoding legacy HH:mm values. */
   shopTimeZone?: string;
@@ -45,4 +47,13 @@ export function formatCollectionWindowRange(
   if (startLabel) return `from ${startLabel} ${zoneLabel}`;
   if (endLabel) return `until ${endLabel} ${zoneLabel}`;
   return null;
+}
+
+/** Collection window label, or {@link NO_TIME_SLOT_SELECTED} when the customer left it blank. */
+export function formatCollectionWindowRangeOrMissing(
+  start: string | null | undefined,
+  end: string | null | undefined,
+  options?: FormatCollectionWindowOptions
+): string {
+  return formatCollectionWindowRange(start, end, options) ?? NO_TIME_SLOT_SELECTED;
 }

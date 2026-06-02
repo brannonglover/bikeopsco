@@ -6,6 +6,10 @@ import type { Job, Stage } from "@/lib/types";
 import { getJobBikeDisplayTitle, getDisplayPartsForJobBikeRow } from "@/lib/job-display";
 import { useUnreadChatCustomerIds } from "@/contexts/StaffChatAttentionContext";
 import { useAppFeatures } from "@/contexts/AppFeaturesContext";
+import {
+  formatCollectionWindowRangeOrMissing,
+  NO_TIME_SLOT_SELECTED,
+} from "@/lib/format-collection-window";
 
 const STAGE_LABELS: Record<Stage, string> = {
   PENDING_APPROVAL: "Pending approval",
@@ -87,6 +91,22 @@ export function JobCardContent({
     !!(job.customer.email || job.customer.phone) &&
     job.stage !== "CANCELLED" &&
     job.stage !== "COMPLETED";
+
+  const isCollection = job.deliveryType === "COLLECTION_SERVICE";
+  const pickupWindowLabel = isCollection
+    ? formatCollectionWindowRangeOrMissing(
+        job.collectionWindowStart,
+        job.collectionWindowEnd,
+        { shopTimeZone: features.timezone, referenceDate: job.dropOffDate }
+      )
+    : null;
+  const returnWindowLabel = isCollection
+    ? formatCollectionWindowRangeOrMissing(
+        job.collectionReturnWindowStart,
+        job.collectionReturnWindowEnd,
+        { shopTimeZone: features.timezone, referenceDate: job.pickupDate }
+      )
+    : null;
 
   const containerClass =
     variant === "plain"
@@ -175,22 +195,45 @@ export function JobCardContent({
             : job.customer.firstName}
         </p>
       )}
-      {(job.dropOffDate || job.pickupDate || (!job.dropOffDate && job.createdAt)) && (
+      {(job.dropOffDate || job.pickupDate || isCollection || job.stage === "PENDING_APPROVAL") && (
         <div className="mt-3 space-y-1 text-xs text-slate-500">
-          {job.dropOffDate && (
+          <p>
+            {isCollection ? "Collection" : "Drop-off"}:{" "}
+            {job.dropOffDate ? (
+              formatDate(job.dropOffDate)
+            ) : (
+              <span className="italic text-slate-400">{NO_TIME_SLOT_SELECTED}</span>
+            )}
+            {isCollection && job.dropOffDate && (
+              <>
+                {" · "}
+                {pickupWindowLabel === NO_TIME_SLOT_SELECTED ? (
+                  <span className="italic text-slate-400">{pickupWindowLabel}</span>
+                ) : (
+                  pickupWindowLabel
+                )}
+              </>
+            )}
+          </p>
+          {(job.pickupDate || isCollection) && (
             <p>
-              {job.deliveryType === "COLLECTION_SERVICE" ? "Collection" : "Drop-off"}:{" "}
-              {formatDate(job.dropOffDate)}
+              {isCollection ? "Return" : "Pickup"}:{" "}
+              {job.pickupDate ? (
+                formatDate(job.pickupDate)
+              ) : (
+                <span className="italic text-slate-400">{NO_TIME_SLOT_SELECTED}</span>
+              )}
+              {isCollection && job.pickupDate && (
+                <>
+                  {" · "}
+                  {returnWindowLabel === NO_TIME_SLOT_SELECTED ? (
+                    <span className="italic text-slate-400">{returnWindowLabel}</span>
+                  ) : (
+                    returnWindowLabel
+                  )}
+                </>
+              )}
             </p>
-          )}
-          {job.pickupDate && (
-            <p>
-              {job.deliveryType === "COLLECTION_SERVICE" ? "Return" : "Pickup"}:{" "}
-              {formatDate(job.pickupDate)}
-            </p>
-          )}
-          {!job.dropOffDate && job.createdAt && (
-            <p>Added: {formatDate(job.createdAt)}</p>
           )}
         </div>
       )}
