@@ -4,6 +4,8 @@ export const SHARED_APP_SUBDOMAIN = "app";
 export const DEFAULT_RESERVED_SUBDOMAINS = [
   "www",
   SHARED_APP_SUBDOMAIN,
+  /** Staging host (dev.bikeops.co) — not a tenant shop; falls back to default shop. */
+  "dev",
   "admin",
   "api",
   "assets",
