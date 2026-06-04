@@ -1,5 +1,5 @@
 import Twilio from "twilio";
-import { getCustomerBillUrl, getCustomerStatusUrl } from "./env";
+import { getCustomerBillUrl, getCustomerStatusUrl } from "./job-customer-access";
 import { normalizePhone } from "./phone";
 
 type SmsProvider = "twilio";
@@ -171,8 +171,8 @@ export async function buildJobSmsMessage(
       : job.customer.firstName
     : "Customer";
 
-  const statusUrl = getCustomerStatusUrl(job.id, shopRow?.subdomain);
-  const billUrl = getCustomerBillUrl(job.id, shopRow?.subdomain);
+  const statusUrl = getCustomerStatusUrl(job.id, job.shopId, shopRow?.subdomain);
+  const billUrl = getCustomerBillUrl(job.id, job.shopId, shopRow?.subdomain);
 
   const vars: Record<string, string> = {
     customerName,

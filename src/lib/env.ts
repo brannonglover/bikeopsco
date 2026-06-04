@@ -106,16 +106,6 @@ export function getShopAppUrl(shopSubdomain?: string | null): string {
   return `https://${subdomain}.${rootDomain}`;
 }
 
-export function getCustomerStatusUrl(jobId: string, shopSubdomain?: string | null): string {
-  const shopUrl = getShopAppUrl(shopSubdomain);
-  return shopUrl ? `${shopUrl}/status/${encodeURIComponent(jobId)}` : "";
-}
-
-export function getCustomerBillUrl(jobId: string, shopSubdomain?: string | null): string {
-  const shopUrl = getShopAppUrl(shopSubdomain);
-  return shopUrl ? `${shopUrl}/pay/${encodeURIComponent(jobId)}` : "";
-}
-
 export function getStaffAppScheme(): string {
   return process.env.STAFF_APP_SCHEME?.trim() || "bikeops";
 }

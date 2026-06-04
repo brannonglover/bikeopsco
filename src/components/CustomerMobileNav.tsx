@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useParams, useSearchParams } from "next/navigation";
+import { readJobAccessParam, withJobAccessQuery } from "@/lib/job-access-url";
 import { useState, useEffect } from "react";
 
 type Job = { id: string; bikeMake: string; bikeModel: string; stage: string };
@@ -22,6 +23,7 @@ export function CustomerMobileNav() {
   const isPayPage = pathname?.startsWith("/pay/");
   const isChatPage = pathname?.startsWith("/chat/c");
   const jobId = jobIdFromUrl ?? jobIdFromQuery;
+  const jobAccess = readJobAccessParam(searchParams);
 
   useEffect(() => {
     fetch("/api/widget/features", { cache: "no-store" })
@@ -57,7 +59,9 @@ export function CustomerMobileNav() {
   }, [menuOpen]);
 
   const statusJobId = jobId ?? jobs[0]?.id;
-  const chatUrl = jobId ? `/chat/c?jobId=${jobId}` : "/chat/c";
+  const chatUrl = jobId
+    ? withJobAccessQuery(`/chat/c?jobId=${encodeURIComponent(jobId)}`, jobAccess)
+    : "/chat/c";
 
   return (
     <>
@@ -132,7 +136,7 @@ export function CustomerMobileNav() {
           )}
           {isChatPage && statusJobId && (
             <Link
-              href={`/status/${statusJobId}`}
+              href={withJobAccessQuery(`/status/${statusJobId}`, jobAccess)}
               onClick={() => setMenuOpen(false)}
               className="flex items-center gap-3 px-4 py-3 rounded-lg text-slate-700 hover:bg-slate-50 font-medium"
             >

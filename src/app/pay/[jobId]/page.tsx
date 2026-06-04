@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
+import { jobAccessApiSuffix, readJobAccessParam } from "@/lib/job-access-url";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { Price } from "@/components/ui/Price";
@@ -107,7 +108,9 @@ function PaymentForm({
 
 export default function PayPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const jobId = params?.jobId as string;
+  const jobAccess = readJobAccessParam(searchParams);
 
   const [job, setJob] = useState<{
     id: string;
@@ -136,7 +139,9 @@ export default function PayPage() {
 
     async function init() {
       try {
-        const jobRes = await fetch(`/api/jobs/${jobId}`, { cache: "no-store" });
+        const jobRes = await fetch(`/api/jobs/${jobId}${jobAccessApiSuffix(jobAccess)}`, {
+          cache: "no-store",
+        });
 
         if (!jobRes.ok) {
           setError("Job not found");
@@ -176,11 +181,14 @@ export default function PayPage() {
           return;
         }
 
-        const intentRes = await fetch(`/api/jobs/${jobId}/payments/create-intent`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mode: "online" }),
-        });
+        const intentRes = await fetch(
+          `/api/jobs/${jobId}/payments/create-intent${jobAccessApiSuffix(jobAccess)}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mode: "online" }),
+          }
+        );
 
         if (!intentRes.ok) {
           const errData = await intentRes.json().catch(() => ({}));
@@ -212,7 +220,7 @@ export default function PayPage() {
     }
 
     init();
-  }, [jobId]);
+  }, [jobId, jobAccess]);
 
   if (loading) {
     return (

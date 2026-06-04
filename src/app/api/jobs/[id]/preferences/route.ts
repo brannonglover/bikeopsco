@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
+import { hasJobReadAccess } from "@/lib/job-customer-access";
 import {
   buildEmailUpdatesConsentUpdate,
   buildSmsConsentUpdate,
   getEffectiveEmailUpdatesConsent,
   getEffectiveSmsConsent,
 } from "@/lib/sms-consent";
+import { getShopForHost } from "@/lib/shop";
 
 const updatePreferencesSchema = z
   .object({
@@ -46,10 +48,18 @@ async function getCustomerForJob(jobId: string) {
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
+    const shop = await getShopForHost(request.headers.get("host"));
+    if (!shop) {
+      return NextResponse.json({ error: "Shop not found" }, { status: 404 });
+    }
+    if (!(await hasJobReadAccess(request, shop.id, params.id))) {
+      return NextResponse.json({ error: "Customer not found for this job" }, { status: 404 });
+    }
+
     const customer = await getCustomerForJob(params.id);
     if (!customer) {
       return NextResponse.json({ error: "Customer not found for this job" }, { status: 404 });
@@ -74,6 +84,14 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
+    const shop = await getShopForHost(request.headers.get("host"));
+    if (!shop) {
+      return NextResponse.json({ error: "Shop not found" }, { status: 404 });
+    }
+    if (!(await hasJobReadAccess(request, shop.id, params.id))) {
+      return NextResponse.json({ error: "Customer not found for this job" }, { status: 404 });
+    }
+
     const body = await request.json();
     const data = updatePreferencesSchema.parse(body);
     const customer = await getCustomerForJob(params.id);

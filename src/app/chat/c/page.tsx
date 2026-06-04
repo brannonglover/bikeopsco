@@ -3,17 +3,28 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import type { ChatMessage } from "@/lib/types";
 import { useCustomerChatNotifications } from "@/hooks/useCustomerChatNotifications";
 import { ChatMessageBubble } from "@/components/chat/ChatMessageBubble";
+import { jobAccessApiSuffix, readJobAccessParam, withJobAccessQuery } from "@/lib/job-access-url";
 
 const POLL_INTERVAL_MS = 3000;
 
 export default function CustomerChatPage() {
+  const searchParams = useSearchParams();
+  const jobAccess = readJobAccessParam(searchParams);
   const [status, setStatus] = useState<"loading" | "login" | "inviteConsent" | "chat" | "disabled">("loading");
   const [loginEmail, setLoginEmail] = useState("");
   const [loginSending, setLoginSending] = useState(false);
   const [loginMessage, setLoginMessage] = useState<string | null>(null);
+  const [replyHint, setReplyHint] = useState<{
+    smsReplyAvailable: boolean;
+    shopSmsNumber: string | null;
+    webChatUrl: string | null;
+    statusUrl: string | null;
+    customerHasApp: boolean;
+  } | null>(null);
   const [inviteToken, setInviteToken] = useState<string | null>(null);
   const [inviteSmsConsent, setInviteSmsConsent] = useState(false);
   const [inviteAccepting, setInviteAccepting] = useState(false);
@@ -165,19 +176,53 @@ export default function CustomerChatPage() {
         return;
       }
 
+      const jobId = params.get("jobId")?.trim() || null;
+      const jobAccess = readJobAccessParam(params);
+
+      async function loadReplyHint(activeJobId: string, access: string | null) {
+        if (!access) return;
+        try {
+          const hintRes = await fetch(
+            `/api/chat/reminder-hint?jobId=${encodeURIComponent(activeJobId)}${jobAccessApiSuffix(access)}`,
+            { cache: "no-store" }
+          );
+          if (hintRes.ok && !cancelled) {
+            setReplyHint(await hintRes.json());
+          }
+        } catch {
+          // ignore
+        }
+      }
+
       try {
-        const res = await fetch("/api/chat/me", { credentials: "include" });
+        let res = await fetch("/api/chat/me", { credentials: "include" });
+        if (!res.ok && jobId && jobAccess) {
+          const establish = await fetch("/api/chat/establish-job-access", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ jobId, access: jobAccess }),
+          });
+          if (establish.ok) {
+            res = await fetch("/api/chat/me", { credentials: "include" });
+          }
+        }
+
         if (!cancelled) {
           if (res.ok) {
             const data = await res.json();
             setCustomerName(data.lastName ? `${data.firstName} ${data.lastName}` : data.firstName);
             setStatus("chat");
           } else {
+            if (jobId) await loadReplyHint(jobId, jobAccess);
             setStatus("login");
           }
         }
       } catch {
-        if (!cancelled) setStatus("login");
+        if (!cancelled) {
+          if (jobId) await loadReplyHint(jobId, jobAccess);
+          setStatus("login");
+        }
       }
     }
 
@@ -568,14 +613,49 @@ export default function CustomerChatPage() {
   }
 
   if (status === "login") {
+    const showSmsFirst = replyHint?.smsReplyAvailable;
     return (
       <div className="flex-1 flex items-center justify-center p-6">
         <div className="w-full max-w-md">
           <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
             <h1 className="text-xl font-semibold text-slate-900 mb-2">Chat with us</h1>
-            <p className="text-slate-600 text-sm mb-6">
-              Enter the email address we have on file and we&apos;ll send you a sign-in link. No password needed.
-            </p>
+            {showSmsFirst ? (
+              <div className="mb-6 space-y-3 text-sm text-slate-600">
+                <p>
+                  The easiest way to reply is in the <strong className="text-slate-800">text message thread</strong> from
+                  us on your phone
+                  {replyHint.shopSmsNumber ? (
+                    <>
+                      {" "}
+                      (<span className="text-slate-800">{replyHint.shopSmsNumber}</span>)
+                    </>
+                  ) : null}
+                  .
+                </p>
+                {replyHint.customerHasApp && (
+                  <p>You can also open chat from the Bike Ops app notification.</p>
+                )}
+                {replyHint.statusUrl && (
+                  <p>
+                    <Link
+                      href={withJobAccessQuery(replyHint.statusUrl, jobAccess)}
+                      className="font-medium text-emerald-700 hover:text-emerald-800"
+                    >
+                      View your repair status
+                    </Link>
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="text-slate-600 text-sm mb-6">
+                Enter the email address we have on file and we&apos;ll send you a sign-in link. No password needed.
+              </p>
+            )}
+            {showSmsFirst && (
+              <p className="text-slate-600 text-sm mb-4">
+                Prefer the web? Sign in with your email below.
+              </p>
+            )}
             <form onSubmit={handleLogin} className="space-y-4">
               <input
                 type="email"

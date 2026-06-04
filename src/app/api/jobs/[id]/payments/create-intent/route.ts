@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getRequestShop, requireStaffShop } from "@/lib/api-auth";
+import { hasJobReadAccess } from "@/lib/job-customer-access";
 import { computeAmountWithSurcharge, getStripe, toCents } from "@/lib/stripe";
 import { computeJobSubtotal, computeTotalPaid, getJobPaymentSummary } from "@/lib/job-payments";
 import { z } from "zod";
@@ -28,6 +29,10 @@ export async function POST(
 
     if (!shopAuth.shop) {
       return NextResponse.json({ error: "Shop not found" }, { status: 404 });
+    }
+
+    if (mode === "online" && !(await hasJobReadAccess(request, shopAuth.shop.id, jobId))) {
+      return NextResponse.json({ error: "Job not found" }, { status: 404 });
     }
 
     const job = await prisma.job.findFirst({

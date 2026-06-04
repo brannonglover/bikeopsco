@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
+import { jobAccessApiSuffix, readJobAccessParam, withJobAccessQuery } from "@/lib/job-access-url";
 import Link from "next/link";
 import Image from "next/image";
 import { Price } from "@/components/ui/Price";
@@ -182,7 +183,9 @@ function BikeStatusBadge({ stage, isWorkingOn, isCompleted, isWaitingOnParts }: 
 
 export default function StatusPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const jobId = params?.jobId as string;
+  const jobAccess = readJobAccessParam(searchParams);
   const [job, setJob] = useState<StatusJob | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -210,7 +213,7 @@ export default function StatusPage() {
   useEffect(() => {
     if (!jobId) return;
 
-    fetch(`/api/jobs/${jobId}`, { cache: "no-store" })
+    fetch(`/api/jobs/${jobId}${jobAccessApiSuffix(jobAccess)}`, { cache: "no-store" })
       .then((res) => {
         if (!res.ok) throw new Error("Job not found");
         return res.json();
@@ -220,7 +223,7 @@ export default function StatusPage() {
       })
       .catch(() => setError("Job not found"))
       .finally(() => setLoading(false));
-  }, [jobId]);
+  }, [jobId, jobAccess]);
 
   if (loading) {
     return (
@@ -550,7 +553,7 @@ export default function StatusPage() {
         </div>
 
         <Link
-          href={`/preferences/${job.id}`}
+          href={withJobAccessQuery(`/preferences/${job.id}`, jobAccess)}
           className="mt-4 block w-full rounded-xl bg-slate-900 px-4 py-3 text-center text-sm font-semibold text-white transition-colors hover:bg-slate-800"
         >
           Change notification settings
@@ -560,7 +563,7 @@ export default function StatusPage() {
       {!paymentSummary.isPaidInFull && subtotal > 0 &&
         ["RECEIVED", "WORKING_ON", "WAITING_ON_CUSTOMER", "WAITING_ON_PARTS", "BIKE_READY", "COMPLETED"].includes(job.stage) && (
         <Link
-          href={`/pay/${job.id}`}
+          href={withJobAccessQuery(`/pay/${job.id}`, jobAccess)}
           className="block w-full rounded-lg bg-emerald-600 px-4 py-3 text-center font-semibold text-white hover:bg-emerald-700"
         >
           {paymentSummary.totalPaid > 0 ? "Pay remaining balance" : "Pay online"}

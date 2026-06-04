@@ -7,7 +7,8 @@ import {
   sendChatStaffReplyReminder,
 } from "@/lib/email";
 import { getEffectiveEmailUpdatesConsent } from "@/lib/sms-consent";
-import { getShopAppUrl, getStaffChatOpenUrl } from "@/lib/env";
+import { getChatCustomerReminderDelivery } from "@/lib/chat-reminder-delivery";
+import { getStaffChatOpenUrl } from "@/lib/env";
 import { getAppFeatures } from "@/lib/app-settings";
 
 export async function GET(request: NextRequest) {
@@ -40,9 +41,6 @@ export async function GET(request: NextRequest) {
       const features = await getAppFeatures(shop.id);
       if (!features.chatEnabled) continue;
 
-      const shopBaseUrl = getShopAppUrl(shop.subdomain);
-      const customerChatUrl = shopBaseUrl ? `${shopBaseUrl}/chat/c` : "";
-
       const conversations = await prisma.conversation.findMany({
         where: { shopId: shop.id, archived: false },
         include: {
@@ -63,7 +61,7 @@ export async function GET(request: NextRequest) {
         if (last.sender === "STAFF") {
           if (!getEffectiveEmailUpdatesConsent(conv.customer)) continue;
           const email = conv.customer.email?.trim();
-          if (!email || !customerChatUrl) continue;
+          if (!email) continue;
 
           // Find the earliest staff message the customer hasn't read yet.
           // The reminder fires 10 minutes after this message, not the latest one,
@@ -93,13 +91,20 @@ export async function GET(request: NextRequest) {
           });
           if (existing) continue;
 
+          const delivery = await getChatCustomerReminderDelivery(
+            shop.id,
+            shop.subdomain,
+            conv.customer.id
+          );
+          if (!delivery) continue;
+
           const result = await sendChatCustomerReplyReminder(
             email,
             conv.customer.firstName,
-            customerChatUrl,
             reminderMinutes,
             last.body,
             last.attachments?.map((a) => a.filename) ?? [],
+            delivery,
             shop.id,
           );
           if (result.ok) {

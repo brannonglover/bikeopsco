@@ -8,6 +8,7 @@ import { syncCollectionJobService } from "@/lib/collection-fee";
 import { getAppFeatures } from "@/lib/app-settings";
 import { computeJobSubtotal, computeTotalPaid, getJobPaymentSummary } from "@/lib/job-payments";
 import { getEffectiveEmailUpdatesConsent, getEffectiveSmsConsent } from "@/lib/sms-consent";
+import { hasJobReadAccess } from "@/lib/job-customer-access";
 import { getShopForHost } from "@/lib/shop";
 import { addCustomerSystemChatMessage } from "@/lib/system-chat";
 import { normalizeJobCollectionWindowsForStorage } from "@/lib/normalize-job-collection-windows";
@@ -82,6 +83,11 @@ export async function GET(
     if (!job) {
       return NextResponse.json({ error: "Job not found" }, { status: 404 });
     }
+
+    if (!(await hasJobReadAccess(request, shop.id, id))) {
+      return NextResponse.json({ error: "Job not found" }, { status: 404 });
+    }
+
     const subtotal = computeJobSubtotal({
       jobServices: job.jobServices,
       jobProducts: job.jobProducts,

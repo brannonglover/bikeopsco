@@ -3,7 +3,10 @@ import fs from "fs";
 import path from "path";
 import { formatCollectionWindowRange } from "./format-collection-window";
 import { getShopTimezone } from "./shop-timezone";
-import { getAppUrl, getCustomerBillUrl, getCustomerStatusUrl, getResendApiKey, getShopAppUrl, getStaffJobOpenUrl } from "./env";
+import type { ChatCustomerReminderDelivery } from "./chat-reminder-delivery";
+import { getCustomerBillUrl, getCustomerStatusUrl } from "./job-customer-access";
+import { getAppUrl, getResendApiKey, getShopAppUrl, getStaffJobOpenUrl } from "./env";
+import { phoneTelHref } from "./phone";
 
 function getResend(): Resend | null {
   const key = getResendApiKey();
@@ -544,7 +547,7 @@ export async function sendJobEmail(
     return { ok: false, error: "Template not found" };
   }
 
-  const statusUrl = getCustomerStatusUrl(job.id, shopRow?.subdomain);
+  const statusUrl = getCustomerStatusUrl(job.id, shopId, shopRow?.subdomain);
   const statusButtonHtml = statusUrl
     ? buildCustomerEmailCtaButton(statusUrl, "Track your repair status")
     : "";
@@ -1100,7 +1103,8 @@ export async function sendBookingReceivedEmail(
         )
         .catch(() => null)
     : null;
-  const statusUrl = getCustomerStatusUrl(job.id, shopRow?.subdomain) || null;
+  const statusUrl =
+    job.shopId ? getCustomerStatusUrl(job.id, job.shopId, shopRow?.subdomain) || null : null;
 
   const formatDate = (d: Date | string | null): string => {
     if (!d) return "Not set";
@@ -1537,13 +1541,66 @@ ${buildCustomerEmailCtaButton(magicLinkUrl, "Sign in to your account")}
   }
 }
 
+function buildChatReminderReplyOptionsHtml(
+  delivery: ChatCustomerReminderDelivery,
+  shopName: string
+): { html: string; plain: string } {
+  const parts: string[] = [];
+  const plainParts: string[] = [];
+
+  if (delivery.smsReplyAvailable) {
+    const numberLine = delivery.shopSmsNumber
+      ? `Open the text thread from <strong>${escapeHtml(shopName)}</strong> on your phone and reply there. Our number: <strong>${escapeHtml(delivery.shopSmsNumber)}</strong>.`
+      : `Open the text message thread from <strong>${escapeHtml(shopName)}</strong> on your phone and reply there.`;
+    parts.push(
+      `<p class="email-body-cell" style="margin:0 0 16px;font-size:16px;color:#475569">${numberLine}</p>`
+    );
+    plainParts.push(
+      delivery.shopSmsNumber
+        ? `Reply in the text thread from ${shopName} on your phone (our number: ${delivery.shopSmsNumber}).`
+        : `Reply in the text thread from ${shopName} on your phone.`
+    );
+  }
+
+  if (delivery.customerHasApp) {
+    parts.push(
+      `<p class="email-body-cell" style="margin:0 0 16px;font-size:16px;color:#475569">If you use the Bike Ops app, you can also open the chat from the notification we sent.</p>`
+    );
+    plainParts.push("If you use the Bike Ops app, open chat from the notification we sent.");
+  }
+
+  if (delivery.webChatUrl) {
+    const label = delivery.smsReplyAvailable ? "Open chat in your browser" : "Open chat";
+    parts.push(buildCustomerEmailCtaButton(delivery.webChatUrl, label));
+    plainParts.push(`${label}: ${delivery.webChatUrl}`);
+  }
+
+  if (delivery.statusUrl) {
+    parts.push(
+      `<p class="email-body-cell" style="margin:16px 0 0;font-size:15px;color:#475569"><a href="${escapeHtml(delivery.statusUrl)}" style="color:#4f46e5;text-decoration:underline">View your repair status</a></p>`
+    );
+    plainParts.push(`Repair status: ${delivery.statusUrl}`);
+  }
+
+  if (delivery.smsReplyAvailable && delivery.shopSmsNumber) {
+    const tel = phoneTelHref(delivery.shopSmsNumber);
+    if (tel) {
+      parts.push(
+        `<p class="email-muted" style="margin:12px 0 0;font-size:14px;color:#64748b"><a href="${escapeHtml(tel)}" style="color:#4f46e5;text-decoration:underline">Call or text ${escapeHtml(delivery.shopSmsNumber)}</a></p>`
+      );
+    }
+  }
+
+  return { html: parts.join("\n"), plain: plainParts.join("\n\n") };
+}
+
 export async function sendChatCustomerReplyReminder(
   customerEmail: string,
   customerFirstName: string,
-  chatUrl: string,
   reminderMinutes: number,
   staffMessageBody: string | null,
   attachmentFilenames: string[] = [],
+  delivery: ChatCustomerReminderDelivery,
   shopId?: string | null
 ): Promise<{ ok: boolean; error?: string }> {
   const resend = getResend();
@@ -1577,15 +1634,21 @@ export async function sendChatCustomerReplyReminder(
         ? `Included: ${files.join(", ")}`
         : "";
 
+  const replyOptions = buildChatReminderReplyOptionsHtml(delivery, shopName);
+  const replyIntro = delivery.smsReplyAvailable
+    ? "How to reply:"
+    : "Open the conversation:";
+
   const textBody = hasLatestInBody
-    ? `Hi ${name},\n\nWe sent you a message in chat at least ${reminderMinutes} minute${reminderMinutes === 1 ? "" : "s"} ago. Here is the latest message:\n\n${plainLatest}\n\nOpen chat: ${chatUrl}\n\n${getCustomerReadOnlyNoticeText()}\n\nIf you already replied, you can ignore this email.`
-    : `Hi ${name},\n\nWe sent you a message in chat at least ${reminderMinutes} minute${reminderMinutes === 1 ? "" : "s"} ago. When you have a moment, please open the conversation and reply.\n\n${chatUrl}\n\n${getCustomerReadOnlyNoticeText()}\n\nIf you already replied, you can ignore this email.`;
+    ? `Hi ${name},\n\nWe sent you a message in chat at least ${reminderMinutes} minute${reminderMinutes === 1 ? "" : "s"} ago. Here is the latest message:\n\n${plainLatest}\n\n${replyIntro}\n\n${replyOptions.plain}\n\n${getCustomerReadOnlyNoticeText()}\n\nIf you already replied, you can ignore this email.`
+    : `Hi ${name},\n\nWe sent you a message in chat at least ${reminderMinutes} minute${reminderMinutes === 1 ? "" : "s"} ago. When you have a moment, please reply.\n\n${replyIntro}\n\n${replyOptions.plain}\n\n${getCustomerReadOnlyNoticeText()}\n\nIf you already replied, you can ignore this email.`;
 
   const branding = await getCustomerEmailBrandingAssets(shopId);
   const innerHtml = `
 ${intro}
 ${latestMessageHtml}
-${buildCustomerEmailCtaButton(chatUrl, "Open chat")}
+<p style="margin:0 0 12px;font-size:15px;font-weight:600;color:#334155">${replyIntro}</p>
+${replyOptions.html}
 <p style="margin:24px 0 0;font-size:12px;color:#6b7280">If you already replied, you can ignore this email.</p>
 `.trim();
   const html = buildReadOnlyCustomerEmailHtml({
@@ -1774,7 +1837,7 @@ export async function sendBikeReadyInvoiceEmail(
       const price = typeof jp.unitPrice === "string" ? parseFloat(jp.unitPrice) : Number(jp.unitPrice);
       return sum + price * (jp.quantity || 1);
     }, 0);
-  const billUrl = getCustomerBillUrl(job.id, shopRow?.subdomain);
+  const billUrl = getCustomerBillUrl(job.id, job.shopId, shopRow?.subdomain);
   const subject = `Your bike is ready - bill for ${job.bikeMake} ${job.bikeModel}`;
 
   const branding = await getCustomerEmailBrandingAssets(job.shopId);
