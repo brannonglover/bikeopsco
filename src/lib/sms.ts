@@ -1,8 +1,8 @@
 import Twilio from "twilio";
-import { getCustomerBillUrl, getCustomerStatusUrl, getShopAppUrl } from "./env";
+import { getCustomerBillUrl, getCustomerStatusUrl } from "./env";
 import { normalizePhone } from "./phone";
 
-type SmsProvider = "infobip" | "twilio";
+type SmsProvider = "twilio";
 
 interface SmsSendResult {
   ok: boolean;
@@ -14,218 +14,28 @@ interface SmsSendResult {
   externalStatusDescription?: string;
 }
 
-type SmsSendOptions = {
-  notifyUrl?: string;
-  callbackData?: string;
-};
-
-export type InfobipSmsDeliveryReport = {
-  messageId?: string;
-  doneAt?: string;
-  status?: {
-    groupName?: string;
-    name?: string;
-    description?: string;
-  };
-  error?: {
-    groupName?: string;
-    name?: string;
-    description?: string;
-  };
-};
-
 const twilio =
   process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN
     ? Twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
     : null;
 
 const TWILIO_FROM_NUMBER = process.env.TWILIO_PHONE_NUMBER?.trim() ?? null;
-const INFOBIP_BASE_URL =
-  process.env.INFOBIP_BASE_URL?.trim().replace(/\/+$/, "") ?? null;
-const INFOBIP_API_KEY = process.env.INFOBIP_API_KEY?.trim() ?? null;
-const INFOBIP_SENDER = process.env.INFOBIP_SENDER?.trim() ?? null;
-
-function isInfobipConfigured(): boolean {
-  return Boolean(INFOBIP_BASE_URL && INFOBIP_API_KEY && INFOBIP_SENDER);
-}
 
 function isTwilioConfigured(): boolean {
   return Boolean(twilio && TWILIO_FROM_NUMBER);
 }
 
 export function getConfiguredSmsProvider(): SmsProvider | null {
-  if (isInfobipConfigured()) return "infobip";
   if (isTwilioConfigured()) return "twilio";
   return null;
 }
 
 export function getConfiguredSmsSender(): string | null {
-  const provider = getConfiguredSmsProvider();
-  if (provider === "infobip") return INFOBIP_SENDER;
-  if (provider === "twilio") return TWILIO_FROM_NUMBER;
-  return null;
+  return isTwilioConfigured() ? TWILIO_FROM_NUMBER : null;
 }
 
 function getSmsNotConfiguredError(): string {
   return "SMS not configured";
-}
-
-function formatInfobipAddress(value: string): string {
-  const normalized = normalizePhone(value);
-  if (normalized) {
-    return normalized.replace(/^\+/, "");
-  }
-  return value.trim();
-}
-
-function getInfobipErrorMessage(payload: unknown): string | null {
-  if (!payload || typeof payload !== "object") return null;
-  const record = payload as Record<string, unknown>;
-  const requestError =
-    record.requestError && typeof record.requestError === "object"
-      ? (record.requestError as Record<string, unknown>)
-      : null;
-  const serviceException =
-    requestError?.serviceException &&
-    typeof requestError.serviceException === "object"
-      ? (requestError.serviceException as Record<string, unknown>)
-      : null;
-  const clientException =
-    requestError?.clientException &&
-    typeof requestError.clientException === "object"
-      ? (requestError.clientException as Record<string, unknown>)
-      : null;
-
-  const candidates = [
-    serviceException?.text,
-    clientException?.text,
-    record.message,
-    record.error,
-  ];
-
-  for (const candidate of candidates) {
-    if (typeof candidate === "string" && candidate.trim()) {
-      return candidate.trim();
-    }
-  }
-
-  return null;
-}
-
-export async function getInfobipSmsDeliveryReport(
-  messageId: string
-): Promise<{ ok: boolean; report?: InfobipSmsDeliveryReport; error?: string }> {
-  if (!INFOBIP_BASE_URL || !INFOBIP_API_KEY) {
-    return { ok: false, error: getSmsNotConfiguredError() };
-  }
-
-  try {
-    const url = new URL(`${INFOBIP_BASE_URL}/sms/3/reports`);
-    url.searchParams.set("messageId", messageId);
-
-    const response = await fetch(url, {
-      headers: {
-        Authorization: `App ${INFOBIP_API_KEY}`,
-        Accept: "application/json",
-      },
-    });
-    const payload = (await response.json().catch(() => null)) as
-      | { results?: InfobipSmsDeliveryReport[]; requestError?: unknown; message?: string; error?: string }
-      | null;
-
-    if (!response.ok) {
-      return {
-        ok: false,
-        error:
-          getInfobipErrorMessage(payload) ??
-          `Infobip delivery report request failed with ${response.status}`,
-      };
-    }
-
-    return { ok: true, report: payload?.results?.[0] };
-  } catch (e) {
-    return {
-      ok: false,
-      error: e instanceof Error ? e.message : "Unknown error",
-    };
-  }
-}
-
-async function sendInfobipSms(
-  to: string,
-  text: string,
-  opts?: SmsSendOptions
-): Promise<SmsSendResult> {
-  if (!INFOBIP_BASE_URL || !INFOBIP_API_KEY || !INFOBIP_SENDER) {
-    console.warn(
-      "Infobip not configured (INFOBIP_BASE_URL, INFOBIP_API_KEY, INFOBIP_SENDER required), skipping SMS"
-    );
-    return { ok: false, error: getSmsNotConfiguredError() };
-  }
-
-  try {
-    const messagePayload: Record<string, unknown> = {
-      sender: formatInfobipAddress(INFOBIP_SENDER),
-      destinations: [{ to: formatInfobipAddress(to) }],
-      content: { text },
-    };
-    if (opts?.notifyUrl) {
-      messagePayload.notifyUrl = opts.notifyUrl;
-      messagePayload.notifyContentType = "application/json";
-    }
-    if (opts?.callbackData) {
-      messagePayload.callbackData = opts.callbackData;
-    }
-
-    const response = await fetch(`${INFOBIP_BASE_URL}/sms/3/messages`, {
-      method: "POST",
-      headers: {
-        Authorization: `App ${INFOBIP_API_KEY}`,
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify({
-        messages: [messagePayload],
-      }),
-    });
-
-    const payload = (await response.json().catch(() => null)) as
-      | {
-          messages?: Array<{
-            messageId?: string;
-            status?: {
-              groupName?: string;
-              name?: string;
-              description?: string;
-            };
-          }>;
-          requestError?: unknown;
-          message?: string;
-          error?: string;
-        }
-      | null;
-
-    if (!response.ok) {
-      const error =
-        getInfobipErrorMessage(payload) ??
-        `Infobip request failed with ${response.status}`;
-      console.error("Infobip SMS send error:", error);
-      return { ok: false, error };
-    }
-
-    return {
-      ok: true,
-      provider: "infobip",
-      externalMessageId: payload?.messages?.[0]?.messageId,
-      externalStatus: payload?.messages?.[0]?.status?.groupName,
-      externalStatusName: payload?.messages?.[0]?.status?.name,
-      externalStatusDescription: payload?.messages?.[0]?.status?.description,
-    };
-  } catch (e) {
-    const err = e instanceof Error ? e.message : "Unknown error";
-    console.error("Infobip SMS send error:", err);
-    return { ok: false, error: err };
-  }
 }
 
 async function sendTwilioSms(
@@ -256,21 +66,15 @@ async function sendTwilioSms(
 
 async function sendSms(
   phoneNumber: string,
-  text: string,
-  opts?: SmsSendOptions
+  text: string
 ): Promise<SmsSendResult> {
-  const provider = getConfiguredSmsProvider();
-  if (!provider) {
+  if (!isTwilioConfigured()) {
     return { ok: false, error: getSmsNotConfiguredError() };
   }
 
   const normalized = normalizePhone(phoneNumber);
   if (!normalized) {
     return { ok: false, error: "Invalid phone number" };
-  }
-
-  if (provider === "infobip") {
-    return sendInfobipSms(normalized, text, opts);
   }
 
   return sendTwilioSms(normalized, text);
@@ -445,25 +249,11 @@ export async function sendChatStaffSms(
   if (body.length > CHAT_SMS_MAX_LEN) {
     body = body.slice(0, CHAT_SMS_MAX_LEN - 3) + "...";
   }
-  const result = await sendSms(phoneNumber, body, {
-    notifyUrl: getInfobipSmsDeliveryNotifyUrl(opts?.shopSubdomain),
-    callbackData: opts?.messageId,
-  });
+  const result = await sendSms(phoneNumber, body);
   if (!result.ok) {
     console.error("Chat SMS send error:", result.error);
   }
   return result;
-}
-
-function getInfobipSmsDeliveryNotifyUrl(shopSubdomain?: string | null): string | undefined {
-  if (!isInfobipConfigured()) return undefined;
-  const base = getShopAppUrl(shopSubdomain);
-  if (!base) return undefined;
-
-  const url = new URL("/api/webhooks/infobip/sms/delivery", base);
-  const secret = process.env.INFOBIP_WEBHOOK_SECRET?.trim();
-  if (secret) url.searchParams.set("secret", secret);
-  return url.toString();
 }
 
 /** One-off test send (no JobSms row). Uses the configured SMS provider sender. */
@@ -475,7 +265,7 @@ export async function sendSmsTest(
   return sendSms(phoneNumber, body);
 }
 
-/** Provider-agnostic direct SMS send for system replies like STOP/HELP confirmations. */
+/** Direct SMS send for system replies like STOP/HELP confirmations. */
 export async function sendPlainSms(
   phoneNumber: string,
   body: string

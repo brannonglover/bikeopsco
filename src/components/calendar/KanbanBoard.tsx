@@ -324,19 +324,27 @@ export function KanbanBoard() {
   );
 
   const handleArchiveCompleted = useCallback(async () => {
-    const count = jobs.filter((j) => j.stage === "COMPLETED").length;
-    if (count === 0) return;
+    const completedIds = jobs
+      .filter((j) => j.stage === "COMPLETED")
+      .map((j) => j.id);
+    if (completedIds.length === 0) return;
+    const completedIdSet = new Set(completedIds);
     setArchiving(true);
+    flushSync(() => {
+      setJobs((prev) => prev.filter((j) => !completedIdSet.has(j.id)));
+      if (selectedJob && completedIdSet.has(selectedJob.id)) {
+        setSelectedJob(null);
+      }
+    });
     try {
       const res = await fetch("/api/jobs/archive-completed", { method: "POST" });
-      if (res.ok) {
-        setJobs((prev) => prev.filter((j) => j.stage !== "COMPLETED"));
-        if (selectedJob?.stage === "COMPLETED") setSelectedJob(null);
+      if (!res.ok) {
+        fetchJobs({ silent: true });
       }
     } finally {
       setArchiving(false);
     }
-  }, [jobs, selectedJob?.stage]);
+  }, [jobs, selectedJob, fetchJobs]);
 
   useEffect(() => {
     fetchJobs();
@@ -630,26 +638,26 @@ export function KanbanBoard() {
         onJobUpdated={(updated) => {
           // Archived or cancelled jobs are not shown on the active board.
           if (updated.archivedAt || updated.stage === "CANCELLED") {
+            pendingBoardMovesRef.current.delete(updated.id);
             setSelectedJob(null);
             setJobs((prev) => prev.filter((j) => j.id !== updated.id));
             return;
           }
-          const applyUpdate = (prev: Job | null) => {
-            if (!prev || prev.id !== updated.id) return prev;
-            const merged = mergeJobPreservingInvoiceDetails(prev, updated);
-            return prev.stage !== updated.stage
-              ? withOptimisticStageChange(merged, updated.stage)
-              : merged;
+          const mergeFromDetail = (current: Job) => {
+            const merged = mergeJobPreservingInvoiceDetails(current, updated);
+            const ownMove = pendingBoardMovesRef.current.get(updated.id);
+            if (ownMove && merged.stage !== ownMove.stage) {
+              return withOptimisticStageChange(merged, ownMove.stage);
+            }
+            return merged;
           };
-          setSelectedJob(applyUpdate);
+          setSelectedJob((prev) =>
+            prev?.id === updated.id ? mergeFromDetail(prev) : prev
+          );
           setJobs((prev) =>
-            prev.map((j) => {
-              if (j.id !== updated.id) return j;
-              const merged = mergeJobPreservingInvoiceDetails(j, updated);
-              return j.stage !== updated.stage
-                ? withOptimisticStageChange(merged, updated.stage)
-                : merged;
-            })
+            applyPendingBoardMoves(
+              prev.map((j) => (j.id === updated.id ? mergeFromDetail(j) : j))
+            )
           );
         }}
         onJobDateSaved={(field, jobId) => {

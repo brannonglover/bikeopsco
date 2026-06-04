@@ -1772,6 +1772,39 @@ function mergeJobPreservingInvoiceDetails(prev: Job, next: Job): Job {
   return merged;
 }
 
+/** Board column order — used to keep a drag-ahead stage when a slow GET returns an older stage. */
+const BOARD_STAGE_FLOW: Stage[] = [
+  "BOOKED_IN",
+  "RECEIVED",
+  "WORKING_ON",
+  "WAITING_ON_CUSTOMER",
+  "WAITING_ON_PARTS",
+  "BIKE_READY",
+  "COMPLETED",
+];
+
+function boardStageIndex(stage: Stage): number {
+  return BOARD_STAGE_FLOW.indexOf(stage);
+}
+
+function mergeFetchedJobWithLiveBoard(live: Job, fetched: Job): Job {
+  const merged = mergeJobPreservingInvoiceDetails(live, fetched);
+  if (live.stage === fetched.stage) return merged;
+
+  const liveIdx = boardStageIndex(live.stage);
+  const fetchedIdx = boardStageIndex(fetched.stage);
+  if (liveIdx === -1 || fetchedIdx === -1 || liveIdx <= fetchedIdx) {
+    return merged;
+  }
+
+  return {
+    ...merged,
+    stage: live.stage,
+    completedAt: live.completedAt ?? merged.completedAt,
+    workingOnJobBikeId: live.workingOnJobBikeId,
+  };
+}
+
 export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, onDismissIntent, onJobDateSaved, onJobDeleted }: JobDetailModalProps) {
   const [activeTab, setActiveTab] = useState<Tab>("details");
   const [cancelling, setCancelling] = useState(false);
@@ -1828,7 +1861,8 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
         const fetchedMs = Date.parse(fetched.updatedAt);
         const liveMs = Date.parse(live.updatedAt);
         if (Number.isFinite(fetchedMs) && Number.isFinite(liveMs) && fetchedMs < liveMs) return;
-        setJob(fetched);
+        const merged = mergeFetchedJobWithLiveBoard(live, fetched);
+        setJob(merged);
         // Keep the parent (board/archive list) in sync so the card updates too.
         onJobUpdatedRef.current?.(fetched);
       })
@@ -2615,8 +2649,6 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
   const [productsDropdownOpen, setProductsDropdownOpen] = useState(false);
   const [serviceSearch, setServiceSearch] = useState("");
   const [productSearch, setProductSearch] = useState("");
-  /** When set, new catalog/custom services are created for this job bike (multi-bike jobs). */
-  const [serviceTargetBikeId, setServiceTargetBikeId] = useState<string | null>(null);
   const [expandedServiceIds, setExpandedServiceIds] = useState<Set<string>>(new Set());
   const [expandedProductIds, setExpandedProductIds] = useState<Set<string>>(new Set());
   const [expandedBikeIds, setExpandedBikeIds] = useState<Set<string>>(() => {
@@ -2754,19 +2786,20 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
   const isMultiBike = jobBikesList.length > 1;
   const invoiceCustomerBikes = job.customer?.bikes;
 
-  const isInvoiceBikeKey = (key: string) => key !== "__unassigned__" && key !== "__legacy__";
-
-  const serviceLineOnBike = (serviceId: string, bikeKey: string) =>
-    jobServices.some((js) => js.serviceId === serviceId && js.jobBikeId === bikeKey);
-
   const canAddCatalogService = (serviceId: string) => {
     if (!isMultiBike) {
       return !attachedServiceIds.has(serviceId);
     }
-    if (serviceTargetBikeId && isInvoiceBikeKey(serviceTargetBikeId)) {
-      return !serviceLineOnBike(serviceId, serviceTargetBikeId);
-    }
     return true;
+  };
+
+  /** First job bike that does not already have this catalog service line. */
+  const defaultJobBikeIdForCatalogService = (serviceId: string): string | undefined => {
+    if (!isMultiBike) return undefined;
+    const bike = jobBikesList.find(
+      (b) => !jobServices.some((js) => js.serviceId === serviceId && js.jobBikeId === b.id)
+    );
+    return bike?.id;
   };
 
   const calcGroupSubtotal = (svcs: JobService[], prods: JobProduct[]) =>
@@ -2824,7 +2857,6 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
       if (servicesDropdownRef.current && !servicesDropdownRef.current.contains(e.target as Node)) {
         setServicesDropdownOpen(false);
         setServiceSearch("");
-        setServiceTargetBikeId(null);
       }
       if (productsDropdownRef.current && !productsDropdownRef.current.contains(e.target as Node)) {
         setProductsDropdownOpen(false);
@@ -2839,9 +2871,7 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
     setAdding(true);
     setServicesDropdownOpen(false);
     setServiceSearch("");
-    const jobBikeId =
-      serviceTargetBikeId && isInvoiceBikeKey(serviceTargetBikeId) ? serviceTargetBikeId : undefined;
-    setServiceTargetBikeId(null);
+    const jobBikeId = defaultJobBikeIdForCatalogService(serviceId);
     try {
       const res = await fetch(`/api/jobs/${job.id}/services`, {
         method: "POST",
@@ -2863,9 +2893,6 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
     setAdding(true);
     setServicesDropdownOpen(false);
     setServiceSearch("");
-    const jobBikeId =
-      serviceTargetBikeId && isInvoiceBikeKey(serviceTargetBikeId) ? serviceTargetBikeId : undefined;
-    setServiceTargetBikeId(null);
     try {
       const res = await fetch(`/api/jobs/${job.id}/services`, {
         method: "POST",
@@ -2873,7 +2900,6 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
         body: JSON.stringify({
           customServiceName: trimmed,
           unitPrice: 0,
-          ...(jobBikeId ? { jobBikeId } : {}),
         }),
       });
       if (res.ok) {
@@ -3154,23 +3180,8 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
               >
                 <div className="min-h-0 overflow-hidden">
                   {itemCount === 0 ? (
-                    <div className="px-3 py-3 space-y-2">
+                    <div className="px-3 py-3">
                       <p className="text-slate-400 text-sm">No services or products assigned to this bike yet.</p>
-                      {isMultiBike && group.bike && (
-                        <button
-                          type="button"
-                          disabled={adding}
-                          onClick={() => {
-                            setProductsDropdownOpen(false);
-                            setProductSearch("");
-                            setServiceTargetBikeId(group.key);
-                            setServicesDropdownOpen(true);
-                          }}
-                          className="text-sm text-violet-700 hover:text-violet-900 font-medium disabled:opacity-50"
-                        >
-                          + Add service to this bike
-                        </button>
-                      )}
                     </div>
                   ) : (
                     <div className="space-y-px bg-slate-100 border-t border-slate-200">
@@ -3523,12 +3534,7 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                 setProductsDropdownOpen(false);
                 setProductSearch("");
                 setServicesDropdownOpen((o) => {
-                  if (o) {
-                    setServiceSearch("");
-                    setServiceTargetBikeId(null);
-                  } else {
-                    setServiceTargetBikeId(null);
-                  }
+                  if (o) setServiceSearch("");
                   return !o;
                 });
               }}
@@ -3579,9 +3585,7 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                       <span className="text-slate-500 text-xs">
                         ${Number(s.price).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         {!canAdd
-                          ? serviceTargetBikeId && isInvoiceBikeKey(serviceTargetBikeId)
-                            ? " · Already on this bike"
-                            : " · Already added"
+                          ? " · Already added"
                           : isAttached && isMultiBike
                             ? " · Add to another bike"
                             : ""}

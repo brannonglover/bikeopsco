@@ -13,7 +13,7 @@ const SETTINGS_LINKS = [
   { href: "/settings/appearance", label: "Appearance", icon: Brush },
   { href: "/settings/branding", label: "Branding", icon: CircleDot },
   { href: "/settings/features", label: "Features", icon: SlidersHorizontal },
-  { href: "/settings/infobip", label: "Infobip SMS", icon: MessageSquareText },
+  { href: "/settings/twilio", label: "Twilio SMS", icon: MessageSquareText },
 ] as const;
 
 export function SettingsSectionNav() {

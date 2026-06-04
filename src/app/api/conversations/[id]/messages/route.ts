@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import {
-  getConfiguredSmsProvider,
-  getInfobipSmsDeliveryReport,
-  sendChatStaffSms,
-} from "@/lib/sms";
+import { getConfiguredSmsProvider, sendChatStaffSms } from "@/lib/sms";
 import { sendPushToCustomer, sendPushToAllStaff } from "@/lib/push";
 import { z } from "zod";
 import { getAppFeatures } from "@/lib/app-settings";
@@ -27,65 +23,6 @@ type ChatMessageRow = {
   smsDeliveredAt?: Date | null;
   [key: string]: unknown;
 };
-
-const INFOBIP_REPORT_FALLBACK_AFTER_MS = 60_000;
-
-function parseInfobipDate(value: string | null | undefined): Date | null {
-  if (!value) return null;
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-
-function isDelivered(groupName: string | null | undefined, name: string | null | undefined): boolean {
-  return groupName === "DELIVERED" || name === "DELIVERED_TO_HANDSET";
-}
-
-async function refreshPendingInfobipDeliveryReports(
-  shopId: string,
-  messages: ChatMessageRow[]
-): Promise<void> {
-  const now = Date.now();
-  const pending = messages.filter((message) => {
-    if (!message.id) return false;
-    if (message.sender !== "STAFF") return false;
-    if (message.smsProvider !== "infobip") return false;
-    if (!message.smsSid) return false;
-    const status = message.smsDeliveryStatus?.toUpperCase();
-    if (status !== "PENDING" && status !== "SENT") return false;
-    return now - message.createdAt.getTime() >= INFOBIP_REPORT_FALLBACK_AFTER_MS;
-  });
-
-  for (const message of pending.slice(0, 3)) {
-    const result = await getInfobipSmsDeliveryReport(message.smsSid!);
-    if (!result.ok || !result.report?.status) continue;
-
-    const report = result.report;
-    const groupName = report.status?.groupName ?? null;
-    const statusName = report.status?.name ?? null;
-    const statusDescription = report.status?.description ?? null;
-    const errorDescription =
-      report.error?.description ?? report.error?.name ?? report.error?.groupName ?? null;
-    const deliveredAt = isDelivered(groupName, statusName)
-      ? parseInfobipDate(report.doneAt) ?? new Date()
-      : null;
-
-    const update = {
-      smsProvider: "infobip",
-      smsDeliveryStatus: groupName,
-      smsDeliveryStatusName: statusName,
-      smsDeliveryStatusDescription: statusDescription,
-      smsDeliveryError: errorDescription,
-      smsDeliveredAt: deliveredAt,
-    };
-
-    await prisma.message.updateMany({
-      where: { id: message.id, shopId },
-      data: update,
-    });
-
-    Object.assign(message, update);
-  }
-}
 
 const createSchema = z.object({
   sender: z.enum(["STAFF", "CUSTOMER"]),
@@ -158,8 +95,6 @@ export async function GET(
       if (!latest || message.createdAt > latest) return message.createdAt;
       return latest;
     }, null);
-
-    await refreshPendingInfobipDeliveryReports(shop.id, messages);
 
     // Preserve updatedAt so marking read does not reorder the inbox (list is sorted by updatedAt).
     let staffLastReadAtIso: string | null = currentStaffLastReadAt?.toISOString() ?? null;
