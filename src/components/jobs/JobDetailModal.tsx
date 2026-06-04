@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useCallback, useEffect, useState, useRef } from "react";
-import type { Job, JobBike, JobProduct, JobService, Stage } from "@/lib/types";
+import type { DeliveryType, Job, JobBike, JobProduct, JobService, Stage } from "@/lib/types";
 import { Price } from "@/components/ui/Price";
 import { BikePlaceholderIcon } from "@/components/ui/BikePlaceholderIcon";
 import { useAppFeatures } from "@/contexts/AppFeaturesContext";
@@ -267,6 +267,149 @@ function InternalNotesSection({
         )
       )}
       {saving && <p className="text-xs text-slate-400 mt-1">Saving…</p>}
+    </div>
+  );
+}
+
+function JobDeliveryTypeSection({
+  job,
+  onJobUpdated,
+}: {
+  job: Job;
+  onJobUpdated?: (job: Job) => void;
+}) {
+  const { collectionServiceEnabled } = useAppFeatures();
+  const [deliveryType, setDeliveryType] = useState<DeliveryType>(job.deliveryType);
+  const [collectionAddress, setCollectionAddress] = useState(job.collectionAddress ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const canEdit = Boolean(onJobUpdated);
+  const showCollectionOption =
+    collectionServiceEnabled || job.deliveryType === "COLLECTION_SERVICE";
+
+  useEffect(() => {
+    setDeliveryType(job.deliveryType);
+    setCollectionAddress(job.collectionAddress ?? "");
+    setError(null);
+  }, [job.id, job.deliveryType, job.collectionAddress]);
+
+  const persistDeliveryType = async (next: DeliveryType) => {
+    if (!onJobUpdated || next === job.deliveryType) return;
+    setSaving(true);
+    setError(null);
+    const body: {
+      deliveryType: DeliveryType;
+      collectionAddress?: string | null;
+    } = { deliveryType: next };
+    if (next === "COLLECTION_SERVICE") {
+      const trimmed = collectionAddress.trim();
+      body.collectionAddress = trimmed || job.customer?.address?.trim() || null;
+    }
+    try {
+      const res = await fetch(`/api/jobs/${job.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setDeliveryType(job.deliveryType);
+        setError(data.error ?? "Failed to update delivery type");
+        return;
+      }
+      onJobUpdated(data as Job);
+    } catch {
+      setDeliveryType(job.deliveryType);
+      setError("Failed to update delivery type");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const persistCollectionAddress = async () => {
+    if (!onJobUpdated || deliveryType !== "COLLECTION_SERVICE") return;
+    const trimmed = collectionAddress.trim();
+    const current = (job.collectionAddress ?? "").trim();
+    if (trimmed === current) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/jobs/${job.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ collectionAddress: trimmed || null }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setCollectionAddress(job.collectionAddress ?? "");
+        setError(data.error ?? "Failed to update collection address");
+        return;
+      }
+      onJobUpdated(data as Job);
+    } catch {
+      setCollectionAddress(job.collectionAddress ?? "");
+      setError("Failed to update collection address");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const label =
+    deliveryType === "COLLECTION_SERVICE" ? "Collection" : "Drop-off";
+
+  if (!canEdit) {
+    return (
+      <div>
+        <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">
+          Booking type
+        </h3>
+        <p className="text-sm text-slate-900">{label}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">
+        Booking type
+      </h3>
+      <select
+        value={deliveryType}
+        disabled={saving}
+        onChange={(e) => {
+          const next = e.target.value as DeliveryType;
+          setDeliveryType(next);
+          void persistDeliveryType(next);
+        }}
+        className="w-full max-w-xs px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none disabled:opacity-60"
+      >
+        <option value="DROP_OFF_AT_SHOP">Drop-off at shop</option>
+        {showCollectionOption && (
+          <option value="COLLECTION_SERVICE">Collection service</option>
+        )}
+      </select>
+      {deliveryType === "COLLECTION_SERVICE" && showCollectionOption && (
+        <div className="mt-3">
+          <label className="block text-xs font-medium text-slate-600 mb-1">
+            Collection address
+          </label>
+          <input
+            type="text"
+            value={collectionAddress}
+            disabled={saving}
+            onChange={(e) => setCollectionAddress(e.target.value)}
+            onBlur={() => void persistCollectionAddress()}
+            placeholder={job.customer?.address || "Pickup/delivery address"}
+            className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none disabled:opacity-60 placeholder:text-slate-400"
+          />
+          <p className="text-xs text-slate-500 mt-1">
+            Collection fee is added or removed on the invoice when you change booking type.
+          </p>
+        </div>
+      )}
+      {saving && <p className="text-xs text-slate-400 mt-1">Saving…</p>}
+      {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
     </div>
   );
 }
@@ -947,6 +1090,7 @@ function JobDetailsDateFields({
     job.collectionWindowEnd,
     job.collectionReturnWindowStart,
     job.collectionReturnWindowEnd,
+    job.deliveryType,
     formatDateInputValue,
     shopTimezone,
   ]);
@@ -2279,15 +2423,6 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
             >
               {STAGE_LABELS[job.stage as Stage]}
             </span>
-            <span
-              className={`text-xs font-medium px-2 py-1 rounded ${
-                job.deliveryType === "COLLECTION_SERVICE"
-                  ? "bg-amber-100 text-amber-800"
-                  : "bg-slate-100 text-slate-800"
-              }`}
-            >
-              {job.deliveryType === "COLLECTION_SERVICE" ? "Collection" : "Drop-off"}
-            </span>
             {job.paymentStatus === "PAID" ? (
               <span className="text-xs font-medium px-2 py-1 rounded bg-emerald-100 text-emerald-800 whitespace-nowrap">
                 Paid
@@ -2406,6 +2541,14 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
           )}
 
           <JobBikeSection
+            job={job}
+            onJobUpdated={(updated) => {
+              setJob(updated);
+              onJobUpdated?.(updated);
+            }}
+          />
+
+          <JobDeliveryTypeSection
             job={job}
             onJobUpdated={(updated) => {
               setJob(updated);

@@ -1,8 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type { Job, Stage } from "@/lib/types";
+import type { DeliveryType, Job, Stage } from "@/lib/types";
 import { getJobBikeDisplayTitle, getDisplayPartsForJobBikeRow } from "@/lib/job-display";
 import { useUnreadChatCustomerIds } from "@/contexts/StaffChatAttentionContext";
 import { useAppFeatures } from "@/contexts/AppFeaturesContext";
@@ -50,6 +51,102 @@ function formatDate(d: Date | string | null) {
   });
 }
 
+function JobDeliveryTypeControl({
+  job,
+  onJobUpdated,
+}: {
+  job: Job;
+  onJobUpdated?: (job: Job) => void;
+}) {
+  const features = useAppFeatures();
+  const [deliveryType, setDeliveryType] = useState<DeliveryType>(job.deliveryType);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const showCollectionOption =
+    features.collectionServiceEnabled || job.deliveryType === "COLLECTION_SERVICE";
+
+  useEffect(() => {
+    setDeliveryType(job.deliveryType);
+    setError(null);
+  }, [job.id, job.deliveryType]);
+
+  const badgeClass =
+    deliveryType === "COLLECTION_SERVICE"
+      ? "bg-amber-100 text-amber-800"
+      : "bg-slate-100 text-slate-700";
+
+  if (!onJobUpdated) {
+    return (
+      <span className={`text-xs font-semibold px-2.5 py-1 rounded-lg ${badgeClass}`}>
+        {deliveryType === "COLLECTION_SERVICE" ? "Collection" : "Drop-off"}
+      </span>
+    );
+  }
+
+  const persistDeliveryType = async (next: DeliveryType) => {
+    if (next === job.deliveryType) return;
+    setSaving(true);
+    setError(null);
+    const body: {
+      deliveryType: DeliveryType;
+      collectionAddress?: string | null;
+    } = { deliveryType: next };
+    if (next === "COLLECTION_SERVICE") {
+      const addr = (job.collectionAddress ?? job.customer?.address ?? "").trim();
+      body.collectionAddress = addr || null;
+    }
+    try {
+      const res = await fetch(`/api/jobs/${job.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setDeliveryType(job.deliveryType);
+        setError(data.error ?? "Failed to update booking type");
+        return;
+      }
+      onJobUpdated(data as Job);
+    } catch {
+      setDeliveryType(job.deliveryType);
+      setError("Failed to update booking type");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div
+      className="min-w-0"
+      onClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      <select
+        value={deliveryType}
+        disabled={saving}
+        onChange={(e) => {
+          const next = e.target.value as DeliveryType;
+          setDeliveryType(next);
+          void persistDeliveryType(next);
+        }}
+        aria-label="Booking type"
+        title={error ?? undefined}
+        className={`text-xs font-semibold px-2 py-1 rounded-lg border-0 cursor-pointer focus:ring-2 focus:ring-indigo-200 focus:outline-none disabled:opacity-60 touch-manipulation max-w-full ${badgeClass}`}
+      >
+        <option value="DROP_OFF_AT_SHOP">Drop-off</option>
+        {showCollectionOption && (
+          <option value="COLLECTION_SERVICE">Collection</option>
+        )}
+      </select>
+      {error && (
+        <p className="text-[10px] text-red-600 mt-0.5 max-w-[140px] leading-tight">{error}</p>
+      )}
+    </div>
+  );
+}
+
 export function JobCardContent({
   job,
   onAccept,
@@ -59,6 +156,7 @@ export function JobCardContent({
   variant = "card",
   notifyCustomer = true,
   onNotifyCustomerChange,
+  onJobUpdated,
 }: {
   job: Job;
   onAccept?: (jobId: string) => void;
@@ -71,6 +169,8 @@ export function JobCardContent({
   /** When false, board actions skip customer email/SMS for this job. */
   notifyCustomer?: boolean;
   onNotifyCustomerChange?: (notify: boolean) => void;
+  /** When set, booking type can be changed on the card (Collection ↔ Drop-off). */
+  onJobUpdated?: (job: Job) => void;
 }) {
   const features = useAppFeatures();
   const unreadChatCustomerIds = useUnreadChatCustomerIds();
@@ -117,15 +217,7 @@ export function JobCardContent({
     <div className={containerClass}>
       <div className="flex items-start justify-between gap-2 mb-2 flex-wrap">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span
-            className={`text-xs font-semibold px-2.5 py-1 rounded-lg ${
-              job.deliveryType === "COLLECTION_SERVICE"
-                ? "bg-amber-100 text-amber-800"
-                : "bg-slate-100 text-slate-700"
-            }`}
-          >
-            {job.deliveryType === "COLLECTION_SERVICE" ? "Collection" : "Drop-off"}
-          </span>
+          <JobDeliveryTypeControl job={job} onJobUpdated={onJobUpdated} />
           {job.paymentStatus === "PAID" ? (
             <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 whitespace-nowrap">
               Paid
@@ -367,6 +459,7 @@ interface JobCardProps {
   onStageChange?: (stage: Stage) => void;
   notifyCustomer?: boolean;
   onNotifyCustomerChange?: (notify: boolean) => void;
+  onJobUpdated?: (job: Job) => void;
 }
 
 export function JobCard({
@@ -379,6 +472,7 @@ export function JobCard({
   onStageChange,
   notifyCustomer,
   onNotifyCustomerChange,
+  onJobUpdated,
 }: JobCardProps) {
   const {
     attributes,
@@ -435,6 +529,7 @@ export function JobCard({
           onStageChange={onStageChange}
           notifyCustomer={notifyCustomer}
           onNotifyCustomerChange={onNotifyCustomerChange}
+          onJobUpdated={onJobUpdated}
         />
       )}
     </div>

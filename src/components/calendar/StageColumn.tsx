@@ -42,6 +42,7 @@ interface StageColumnProps {
   onStageChange?: JobStageChangeHandler;
   jobNotifyCustomer?: (jobId: string) => boolean;
   onJobNotifyCustomerChange?: (jobId: string, notify: boolean) => void;
+  onJobUpdated?: (job: Job) => void;
 }
 
 export function StageColumn({
@@ -55,6 +56,7 @@ export function StageColumn({
   onStageChange,
   jobNotifyCustomer,
   onJobNotifyCustomerChange,
+  onJobUpdated,
 }: StageColumnProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: stage,
@@ -102,6 +104,7 @@ export function StageColumn({
                     ? (notify) => onJobNotifyCustomerChange(job.id, notify)
                     : undefined
                 }
+                onJobUpdated={onJobUpdated}
               />
             ))
           ) : (

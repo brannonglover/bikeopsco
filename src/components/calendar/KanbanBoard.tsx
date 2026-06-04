@@ -219,6 +219,34 @@ export function KanbanBoard() {
     return next;
   }, []);
 
+  const handleJobUpdated = useCallback(
+    (updated: Job) => {
+      if (updated.archivedAt || updated.stage === "CANCELLED") {
+        pendingBoardMovesRef.current.delete(updated.id);
+        setSelectedJob(null);
+        setJobs((prev) => prev.filter((j) => j.id !== updated.id));
+        return;
+      }
+      const mergeFromUpdate = (current: Job) => {
+        const merged = mergeJobPreservingInvoiceDetails(current, updated);
+        const ownMove = pendingBoardMovesRef.current.get(updated.id);
+        if (ownMove && merged.stage !== ownMove.stage) {
+          return withOptimisticStageChange(merged, ownMove.stage);
+        }
+        return merged;
+      };
+      setSelectedJob((prev) =>
+        prev?.id === updated.id ? mergeFromUpdate(prev) : prev
+      );
+      setJobs((prev) =>
+        applyPendingBoardMoves(
+          prev.map((j) => (j.id === updated.id ? mergeFromUpdate(j) : j))
+        )
+      );
+    },
+    [applyPendingBoardMoves]
+  );
+
   const fetchJobs = useCallback((opts?: { silent?: boolean }) => {
     if (!opts?.silent) setLoading(true);
     fetch("/api/jobs?view=board", { cache: "no-store" })
@@ -635,31 +663,7 @@ export function KanbanBoard() {
         onDismissIntent={() => {
           dismissDateToastJobIdRef.current = selectedJob?.id ?? null;
         }}
-        onJobUpdated={(updated) => {
-          // Archived or cancelled jobs are not shown on the active board.
-          if (updated.archivedAt || updated.stage === "CANCELLED") {
-            pendingBoardMovesRef.current.delete(updated.id);
-            setSelectedJob(null);
-            setJobs((prev) => prev.filter((j) => j.id !== updated.id));
-            return;
-          }
-          const mergeFromDetail = (current: Job) => {
-            const merged = mergeJobPreservingInvoiceDetails(current, updated);
-            const ownMove = pendingBoardMovesRef.current.get(updated.id);
-            if (ownMove && merged.stage !== ownMove.stage) {
-              return withOptimisticStageChange(merged, ownMove.stage);
-            }
-            return merged;
-          };
-          setSelectedJob((prev) =>
-            prev?.id === updated.id ? mergeFromDetail(prev) : prev
-          );
-          setJobs((prev) =>
-            applyPendingBoardMoves(
-              prev.map((j) => (j.id === updated.id ? mergeFromDetail(j) : j))
-            )
-          );
-        }}
+        onJobUpdated={handleJobUpdated}
         onJobDateSaved={(field, jobId) => {
           if (dismissDateToastJobIdRef.current !== jobId) return;
           dismissDateToastJobIdRef.current = null;
@@ -850,6 +854,7 @@ export function KanbanBoard() {
               onStageChange={patchJobStage}
               jobNotifyCustomer={jobNotifyCustomer}
               onJobNotifyCustomerChange={onJobNotifyCustomerChange}
+              onJobUpdated={handleJobUpdated}
             />
           ))}
         </div>
