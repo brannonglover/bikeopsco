@@ -4,6 +4,8 @@ import {
   findCustomerIdBySmsFrom,
   findOrCreateConversationForInboundSms,
   getTwilioInboundWebhookUrl,
+  importTwilioInboundMedia,
+  parseTwilioInboundMedia,
   validateTwilioWebhook,
 } from "@/lib/chat-sms";
 import { normalizePhone } from "@/lib/phone";
@@ -33,7 +35,7 @@ function twimlMessage(body?: string): NextResponse {
 }
 
 /**
- * Twilio inbound SMS → customer chat message.
+ * Twilio inbound SMS/MMS → customer chat message.
  * Configure on your Twilio number: Messaging → "A message comes in" →
  * POST https://YOUR_DOMAIN/api/webhooks/twilio/sms
  */
@@ -91,11 +93,11 @@ export async function POST(request: NextRequest) {
     return twimlMessage();
   }
 
-  let bodyText = bodyRaw.trim();
-  if (!bodyText && numMedia > 0) {
-    bodyText = "[Photo sent via SMS]";
-  }
-  if (!bodyText) {
+  const bodyText = bodyRaw.trim();
+  const mediaItems = parseTwilioInboundMedia(params);
+  const hasMedia = numMedia > 0 || mediaItems.length > 0;
+
+  if (!bodyText && !hasMedia) {
     return twimlMessage();
   }
 
@@ -105,7 +107,7 @@ export async function POST(request: NextRequest) {
     return twimlMessage();
   }
 
-  const consentKeyword = parseSmsConsentKeyword(bodyText);
+  const consentKeyword = bodyText ? parseSmsConsentKeyword(bodyText) : null;
   if (consentKeyword === "stop") {
     await prisma.customer.updateMany({
       where: { id: customerId, shopId: shop.id },
@@ -135,14 +137,30 @@ export async function POST(request: NextRequest) {
     customerId
   );
 
+  const importedAttachments = await importTwilioInboundMedia(
+    shop.id,
+    mediaItems
+  );
+  if (!bodyText && importedAttachments.length === 0) {
+    console.warn("Twilio MMS: no usable media in inbound message", messageSid);
+    return twimlMessage();
+  }
+
   try {
     const message = await prisma.message.create({
       data: {
         shopId: shop.id,
         conversationId: conversation.id,
         sender: "CUSTOMER",
-        body: bodyText,
+        body: bodyText || null,
         smsSid: messageSid,
+        attachments: importedAttachments.length
+          ? {
+              connect: importedAttachments.map((attachment) => ({
+                id: attachment.id,
+              })),
+            }
+          : undefined,
       },
     });
 

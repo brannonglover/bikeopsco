@@ -7,9 +7,9 @@ const TWILIO_SETUP_STEPS = [
       "Complete Twilio's business verification and toll-free or A2P 10DLC registration so your number can send to customers in production.",
   },
   {
-    title: "Buy an SMS-capable phone number",
+    title: "Buy an SMS/MMS-capable phone number",
     description:
-      "Use a number that can send and receive SMS so customer replies appear in Bike Ops Chat. Configure it under Phone Numbers in the Twilio Console.",
+      "Use a number that can send and receive SMS (and MMS for photos) so customer replies and images appear in Bike Ops Chat. Configure it under Phone Numbers in the Twilio Console.",
   },
   {
     title: "Copy Account SID and Auth Token",
@@ -70,7 +70,7 @@ export default function TwilioSettingsPage() {
             <PhoneCall className="h-5 w-5 text-amber-600 dark:text-amber-400" aria-hidden />
             <h2 className="mt-2 text-sm font-semibold text-foreground">Two-way replies</h2>
             <p className="mt-1 text-xs leading-5 text-text-secondary">
-              Inbound SMS webhooks let customer replies land in the Bike Ops chat inbox.
+              Inbound SMS/MMS webhooks let customer replies and photos land in the Bike Ops chat inbox.
             </p>
           </div>
           <div className="rounded-lg border border-surface-border bg-subtle-bg p-3">

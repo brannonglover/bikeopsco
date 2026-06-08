@@ -71,9 +71,10 @@ TWILIO_PHONE_NUMBER="+15551234567"
 ```
 
 - Get credentials from [console.twilio.com](https://console.twilio.com).
-- Use a number that can send and receive SMS for two-way chat.
+- Use a number that can send and receive SMS (and MMS for customer photos) for two-way chat.
 - Test outbound SMS with `GET /api/sms/test?to=%2B15551234567`.
 - For inbound SMS replies, point your Twilio number webhook to `https://your-domain.com/api/webhooks/twilio/sms`.
+- Customer photos sent by MMS are saved to chat when `BLOB_READ_WRITE_TOKEN` is configured (same as in-app chat uploads).
 - If webhook signature validation fails behind a proxy, set `TWILIO_WEBHOOK_URL` to the exact URL configured in Twilio.
 
 See **Settings → Twilio SMS** in the app for a full setup checklist.
