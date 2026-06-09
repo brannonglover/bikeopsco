@@ -337,6 +337,8 @@ function ChatPageContent() {
   const [, setTypingTick] = useState(0);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const selectedIdRef = useRef<string | null>(null);
+  const conversationsRef = useRef(conversations);
+  conversationsRef.current = conversations;
   const [customerActiveJobId, setCustomerActiveJobId] = useState<string | null>(null);
 
   useLayoutEffect(() => {
@@ -377,10 +379,17 @@ function ChatPageContent() {
   }, []);
 
   const fetchConversations = useCallback(async () => {
-    const res = await fetch("/api/conversations");
+    const res = await fetch("/api/conversations", { cache: "no-store" });
     if (res.ok) {
-      const data = await res.json();
-      setConversations(data);
+      const data = (await res.json()) as Conversation[];
+      setConversations((prev) => {
+        const selected = selectedIdRef.current;
+        const pinned = selected ? prev.find((c) => c.id === selected) : undefined;
+        if (pinned && !data.some((c) => c.id === pinned.id)) {
+          return [pinned, ...data];
+        }
+        return data;
+      });
     }
   }, []);
 
@@ -489,46 +498,62 @@ function ChatPageContent() {
     deepLinkConversationRef.current = conversationIdFromUrl;
   }, [loading, conversationIdFromUrl, conversations, router]);
 
+  // Select an existing general thread when the inbox list catches up to ?customer=.
   useEffect(() => {
-    if (loading || !customerIdFromUrl) return;
+    if (!customerIdFromUrl) return;
 
     const existing = conversations.find(
       (c) => c.customerId === customerIdFromUrl && !c.jobId
     );
-    if (existing) {
-      setSelectedId(existing.id);
-      deepLinkCustomerRef.current = customerIdFromUrl;
-      router.replace("/chat", { scroll: false });
-      return;
-    }
+    if (!existing) return;
+
+    setSelectedId(existing.id);
+    deepLinkCustomerRef.current = customerIdFromUrl;
+    router.replace("/chat", { scroll: false });
+  }, [customerIdFromUrl, conversations, router]);
+
+  // Lazily create a general thread for ?customer= (do not depend on `conversations`:
+  // list polls re-run that effect and cancel the in-flight POST via cleanup).
+  useEffect(() => {
+    if (loading || !customerIdFromUrl) return;
+
+    const existing = conversationsRef.current.find(
+      (c) => c.customerId === customerIdFromUrl && !c.jobId
+    );
+    if (existing) return;
 
     if (deepLinkCustomerRef.current === customerIdFromUrl) return;
 
     deepLinkCustomerRef.current = customerIdFromUrl;
-    let cancelled = false;
-    fetch("/api/conversations", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ customerId: customerIdFromUrl }),
-    })
-      .then(async (res) => {
-        if (cancelled) return;
+    const requestCustomerId = customerIdFromUrl;
+
+    void (async () => {
+      try {
+        const res = await fetch("/api/conversations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          cache: "no-store",
+          body: JSON.stringify({ customerId: requestCustomerId }),
+        });
+        if (deepLinkCustomerRef.current !== requestCustomerId) return;
         if (res.ok) {
           const newConv = (await res.json()) as Conversation;
-          setConversations((prev) => [newConv, ...prev]);
+          setConversations((prev) => {
+            if (prev.some((c) => c.id === newConv.id)) return prev;
+            return [newConv, ...prev];
+          });
           setSelectedId(newConv.id);
           router.replace("/chat", { scroll: false });
         } else {
           deepLinkCustomerRef.current = null;
         }
-      })
-      .catch(() => {
-        deepLinkCustomerRef.current = null;
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [loading, customerIdFromUrl, conversations, router]);
+      } catch {
+        if (deepLinkCustomerRef.current === requestCustomerId) {
+          deepLinkCustomerRef.current = null;
+        }
+      }
+    })();
+  }, [loading, customerIdFromUrl, router]);
 
   useEffect(() => {
     if (!selectedId) {
