@@ -11,11 +11,11 @@ function safeServiceIds(value: unknown): string[] {
 
 export async function GET(request: NextRequest) {
   const token = await getToken({ req: request });
-  if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!token?.shopId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
     const entries = await prisma.waitlistEntry.findMany({
-      where: { status: "WAITING", archivedAt: null },
+      where: { shopId: token.shopId, status: "WAITING", archivedAt: null },
       orderBy: { createdAt: "asc" },
       include: { bikes: { orderBy: { sortOrder: "asc" } } },
     });

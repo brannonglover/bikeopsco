@@ -7,6 +7,7 @@ import { signOut, useSession } from "next-auth/react";
 import { SidebarNav } from "@/components/SidebarNav";
 import { CustomerMobileNav } from "@/components/CustomerMobileNav";
 import { StaffChatAttentionProvider } from "@/contexts/StaffChatAttentionContext";
+import { StaffWaitlistAttentionProvider } from "@/contexts/StaffWaitlistAttentionContext";
 import { AppFeaturesProvider, useAppFeatures } from "@/contexts/AppFeaturesContext";
 import { initNotificationSound } from "@/lib/notificationSound";
 import { BrandLogo, BrandingProvider, type BrandingResponse } from "@/components/BrandLogo";
@@ -201,9 +202,11 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
   }
 
   const isStaffChatPage = pathname === "/chat";
+  const isStaffWaitlistPage = pathname === "/waitlist";
   return (
     <AppFeaturesProvider>
       <FeatureRedirector />
+      <StaffWaitlistAttentionProvider syncEnabled={!isStaffWaitlistPage}>
       <StaffChatAttentionProvider syncEnabled={!isStaffChatPage}>
         <div className="flex min-h-screen flex-1 min-w-0">
           {/* Mobile header bar - safe area spacer then centered content bar */}
@@ -309,6 +312,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
           </main>
         </div>
       </StaffChatAttentionProvider>
+      </StaffWaitlistAttentionProvider>
     </AppFeaturesProvider>
   );
 }

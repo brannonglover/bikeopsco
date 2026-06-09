@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useStaffChatWaitingCount } from "@/contexts/StaffChatAttentionContext";
+import { useStaffWaitlistWaitingCount } from "@/contexts/StaffWaitlistAttentionContext";
 import { useAppFeatures } from "@/contexts/AppFeaturesContext";
 
 const NAV_LINKS = [
@@ -26,6 +27,7 @@ interface SidebarNavProps {
 export function SidebarNav({ onNavigate }: SidebarNavProps) {
   const pathname = usePathname();
   const chatWaitingCount = useStaffChatWaitingCount();
+  const waitlistWaitingCount = useStaffWaitlistWaitingCount();
   const features = useAppFeatures();
 
   const visibleLinks = NAV_LINKS.filter((l) => {
@@ -46,18 +48,25 @@ export function SidebarNav({ onNavigate }: SidebarNavProps) {
                 ? pathname === "/archive"
                 : pathname.startsWith(href);
         const showChatBadge = href === "/chat" && chatWaitingCount > 0;
+        const showWaitlistBadge = href === "/waitlist" && waitlistWaitingCount > 0;
         const chatLabel =
           showChatBadge && chatWaitingCount === 1
             ? "Chat, 1 conversation waiting for your reply"
             : showChatBadge
               ? `Chat, ${chatWaitingCount} conversations waiting for your reply`
               : undefined;
+        const waitlistLabel =
+          showWaitlistBadge && waitlistWaitingCount === 1
+            ? "Waitlist, 1 request waiting"
+            : showWaitlistBadge
+              ? `Waitlist, ${waitlistWaitingCount} requests waiting`
+              : undefined;
         return (
           <Link
             key={href}
             href={href}
             onClick={onNavigate}
-            aria-label={chatLabel}
+            aria-label={chatLabel ?? waitlistLabel}
             className={`px-3 py-3 rounded-lg font-medium transition-colors text-base touch-manipulation flex items-center gap-2 min-w-0 ${
               isActive
                 ? "text-white bg-slate-600 shadow-[inset_3px_0_0_#e49a32]"
@@ -69,6 +78,12 @@ export function SidebarNav({ onNavigate }: SidebarNavProps) {
               {showChatBadge && (
                 <span
                   className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.65)] ring-2 ring-white/35 animate-pulse"
+                  aria-hidden
+                />
+              )}
+              {showWaitlistBadge && (
+                <span
+                  className="h-2.5 w-2.5 shrink-0 rounded-full bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.65)] ring-2 ring-white/35 animate-pulse"
                   aria-hidden
                 />
               )}
