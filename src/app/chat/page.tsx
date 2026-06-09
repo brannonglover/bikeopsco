@@ -1091,9 +1091,9 @@ function ChatPageContent() {
                 </div>
                 {customerActiveJobId && (
                   <a
-                    href={`/?openJob=${encodeURIComponent(customerActiveJobId)}`}
+                    href={`/calendar?openJob=${encodeURIComponent(customerActiveJobId)}`}
                     className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors"
-                    title="Go to job card on the board"
+                    title="Open job details"
                   >
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} aria-hidden>
                       <rect x="3" y="3" width="7" height="7" />
