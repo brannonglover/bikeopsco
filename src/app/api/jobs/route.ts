@@ -11,12 +11,13 @@ import { computeJobSubtotal, computeTotalPaid, getJobPaymentSummary } from "@/li
 import { getShopForHost } from "@/lib/shop";
 import { getEffectiveEmailUpdatesConsent, getEffectiveSmsConsent } from "@/lib/sms-consent";
 import { normalizeJobCollectionWindowsForStorage } from "@/lib/normalize-job-collection-windows";
+import { optionalTrimmedString } from "@/lib/zod-helpers";
 
 export const dynamic = "force-dynamic";
 
 const bikeSchema = z.object({
   make: z.string().min(1),
-  model: z.string().min(1).optional().nullable(),
+  model: optionalTrimmedString,
   nickname: z.string().optional().nullable(),
   imageUrl: z.string().optional().nullable(),
   bikeId: z.string().optional().nullable(),
@@ -465,7 +466,7 @@ export async function POST(request: NextRequest) {
           shopId,
           jobId: newJob.id,
           make: b.make,
-          model: b.model,
+          model: b.model?.trim() || null,
           nickname: b.nickname ?? null,
           imageUrl: b.imageUrl ?? null,
           bikeId: b.bikeId,

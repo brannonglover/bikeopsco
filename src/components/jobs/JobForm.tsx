@@ -61,6 +61,14 @@ function getDefaultDropOffDateTime(): string {
   return `${year}-${month}-${day}T09:00`;
 }
 
+function parseNewCustomerName(input: string): { firstName: string; lastName: string | null } {
+  const trimmed = input.trim();
+  const parts = trimmed.split(/\s+/);
+  const firstName = parts[0] ?? trimmed;
+  const lastName = parts.length > 1 ? parts.slice(1).join(" ") : null;
+  return { firstName, lastName };
+}
+
 interface Customer {
   id: string;
   firstName: string;
@@ -94,7 +102,9 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
   const [services, setServices] = useState<Service[]>([]);
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
   const [customerInput, setCustomerInput] = useState("");
+  const [customerEmail, setCustomerEmail] = useState("");
   const [serviceSearch, setServiceSearch] = useState("");
+  const [servicesLoading, setServicesLoading] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -153,6 +163,7 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
   );
   const showCreateOption =
     customerInput.trim().length > 0 && !exactMatch && !selectedCustomer;
+  const showNewCustomerFields = !selectedCustomer && customerInput.trim().length > 0;
 
   /** Load saved bikes when a customer is selected or when the typed name exactly matches a search result (dropdown click not required). */
   const resolvedCustomerIdForBikes = useMemo(
@@ -225,10 +236,19 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
   }, [fetchCustomerBikes, resolvedCustomerIdForBikes]);
 
   useEffect(() => {
-    fetch("/api/services")
-      .then((res) => res.json())
-      .then((data) => setServices(Array.isArray(data) ? data : []));
-  }, []);
+    const q = serviceSearch.trim();
+    setServicesLoading(true);
+    const timer = setTimeout(() => {
+      const url = q
+        ? `/api/services?q=${encodeURIComponent(q)}`
+        : "/api/services";
+      fetch(url)
+        .then((res) => res.json())
+        .then((data) => setServices(Array.isArray(data) ? data : []))
+        .finally(() => setServicesLoading(false));
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [serviceSearch]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -243,21 +263,24 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
   const selectCustomer = (customer: Customer) => {
     customerIdField.onChange(customer.id);
     setCustomerInput(customerDisplayName(customer));
+    setCustomerEmail("");
     setShowDropdown(false);
   };
 
   const createAndSelectCustomer = async () => {
     const input = customerInput.trim();
     if (!input) return;
-    const parts = input.split(/\s+/);
-    const firstName = parts[0] ?? input;
-    const lastName = parts.length > 1 ? parts.slice(1).join(" ") : null;
+    const { firstName, lastName } = parseNewCustomerName(input);
     setIsCreating(true);
     try {
       const res = await fetch("/api/customers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ firstName, lastName }),
+        body: JSON.stringify({
+          firstName,
+          lastName,
+          email: customerEmail.trim() || null,
+        }),
       });
       if (!res.ok) {
         const text = await res.text();
@@ -284,6 +307,7 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
   const clearCustomer = () => {
     customerIdField.onChange("");
     setCustomerInput("");
+    setCustomerEmail("");
     setShowDropdown(true);
   };
 
@@ -301,13 +325,15 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
       if (match) {
         finalCustomerId = match.id;
       } else {
-        const parts = input.split(/\s+/);
-        const firstName = parts[0] ?? input;
-        const lastName = parts.length > 1 ? parts.slice(1).join(" ") : null;
+        const { firstName, lastName } = parseNewCustomerName(input);
         const customerRes = await fetch("/api/customers", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ firstName, lastName }),
+          body: JSON.stringify({
+            firstName,
+            lastName,
+            email: customerEmail.trim() || null,
+          }),
         });
         if (!customerRes.ok) {
           const text = await customerRes.text();
@@ -330,7 +356,10 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
 
     const validBikes = data.bikes.filter((b) => b.make?.trim());
     const bikeMake = validBikes.length === 1 ? validBikes[0].make : "Multiple";
-    const bikeModel = validBikes.length === 1 ? (validBikes[0].model ?? "") : `${validBikes.length} bikes`;
+    const bikeModel =
+      validBikes.length === 1
+        ? validBikes[0].model?.trim() || null
+        : `${validBikes.length} bikes`;
 
     const res = await fetch("/api/jobs", {
       method: "POST",
@@ -340,7 +369,7 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
         bikeModel,
         bikes: validBikes.map((b) => ({
           make: b.make,
-          model: b.model,
+          model: b.model?.trim() || null,
           nickname: b.nickname || null,
           imageUrl: b.imageUrl || null,
           bikeId: b.bikeId || null,
@@ -413,7 +442,10 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
               onChange={(e) => {
                 setCustomerInput(e.target.value);
                 setShowDropdown(true);
-                if (!e.target.value) customerIdField.onChange("");
+                if (!e.target.value) {
+                  customerIdField.onChange("");
+                  setCustomerEmail("");
+                }
               }}
               onFocus={() => setShowDropdown(true)}
               placeholder="Type name to search or create..."
@@ -465,6 +497,18 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
                   )}
                 </>
               )}
+            </div>
+          )}
+          {showNewCustomerFields && (
+            <div className="mt-2">
+              <label className="block text-xs font-medium text-slate-500 mb-1">Email (optional)</label>
+              <input
+                type="email"
+                value={customerEmail}
+                onChange={(e) => setCustomerEmail(e.target.value)}
+                placeholder="jane@example.com"
+                className="w-full min-w-0 px-4 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+              />
             </div>
           )}
         </div>
@@ -596,7 +640,9 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
           <p className="text-xs text-slate-500 mb-2">
             Select the services being done on this bike
           </p>
-          {services.length === 0 ? (
+          {servicesLoading && services.length === 0 ? (
+            <p className="text-sm text-slate-500 py-2">Loading services...</p>
+          ) : services.length === 0 ? (
             <p className="text-sm text-slate-500 py-2">
               No services defined yet.{" "}
               <a href="/services" className="text-indigo-600 hover:underline">
@@ -613,8 +659,16 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
                 placeholder="Search services..."
                 className="w-full min-w-0 px-3 py-2 mb-2 border border-slate-200 rounded-xl text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-transparent"
               />
-              <div className="border border-slate-200 rounded-lg p-3 max-h-40 overflow-y-auto space-y-2">
-                {filteredServices.map((s) => {
+              {serviceSearch.trim() && !servicesLoading && filteredServices.length > 0 && (
+                <p className="text-xs text-slate-500 mb-2">
+                  {filteredServices.length} matching service{filteredServices.length === 1 ? "" : "s"}
+                </p>
+              )}
+              <div className="border border-slate-200 rounded-lg p-3 max-h-72 overflow-y-auto space-y-2">
+                {servicesLoading && filteredServices.length === 0 ? (
+                  <p className="text-sm text-slate-500 py-2">Searching services...</p>
+                ) : (
+                  filteredServices.map((s) => {
                   const price = typeof s.price === "string" ? parseFloat(s.price) : Number(s.price);
                   const isSelected = selectedServiceIds.includes(s.id);
                   return (
@@ -638,7 +692,8 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
                       <Price amount={price} variant="inline" />
                     </label>
                   );
-                })}
+                })
+                )}
               </div>
               {serviceSearch.trim() && filteredServices.length === 0 && (
                 <p className="text-sm text-slate-500 mt-2">No services match your search</p>

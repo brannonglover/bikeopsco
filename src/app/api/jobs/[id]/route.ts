@@ -12,10 +12,11 @@ import { hasJobReadAccess } from "@/lib/job-customer-access";
 import { getShopForHost } from "@/lib/shop";
 import { addCustomerSystemChatMessage } from "@/lib/system-chat";
 import { normalizeJobCollectionWindowsForStorage } from "@/lib/normalize-job-collection-windows";
+import { optionalTrimmedString } from "@/lib/zod-helpers";
 
 const bikeSchema = z.object({
   make: z.string().min(1),
-  model: z.string().min(1).optional().nullable(),
+  model: optionalTrimmedString,
   nickname: z.string().optional().nullable(),
   imageUrl: z.string().optional().nullable(),
   bikeId: z.string().optional().nullable(),
@@ -30,7 +31,7 @@ const updateJobSchema = z.object({
   notifyCustomer: z.boolean().optional(),
   cancellationReason: z.string().min(1).optional(),
   bikeMake: z.string().min(1).optional(),
-  bikeModel: z.string().min(1).optional(),
+  bikeModel: optionalTrimmedString,
   bikes: z.array(bikeSchema).optional(),
   /** Append a single bike to the job without touching existing JobBike workflow state. */
   addBike: bikeSchema.optional(),
