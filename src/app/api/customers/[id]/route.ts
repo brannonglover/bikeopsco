@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { sendMissedBookingConfirmationEmails } from "@/lib/email";
 import { coerceCustomerPhone } from "@/lib/phone";
 import { z } from "zod";
 
@@ -41,6 +42,15 @@ export async function PATCH(
     const body = await request.json();
     const data = updateCustomerSchema.parse(body);
 
+    const existing = await prisma.customer.findUnique({ where: { id } });
+    if (!existing) {
+      return NextResponse.json({ error: "Customer not found" }, { status: 404 });
+    }
+
+    const previousEmail = existing.email?.trim() ?? "";
+    const emailFirstAdded =
+      data.email !== undefined && !previousEmail && !!(data.email?.trim());
+
     const customer = await prisma.customer.update({
       where: { id },
       data: {
@@ -54,6 +64,12 @@ export async function PATCH(
         ...(data.notes !== undefined && { notes: data.notes }),
       },
     });
+
+    if (emailFirstAdded) {
+      void sendMissedBookingConfirmationEmails(customer).catch((e) =>
+        console.error("[PATCH customer] Missed booking confirmation send failed:", e)
+      );
+    }
 
     return NextResponse.json(customer);
   } catch (error) {

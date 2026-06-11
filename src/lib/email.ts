@@ -2,6 +2,7 @@ import { Resend } from "resend";
 import fs from "fs";
 import path from "path";
 import { formatCollectionWindowRange } from "./format-collection-window";
+import { getEffectiveEmailUpdatesConsent } from "./sms-consent";
 import { getShopTimezone } from "./shop-timezone";
 import type { ChatCustomerReminderDelivery } from "./chat-reminder-delivery";
 import { getCustomerBillUrl, getCustomerStatusUrl } from "./job-customer-access";
@@ -1282,6 +1283,72 @@ export function getTemplateForStage(
     COMPLETED: "bike_completed",
   };
   return map[stage] ?? null;
+}
+
+type CustomerForMissedBookingEmail = {
+  id: string;
+  shopId: string;
+  email: string | null;
+  emailUpdatesConsent?: boolean | null;
+};
+
+/**
+ * Send booking confirmation for BOOKED_IN jobs created without a customer email.
+ * Deduped via JobEmail records (same as job creation and stage-change sends).
+ */
+export async function sendMissedBookingConfirmationEmails(
+  customer: CustomerForMissedBookingEmail
+): Promise<void> {
+  if (!getEffectiveEmailUpdatesConsent(customer)) return;
+
+  const recipient = customer.email?.trim();
+  if (!recipient) return;
+
+  const { prisma } = await import("./db");
+  const jobs = await prisma.job.findMany({
+    where: {
+      customerId: customer.id,
+      shopId: customer.shopId,
+      stage: "BOOKED_IN",
+      archivedAt: null,
+    },
+    include: { customer: true },
+  });
+
+  for (const job of jobs) {
+    const templateSlug = getTemplateForStage("BOOKED_IN", job.deliveryType);
+    if (!templateSlug) continue;
+
+    const alreadySent = await prisma.jobEmail.findFirst({
+      where: { shopId: job.shopId, jobId: job.id, templateSlug },
+    });
+    if (alreadySent) continue;
+
+    const result = await sendJobEmail(templateSlug, recipient, {
+      id: job.id,
+      shopId: job.shopId,
+      bikeMake: job.bikeMake,
+      bikeModel: job.bikeModel,
+      stage: job.stage,
+      customer: job.customer
+        ? {
+            firstName: job.customer.firstName,
+            lastName: job.customer.lastName,
+          }
+        : null,
+      customerNotes: job.customerNotes,
+      dropOffDate: job.dropOffDate,
+      pickupDate: job.pickupDate,
+      collectionWindowStart: job.collectionWindowStart,
+      collectionWindowEnd: job.collectionWindowEnd,
+    });
+    if (!result.ok) {
+      console.error(
+        `[Customer email added] Booking confirmation failed for job ${job.id}:`,
+        result.error
+      );
+    }
+  }
 }
 
 export interface JobServiceForInvoice {
