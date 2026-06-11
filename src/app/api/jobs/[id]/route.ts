@@ -29,6 +29,8 @@ const updateJobSchema = z.object({
   archived: z.boolean().optional(),
   /** When false, skip customer email and SMS for this update (stage / pending rejection). Defaults to true if omitted. */
   notifyCustomer: z.boolean().optional(),
+  /** When true, send stage notification even if one was already sent for this stage. */
+  resendNotification: z.boolean().optional(),
   cancellationReason: z.string().min(1).optional(),
   bikeMake: z.string().min(1).optional(),
   bikeModel: optionalTrimmedString,
@@ -142,7 +144,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const features = await getAppFeatures();
+    const features = await getAppFeatures(shop.id);
     const { id } = params;
     const body = await request.json();
     const data = updateJobSchema.parse(body);
@@ -171,6 +173,9 @@ export async function PATCH(
     if (!existingJob) {
       return NextResponse.json({ error: "Job not found" }, { status: 404 });
     }
+
+    const stageChanged =
+      data.stage !== undefined && data.stage !== existingJob.stage;
 
     const updateData: Record<string, unknown> = {};
     if (data.stage !== undefined) updateData.stage = data.stage;
@@ -249,14 +254,13 @@ export async function PATCH(
         ? data.workingOnJobBikeId
         : autoWorkingOnJobBikeId;
 
-    if (data.stage !== undefined && data.stage !== existingJob.stage) {
+    if (stageChanged) {
       updateData.completedAt = data.stage === "COMPLETED" ? new Date() : null;
+      updateData.columnSortOrder = null;
     }
 
-    // Reset column sort order when moving between stages so the job falls back
-    // to dropOffDate ordering in its new column.
-    if (data.stage !== undefined && data.stage !== existingJob.stage) {
-      updateData.columnSortOrder = null;
+    if (!stageChanged && data.stage !== undefined) {
+      delete updateData.stage;
     }
 
     if (data.bikes !== undefined) {
@@ -281,10 +285,12 @@ export async function PATCH(
     }
 
     const job = await prisma.$transaction(async (tx) => {
-      await tx.job.update({
-        where: { id, shopId: shop.id },
-        data: updateData,
-      });
+      if (Object.keys(updateData).length > 0) {
+        await tx.job.update({
+          where: { id, shopId: shop.id },
+          data: updateData,
+        });
+      }
       if (workingOnBikeIdToClearWaiting) {
         await tx.jobBike.update({
           where: { id: workingOnBikeIdToClearWaiting, jobId: id, shopId: shop.id },
@@ -430,6 +436,7 @@ export async function PATCH(
       }
       /** Only when the job actually moves into this column — not idempotent WOP PATCHs (would re-set waiting after resume / unwait). */
       if (
+        stageChanged &&
         data.stage === "WAITING_ON_PARTS" &&
         existingJob.stage !== "WAITING_ON_PARTS" &&
         existingJob.workingOnJobBikeId &&
@@ -443,6 +450,7 @@ export async function PATCH(
       }
       /** Clear the active-bike pointer whenever the job leaves WORKING_ON (WAITING_ON_PARTS already handles its own branch above). */
       if (
+        stageChanged &&
         data.stage !== undefined &&
         data.stage !== "WORKING_ON" &&
         data.stage !== "WAITING_ON_PARTS" &&
@@ -451,7 +459,7 @@ export async function PATCH(
         await tx.job.update({ where: { id, shopId: shop.id }, data: { workingOnJobBikeId: null } });
       }
       /** Dragging the card out of Waiting on parts (or any other column) must drop bike-level flags; only staying in WAITING_ON_PARTS keeps them. */
-      if (data.stage !== undefined && data.stage !== "WAITING_ON_PARTS") {
+      if (stageChanged && data.stage !== undefined && data.stage !== "WAITING_ON_PARTS") {
         await tx.jobBike.updateMany({
           where: {
             shopId: shop.id,
@@ -541,7 +549,7 @@ export async function PATCH(
             emailPromise,
             smsPromise,
           ]);
-          if (customerEmail && templateSlug && !emailAlreadySent) {
+          if (customerEmail && templateSlug && (!emailAlreadySent || data.resendNotification)) {
             if (data.stage === "BIKE_READY") {
               const totalPaid = computeTotalPaid(job.payments);
               sendBikeReadyInvoiceEmail(job, totalPaid).catch(console.error);
@@ -549,7 +557,7 @@ export async function PATCH(
               sendJobEmail(templateSlug, customerEmail, job).catch(console.error);
             }
           }
-          if (canSendSms && customerPhone && smsTemplateSlug && !smsAlreadySent) {
+          if (canSendSms && customerPhone && smsTemplateSlug && (!smsAlreadySent || data.resendNotification)) {
             sendJobSms(smsTemplateSlug, customerPhone, job)
               .then((result) => {
                 if (!result.ok || !result.message || !features.chatEnabled || !job.customer?.id) {

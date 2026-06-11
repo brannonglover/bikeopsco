@@ -1296,6 +1296,65 @@ type CustomerForMissedBookingEmail = {
  * Send booking confirmation for BOOKED_IN jobs created without a customer email.
  * Deduped via JobEmail records (same as job creation and stage-change sends).
  */
+export async function sendBookingConfirmationForJob(
+  jobId: string,
+  opts?: { force?: boolean }
+): Promise<{ ok: boolean; error?: string; recipient?: string }> {
+  const { prisma } = await import("./db");
+  const job = await prisma.job.findUnique({
+    where: { id: jobId },
+    include: { customer: true },
+  });
+  if (!job) return { ok: false, error: "Job not found" };
+
+  if (job.stage !== "BOOKED_IN" && job.stage !== "PENDING_APPROVAL") {
+    return {
+      ok: false,
+      error: "Job is not in Booked In or Pending approval",
+    };
+  }
+
+  const recipient = getEffectiveEmailUpdatesConsent(job.customer)
+    ? job.customer?.email?.trim()
+    : null;
+  if (!recipient) {
+    return { ok: false, error: "No customer email or email updates disabled" };
+  }
+
+  const templateSlug = getTemplateForStage("BOOKED_IN", job.deliveryType);
+  if (!templateSlug) return { ok: false, error: "Template not found" };
+
+  if (!opts?.force) {
+    const alreadySent = await prisma.jobEmail.findFirst({
+      where: { shopId: job.shopId, jobId: job.id, templateSlug },
+    });
+    if (alreadySent) {
+      return { ok: false, error: "Booking confirmation was already sent for this job" };
+    }
+  }
+
+  const result = await sendJobEmail(templateSlug, recipient, {
+    id: job.id,
+    shopId: job.shopId,
+    bikeMake: job.bikeMake,
+    bikeModel: job.bikeModel,
+    stage: job.stage === "PENDING_APPROVAL" ? "BOOKED_IN" : job.stage,
+    customer: job.customer
+      ? {
+          firstName: job.customer.firstName,
+          lastName: job.customer.lastName,
+        }
+      : null,
+    customerNotes: job.customerNotes,
+    dropOffDate: job.dropOffDate,
+    pickupDate: job.pickupDate,
+    collectionWindowStart: job.collectionWindowStart,
+    collectionWindowEnd: job.collectionWindowEnd,
+  });
+
+  return result.ok ? { ok: true, recipient } : result;
+}
+
 export async function sendMissedBookingConfirmationEmails(
   customer: CustomerForMissedBookingEmail
 ): Promise<void> {
@@ -1316,33 +1375,8 @@ export async function sendMissedBookingConfirmationEmails(
   });
 
   for (const job of jobs) {
-    const templateSlug = getTemplateForStage("BOOKED_IN", job.deliveryType);
-    if (!templateSlug) continue;
-
-    const alreadySent = await prisma.jobEmail.findFirst({
-      where: { shopId: job.shopId, jobId: job.id, templateSlug },
-    });
-    if (alreadySent) continue;
-
-    const result = await sendJobEmail(templateSlug, recipient, {
-      id: job.id,
-      shopId: job.shopId,
-      bikeMake: job.bikeMake,
-      bikeModel: job.bikeModel,
-      stage: job.stage,
-      customer: job.customer
-        ? {
-            firstName: job.customer.firstName,
-            lastName: job.customer.lastName,
-          }
-        : null,
-      customerNotes: job.customerNotes,
-      dropOffDate: job.dropOffDate,
-      pickupDate: job.pickupDate,
-      collectionWindowStart: job.collectionWindowStart,
-      collectionWindowEnd: job.collectionWindowEnd,
-    });
-    if (!result.ok) {
+    const result = await sendBookingConfirmationForJob(job.id);
+    if (!result.ok && result.error !== "Booking confirmation was already sent for this job") {
       console.error(
         `[Customer email added] Booking confirmation failed for job ${job.id}:`,
         result.error
