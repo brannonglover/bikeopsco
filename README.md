@@ -131,6 +131,17 @@ When clicked, a modal opens with the booking form. Customers enter their info, b
 
 **Custom selector:** Use `data-bikeops-selector=".my-class"` on the script tag to target different elements.
 
+## Deployment
+
+| Environment | Git branch | URL |
+|-------------|------------|-----|
+| Production | `main` | `app.bikeops.co`, tenant subdomains |
+| Staging | `develop` | [dev.bikeops.co](https://dev.bikeops.co) |
+
+**Workflow:** feature/fix → push to `develop` → test on dev.bikeops.co → PR to `main` when ready.
+
+Full staging setup (Vercel domains, env vars, separate database): [docs/staging-environment.md](docs/staging-environment.md).
+
 ## Cron (3-day follow-up)
 
 On Vercel, the cron runs daily at 9:00 UTC. For local or other hosts, call:
