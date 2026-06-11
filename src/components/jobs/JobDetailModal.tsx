@@ -24,7 +24,7 @@ import {
   NO_TIME_SLOT_SELECTED,
 } from "@/lib/format-collection-window";
 import { toCalendarDateInTimezone } from "@/lib/timezone";
-import { keepForwardBoardStage } from "@/lib/board-stage-merge";
+import { mergeBoardJob } from "@/lib/board-stage-merge";
 import { ServiceName } from "@/components/ui/ServiceName";
 
 function formatChatPreviewTime(iso: string): string {
@@ -1919,7 +1919,7 @@ function mergeJobPreservingInvoiceDetails(prev: Job, next: Job): Job {
 
 function mergeFetchedJobWithLiveBoard(live: Job, fetched: Job): Job {
   const merged = mergeJobPreservingInvoiceDetails(live, fetched);
-  return keepForwardBoardStage(live, merged);
+  return mergeBoardJob(live, merged);
 }
 
 export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, onDismissIntent, onJobDateSaved, onJobDeleted }: JobDetailModalProps) {

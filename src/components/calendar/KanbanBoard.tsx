@@ -26,7 +26,10 @@ import type { Job, Stage } from "@/lib/types";
 import { getJobBikeDisplayTitle } from "@/lib/job-display";
 import { useAppFeatures } from "@/contexts/AppFeaturesContext";
 import { JOBS_REFRESH_EVENT } from "@/lib/jobs-refresh";
-import { keepForwardBoardStage } from "@/lib/board-stage-merge";
+import {
+  mergeBoardJob,
+  mergeBoardJobsFromFetch,
+} from "@/lib/board-stage-merge";
 
 function formatShortDate(d: Date | string | null) {
   if (!d) return null;
@@ -234,7 +237,7 @@ export function KanbanBoard() {
         if (ownMove && merged.stage !== ownMove.stage) {
           return withOptimisticStageChange(merged, ownMove.stage);
         }
-        return keepForwardBoardStage(current, merged);
+        return mergeBoardJob(current, merged);
       };
       setSelectedJob((prev) =>
         prev?.id === updated.id ? mergeFromUpdate(prev) : prev
@@ -253,17 +256,18 @@ export function KanbanBoard() {
     fetch("/api/jobs?view=board", { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => {
-        const next = applyPendingBoardMoves(
-          Array.isArray(data) ? (data as Job[]) : []
-        );
-        setJobs(next);
-        // Keep the detail modal in sync if it's open, without clobbering fields
-        // that aren't returned by the board view (e.g. jobServices/jobProducts).
-        setSelectedJob((prev) => {
-          if (!prev) return prev;
-          const refreshed = next.find((j) => j.id === prev.id);
-          if (!refreshed) return prev;
-          return mergeJobPreservingInvoiceDetails(prev, refreshed);
+        const incoming = Array.isArray(data) ? (data as Job[]) : [];
+        setJobs((prev) => {
+          const next = applyPendingBoardMoves(
+            mergeBoardJobsFromFetch(prev, incoming)
+          );
+          setSelectedJob((sel) => {
+            if (!sel) return sel;
+            const refreshed = next.find((j) => j.id === sel.id);
+            if (!refreshed) return sel;
+            return mergeJobPreservingInvoiceDetails(sel, refreshed);
+          });
+          return next;
         });
       })
       .catch(() => setJobs([]))
@@ -517,6 +521,7 @@ export function KanbanBoard() {
             void reorderColumnJobs(sortUpdates);
           }
         } else {
+          console.error("Failed to update job stage", res.status, await res.text().catch(() => ""));
           revert();
         }
       } catch (e) {

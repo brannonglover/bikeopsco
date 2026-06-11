@@ -35,3 +35,42 @@ export function keepForwardBoardStage(live: Job, incoming: Job): Job {
     workingOnJobBikeId: live.workingOnJobBikeId,
   };
 }
+
+function parseJobUpdatedAtMs(job: Job): number | null {
+  const ms = Date.parse(job.updatedAt);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+/**
+ * Merge a polled/refetched board row into what the client already shows. Stale responses
+ * (older updatedAt than a successful PATCH) must not revert stage; equal timestamps still
+ * use forward-stage protection for in-flight drags before updatedAt bumps.
+ */
+export function mergeBoardJob(live: Job, incoming: Job): Job {
+  const liveMs = parseJobUpdatedAtMs(live);
+  const incomingMs = parseJobUpdatedAtMs(incoming);
+
+  if (liveMs !== null && incomingMs !== null) {
+    if (incomingMs > liveMs) return incoming;
+    if (incomingMs < liveMs) {
+      return {
+        ...incoming,
+        stage: live.stage,
+        completedAt: live.completedAt,
+        workingOnJobBikeId: live.workingOnJobBikeId,
+        columnSortOrder: live.columnSortOrder ?? incoming.columnSortOrder,
+      };
+    }
+  }
+
+  return keepForwardBoardStage(live, incoming);
+}
+
+/** Apply {@link mergeBoardJob} for a full board poll/refetch payload. */
+export function mergeBoardJobsFromFetch(previous: Job[], incoming: Job[]): Job[] {
+  const prevById = new Map(previous.map((job) => [job.id, job]));
+  return incoming.map((job) => {
+    const live = prevById.get(job.id);
+    return live ? mergeBoardJob(live, job) : job;
+  });
+}

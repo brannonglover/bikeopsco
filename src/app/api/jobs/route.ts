@@ -2,13 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { Stage } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
-import { getToken } from "next-auth/jwt";
+import { getAuthorizedShopId } from "@/lib/api-auth";
 import { sendJobEmail, getTemplateForStage } from "@/lib/email";
 import { syncCollectionJobService } from "@/lib/collection-fee";
 import { sendPushToAllStaff } from "@/lib/push";
 import { getAppFeatures } from "@/lib/app-settings";
 import { computeJobSubtotal, computeTotalPaid, getJobPaymentSummary } from "@/lib/job-payments";
-import { getShopForHost } from "@/lib/shop";
 import { getEffectiveEmailUpdatesConsent, getEffectiveSmsConsent } from "@/lib/sms-consent";
 import { normalizeJobCollectionWindowsForStorage } from "@/lib/normalize-job-collection-windows";
 import { optionalTrimmedString } from "@/lib/zod-helpers";
@@ -42,18 +41,6 @@ const createJobSchema = z.object({
   customerNotes: z.string().optional().nullable(),
   serviceIds: z.array(z.string()).optional().default([]),
 });
-
-async function getAuthorizedShopId(request: NextRequest): Promise<string | null> {
-  const token = await getToken({ req: request });
-  if (!token?.shopId) return null;
-
-  const hostHeader =
-    request.headers.get("x-forwarded-host") ?? request.headers.get("host");
-  const shop = await getShopForHost(hostHeader);
-  if (!shop || shop.id !== token.shopId) return null;
-
-  return shop.id;
-}
 
 export async function GET(request: NextRequest) {
   const shopId = await getAuthorizedShopId(request);

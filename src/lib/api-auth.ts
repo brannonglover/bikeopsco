@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
 import { getToken } from "next-auth/jwt";
+import { authOptions } from "@/lib/auth";
 import { getShopForHost, type CurrentShop } from "@/lib/shop";
 
 export type StaffShopAuth =
@@ -12,9 +14,24 @@ export async function getRequestShop(request: NextRequest): Promise<CurrentShop 
   return getShopForHost(hostHeader);
 }
 
+/** Resolve staff shopId from JWT cookie and/or NextAuth session (browser fallback). */
+export async function resolveStaffShopId(request: NextRequest): Promise<string | null> {
+  const secret = process.env.NEXTAUTH_SECRET;
+  const token = await getToken({ req: request, secret });
+  if (typeof token?.shopId === "string") {
+    return token.shopId;
+  }
+
+  const session = await getServerSession(authOptions);
+  if (typeof session?.user?.shopId === "string") {
+    return session.user.shopId;
+  }
+
+  return null;
+}
+
 export async function requireStaffShop(request: NextRequest): Promise<StaffShopAuth> {
-  const token = await getToken({ req: request });
-  const tokenShopId = typeof token?.shopId === "string" ? token.shopId : null;
+  const tokenShopId = await resolveStaffShopId(request);
 
   if (!tokenShopId) {
     return {
@@ -32,4 +49,10 @@ export async function requireStaffShop(request: NextRequest): Promise<StaffShopA
   }
 
   return { ok: true, shop, shopId: tokenShopId };
+}
+
+/** Convenience for routes that only need the authorized shop id. */
+export async function getAuthorizedShopId(request: NextRequest): Promise<string | null> {
+  const auth = await requireStaffShop(request);
+  return auth.ok ? auth.shopId : null;
 }

@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import type { NextRequest } from "next/server";
-import { getToken } from "next-auth/jwt";
+import { resolveStaffShopId } from "@/lib/api-auth";
 import { getShopAppUrl } from "./env";
 
 const ACCESS_PARAM = "access";
@@ -104,11 +104,8 @@ export async function hasStaffJobAccess(
   request: NextRequest,
   shopId: string
 ): Promise<boolean> {
-  const token = await getToken({
-    req: request,
-    secret: process.env.NEXTAUTH_SECRET,
-  });
-  return Boolean(token?.shopId && token.shopId === shopId);
+  const tokenShopId = await resolveStaffShopId(request);
+  return Boolean(tokenShopId && tokenShopId === shopId);
 }
 
 /** Staff session or valid signed ?access= for this job. */

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { getToken } from "next-auth/jwt";
+import { requireStaffShop } from "@/lib/api-auth";
 import { sendBikeReadyInvoiceEmail, sendJobEmail, getTemplateForStage, sendBookingDeclinedEmail } from "@/lib/email";
 import { sendJobSms, getTemplateSlugForStage } from "@/lib/sms";
 import { syncCollectionJobService } from "@/lib/collection-fee";
@@ -131,19 +132,11 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const token = await getToken({ req: request });
-  if (!token?.shopId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requireStaffShop(request);
+  if (!auth.ok) return auth.response;
+  const shop = auth.shop;
 
   try {
-    const hostHeader =
-      request.headers.get("x-forwarded-host") ?? request.headers.get("host");
-    const shop = await getShopForHost(hostHeader);
-    if (!shop || shop.id !== token.shopId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const features = await getAppFeatures(shop.id);
     const { id } = params;
     const body = await request.json();
@@ -182,7 +175,7 @@ export async function PATCH(
     if (data.archived !== undefined) updateData.archivedAt = data.archived ? new Date() : null;
     if (data.cancellationReason !== undefined) updateData.cancellationReason = data.cancellationReason;
     if (data.bikeMake !== undefined) updateData.bikeMake = data.bikeMake;
-    if (data.bikeModel !== undefined) updateData.bikeModel = data.bikeModel;
+    if (data.bikeModel !== undefined) updateData.bikeModel = data.bikeModel ?? "";
     if (data.customerId !== undefined) updateData.customerId = data.customerId;
     if (data.deliveryType !== undefined) updateData.deliveryType = data.deliveryType;
     if (data.dropOffDate !== undefined) updateData.dropOffDate = data.dropOffDate ? new Date(data.dropOffDate) : null;
@@ -269,7 +262,8 @@ export async function PATCH(
           ? data.bikes
           : [{ make: existingJob.bikeMake, model: existingJob.bikeModel }];
       updateData.bikeMake = bikes.length === 1 ? bikes[0].make : "Multiple";
-      updateData.bikeModel = bikes.length === 1 ? bikes[0].model : `${bikes.length} bikes`;
+      updateData.bikeModel =
+        bikes.length === 1 ? (bikes[0].model ?? "") : `${bikes.length} bikes`;
     }
 
     if (data.addBike !== undefined) {
@@ -277,7 +271,7 @@ export async function PATCH(
       const totalCount = existingCount + 1;
       if (totalCount === 1) {
         updateData.bikeMake = data.addBike.make;
-        updateData.bikeModel = data.addBike.model;
+        updateData.bikeModel = data.addBike.model ?? "";
       } else {
         updateData.bikeMake = "Multiple";
         updateData.bikeModel = `${totalCount} bikes`;
