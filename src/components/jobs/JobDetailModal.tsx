@@ -24,6 +24,7 @@ import {
   NO_TIME_SLOT_SELECTED,
 } from "@/lib/format-collection-window";
 import { toCalendarDateInTimezone } from "@/lib/timezone";
+import { keepForwardBoardStage } from "@/lib/board-stage-merge";
 import { ServiceName } from "@/components/ui/ServiceName";
 
 function formatChatPreviewTime(iso: string): string {
@@ -1916,37 +1917,9 @@ function mergeJobPreservingInvoiceDetails(prev: Job, next: Job): Job {
   return merged;
 }
 
-/** Board column order — used to keep a drag-ahead stage when a slow GET returns an older stage. */
-const BOARD_STAGE_FLOW: Stage[] = [
-  "BOOKED_IN",
-  "RECEIVED",
-  "WORKING_ON",
-  "WAITING_ON_CUSTOMER",
-  "WAITING_ON_PARTS",
-  "BIKE_READY",
-  "COMPLETED",
-];
-
-function boardStageIndex(stage: Stage): number {
-  return BOARD_STAGE_FLOW.indexOf(stage);
-}
-
 function mergeFetchedJobWithLiveBoard(live: Job, fetched: Job): Job {
   const merged = mergeJobPreservingInvoiceDetails(live, fetched);
-  if (live.stage === fetched.stage) return merged;
-
-  const liveIdx = boardStageIndex(live.stage);
-  const fetchedIdx = boardStageIndex(fetched.stage);
-  if (liveIdx === -1 || fetchedIdx === -1 || liveIdx <= fetchedIdx) {
-    return merged;
-  }
-
-  return {
-    ...merged,
-    stage: live.stage,
-    completedAt: live.completedAt ?? merged.completedAt,
-    workingOnJobBikeId: live.workingOnJobBikeId,
-  };
+  return keepForwardBoardStage(live, merged);
 }
 
 export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, onDismissIntent, onJobDateSaved, onJobDeleted }: JobDetailModalProps) {
@@ -2008,7 +1981,7 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
         const merged = mergeFetchedJobWithLiveBoard(live, fetched);
         setJob(merged);
         // Keep the parent (board/archive list) in sync so the card updates too.
-        onJobUpdatedRef.current?.(fetched);
+        onJobUpdatedRef.current?.(merged);
       })
       .catch(() => {});
     return () => ac.abort();

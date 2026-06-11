@@ -26,6 +26,7 @@ import type { Job, Stage } from "@/lib/types";
 import { getJobBikeDisplayTitle } from "@/lib/job-display";
 import { useAppFeatures } from "@/contexts/AppFeaturesContext";
 import { JOBS_REFRESH_EVENT } from "@/lib/jobs-refresh";
+import { keepForwardBoardStage } from "@/lib/board-stage-merge";
 
 function formatShortDate(d: Date | string | null) {
   if (!d) return null;
@@ -233,7 +234,7 @@ export function KanbanBoard() {
         if (ownMove && merged.stage !== ownMove.stage) {
           return withOptimisticStageChange(merged, ownMove.stage);
         }
-        return merged;
+        return keepForwardBoardStage(current, merged);
       };
       setSelectedJob((prev) =>
         prev?.id === updated.id ? mergeFromUpdate(prev) : prev
