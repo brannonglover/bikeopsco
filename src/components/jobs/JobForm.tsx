@@ -103,6 +103,10 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
   const [customerInput, setCustomerInput] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
+  const [customerEntryMode, setCustomerEntryMode] = useState<"search" | "new">("search");
+  const [newFirstName, setNewFirstName] = useState("");
+  const [newLastName, setNewLastName] = useState("");
+  const [attachedCustomer, setAttachedCustomer] = useState<Customer | null>(null);
   const [serviceSearch, setServiceSearch] = useState("");
   const [servicesLoading, setServicesLoading] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -153,7 +157,9 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
     setValue("collectionWindowEnd", "");
   }, [features.collectionServiceEnabled, deliveryType, setValue]);
   const customerId = watch("customerId");
-  const selectedCustomer = customers.find((c) => c.id === customerId);
+  const selectedCustomer =
+    attachedCustomer ??
+    (customerId ? customers.find((c) => c.id === customerId) ?? null : null);
   const customerDisplayName = (c: Customer) =>
     c.lastName ? `${c.firstName} ${c.lastName}` : c.firstName;
   const exactMatch = customers.find(
@@ -163,7 +169,7 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
   );
   const showCreateOption =
     customerInput.trim().length > 0 && !exactMatch && !selectedCustomer;
-  const showNewCustomerFields = !selectedCustomer && customerInput.trim().length > 0;
+  const showCustomerEmailField = Boolean(selectedCustomer && !selectedCustomer.email);
 
   /** Load saved bikes when a customer is selected or when the typed name exactly matches a search result (dropdown click not required). */
   const resolvedCustomerIdForBikes = useMemo(
@@ -262,9 +268,122 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
 
   const selectCustomer = (customer: Customer) => {
     customerIdField.onChange(customer.id);
+    setAttachedCustomer(customer);
     setCustomerInput(customerDisplayName(customer));
-    setCustomerEmail("");
+    setCustomerEmail(customer.email ?? "");
     setShowDropdown(false);
+    setCustomerEntryMode("search");
+    setNewFirstName("");
+    setNewLastName("");
+  };
+
+  const openNewCustomerForm = () => {
+    customerIdField.onChange("");
+    setAttachedCustomer(null);
+    setCustomerEntryMode("new");
+    setShowDropdown(false);
+    if (customerInput.trim()) {
+      const { firstName, lastName } = parseNewCustomerName(customerInput.trim());
+      setNewFirstName(firstName);
+      setNewLastName(lastName ?? "");
+    } else {
+      setNewFirstName("");
+      setNewLastName("");
+    }
+    setCustomerEmail("");
+  };
+
+  const cancelNewCustomerForm = () => {
+    setCustomerEntryMode("search");
+    setNewFirstName("");
+    setNewLastName("");
+    setCustomerEmail("");
+  };
+
+  const createCustomerRecord = async (payload: {
+    firstName: string;
+    lastName: string | null;
+    email: string | null;
+  }): Promise<Customer | null> => {
+    const res = await fetch("/api/customers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      let msg = "Failed to create customer";
+      if (text) {
+        try {
+          const err = JSON.parse(text);
+          msg = typeof err.error === "string" ? err.error : err.error?.message || msg;
+        } catch {
+          msg = text.slice(0, 100);
+        }
+      }
+      alert(msg);
+      return null;
+    }
+    return (await res.json()) as Customer;
+  };
+
+  const saveCustomerEmailIfNeeded = async (customerId: string): Promise<boolean> => {
+    const email = customerEmail.trim();
+    if (!email) return true;
+
+    const customer =
+      (attachedCustomer?.id === customerId ? attachedCustomer : null) ??
+      customers.find((c) => c.id === customerId);
+    if (customer?.email) return true;
+
+    const res = await fetch(`/api/customers/${customerId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      let msg = "Failed to save customer email";
+      if (text) {
+        try {
+          const err = JSON.parse(text);
+          msg = typeof err.error === "string" ? err.error : err.error?.message || msg;
+        } catch {
+          msg = text.slice(0, 100);
+        }
+      }
+      alert(msg);
+      return false;
+    }
+    const updated = (await res.json()) as Customer;
+    setCustomers((prev) =>
+      prev.map((c) => (c.id === updated.id ? updated : c))
+    );
+    if (attachedCustomer?.id === updated.id) {
+      setAttachedCustomer(updated);
+    }
+    return true;
+  };
+
+  const createCustomerFromForm = async () => {
+    const firstName = newFirstName.trim();
+    if (!firstName) {
+      alert("First name is required");
+      return;
+    }
+    setIsCreating(true);
+    try {
+      const created = await createCustomerRecord({
+        firstName,
+        lastName: newLastName.trim() || null,
+        email: customerEmail.trim() || null,
+      });
+      if (!created) return;
+      setCustomers((prev) => [created, ...prev.filter((c) => c.id !== created.id)]);
+      selectCustomer(created);
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   const createAndSelectCustomer = async () => {
@@ -273,32 +392,14 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
     const { firstName, lastName } = parseNewCustomerName(input);
     setIsCreating(true);
     try {
-      const res = await fetch("/api/customers", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          firstName,
-          lastName,
-          email: customerEmail.trim() || null,
-        }),
+      const created = await createCustomerRecord({
+        firstName,
+        lastName,
+        email: customerEmail.trim() || null,
       });
-      if (!res.ok) {
-        const text = await res.text();
-        let msg = "Failed to create customer";
-        if (text) {
-          try {
-            const err = JSON.parse(text);
-            msg = typeof err.error === "string" ? err.error : err.error?.message || msg;
-          } catch {
-            msg = text.slice(0, 100);
-          }
-        }
-        alert(msg);
-        return;
-      }
-      const created = await res.json();
+      if (!created) return;
+      setCustomers((prev) => [created, ...prev.filter((c) => c.id !== created.id)]);
       selectCustomer(created);
-      setCustomers((prev) => [created, ...prev]);
     } finally {
       setIsCreating(false);
     }
@@ -306,8 +407,12 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
 
   const clearCustomer = () => {
     customerIdField.onChange("");
+    setAttachedCustomer(null);
     setCustomerInput("");
     setCustomerEmail("");
+    setCustomerEntryMode("search");
+    setNewFirstName("");
+    setNewLastName("");
     setShowDropdown(true);
   };
 
@@ -317,7 +422,17 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
     try {
     let finalCustomerId = data.customerId;
 
-    if (!finalCustomerId && customerInput.trim()) {
+    if (!finalCustomerId && customerEntryMode === "new" && newFirstName.trim()) {
+      const created = await createCustomerRecord({
+        firstName: newFirstName.trim(),
+        lastName: newLastName.trim() || null,
+        email: customerEmail.trim() || null,
+      });
+      if (!created) return;
+      finalCustomerId = created.id;
+      setAttachedCustomer(created);
+      customerIdField.onChange(created.id);
+    } else if (!finalCustomerId && customerInput.trim()) {
       const input = customerInput.trim();
       const match = customers.find(
         (c) => customerDisplayName(c).toLowerCase() === input.toLowerCase()
@@ -352,6 +467,11 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
         const created = await customerRes.json();
         finalCustomerId = created.id;
       }
+    }
+
+    if (finalCustomerId) {
+      const savedEmail = await saveCustomerEmailIfNeeded(finalCustomerId);
+      if (!savedEmail) return;
     }
 
     const validBikes = data.bikes.filter((b) => b.make?.trim());
@@ -432,84 +552,163 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
       )}
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 min-w-0">
         <div className="relative min-w-0" ref={dropdownRef}>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
-            Customer
-          </label>
-          <div className="relative">
-            <input
-              type="text"
-              value={customerInput}
-              onChange={(e) => {
-                setCustomerInput(e.target.value);
-                setShowDropdown(true);
-                if (!e.target.value) {
-                  customerIdField.onChange("");
-                  setCustomerEmail("");
-                }
-              }}
-              onFocus={() => setShowDropdown(true)}
-              placeholder="Type name to search or create..."
-              className="w-full min-w-0 px-4 py-2 pr-16 sm:pr-20 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
-            />
-            {selectedCustomer && (
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <label className="block text-sm font-medium text-slate-700">
+              Customer
+            </label>
+            {!selectedCustomer && customerEntryMode === "search" && (
               <button
                 type="button"
-                onClick={clearCustomer}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-sm"
-                aria-label="Clear customer"
+                onClick={openNewCustomerForm}
+                className="text-sm font-medium text-indigo-600 hover:text-indigo-700"
               >
-                Clear
+                + New customer
               </button>
             )}
           </div>
-          {showDropdown && (customerInput.length > 0 || customers.length > 0) && (
-            <div className="absolute z-10 mt-1 left-0 right-0 min-w-0 bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto overflow-x-hidden">
-              {isSearching ? (
-                <div className="px-4 py-3 text-sm text-slate-500">Searching...</div>
-              ) : customers.length === 0 && !showCreateOption ? (
-                <div className="px-4 py-3 text-sm text-slate-500">No customers found</div>
-              ) : (
-                <>
-                  {customers.map((c) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onClick={() => selectCustomer(c)}
-                      className="w-full px-4 py-2 text-left hover:bg-slate-50 text-sm flex flex-col"
-                    >
-                      <span className="font-medium">{customerDisplayName(c)}</span>
-                      {c.email && (
-                        <span className="text-slate-500 text-xs">{c.email}</span>
-                      )}
-                    </button>
-                  ))}
-                  {showCreateOption && (
-                    <button
-                      type="button"
-                      onClick={createAndSelectCustomer}
-                      disabled={isCreating}
-                      className="w-full px-4 py-2 text-left hover:bg-emerald-50 text-emerald-700 font-medium text-sm border-t border-slate-100"
-                    >
-                      {isCreating
-                        ? "Creating..."
-                        : `+ Create "${customerInput.trim()}"`}
-                    </button>
-                  )}
-                </>
+
+          {selectedCustomer ? (
+            <>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={customerDisplayName(selectedCustomer)}
+                  readOnly
+                  className="w-full min-w-0 px-4 py-2 pr-16 sm:pr-20 border border-slate-200 rounded-xl bg-slate-50 text-slate-800 outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={clearCustomer}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-sm"
+                  aria-label="Clear customer"
+                >
+                  Clear
+                </button>
+              </div>
+              {showCustomerEmailField && (
+                <div className="mt-2">
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Email (optional)</label>
+                  <input
+                    type="email"
+                    value={customerEmail}
+                    onChange={(e) => setCustomerEmail(e.target.value)}
+                    placeholder="jane@example.com"
+                    className="w-full min-w-0 px-4 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                  />
+                </div>
               )}
+            </>
+          ) : customerEntryMode === "new" ? (
+            <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-slate-600">New customer</span>
+                <button
+                  type="button"
+                  onClick={cancelNewCustomerForm}
+                  className="text-sm text-slate-500 hover:text-slate-700"
+                >
+                  Cancel
+                </button>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">First name *</label>
+                  <input
+                    type="text"
+                    value={newFirstName}
+                    onChange={(e) => setNewFirstName(e.target.value)}
+                    placeholder="e.g. Jane"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Last name</label>
+                  <input
+                    type="text"
+                    value={newLastName}
+                    onChange={(e) => setNewLastName(e.target.value)}
+                    placeholder="e.g. Smith"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none bg-white"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Email (optional)</label>
+                <input
+                  type="email"
+                  value={customerEmail}
+                  onChange={(e) => setCustomerEmail(e.target.value)}
+                  placeholder="jane@example.com"
+                  className="w-full min-w-0 px-4 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none bg-white"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={createCustomerFromForm}
+                disabled={isCreating || !newFirstName.trim()}
+                className="w-full sm:w-auto px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+              >
+                {isCreating ? "Adding..." : "Add customer"}
+              </button>
             </div>
-          )}
-          {showNewCustomerFields && (
-            <div className="mt-2">
-              <label className="block text-xs font-medium text-slate-500 mb-1">Email (optional)</label>
-              <input
-                type="email"
-                value={customerEmail}
-                onChange={(e) => setCustomerEmail(e.target.value)}
-                placeholder="jane@example.com"
-                className="w-full min-w-0 px-4 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
-              />
-            </div>
+          ) : (
+            <>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={customerInput}
+                  onChange={(e) => {
+                    setCustomerInput(e.target.value);
+                    setShowDropdown(true);
+                    if (!e.target.value) {
+                      customerIdField.onChange("");
+                      setAttachedCustomer(null);
+                      setCustomerEmail("");
+                    }
+                  }}
+                  onFocus={() => setShowDropdown(true)}
+                  placeholder="Type name to search..."
+                  className="w-full min-w-0 px-4 py-2 pr-16 sm:pr-20 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                />
+              </div>
+              {showDropdown && (customerInput.length > 0 || customers.length > 0) && (
+                <div className="absolute z-10 mt-1 left-0 right-0 min-w-0 bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto overflow-x-hidden">
+                  {isSearching ? (
+                    <div className="px-4 py-3 text-sm text-slate-500">Searching...</div>
+                  ) : customers.length === 0 && !showCreateOption ? (
+                    <div className="px-4 py-3 text-sm text-slate-500">No customers found</div>
+                  ) : (
+                    <>
+                      {customers.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => selectCustomer(c)}
+                          className="w-full px-4 py-2 text-left hover:bg-slate-50 text-sm flex flex-col"
+                        >
+                          <span className="font-medium">{customerDisplayName(c)}</span>
+                          {c.email && (
+                            <span className="text-slate-500 text-xs">{c.email}</span>
+                          )}
+                        </button>
+                      ))}
+                      {showCreateOption && (
+                        <button
+                          type="button"
+                          onClick={createAndSelectCustomer}
+                          disabled={isCreating}
+                          className="w-full px-4 py-2 text-left hover:bg-emerald-50 text-emerald-700 font-medium text-sm border-t border-slate-100"
+                        >
+                          {isCreating
+                            ? "Creating..."
+                            : `+ Create "${customerInput.trim()}"`}
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+            </>
           )}
         </div>
 
