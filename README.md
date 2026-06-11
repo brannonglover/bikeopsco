@@ -133,14 +133,9 @@ When clicked, a modal opens with the booking form. Customers enter their info, b
 
 ## Deployment
 
-| Environment | Git branch | URL |
-|-------------|------------|-----|
-| Production | `main` | `app.bikeops.co`, tenant subdomains |
-| Staging | `develop` | [dev.bikeops.co](https://dev.bikeops.co) |
+**Staging:** `develop` → [dev.bikeops.co](https://dev.bikeops.co) · **Production:** `main` → `app.bikeops.co` and tenant subdomains.
 
-**Workflow:** feature/fix → push to `develop` → test on dev.bikeops.co → PR to `main` when ready.
-
-Full staging setup (Vercel domains, env vars, separate database): [docs/staging-environment.md](docs/staging-environment.md).
+Workflow and Vercel setup: **[DEPLOYMENT.md](DEPLOYMENT.md)** (concise) · [docs/staging-environment.md](docs/staging-environment.md) (detailed staging guide).
 
 ## Cron (3-day follow-up)
 
