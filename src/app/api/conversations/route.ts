@@ -2,7 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { getAppFeatures } from "@/lib/app-settings";
+import {
+  consolidateCustomerConversations,
+  findOrCreateGeneralConversation,
+} from "@/lib/conversation";
 import { requireCurrentShop } from "@/lib/shop";
+
+const conversationInclude = {
+  customer: true,
+  job: true,
+  messages: {
+    orderBy: { createdAt: "desc" as const },
+    take: 1,
+    include: { attachments: true, reactions: true },
+  },
+};
 
 export const dynamic = "force-dynamic";
 
@@ -20,37 +34,51 @@ export async function GET(request: NextRequest) {
     }
     const query = request.nextUrl.searchParams.get("q")?.trim() ?? "";
     const terms = query.split(/\s+/).filter(Boolean).slice(0, 8);
-    const conversations = await prisma.conversation.findMany({
-      where: {
-        shopId: shop.id,
-        archived: false,
-        ...(terms.length > 0
-          ? {
-              AND: terms.map((term) => ({
-                OR: [
-                  { customer: { firstName: { contains: term, mode: "insensitive" as const } } },
-                  { customer: { lastName: { contains: term, mode: "insensitive" as const } } },
-                  { customer: { email: { contains: term, mode: "insensitive" as const } } },
-                  { customer: { phone: { contains: term, mode: "insensitive" as const } } },
-                  { job: { bikeMake: { contains: term, mode: "insensitive" as const } } },
-                  { job: { bikeModel: { contains: term, mode: "insensitive" as const } } },
-                  { messages: { some: { body: { contains: term, mode: "insensitive" as const } } } },
-                ],
-              })),
-            }
-          : {}),
-      },
+    const listWhere = {
+      shopId: shop.id,
+      archived: false,
+      jobId: null,
+      ...(terms.length > 0
+        ? {
+            AND: terms.map((term) => ({
+              OR: [
+                { customer: { firstName: { contains: term, mode: "insensitive" as const } } },
+                { customer: { lastName: { contains: term, mode: "insensitive" as const } } },
+                { customer: { email: { contains: term, mode: "insensitive" as const } } },
+                { customer: { phone: { contains: term, mode: "insensitive" as const } } },
+                { messages: { some: { body: { contains: term, mode: "insensitive" as const } } } },
+              ],
+            })),
+          }
+        : {}),
+    };
+
+    let conversations = await prisma.conversation.findMany({
+      where: listWhere,
       orderBy: { updatedAt: "desc" },
-      include: {
-        customer: true,
-        job: true,
-        messages: {
-          orderBy: { createdAt: "desc" },
-          take: 1,
-          include: { attachments: true, reactions: true },
-        },
-      },
+      include: conversationInclude,
     });
+
+    const customerCounts = new Map<string, number>();
+    for (const c of conversations) {
+      customerCounts.set(c.customerId, (customerCounts.get(c.customerId) ?? 0) + 1);
+    }
+    const dupeCustomerIds = [...customerCounts.entries()]
+      .filter(([, count]) => count > 1)
+      .map(([customerId]) => customerId);
+
+    if (dupeCustomerIds.length > 0) {
+      await prisma.$transaction(async (tx) => {
+        for (const customerId of dupeCustomerIds) {
+          await consolidateCustomerConversations(shop.id, customerId, tx);
+        }
+      });
+      conversations = await prisma.conversation.findMany({
+        where: listWhere,
+        orderBy: { updatedAt: "desc" },
+        include: conversationInclude,
+      });
+    }
 
     return NextResponse.json(conversations);
   } catch (error) {
@@ -70,8 +98,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
     }
     const body = await request.json();
-    const { customerId, jobId } = createSchema.parse(body);
-    const normalizedJobId = jobId ?? null;
+    const { customerId } = createSchema.parse(body);
 
     const customer = await prisma.customer.findFirst({
       where: { id: customerId, shopId: shop.id },
@@ -81,47 +108,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Customer not found" }, { status: 404 });
     }
 
-    const conversation = await prisma.$transaction(async (tx) => {
-      const lockKey = `${shop.id}:${customerId}:${normalizedJobId ?? "general"}`;
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
-
-      const existing = await tx.conversation.findFirst({
-        where: {
-          shopId: shop.id,
-          customerId,
-          jobId: normalizedJobId,
-          archived: false,
-        },
-        orderBy: { updatedAt: "desc" },
-        include: {
-          customer: true,
-          job: true,
-          messages: {
-            orderBy: { createdAt: "desc" },
-            take: 1,
-            include: { attachments: true, reactions: true },
-          },
-        },
-      });
-      if (existing) return existing;
-
-      return tx.conversation.create({
-        data: {
-          shopId: shop.id,
-          customerId,
-          jobId: normalizedJobId,
-        },
-        include: {
-          customer: true,
-          job: true,
-          messages: {
-            orderBy: { createdAt: "desc" },
-            take: 1,
-            include: { attachments: true, reactions: true },
-          },
-        },
-      });
-    });
+    const conversation = await findOrCreateGeneralConversation(
+      shop.id,
+      customerId,
+      { include: conversationInclude }
+    );
 
     return NextResponse.json(conversation);
   } catch (error) {

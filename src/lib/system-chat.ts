@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { findOrCreateGeneralConversation } from "@/lib/conversation";
 
 export async function addCustomerSystemChatMessage({
   shopId,
@@ -12,17 +13,7 @@ export async function addCustomerSystemChatMessage({
   const trimmed = body.trim();
   if (!trimmed) return null;
 
-  let conversation = await prisma.conversation.findFirst({
-    where: { shopId, customerId, jobId: null, archived: false },
-    select: { id: true },
-  });
-
-  if (!conversation) {
-    conversation = await prisma.conversation.create({
-      data: { shopId, customerId, jobId: null },
-      select: { id: true },
-    });
-  }
+  const conversation = await findOrCreateGeneralConversation(shopId, customerId);
 
   const message = await prisma.message.create({
     data: {

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getAppFeatures } from "@/lib/app-settings";
+import { resolveGeneralConversation } from "@/lib/conversation";
+import { requireCurrentShop } from "@/lib/shop";
 
 export const dynamic = "force-dynamic";
 
@@ -12,24 +14,27 @@ export async function GET(
   { params }: { params: Promise<{ customerId: string }> }
 ) {
   try {
-    const features = await getAppFeatures();
+    const shop = await requireCurrentShop();
+    const features = await getAppFeatures(shop.id);
     if (!features.chatEnabled) {
       return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
     }
     const { customerId } = await params;
     const markRead = new URL(request.url).searchParams.get("markRead") === "1";
 
-    const conversation = await prisma.conversation.findFirst({
-      where: { customerId, jobId: null, archived: false },
-      orderBy: { updatedAt: "desc" },
-      include: {
-        messages: {
-          orderBy: { createdAt: "desc" },
-          take: 1,
-          include: { attachments: true },
-        },
-      },
-    });
+    const resolved = await resolveGeneralConversation(shop.id, customerId);
+    const conversation = resolved
+      ? await prisma.conversation.findUnique({
+          where: { id: resolved.id },
+          include: {
+            messages: {
+              orderBy: { createdAt: "desc" },
+              take: 1,
+              include: { attachments: true },
+            },
+          },
+        })
+      : null;
 
     if (!conversation) {
       return NextResponse.json({ conversation: null });

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
 import { getCustomerFromSession } from "@/lib/chat-session";
 import { getAppFeatures } from "@/lib/app-settings";
+import { findOrCreateGeneralConversation } from "@/lib/conversation";
 import { requireCurrentShop } from "@/lib/shop";
 
 export const dynamic = "force-dynamic";
@@ -20,23 +20,10 @@ export async function GET() {
     return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   }
 
-  let conversation = await prisma.conversation.findFirst({
-    where: { shopId: shop.id, customerId, jobId: null },
-    orderBy: { updatedAt: "desc" },
-    include: {
-      customer: true,
-      job: true,
-      messages: {
-        orderBy: { createdAt: "desc" },
-        take: 1,
-        include: { attachments: true },
-      },
-    },
-  });
-
-  if (!conversation) {
-    conversation = await prisma.conversation.create({
-      data: { shopId: shop.id, customerId, jobId: null },
+  const conversation = await findOrCreateGeneralConversation(
+    shop.id,
+    customerId,
+    {
       include: {
         customer: true,
         job: true,
@@ -46,8 +33,8 @@ export async function GET() {
           include: { attachments: true },
         },
       },
-    });
-  }
+    }
+  );
 
   return NextResponse.json(conversation);
 }

@@ -49,6 +49,39 @@ export function getResendApiKey(): string | null {
 }
 
 /**
+ * When set, overrides the default staging guard for customer-facing email/SMS.
+ * - "true" — allow sends (use only on an isolated staging DB with test recipients)
+ * - "false" — always block
+ */
+export function getCustomerNotificationBlockReason(): string | null {
+  const explicit = process.env.ALLOW_CUSTOMER_NOTIFICATIONS?.trim().toLowerCase();
+  if (explicit === "true") return null;
+  if (explicit === "false") {
+    return "Customer notifications disabled (ALLOW_CUSTOMER_NOTIFICATIONS=false)";
+  }
+
+  const vercelEnv = process.env.VERCEL_ENV?.trim();
+  if (vercelEnv === "preview") {
+    return "Customer notifications disabled on Vercel Preview (staging)";
+  }
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim().toLowerCase() ?? "";
+  if (appUrl.includes("dev.bikeops.co")) {
+    return "Customer notifications disabled on dev.bikeops.co";
+  }
+
+  return null;
+}
+
+export function areCustomerNotificationsEnabled(): boolean {
+  return getCustomerNotificationBlockReason() === null;
+}
+
+export function isProductionDeployment(): boolean {
+  return process.env.VERCEL_ENV === "production";
+}
+
+/**
  * App base URL for links. Tries:
  * 1. NEXT_PUBLIC_APP_URL
  * 2. URL (Netlify - main site URL)

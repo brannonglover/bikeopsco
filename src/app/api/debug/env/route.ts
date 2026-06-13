@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
-import { getAppUrl, getResendApiKey } from "@/lib/env";
+import {
+  areCustomerNotificationsEnabled,
+  getAppUrl,
+  getCustomerNotificationBlockReason,
+  getResendApiKey,
+  isProductionDeployment,
+} from "@/lib/env";
 
 /**
  * Debug endpoint to check which env vars the serverless function can see.
@@ -27,6 +33,10 @@ export async function GET() {
   const resolvedUrl = getAppUrl();
 
   return NextResponse.json({
+    VERCEL_ENV: process.env.VERCEL_ENV || "(not set)",
+    isProductionDeployment: isProductionDeployment(),
+    customerNotificationsEnabled: areCustomerNotificationsEnabled(),
+    customerNotificationBlockReason: getCustomerNotificationBlockReason(),
     RESEND_API_KEY: {
       exists: typeof key === "string",
       hasValue: !!trimmed,

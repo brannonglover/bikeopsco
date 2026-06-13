@@ -2,11 +2,31 @@
 
 Use this workflow to test changes (for example chat sign-in magic links) on a stable URL before merging to `main` and deploying production.
 
+## Audit summary (2026-06)
+
+**Preview was sharing the production database.** In Vercel → **bikeopsco** → Environment Variables, `DATABASE_URL` and `DIRECT_URL` are scoped to **Production, Preview, and Development** with the **same value** (Supabase project `postgres.nshrozsfixyeih…`). That is why `dev.bikeops.co` shows real production customers and jobs.
+
+**Notification exposure on Preview (before code guard):**
+
+| Service | Preview config | Risk |
+|---------|----------------|------|
+| **Postgres** | Same as Production | Reads/writes live customer data |
+| **Twilio** | Same account + auth token; different `TWILIO_PHONE_NUMBER` | Stage changes / chat could SMS real customers |
+| **Quo** | `QUO_API_KEY` shared; `QUO_PHONE_NUMBER` Production-only | API key present; sends blocked without phone |
+| **Resend** | Not set on Preview | Customer emails mostly skipped already |
+| **Stripe** | Not set on Preview | Payments fail without keys (good) |
+
+**Code guard (develop branch):** Customer-facing email, SMS, and Quo sends are blocked when `VERCEL_ENV=preview` or `NEXT_PUBLIC_APP_URL` contains `dev.bikeops.co`. Set `ALLOW_CUSTOMER_NOTIFICATIONS=true` on Preview only when using an **isolated staging DB** and test recipients. Chat magic-link emails are still allowed (for sign-in testing).
+
+**You still need a separate staging database** — the guard prevents accidental notifications but Preview must not read/write production data.
+
+---
+
 ## Current deployment architecture
 
 | Vercel project | Root directory | Git branch | Domains |
 |----------------|----------------|------------|---------|
-| **bikeops** (App) | repo root | `main` → Production | `*.bikeops.co`, `app.bikeops.co` |
+| **bikeopsco** (App) | repo root | `main` → Production | `*.bikeops.co`, `app.bikeops.co` |
 | **Marketing** | `marketing/` | `main` → Production | `bikeops.co`, `www.bikeops.co` |
 
 There is no GitHub Actions deploy pipeline. Vercel builds on push via its Git integration. `vercel.json` at the repo root configures crons and the npm install command for the App project only.
@@ -80,49 +100,98 @@ Wait for DNS + SSL (usually minutes; up to 48h for some registrars).
 
 ### 5. Environment variables (Preview / staging)
 
-In **bikeops** project → **Settings → Environment Variables**, set values for **Preview** (applies to all preview deploys including `develop`). Optionally use **Git Branch** overrides scoped to `develop` only.
+In **bikeopsco** project → **Settings → Environment Variables**.
+
+#### Critical: separate database (required)
+
+1. Create a **new** Postgres database (do not clone production data):
+   - **Supabase:** [supabase.com](https://supabase.com) → New project → Settings → Database → copy **Connection string** (pooler) and **Direct connection**.
+   - **Neon:** [neon.tech](https://neon.tech) or Vercel Storage → Create Database → copy pooled + direct URLs.
+2. In Vercel, **edit** `DATABASE_URL` and `DIRECT_URL`:
+   - Remove **Preview** from the existing Production-scoped entries (or delete Preview values that point at production).
+   - Add **new** Preview-only values with the staging URLs.
+   - Leave **Production** entries unchanged.
+3. Redeploy `develop` after saving env vars.
+
+Verify isolation: after redeploy, `dev.bikeops.co` should show an empty calendar (or only seeded demo data).
+
+#### Seed staging with fake data only
+
+From your machine (never against production URLs):
+
+```bash
+# Apply schema to the new empty staging DB
+DATABASE_URL="postgresql://…staging-pooler…" DIRECT_URL="postgresql://…staging-direct…" npm run db:push
+
+# Templates, services, admin user, demo customer + job
+DATABASE_URL="postgresql://…staging-pooler…" \
+ADMIN_EMAIL="you@example.com" \
+ADMIN_PASSWORD="your-staging-password" \
+STAGING_TEST_EMAIL="you@example.com" \
+npm run db:seed:staging
+```
+
+`db:seed:staging` sets `SEED_DEMO_DATA=true`: creates a demo customer (`staging-test@example.com` by default), one `BOOKED_IN` job, and turns off `notifyCustomerEnabled` in App Settings.
+
+#### Preview env var checklist
+
+Set values for **Preview** (optionally scoped to Git branch `develop` only):
 
 **Required for chat sign-in on dev:**
 
 | Variable | Staging value | Notes |
 |----------|---------------|-------|
-| `DATABASE_URL` | Staging Postgres URL | Strongly prefer a **separate** Supabase/Neon project so staging does not touch production data. |
-| `DIRECT_URL` | Same DB direct URL | Required if using Supabase pooling. |
+| `DATABASE_URL` | **Staging-only** Postgres URL | Must differ from Production. |
+| `DIRECT_URL` | Staging direct URL | Required with Supabase pooling. |
 | `NEXTAUTH_SECRET` | Random string | Can differ from production. |
 | `NEXTAUTH_URL` | `https://dev.bikeops.co` | Staff NextAuth callback base. |
 | `NEXT_PUBLIC_APP_URL` | `https://dev.bikeops.co` | Fallback base URL in emails/links when host header is missing. |
 | `ROOT_DOMAIN` | `bikeops.co` | Keep same as production (tenant URL shape unchanged). |
-| `RESEND_API_KEY` | Resend key | Same key is fine; use test recipient emails. |
-| `FROM_EMAIL` | Verified sender | Must be a domain verified in Resend (e.g. `Bike Ops <no-reply@yourdomain.com>`). |
-| `NEXTAUTH_SECRET` | (see above) | |
+| `FROM_EMAIL` | Verified sender | Only needed if testing outbound email on staging. |
+
+**Do not copy from Production on Preview:**
+
+| Variable | Staging value |
+|----------|---------------|
+| `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` | Omit on Preview, or use a Twilio **test** subaccount |
+| `TWILIO_PHONE_NUMBER` | Omit on Preview (code guard blocks sends anyway) |
+| `QUO_API_KEY` / `QUO_WEBHOOK_SECRET` | Omit on Preview unless testing Quo with a sandbox line |
+| `RESEND_API_KEY` | Omit unless testing email; add Preview-only key for magic-link tests |
+| `STRIPE_SECRET_KEY` / `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Stripe **test** keys only, Preview-scoped |
+| `STRIPE_WEBHOOK_SECRET` | Separate webhook for `https://dev.bikeops.co/api/webhooks/stripe` |
+
+**Optional override (isolated staging DB + test recipients only):**
+
+| Variable | Value |
+|----------|-------|
+| `ALLOW_CUSTOMER_NOTIFICATIONS` | `true` — re-enables customer email/SMS on Preview |
 
 **Recommended (parity with production):**
 
 | Variable | Notes |
 |----------|-------|
-| `BLOB_READ_WRITE_TOKEN` | Chat image uploads |
-| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` / `STRIPE_SECRET_KEY` | Use **test** keys on staging |
-| `STRIPE_WEBHOOK_SECRET` | Separate Stripe webhook endpoint for `https://dev.bikeops.co/api/webhooks/stripe` if testing billing |
+| `BLOB_READ_WRITE_TOKEN` | Chat image uploads (can share or use separate Blob store) |
+| `NEXT_PUBLIC_POSTHOG_*` | Optional; events tagged by host |
 
-**Usually copy from production Preview or Production as-is:**
-
-- `NEXT_PUBLIC_POSTHOG_*` (optional; events tagged by host)
-- `QUO_*` / SMS vars — only if testing SMS on staging
-
-After changing env vars, **redeploy** the `develop` branch (push an empty commit or use **Redeploy** in Vercel).
+After changing env vars, **redeploy** the `develop` branch (push a commit or use **Redeploy** in Vercel).
 
 ### 6. Database for staging
 
-If using a fresh database:
+See **Seed staging with fake data only** above. Ensure at least one customer with a known email exists for chat sign-in tests, and that **Settings → Features → Chat** is enabled for the shop.
+
+### 7. Verify notification sandbox
+
+After deploy:
 
 ```bash
-DATABASE_URL="..." DIRECT_URL="..." npm run db:push
-DATABASE_URL="..." npm run db:seed
+curl -s https://dev.bikeops.co/api/debug/env | jq '{VERCEL_ENV, customerNotificationsEnabled, customerNotificationBlockReason}'
 ```
 
-Ensure at least one customer with a known email exists for chat sign-in tests, and that **Settings → Features → Chat** is enabled for the shop.
+Expect `customerNotificationsEnabled: false` and a block reason mentioning Preview or `dev.bikeops.co`.
 
-### 7. Marketing project (optional)
+Moving a job stage on staging should log `[sms] Skipping send` / `[email] Skipping sendJobEmail` in Vercel function logs — no Twilio or Resend delivery.
+
+### 8. Marketing project (optional)
 
 The marketing site (`bikeops.co`) can stay production-only. It hard-links to `app.bikeops.co`. For staging, browse the app directly at `https://dev.bikeops.co/chat/c`.
 
@@ -142,9 +211,9 @@ After `develop` is deployed and the domain is active:
 
 **Debug endpoints (Preview only):**
 
-- `GET https://dev.bikeops.co/api/debug/env` — confirms `RESEND_API_KEY` resolves and `getAppUrl()` (optional; magic links prefer the request `Host` header).
+- `GET https://dev.bikeops.co/api/debug/env` — `customerNotificationsEnabled`, Resend/App URL resolution
 
-**Resend checklist:**
+**Resend checklist (when testing email on staging):**
 
 - API key set for Preview environment
 - `FROM_EMAIL` domain verified in Resend
@@ -159,8 +228,8 @@ After `develop` is deployed and the domain is active:
 | Vercel dashboard access (bikeops project) | You |
 | Add `dev.bikeops.co` domain + branch assignment | You |
 | DNS CNAME for `dev` | You (registrar or Vercel DNS) |
-| Preview environment variables | You |
-| Staging database (recommended) | You |
+| Preview environment variables | You — **separate DATABASE_URL required** |
+| Staging database provision + seed | You |
 | `git push origin develop` (if not pushed yet) | You — approve push |
 | Vercel CLI locally (`vercel login`) | Optional; dashboard is enough |
 

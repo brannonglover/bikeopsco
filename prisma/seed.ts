@@ -331,13 +331,72 @@ async function main() {
       collectionRadiusMiles: 5,
       collectionFeeRegular: regularFee,
       collectionFeeEbike: ebikeFee,
-      notifyCustomerEnabled: true,
+      notifyCustomerEnabled: process.env.SEED_DEMO_DATA === "true" ? false : true,
       chatEnabled: true,
       reviewsEnabled: true,
     },
-    update: {},
+    update: process.env.SEED_DEMO_DATA === "true" ? { notifyCustomerEnabled: false } : {},
   });
   console.log("Seeded app settings");
+
+  if (process.env.SEED_DEMO_DATA === "true") {
+    const demoEmail =
+      process.env.STAGING_TEST_EMAIL?.trim().toLowerCase() || "staging-test@example.com";
+    const existingDemo = await prisma.customer.findFirst({
+      where: { shopId: defaultShop.id, email: demoEmail },
+    });
+    const demoCustomer = existingDemo
+      ? await prisma.customer.update({
+          where: { id: existingDemo.id },
+          data: {
+            firstName: "Staging",
+            lastName: "Tester",
+            phone: "+15555550100",
+            emailUpdatesConsent: true,
+            smsConsent: false,
+          },
+        })
+      : await prisma.customer.create({
+          data: {
+            shopId: defaultShop.id,
+            firstName: "Staging",
+            lastName: "Tester",
+            email: demoEmail,
+            phone: "+15555550100",
+            emailUpdatesConsent: true,
+            smsConsent: false,
+          },
+        });
+
+    const existingDemoJob = await prisma.job.findFirst({
+      where: {
+        shopId: defaultShop.id,
+        customerId: demoCustomer.id,
+        bikeModel: "Staging Demo",
+      },
+    });
+
+    if (!existingDemoJob) {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(10, 0, 0, 0);
+
+      await prisma.job.create({
+        data: {
+          shopId: defaultShop.id,
+          customerId: demoCustomer.id,
+          bikeMake: "Trek",
+          bikeModel: "Staging Demo",
+          stage: "BOOKED_IN",
+          deliveryType: "DROP_OFF_AT_SHOP",
+          dropOffDate: tomorrow,
+          notes: "Staging-only demo job (safe to delete)",
+        },
+      });
+    }
+
+    console.log("Seeded staging demo customer + job:", demoEmail);
+  }
 }
 
 main()

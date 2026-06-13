@@ -1841,49 +1841,64 @@ function ReprocessStripeButton({
 
 function CopyPaymentLinkButton({ jobId }: { jobId: string }) {
   const [copied, setCopied] = useState(false);
-  const url = typeof window !== "undefined" ? `${window.location.origin}/pay/${jobId}` : "";
+  const [copyError, setCopyError] = useState<string | null>(null);
 
   const handleCopy = async () => {
-    if (!url) return;
+    setCopyError(null);
     try {
-      await navigator.clipboard.writeText(url);
+      const res = await fetch(`/api/jobs/${jobId}/customer-links`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || typeof data.billUrl !== "string" || !data.billUrl) {
+        setCopyError(data.error ?? "Could not build payment link");
+        return;
+      }
+      const url = data.billUrl as string;
+      try {
+        await navigator.clipboard.writeText(url);
+      } catch {
+        const input = document.createElement("input");
+        input.value = url;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand("copy");
+        document.body.removeChild(input);
+      }
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Fallback for older browsers
-      const input = document.createElement("input");
-      input.value = url;
-      document.body.appendChild(input);
-      input.select();
-      document.execCommand("copy");
-      document.body.removeChild(input);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setCopyError("Could not copy payment link");
     }
   };
 
   return (
-    <button
-      type="button"
-      onClick={handleCopy}
-      className="inline-flex items-center gap-2 self-start text-sm text-slate-500 hover:text-slate-700"
-    >
-      {copied ? (
-        <>
-          <svg className="h-4 w-4 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-          </svg>
-          Copied!
-        </>
-      ) : (
-        <>
-          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-          </svg>
-          Copy payment link
-        </>
+    <div className="flex flex-col gap-1">
+      <button
+        type="button"
+        onClick={handleCopy}
+        className="inline-flex items-center gap-2 self-start text-sm text-slate-500 hover:text-slate-700"
+      >
+        {copied ? (
+          <>
+            <svg className="h-4 w-4 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+            </svg>
+            Copied!
+          </>
+        ) : (
+          <>
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+            </svg>
+            Copy payment link
+          </>
+        )}
+      </button>
+      {copyError && (
+        <p className="text-xs text-red-600" role="alert">
+          {copyError}
+        </p>
       )}
-    </button>
+    </div>
   );
 }
 

@@ -1,4 +1,5 @@
 import Twilio from "twilio";
+import { getCustomerNotificationBlockReason } from "./env";
 import { getCustomerBillUrl, getCustomerStatusUrl } from "./job-customer-access";
 import { normalizePhone } from "./phone";
 
@@ -68,6 +69,12 @@ async function sendSms(
   phoneNumber: string,
   text: string
 ): Promise<SmsSendResult> {
+  const blockReason = getCustomerNotificationBlockReason();
+  if (blockReason) {
+    console.warn(`[sms] Skipping send: ${blockReason}`);
+    return { ok: false, error: blockReason };
+  }
+
   if (!isTwilioConfigured()) {
     return { ok: false, error: getSmsNotConfiguredError() };
   }

@@ -1,3 +1,4 @@
+import { getCustomerNotificationBlockReason } from "@/lib/env";
 import { normalizePhone } from "@/lib/phone";
 
 const QUO_API_BASE = "https://api.openphone.com/v1";
@@ -62,6 +63,12 @@ export async function sendQuoTextMessage(params: {
   toE164: string;
   content: string;
 }): Promise<QuoSendMessageResult> {
+  const blockReason = getCustomerNotificationBlockReason();
+  if (blockReason) {
+    console.warn(`[quo] Skipping send: ${blockReason}`);
+    return { ok: false, error: blockReason };
+  }
+
   const apiKey = getQuoApiKey();
   const from = getQuoFromNumber();
   if (!apiKey || !from) {

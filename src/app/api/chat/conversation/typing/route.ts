@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { getCustomerFromSession } from "@/lib/chat-session";
+import { findOrCreateGeneralConversation } from "@/lib/conversation";
 import { getAppFeatures } from "@/lib/app-settings";
 import { requireCurrentShop } from "@/lib/shop";
 
@@ -32,15 +33,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid body" }, { status: 400 });
   }
 
-  let conversation = await prisma.conversation.findFirst({
-    where: { shopId: shop.id, customerId, jobId: null },
-  });
-
-  if (!conversation) {
-    conversation = await prisma.conversation.create({
-      data: { shopId: shop.id, customerId, jobId: null },
-    });
-  }
+  const conversation = await findOrCreateGeneralConversation(
+    shop.id,
+    customerId
+  );
 
   await prisma.conversation.update({
     where: { id: conversation.id },

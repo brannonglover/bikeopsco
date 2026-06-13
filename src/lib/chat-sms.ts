@@ -169,17 +169,4 @@ export async function importTwilioInboundMedia(
   return attachments;
 }
 
-/** Most recently active thread, or a new general (no job) conversation. */
-export async function findOrCreateConversationForInboundSms(
-  shopId: string,
-  customerId: string
-) {
-  const existing = await prisma.conversation.findFirst({
-    where: { shopId, customerId, archived: false },
-    orderBy: { updatedAt: "desc" },
-  });
-  if (existing) return existing;
-  return prisma.conversation.create({
-    data: { shopId, customerId, jobId: null },
-  });
-}
+export { findOrCreateGeneralConversation as findOrCreateConversationForInboundSms } from "@/lib/conversation";

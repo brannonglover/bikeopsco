@@ -44,22 +44,25 @@ These steps are done in the [Vercel dashboard](https://vercel.com) (CLI optional
 
 ### Environment variables (Preview / staging)
 
+**Confirmed:** Preview currently shares Production `DATABASE_URL` / `DIRECT_URL`. Provision a separate Postgres project and scope those vars to Preview only. Full audit and checklist: [docs/staging-environment.md](docs/staging-environment.md).
+
 In **bikeopsco** → Settings → Environment Variables, set **Preview** values (optionally scoped to branch `develop`):
 
 | Variable | Staging value | Notes |
 |----------|---------------|-------|
-| `DATABASE_URL` | Separate Postgres URL | **Use a separate Supabase/Neon project** — do not point staging at production data. |
+| `DATABASE_URL` | Separate Postgres URL | **Must differ from Production** — do not point staging at production data. |
 | `DIRECT_URL` | Same DB direct URL | Required with Supabase pooling. |
 | `NEXTAUTH_SECRET` | Random string | Can differ from production. |
 | `NEXTAUTH_URL` | `https://dev.bikeops.co` | NextAuth callback base. |
 | `NEXT_PUBLIC_APP_URL` | `https://dev.bikeops.co` | Links in emails when host header is missing. |
 | `ROOT_DOMAIN` | `bikeops.co` | Same as production. |
-| `RESEND_API_KEY` | Resend key | Same key OK; use test recipient emails. |
-| `FROM_EMAIL` | Verified sender | Domain must be verified in Resend. |
+| `FROM_EMAIL` | Verified sender | Only if testing email on staging. |
 
-**Recommended for parity:** `BLOB_READ_WRITE_TOKEN`, Stripe **test** keys (`STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`), and a separate `STRIPE_WEBHOOK_SECRET` for `https://dev.bikeops.co/api/webhooks/stripe` if testing billing.
+**Do not copy Production Twilio/Quo/Resend keys to Preview** unless using sandbox/test accounts. Customer notifications are blocked on Preview by default (`ALLOW_CUSTOMER_NOTIFICATIONS=true` to override on an isolated DB).
 
-**Production-only vars** stay on the **Production** environment (`main` deploys). After changing Preview vars, redeploy `develop` (push a commit or Redeploy in Vercel).
+**Recommended for parity:** `BLOB_READ_WRITE_TOKEN`, Stripe **test** keys, separate `STRIPE_WEBHOOK_SECRET` for `https://dev.bikeops.co/api/webhooks/stripe`.
+
+**Production-only vars** stay on the **Production** environment. After changing Preview vars, redeploy `develop`.
 
 ### Staging database
 
@@ -67,10 +70,10 @@ On a fresh staging database:
 
 ```bash
 DATABASE_URL="..." DIRECT_URL="..." npm run db:push
-DATABASE_URL="..." npm run db:seed
+DATABASE_URL="..." ADMIN_EMAIL=... ADMIN_PASSWORD=... STAGING_TEST_EMAIL=... npm run db:seed:staging
 ```
 
-Seed creates fake/demo data suitable for testing on dev.
+`db:seed:staging` creates templates, services, a demo customer/job, and disables `notifyCustomerEnabled`.
 
 ## Quick checks
 

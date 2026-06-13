@@ -6,12 +6,23 @@ import { getEffectiveEmailUpdatesConsent } from "./sms-consent";
 import { getShopTimezone } from "./shop-timezone";
 import type { ChatCustomerReminderDelivery } from "./chat-reminder-delivery";
 import { getCustomerBillUrl, getCustomerStatusUrl } from "./job-customer-access";
-import { getAppUrl, getResendApiKey, getShopAppUrl, getStaffJobOpenUrl } from "./env";
+import { getAppUrl, getCustomerNotificationBlockReason, getResendApiKey, getShopAppUrl, getStaffJobOpenUrl } from "./env";
 import { phoneTelHref } from "./phone";
 
 function getResend(): Resend | null {
   const key = getResendApiKey();
   return key ? new Resend(key) : null;
+}
+
+function skipIfCustomerNotificationsBlocked(
+  context: string
+): { ok: false; error: string } | null {
+  const reason = getCustomerNotificationBlockReason();
+  if (reason) {
+    console.warn(`[email] Skipping ${context}: ${reason}`);
+    return { ok: false, error: reason };
+  }
+  return null;
 }
 
 function extractEmailAddress(raw: string | null | undefined): string | null {
@@ -483,6 +494,9 @@ export async function sendJobEmail(
   recipient: string,
   job: JobForEmail
 ): Promise<{ ok: boolean; error?: string }> {
+  const blocked = skipIfCustomerNotificationsBlocked("sendJobEmail");
+  if (blocked) return blocked;
+
   const resend = getResend();
   if (!resend) {
     console.warn("RESEND_API_KEY not set, skipping email");
@@ -1027,6 +1041,9 @@ export async function sendWaitlistReceivedEmail(entry: {
   customerName: string;
   recipient: string;
 }): Promise<{ ok: boolean; error?: string }> {
+  const blocked = skipIfCustomerNotificationsBlocked("sendWaitlistReceivedEmail");
+  if (blocked) return blocked;
+
   const resend = getResend();
   if (!resend) {
     console.warn("RESEND_API_KEY not set, skipping email");
@@ -1085,6 +1102,9 @@ export async function sendBookingReceivedEmail(
     jobServices?: { service?: { name: string } | null; customServiceName?: string | null; quantity: number }[];
   }
 ): Promise<{ ok: boolean; error?: string }> {
+  const blocked = skipIfCustomerNotificationsBlocked("sendBookingReceivedEmail");
+  if (blocked) return blocked;
+
   const resend = getResend();
   if (!resend) return { ok: false, error: "Email not configured" };
 
@@ -1207,6 +1227,9 @@ export async function sendBookingDeclinedEmail(
     customer: { firstName: string; lastName: string | null } | null;
   }
 ): Promise<{ ok: boolean; error?: string }> {
+  const blocked = skipIfCustomerNotificationsBlocked("sendBookingDeclinedEmail");
+  if (blocked) return blocked;
+
   const resend = getResend();
   if (!resend) {
     return { ok: false, error: "Email not configured" };
@@ -1358,6 +1381,7 @@ export async function sendBookingConfirmationForJob(
 export async function sendMissedBookingConfirmationEmails(
   customer: CustomerForMissedBookingEmail
 ): Promise<void> {
+  if (skipIfCustomerNotificationsBlocked("sendMissedBookingConfirmationEmails")) return;
   if (!getEffectiveEmailUpdatesConsent(customer)) return;
 
   const recipient = customer.email?.trim();
@@ -1704,6 +1728,9 @@ export async function sendChatCustomerReplyReminder(
   delivery: ChatCustomerReminderDelivery,
   shopId?: string | null
 ): Promise<{ ok: boolean; error?: string }> {
+  const blocked = skipIfCustomerNotificationsBlocked("sendChatCustomerReplyReminder");
+  if (blocked) return blocked;
+
   const resend = getResend();
   if (!resend) {
     console.warn("RESEND_API_KEY not set, skipping chat reminder email");
@@ -1838,6 +1865,9 @@ export async function sendPaymentReceiptEmail(
   job: JobForInvoice,
   totalPaid?: number
 ): Promise<{ ok: boolean; error?: string }> {
+  const blocked = skipIfCustomerNotificationsBlocked("sendPaymentReceiptEmail");
+  if (blocked) return blocked;
+
   const resend = getResend();
   if (!resend) {
     console.warn("RESEND_API_KEY not set, skipping payment receipt email");
@@ -1913,6 +1943,9 @@ export async function sendBikeReadyInvoiceEmail(
   job: JobForInvoice,
   totalPaid = 0
 ): Promise<{ ok: boolean; error?: string }> {
+  const blocked = skipIfCustomerNotificationsBlocked("sendBikeReadyInvoiceEmail");
+  if (blocked) return blocked;
+
   const resend = getResend();
   if (!resend) {
     console.warn("RESEND_API_KEY not set, skipping bike ready invoice email");
@@ -1999,6 +2032,8 @@ export async function sendReviewRequestEmail({
   shopId,
   followUpNumber = 1,
 }: ReviewRequestEmailParams): Promise<void> {
+  if (skipIfCustomerNotificationsBlocked("sendReviewRequestEmail")) return;
+
   const resend = getResend();
   if (!resend) throw new Error("Email sending is not configured (missing Resend API key).");
 

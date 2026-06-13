@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCustomerFromSession } from "@/lib/chat-session";
+import {
+  findOrCreateGeneralConversation,
+  resolveGeneralConversation,
+} from "@/lib/conversation";
 import { sendPushToAllStaff } from "@/lib/push";
 import { z } from "zod";
 import { getAppFeatures } from "@/lib/app-settings";
@@ -30,10 +34,7 @@ export async function GET() {
       return NextResponse.json({ error: "Not signed in" }, { status: 401 });
     }
 
-    const conversation = await prisma.conversation.findFirst({
-      where: { shopId: shop.id, customerId, jobId: null },
-      select: { id: true, updatedAt: true, staffLastReadAt: true, customerLastReadAt: true },
-    });
+    const conversation = await resolveGeneralConversation(shop.id, customerId);
 
     if (!conversation) {
       return NextResponse.json({ messages: [], staffLastReadAt: null });
@@ -102,15 +103,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   }
 
-  let conversation = await prisma.conversation.findFirst({
-    where: { shopId: shop.id, customerId, jobId: null },
-  });
-
-  if (!conversation) {
-    conversation = await prisma.conversation.create({
-      data: { shopId: shop.id, customerId, jobId: null },
-    });
-  }
+  const conversation = await findOrCreateGeneralConversation(
+    shop.id,
+    customerId
+  );
 
   const body = await request.json();
   const { body: bodyText, attachmentIds } = createSchema.parse(body);

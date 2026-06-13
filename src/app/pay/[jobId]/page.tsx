@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
-import { jobAccessApiSuffix, readJobAccessParam } from "@/lib/job-access-url";
+import { jobAccessApiSuffix, readJobAccessParam, withJobAccessQuery } from "@/lib/job-access-url";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { Price } from "@/components/ui/Price";
@@ -12,10 +12,12 @@ const PAYABLE_STAGES = ["RECEIVED", "WORKING_ON", "WAITING_ON_CUSTOMER", "WAITIN
 
 function PaymentForm({
   jobId,
+  jobAccess,
   total,
   customerEmail,
 }: {
   jobId: string;
+  jobAccess: string | null;
   total: number;
   customerEmail?: string | null;
 }) {
@@ -46,7 +48,10 @@ function PaymentForm({
     const { error: submitError } = await stripe.confirmPayment({
       elements,
       confirmParams: {
-        return_url: `${window.location.origin}/status/${jobId}?paid=1`,
+        return_url: withJobAccessQuery(
+          `${window.location.origin}/status/${jobId}?paid=1`,
+          jobAccess
+        ),
         receipt_email: undefined,
       },
     });
@@ -144,7 +149,8 @@ export default function PayPage() {
         });
 
         if (!jobRes.ok) {
-          setError("Job not found");
+          const errData = await jobRes.json().catch(() => ({}));
+          setError(typeof errData.error === "string" ? errData.error : "Job not found");
           return;
         }
 
@@ -393,7 +399,12 @@ export default function PayPage() {
             },
           }}
         >
-          <PaymentForm jobId={jobId} total={total} customerEmail={job.customer?.email} />
+          <PaymentForm
+            jobId={jobId}
+            jobAccess={jobAccess}
+            total={total}
+            customerEmail={job.customer?.email}
+          />
         </Elements>
       ) : isPaidInFull ? (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-center text-sm font-medium text-emerald-800">
