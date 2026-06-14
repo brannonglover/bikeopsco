@@ -70,6 +70,11 @@ export function getCustomerNotificationBlockReason(): string | null {
     return "Customer notifications disabled on dev.bikeops.co";
   }
 
+  const staging = process.env.STAGING?.trim().toLowerCase();
+  if (staging === "true" || staging === "1") {
+    return "Customer notifications disabled (STAGING=true)";
+  }
+
   return null;
 }
 
@@ -79,6 +84,22 @@ export function areCustomerNotificationsEnabled(): boolean {
 
 export function isProductionDeployment(): boolean {
   return process.env.VERCEL_ENV === "production";
+}
+
+/** Host portion of DATABASE_URL for staging isolation checks (no credentials). */
+export function getDatabaseUrlHostHint(): string | null {
+  const url = process.env.DATABASE_URL?.trim();
+  if (!url) return null;
+  try {
+    const parsed = new URL(url.replace(/^postgresql:/, "postgres:"));
+    return parsed.host || null;
+  } catch {
+    const at = url.indexOf("@");
+    if (at === -1) return null;
+    const rest = url.slice(at + 1);
+    const slash = rest.indexOf("/");
+    return (slash === -1 ? rest : rest.slice(0, slash)) || null;
+  }
 }
 
 /**

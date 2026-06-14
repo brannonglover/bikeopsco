@@ -3,6 +3,7 @@ import {
   areCustomerNotificationsEnabled,
   getAppUrl,
   getCustomerNotificationBlockReason,
+  getDatabaseUrlHostHint,
   getResendApiKey,
   isProductionDeployment,
 } from "@/lib/env";
@@ -37,6 +38,7 @@ export async function GET() {
     isProductionDeployment: isProductionDeployment(),
     customerNotificationsEnabled: areCustomerNotificationsEnabled(),
     customerNotificationBlockReason: getCustomerNotificationBlockReason(),
+    databaseUrlHostHint: getDatabaseUrlHostHint(),
     RESEND_API_KEY: {
       exists: typeof key === "string",
       hasValue: !!trimmed,

@@ -2,9 +2,17 @@
 
 Use this workflow to test changes (for example chat sign-in magic links) on a stable URL before merging to `main` and deploying production.
 
-## Audit summary (2026-06)
+## Audit summary (2026-06-14, re-verified)
 
-**Preview was sharing the production database.** In Vercel → **bikeopsco** → Environment Variables, `DATABASE_URL` and `DIRECT_URL` are scoped to **Production, Preview, and Development** with the **same value** (Supabase project `postgres.nshrozsfixyeih…`). That is why `dev.bikeops.co` shows real production customers and jobs.
+**Preview is still sharing the production database.** `vercel env ls` shows `DATABASE_URL` and `DIRECT_URL` scoped to **Production, Preview, and Development**. Pulling both environments with `vercel env pull` confirms **identical values** — Supabase pooler host `aws-0-us-west-2.pooler.supabase.com`. That is why `dev.bikeops.co` shows real production customers and jobs.
+
+After you provision a separate staging DB, confirm isolation:
+
+```bash
+vercel curl https://dev.bikeops.co/api/debug/env | jq '{databaseUrlHostHint, customerNotificationsEnabled}'
+```
+
+The host hint must **not** match production (`aws-0-us-west-2.pooler.supabase.com` today).
 
 **Notification exposure on Preview (before code guard):**
 
@@ -107,9 +115,20 @@ In **bikeopsco** project → **Settings → Environment Variables**.
 1. Create a **new** Postgres database (do not clone production data):
    - **Supabase:** [supabase.com](https://supabase.com) → New project → Settings → Database → copy **Connection string** (pooler) and **Direct connection**.
    - **Neon:** [neon.tech](https://neon.tech) or Vercel Storage → Create Database → copy pooled + direct URLs.
-2. In Vercel, **edit** `DATABASE_URL` and `DIRECT_URL`:
-   - Remove **Preview** from the existing Production-scoped entries (or delete Preview values that point at production).
-   - Add **new** Preview-only values with the staging URLs.
+2. In Vercel, **split** `DATABASE_URL` and `DIRECT_URL` so Preview uses staging only:
+   - Dashboard: edit each var → remove **Preview** from the Production entry → add a new Preview-only entry (scope to Git branch `develop` if you like).
+   - CLI (after creating the staging project):
+
+```bash
+# Remove Preview from production-scoped DB vars (re-add Production + Development only)
+vercel env rm DATABASE_URL preview --yes
+vercel env rm DIRECT_URL preview --yes
+
+# Add Preview-only staging URLs (paste when prompted)
+vercel env add DATABASE_URL preview develop
+vercel env add DIRECT_URL preview develop
+```
+
    - Leave **Production** entries unchanged.
 3. Redeploy `develop` after saving env vars.
 

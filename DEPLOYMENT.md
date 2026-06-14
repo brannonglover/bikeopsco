@@ -44,7 +44,7 @@ These steps are done in the [Vercel dashboard](https://vercel.com) (CLI optional
 
 ### Environment variables (Preview / staging)
 
-**Confirmed:** Preview currently shares Production `DATABASE_URL` / `DIRECT_URL`. Provision a separate Postgres project and scope those vars to Preview only. Full audit and checklist: [docs/staging-environment.md](docs/staging-environment.md).
+**Confirmed (2026-06-14):** Preview still shares Production `DATABASE_URL` / `DIRECT_URL` (same Supabase host `aws-0-us-west-2.pooler.supabase.com`). Provision a separate Postgres project and scope those vars to Preview only. Verify with `GET /api/debug/env` → `databaseUrlHostHint`. Full audit and checklist: [docs/staging-environment.md](docs/staging-environment.md).
 
 In **bikeopsco** → Settings → Environment Variables, set **Preview** values (optionally scoped to branch `develop`):
 
