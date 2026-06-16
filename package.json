@@ -11,6 +11,7 @@
     "db:migrate": "node scripts/prisma.js migrate dev",
     "db:seed": "node scripts/prisma.js db seed",
     "db:seed:staging": "SEED_DEMO_DATA=true node scripts/prisma.js db seed",
+    "db:validate-env": "node scripts/validate-db-env.js",
     "postinstall": "node scripts/prisma.js generate"
   },
   "prisma": {

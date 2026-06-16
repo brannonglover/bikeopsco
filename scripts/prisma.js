@@ -4,6 +4,7 @@
  * Schema validation requires both env vars; generate does not need a real DB.
  */
 const { spawnSync } = require("child_process");
+const { parseDbUrl } = require("./validate-db-env");
 
 const args = process.argv.slice(2);
 if (args.length === 0) {
@@ -98,6 +99,38 @@ if (needsDatabase && !process.env.DATABASE_URL) {
 
 if (needsDatabase) {
   validateSupabaseDirectUrl();
+  runDbEnvValidation();
+}
+
+function runDbEnvValidation() {
+  const labels = ["DATABASE_URL", "DIRECT_URL"];
+  const reports = labels.map((label) => parseDbUrl(process.env[label], label));
+  const errors = reports.flatMap((r) => r.issues.map((i) => `${r.label}: ${i}`));
+
+  const refs = reports.map((r) => r.projectRef).filter(Boolean);
+  if (refs.length === 2 && refs[0] !== refs[1]) {
+    errors.push(
+      "DATABASE_URL and DIRECT_URL use different Supabase project refs"
+    );
+  }
+
+  if (errors.length === 0) return;
+
+  console.error(
+    [
+      "Error: database environment variables failed validation.",
+      "",
+      ...reports.map((r) => {
+        const lines = [`${r.label}: host=${r.host ?? "?"}, port=${r.port ?? "?"}, user=${r.user ?? "?"}`];
+        for (const issue of r.issues) lines.push(`  ✗ ${issue}`);
+        return lines.join("\n");
+      }),
+      "",
+      "Run locally: npm run db:validate-env",
+      "See DEPLOYMENT.md § Database connection fix checklist.",
+    ].join("\n")
+  );
+  process.exit(1);
 }
 
 const result = spawnSync("npx", ["prisma", ...args], {

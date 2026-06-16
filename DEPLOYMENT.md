@@ -2,6 +2,116 @@
 
 Bike Ops uses two Git branches and two Vercel environments. There is no GitHub Actions pipeline — Vercel builds on push via its Git integration.
 
+## Database connection fix checklist (Supabase + Vercel + Prisma)
+
+Use this **in order** when builds fail with `P1012`, `P1001`, or `P1000` during `prisma migrate deploy`.
+
+### 1. Supabase — confirm project is alive
+
+1. Open [supabase.com/dashboard](https://supabase.com/dashboard) → select the **correct** project (staging vs production are separate projects).
+2. If the project shows **Paused**, click **Restore** and wait until status is **Active**.
+3. Go to **Project Settings → Database**.
+4. Click **Reset database password** if you have ever pasted the wrong value or are unsure. Copy the **new** password immediately.
+5. Under **Connection string**, open the **URI** tab. Note the **project ref** in the username (`postgres.abcdefghij…`).
+
+### 2. Copy the two correct strings (not “Direct connection”)
+
+In **Connection string**, use the pooler panel — **not** the legacy **Direct connection** (`db.*.supabase.co`).
+
+| Step | Supabase UI | Vercel variable |
+|------|-------------|-----------------|
+| A | **Transaction** mode | `DATABASE_URL` |
+| B | **Session** mode | `DIRECT_URL` |
+
+For each string:
+
+- Username must be `postgres.[project-ref]` (copy from UI). **Never** bare `postgres`.
+- Password is the **database password** from step 1. **Not** the `anon` key, **not** `service_role`, **not** `sbp_` tokens.
+- If the password contains `@`, `#`, or `%`, [URL-encode](https://developer.mozilla.org/en-US/docs/Glossary/Percent-encoding) them (`@` → `%40`, `#` → `%23`, `%` → `%25`).
+
+**Copy template** (replace placeholders; same password and project ref in both):
+
+```text
+DATABASE_URL=postgresql://postgres.[PROJECT-REF]:[URL-ENCODED-PASSWORD]@aws-0-[REGION].pooler.supabase.com:6543/postgres?pgbouncer=true&sslmode=require
+
+DIRECT_URL=postgresql://postgres.[PROJECT-REF]:[URL-ENCODED-PASSWORD]@aws-0-[REGION].pooler.supabase.com:5432/postgres?sslmode=require
+```
+
+**Sanity checks:**
+
+| Check | `DATABASE_URL` | `DIRECT_URL` |
+|-------|----------------|--------------|
+| Port | **6543** | **5432** |
+| Host | `*.pooler.supabase.com` | `*.pooler.supabase.com` |
+| `?pgbouncer=true` | **Yes** | **No** |
+| `db.*.supabase.co` | **Never** | **Never** |
+
+### 3. Vercel — set the right **scope** (most common mistake)
+
+Vercel **Development** ≠ Git branch `develop`. Push builds never use **Development**.
+
+| What you deploy | Vercel environment target | Git branch |
+|-----------------|---------------------------|------------|
+| `dev.bikeops.co` (staging) | **Preview** (optionally scoped to branch `develop`) | `develop` |
+| `app.bikeops.co` (production) | **Production** | `main` |
+
+1. [Vercel Dashboard](https://vercel.com) → project **bikeopsco** → **Settings → Environment Variables**.
+2. For **staging**: add or edit `DATABASE_URL` and `DIRECT_URL` with **Preview** checked (and **Git branch: develop** if offered). **Uncheck Development** unless you use `vercel dev`.
+3. For **production**: separate entries with **Production** checked only (staging URLs must not be on Production).
+4. Paste values with **no trailing spaces or newlines**. Save each var.
+5. **Deployments →** latest failed deploy → **⋯ → Redeploy** (required after env changes).
+
+CLI check (values hidden): `vercel env ls | rg 'DATABASE|DIRECT'`
+
+Expected today: `DATABASE_URL` / `DIRECT_URL` on **Production** and **Preview (develop)** as separate rows.
+
+### 4. Validate locally before pushing
+
+```bash
+DATABASE_URL="postgresql://postgres.[ref]:[pass]@aws-0-[region].pooler.supabase.com:6543/postgres?pgbouncer=true&sslmode=require" \
+DIRECT_URL="postgresql://postgres.[ref]:[pass]@aws-0-[region].pooler.supabase.com:5432/postgres?sslmode=require" \
+npm run db:validate-env
+```
+
+Optional: run `npm run db:migrate` against the staging DB to confirm auth before Vercel builds.
+
+### 5. What to look for in the next build log
+
+**Success:**
+
+```text
+Database env check (VERCEL_ENV=preview)
+✓ DATABASE_URL and DIRECT_URL structure look correct
+Applying migration ...
+```
+
+**Failure patterns:**
+
+| Log message | Meaning | Fix |
+|-------------|---------|-----|
+| `P1012` / `Environment variable not found: DIRECT_URL` | Var missing at build time | Set on **Preview** or **Production**, redeploy |
+| `invalid DIRECT_URL` / `db.*.supabase.co` | Legacy direct host | Use Session pooler URI (step 2B) |
+| `P1001: Can't reach database server` | Wrong host/port or paused project | Pooler host, restore Supabase project |
+| `P1000: Authentication failed` / `for user postgres` | Wrong password or bare `postgres` user | Reset DB password; use `postgres.[ref]`; URL-encode |
+| `username is bare postgres` (validator) | Copied old-style URI | Re-copy from Supabase Connection string UI |
+
+After a successful Preview deploy: `curl -s https://dev.bikeops.co/api/debug/env | jq .databaseUrlHostHint` — staging host should **not** match production if databases are split.
+
+### Common mistakes (quick reference)
+
+1. **Wrong Vercel scope** — vars only under Development; Preview build still fails.
+2. **Username `postgres`** instead of `postgres.[project-ref]`.
+3. **Password not URL-encoded** (`@`, `#`, `%` in password).
+4. **Password from wrong Supabase project** (staging URL on Preview, prod password).
+5. **`DIRECT_URL` with `?pgbouncer=true` or port 6543** — migrations need Session / 5432.
+6. **`DATABASE_URL` without `?pgbouncer=true` on port 6543**.
+7. **Trailing whitespace** when pasting into Vercel.
+8. **Using anon/service_role API key** instead of database password.
+9. **Supabase project paused** (free tier).
+10. **Preview branch var** not scoped to `develop` while deploying a different branch.
+
+---
+
 ## Branches and URLs
 
 | Environment | Git branch | Vercel target | URL |
