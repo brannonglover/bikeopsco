@@ -167,8 +167,10 @@ function diagnosePair(databaseUrl, directUrl) {
   if (database.port && database.port !== "6543") {
     pairWarnings.push(`DATABASE_URL port is ${database.port} (expected 6543 for transaction pooler)`);
   }
-  if (database.pgbouncer !== "true") {
-    pairWarnings.push("DATABASE_URL missing ?pgbouncer=true (required for transaction pooler on 6543)");
+  if (database.port === "6543" && database.pgbouncer !== "true") {
+    pairIssues.push(
+      "DATABASE_URL missing ?pgbouncer=true (required for transaction pooler on 6543 — causes prepared statement 500s)"
+    );
   }
 
   // DIRECT_URL expectations (session pooler for migrations)
