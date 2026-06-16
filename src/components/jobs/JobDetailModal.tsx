@@ -25,6 +25,11 @@ import {
 } from "@/lib/format-collection-window";
 import { toCalendarDateInTimezone } from "@/lib/timezone";
 import { mergeBoardJob } from "@/lib/board-stage-merge";
+import {
+  applyJobProductLineUpdate,
+  applyJobServiceLineUpdate,
+  mergeJobPreservingInvoiceDetails,
+} from "@/lib/job-invoice-merge";
 import { ServiceName } from "@/components/ui/ServiceName";
 
 function formatChatPreviewTime(iso: string): string {
@@ -66,9 +71,17 @@ function CustomerChatSection({ customerId }: { customerId: string }) {
     fetch(
       `/api/conversations/by-customer/${encodeURIComponent(customerId)}?markRead=1`
     )
-      .then((r) => r.json())
-      .then((data: { conversation?: CustomerChatPreviewPayload | null }) => {
+      .then(async (r) => {
+        const data = (await r.json()) as {
+          conversation?: CustomerChatPreviewPayload | null;
+          error?: string;
+        };
         if (cancelled) return;
+        if (!r.ok) {
+          setConversation(null);
+          setStatus("error");
+          return;
+        }
         setConversation(data.conversation ?? null);
         setStatus("ready");
       })
@@ -517,7 +530,10 @@ function JobBikeSection({
       const body: Record<string, unknown> = { workingOnJobBikeId: nextId };
       if (nextId && job.stage !== "WORKING_ON") {
         body.stage = "WORKING_ON";
-        body.notifyCustomer = false;
+        // Resume from waiting-on-parts already notified the customer; other transitions should notify.
+        if (job.stage === "WAITING_ON_PARTS") {
+          body.notifyCustomer = false;
+        }
       }
       const res = await fetch(`/api/jobs/${job.id}`, {
         method: "PATCH",
@@ -1957,25 +1973,6 @@ const CANCELLATION_REASONS = [
   "Other",
 ] as const;
 
-function mergeJobPreservingInvoiceDetails(prev: Job, next: Job): Job {
-  const merged = { ...prev, ...next };
-  const nextServices = next.jobServices ?? [];
-  const nextProducts = next.jobProducts ?? [];
-  const isIncompleteServiceLine = (js: JobService) =>
-    !js.id || (Boolean(js.serviceId) && !js.service) || (!js.serviceId && !js.customServiceName && !js.service);
-  const isIncompleteProductLine = (jp: JobProduct) =>
-    !jp.id || !jp.productId || !jp.product;
-
-  if (nextServices.length > 0 && nextServices.some(isIncompleteServiceLine)) {
-    merged.jobServices = prev.jobServices;
-  }
-  if (nextProducts.length > 0 && nextProducts.some(isIncompleteProductLine)) {
-    merged.jobProducts = prev.jobProducts;
-  }
-
-  return merged;
-}
-
 function mergeFetchedJobWithLiveBoard(live: Job, fetched: Job): Job {
   const merged = mergeJobPreservingInvoiceDetails(live, fetched);
   return mergeBoardJob(live, merged);
@@ -1999,6 +1996,8 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
   const [reviewBanner, setReviewBanner] = useState<{ ok: boolean; text: string } | null>(null);
   const latestJobPropRef = useRef(jobProp);
   latestJobPropRef.current = jobProp;
+  /** Ignore stale modal enrich GETs after invoice line edits (same updatedAt, older quantities). */
+  const jobEnrichGenRef = useRef(0);
   const onJobUpdatedRef = useRef(onJobUpdated);
 
   useEffect(() => {
@@ -2028,10 +2027,11 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
     if (!isOpen || !jobProp?.id) return;
     const ac = new AbortController();
     const openedJobId = jobProp.id;
+    const enrichGen = jobEnrichGenRef.current;
     fetch(`/api/jobs/${openedJobId}`, { signal: ac.signal })
       .then((res) => (res.ok ? res.json() : null))
       .then((fetched: Job | null) => {
-        if (!fetched || ac.signal.aborted) return;
+        if (!fetched || ac.signal.aborted || enrichGen !== jobEnrichGenRef.current) return;
         const live = latestJobPropRef.current;
         if (!live || live.id !== openedJobId) return;
         const fetchedMs = Date.parse(fetched.updatedAt);
@@ -2410,6 +2410,7 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
             <InvoiceTab
               job={job}
               onJobUpdated={(updated) => {
+                jobEnrichGenRef.current += 1;
                 setJob(updated);
                 onJobUpdated?.(updated);
               }}
@@ -3112,8 +3113,8 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
         body: JSON.stringify({ jobServiceId, quantity }),
       });
       if (res.ok) {
-        const updatedJob = await fetch(`/api/jobs/${job.id}`).then((r) => r.json());
-        onJobUpdated?.(updatedJob);
+        const updatedLine = (await res.json()) as JobService;
+        onJobUpdated?.(applyJobServiceLineUpdate(job, updatedLine));
       }
     } finally {
       setUpdatingServiceQty(null);
@@ -3129,8 +3130,8 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
         body: JSON.stringify({ jobServiceId, unitPrice }),
       });
       if (res.ok) {
-        const updatedJob = await fetch(`/api/jobs/${job.id}`).then((r) => r.json());
-        onJobUpdated?.(updatedJob);
+        const updatedLine = (await res.json()) as JobService;
+        onJobUpdated?.(applyJobServiceLineUpdate(job, updatedLine));
       }
     } finally {
       setUpdatingServicePrice(null);
@@ -3147,8 +3148,8 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
         body: JSON.stringify({ jobProductId, quantity }),
       });
       if (res.ok) {
-        const updatedJob = await fetch(`/api/jobs/${job.id}`).then((r) => r.json());
-        onJobUpdated?.(updatedJob);
+        const updatedLine = (await res.json()) as JobProduct;
+        onJobUpdated?.(applyJobProductLineUpdate(job, updatedLine));
       }
     } finally {
       setUpdatingProductQty(null);
@@ -3164,8 +3165,8 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
         body: JSON.stringify({ jobProductId, unitPrice }),
       });
       if (res.ok) {
-        const updatedJob = await fetch(`/api/jobs/${job.id}`).then((r) => r.json());
-        onJobUpdated?.(updatedJob);
+        const updatedLine = (await res.json()) as JobProduct;
+        onJobUpdated?.(applyJobProductLineUpdate(job, updatedLine));
       }
     } finally {
       setUpdatingProductPrice(null);
@@ -3181,8 +3182,8 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
         body: JSON.stringify({ jobServiceId, jobBikeId }),
       });
       if (res.ok) {
-        const updatedJob = await fetch(`/api/jobs/${job.id}`).then((r) => r.json());
-        onJobUpdated?.(updatedJob);
+        const updatedLine = (await res.json()) as JobService;
+        onJobUpdated?.(applyJobServiceLineUpdate(job, updatedLine));
       }
     } finally {
       setUpdatingServiceBike(null);
@@ -3215,8 +3216,8 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
         body: JSON.stringify({ jobProductId, jobBikeId }),
       });
       if (res.ok) {
-        const updatedJob = await fetch(`/api/jobs/${job.id}`).then((r) => r.json());
-        onJobUpdated?.(updatedJob);
+        const updatedLine = (await res.json()) as JobProduct;
+        onJobUpdated?.(applyJobProductLineUpdate(job, updatedLine));
       }
     } finally {
       setUpdatingProductBike(null);

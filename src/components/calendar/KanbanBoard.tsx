@@ -30,6 +30,7 @@ import {
   mergeBoardJob,
   mergeBoardJobsFromFetch,
 } from "@/lib/board-stage-merge";
+import { mergeJobPreservingInvoiceDetails } from "@/lib/job-invoice-merge";
 
 function formatShortDate(d: Date | string | null) {
   if (!d) return null;
@@ -44,25 +45,6 @@ function customerLine(job: Job) {
   if (!job.customer) return "Customer";
   const { firstName, lastName } = job.customer;
   return lastName ? `${firstName} ${lastName}` : firstName;
-}
-
-function mergeJobPreservingInvoiceDetails(prev: Job, next: Job): Job {
-  const merged = { ...prev, ...next };
-  const nextServices = next.jobServices ?? [];
-  const nextProducts = next.jobProducts ?? [];
-  const isIncompleteServiceLine = (js: NonNullable<Job["jobServices"]>[number]) =>
-    !js.id || (Boolean(js.serviceId) && !js.service) || (!js.serviceId && !js.customServiceName && !js.service);
-  const isIncompleteProductLine = (jp: NonNullable<Job["jobProducts"]>[number]) =>
-    !jp.id || !jp.productId || !jp.product;
-
-  if (nextServices.length > 0 && nextServices.some(isIncompleteServiceLine)) {
-    merged.jobServices = prev.jobServices;
-  }
-  if (nextProducts.length > 0 && nextProducts.some(isIncompleteProductLine)) {
-    merged.jobProducts = prev.jobProducts;
-  }
-
-  return merged;
 }
 
 const STAGES: Stage[] = [
