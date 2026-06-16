@@ -1,4 +1,5 @@
-import { getAppUrl, getStaffChatDeepLink } from "@/lib/env";
+import { headers } from "next/headers";
+import { getOpenLinkWebBaseUrl, getStaffChatDeepLink } from "@/lib/env";
 import { OpenStaffChatPage } from "./OpenStaffChatPage";
 
 export default async function Page({
@@ -11,8 +12,7 @@ export default async function Page({
   const { conversationId } = params;
   const messageId =
     typeof searchParams.messageId === "string" ? searchParams.messageId : undefined;
-  const appUrl = getAppUrl();
-  const webBase = appUrl || "";
+  const webBase = getOpenLinkWebBaseUrl(headers().get("host"));
   const webQs = new URLSearchParams({ conversation: conversationId });
   if (messageId) webQs.set("messageId", messageId);
   const webUrl = webBase
@@ -21,7 +21,7 @@ export default async function Page({
 
   return (
     <OpenStaffChatPage
-      appUrl={appUrl}
+      appUrl={webBase}
       conversationId={conversationId}
       nativeUrl={getStaffChatDeepLink(conversationId, messageId)}
       webUrl={webUrl}

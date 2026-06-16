@@ -38,7 +38,10 @@ export async function middleware(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const signInUrl = new URL("/login", req.url);
-    signInUrl.searchParams.set("callbackUrl", req.nextUrl.pathname);
+    signInUrl.searchParams.set(
+      "callbackUrl",
+      `${req.nextUrl.pathname}${req.nextUrl.search}`,
+    );
     return NextResponse.redirect(signInUrl);
   }
 
@@ -59,7 +62,10 @@ export async function middleware(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const signInUrl = new URL("/login", req.url);
-    signInUrl.searchParams.set("callbackUrl", req.nextUrl.pathname);
+    signInUrl.searchParams.set(
+      "callbackUrl",
+      `${req.nextUrl.pathname}${req.nextUrl.search}`,
+    );
     return NextResponse.redirect(signInUrl);
   }
 

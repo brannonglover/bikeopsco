@@ -7,6 +7,7 @@
 
 import {
   DEFAULT_ROOT_DOMAIN,
+  getSubdomainFromHost,
   SHARED_APP_SUBDOMAIN,
 } from "./tenant-domain";
 
@@ -190,6 +191,32 @@ export function getStaffChatUrl(
     : "/open/staff/chat";
   const qs = messageId ? `?messageId=${encodeURIComponent(messageId)}` : "";
   return `${baseUrl.replace(/\/$/, "")}${path}${qs}`;
+}
+
+/**
+ * Base URL for web fallbacks on /open/* trampoline pages.
+ * Preserves the shop tenant host from the incoming request so email deep links
+ * do not bounce staff to the shared app host (app.*) and hit login.
+ */
+export function getOpenLinkWebBaseUrl(hostHeader: string | null): string {
+  const rootDomain = (process.env.ROOT_DOMAIN ?? DEFAULT_ROOT_DOMAIN).toLowerCase();
+  const subdomain = getSubdomainFromHost(hostHeader, {
+    rootDomain,
+    defaultSubdomain: process.env.DEFAULT_SHOP_SUBDOMAIN ?? null,
+  });
+
+  if (subdomain && hostHeader) {
+    const host = hostHeader.trim();
+    const hostname = host.split(":")[0]?.toLowerCase() ?? "";
+    const isLocal =
+      hostname === "localhost" ||
+      hostname.endsWith(".localhost") ||
+      hostname.endsWith(".lvh.me");
+    const protocol = isLocal ? "http" : "https";
+    return `${protocol}://${host}`.replace(/\/$/, "");
+  }
+
+  return getShopAppUrl(subdomain) || getCanonicalAppBaseUrl();
 }
 
 /** HTTPS trampoline for staff chat (email / SMS). Prefer shop tenant host. */
