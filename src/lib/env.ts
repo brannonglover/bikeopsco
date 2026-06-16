@@ -61,6 +61,9 @@ export function getCustomerNotificationBlockReason(): string | null {
     return "Customer notifications disabled (ALLOW_CUSTOMER_NOTIFICATIONS=false)";
   }
 
+  // Production must never inherit preview/staging guards (e.g. mis-scoped env vars).
+  if (isProductionDeployment()) return null;
+
   const vercelEnv = process.env.VERCEL_ENV?.trim();
   if (vercelEnv === "preview") {
     return "Customer notifications disabled on Vercel Preview (staging)";

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
 import {
   areCustomerNotificationsEnabled,
   getAppUrl,
@@ -32,12 +33,16 @@ export async function GET() {
 
   const resolvedKey = getResendApiKey();
   const resolvedUrl = getAppUrl();
+  const appSettings = await prisma.appSettings
+    .findFirst({ select: { notifyCustomerEnabled: true } })
+    .catch(() => null);
 
   return NextResponse.json({
     VERCEL_ENV: process.env.VERCEL_ENV || "(not set)",
     isProductionDeployment: isProductionDeployment(),
     customerNotificationsEnabled: areCustomerNotificationsEnabled(),
     customerNotificationBlockReason: getCustomerNotificationBlockReason(),
+    shopNotifyCustomerEnabled: appSettings?.notifyCustomerEnabled ?? null,
     databaseUrlHostHint: getDatabaseUrlHostHint(),
     RESEND_API_KEY: {
       exists: typeof key === "string",

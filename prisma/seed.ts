@@ -331,11 +331,11 @@ async function main() {
       collectionRadiusMiles: 5,
       collectionFeeRegular: regularFee,
       collectionFeeEbike: ebikeFee,
-      notifyCustomerEnabled: process.env.SEED_DEMO_DATA === "true" ? false : true,
+      notifyCustomerEnabled: true,
       chatEnabled: true,
       reviewsEnabled: true,
     },
-    update: process.env.SEED_DEMO_DATA === "true" ? { notifyCustomerEnabled: false } : {},
+    update: {},
   });
   console.log("Seeded app settings");
 

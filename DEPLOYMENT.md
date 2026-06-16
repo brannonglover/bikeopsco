@@ -245,7 +245,7 @@ DATABASE_URL="..." DIRECT_URL="..." npm run db:push
 DATABASE_URL="..." ADMIN_EMAIL=... ADMIN_PASSWORD=... STAGING_TEST_EMAIL=... npm run db:seed:staging
 ```
 
-`db:seed:staging` creates templates, services, a demo customer/job, and disables `notifyCustomerEnabled`.
+`db:seed:staging` creates templates, services, a demo customer/job. Preview deploys block customer notifications via env guards.
 
 ## Quick checks
 

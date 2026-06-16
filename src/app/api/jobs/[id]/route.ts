@@ -520,6 +520,7 @@ export async function PATCH(
     if (
       features.notifyCustomerEnabled &&
       data.notifyCustomer !== false &&
+      stageChanged &&
       data.stage &&
       data.stage !== "CANCELLED" &&
       data.stage !== "COMPLETED" &&
