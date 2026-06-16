@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { mergeSmsConsentFields } from "@/lib/sms-consent";
 import { z } from "zod";
 
 const mergeSchema = z.object({
@@ -41,6 +42,14 @@ export async function POST(
     }
 
     await prisma.$transaction(async (tx) => {
+      const consentUpdate = mergeSmsConsentFields(target, source);
+      if (Object.keys(consentUpdate).length > 0) {
+        await tx.customer.update({
+          where: { id: targetId },
+          data: consentUpdate,
+        });
+      }
+
       await tx.bike.updateMany({
         where: { customerId: sourceCustomerId },
         data: { customerId: targetId },

@@ -14,7 +14,7 @@ import { coerceCustomerPhone } from "@/lib/phone";
 import { checkCollectionEligibility } from "@/lib/collection-radius";
 import { getAppFeatures } from "@/lib/app-settings";
 import { addWidgetCorsHeaders } from "@/lib/widget-cors";
-import { buildSmsConsentUpdate } from "@/lib/sms-consent";
+import { buildSmsConsentOptInUpdate } from "@/lib/sms-consent";
 import { getShopForHost } from "@/lib/shop";
 import { getCustomerStatusUrl } from "@/lib/job-customer-access";
 import { normalizeJobCollectionWindowsForStorage } from "@/lib/normalize-job-collection-windows";
@@ -264,7 +264,7 @@ export async function POST(request: NextRequest) {
                 lastName: data.lastName ?? null,
                 email: data.email.trim(),
                 phone: phoneStored,
-                ...buildSmsConsentUpdate(Boolean(data.smsConsent), "BOOKING_FORM"),
+                ...buildSmsConsentOptInUpdate(Boolean(data.smsConsent), "BOOKING_FORM"),
                 address: data.address ?? null,
               },
             });
@@ -275,9 +275,7 @@ export async function POST(request: NextRequest) {
                 firstName: data.firstName,
                 lastName: data.lastName ?? null,
                 phone: phoneStored,
-                ...(data.smsConsent
-                  ? buildSmsConsentUpdate(true, "BOOKING_FORM")
-                  : {}),
+                ...buildSmsConsentOptInUpdate(Boolean(data.smsConsent), "BOOKING_FORM"),
                 address: data.address ?? customer.address,
               },
             });
@@ -421,7 +419,7 @@ export async function POST(request: NextRequest) {
             lastName: data.lastName ?? null,
             email: data.email.trim(),
             phone: phoneStored,
-            ...buildSmsConsentUpdate(Boolean(data.smsConsent), "BOOKING_FORM"),
+            ...buildSmsConsentOptInUpdate(Boolean(data.smsConsent), "BOOKING_FORM"),
             address: data.address ?? null,
           },
         });
@@ -432,9 +430,7 @@ export async function POST(request: NextRequest) {
             firstName: data.firstName,
             lastName: data.lastName ?? null,
             phone: phoneStored,
-            ...(data.smsConsent
-              ? buildSmsConsentUpdate(true, "BOOKING_FORM")
-              : {}),
+            ...buildSmsConsentOptInUpdate(Boolean(data.smsConsent), "BOOKING_FORM"),
             address: data.address ?? customer.address,
           },
         });

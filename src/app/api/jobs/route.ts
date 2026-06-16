@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { Stage } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
-import { getAuthorizedShopId } from "@/lib/api-auth";
+import { getAuthorizedShopId, requireStaffShop } from "@/lib/api-auth";
+import { withPrismaRetry } from "@/lib/prisma-retry";
 import { sendJobEmail, getTemplateForStage } from "@/lib/email";
 import { syncCollectionJobService } from "@/lib/collection-fee";
 import { sendPushToAllStaff } from "@/lib/push";
@@ -43,12 +44,10 @@ const createJobSchema = z.object({
 });
 
 export async function GET(request: NextRequest) {
-  const shopId = await getAuthorizedShopId(request);
-  if (!shopId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   try {
+    const auth = await requireStaffShop(request);
+    if (!auth.ok) return auth.response;
+    const shopId = auth.shopId;
     const { searchParams } = new URL(request.url);
     const weekStart = searchParams.get("weekStart");
     const weekEnd = searchParams.get("weekEnd");
@@ -127,18 +126,21 @@ export async function GET(request: NextRequest) {
             ];
 
     if (summary) {
-      const jobs = await prisma.job.findMany({
-        where,
-        select: { id: true, stage: true },
-        orderBy,
-      });
+      const jobs = await withPrismaRetry(() =>
+        prisma.job.findMany({
+          where,
+          select: { id: true, stage: true, updatedAt: true },
+          orderBy,
+        })
+      );
       const res = NextResponse.json(jobs);
       res.headers.set("Cache-Control", "no-store");
       return res;
     }
 
     if (view === "board") {
-      const jobs = await prisma.job.findMany({
+      const jobs = await withPrismaRetry(() =>
+        prisma.job.findMany({
         where,
         select: {
           id: true,
@@ -270,7 +272,8 @@ export async function GET(request: NextRequest) {
           },
         },
         orderBy,
-      });
+        })
+      );
       const jobsWithPaymentState = jobs.map((job) => {
         const subtotal = computeJobSubtotal({
           jobServices: job.jobServices,
@@ -301,7 +304,8 @@ export async function GET(request: NextRequest) {
       return res;
     }
 
-    const jobs = await prisma.job.findMany({
+    const jobs = await withPrismaRetry(() =>
+      prisma.job.findMany({
       where,
       include: {
         customer: { include: { bikes: true } },
@@ -320,7 +324,8 @@ export async function GET(request: NextRequest) {
         },
       },
       orderBy,
-    });
+      })
+    );
     const jobsWithPaymentState = jobs.map((job) => {
       const subtotal = computeJobSubtotal({
         jobServices: job.jobServices,

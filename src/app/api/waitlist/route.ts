@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getToken } from "next-auth/jwt";
+import { requireStaffShop } from "@/lib/api-auth";
 import { prisma } from "@/lib/db";
+import { withPrismaRetry } from "@/lib/prisma-retry";
 
 export const dynamic = "force-dynamic";
 
@@ -10,15 +11,18 @@ function safeServiceIds(value: unknown): string[] {
 }
 
 export async function GET(request: NextRequest) {
-  const token = await getToken({ req: request });
-  if (!token?.shopId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
   try {
-    const entries = await prisma.waitlistEntry.findMany({
-      where: { shopId: token.shopId, status: "WAITING", archivedAt: null },
-      orderBy: { createdAt: "asc" },
-      include: { bikes: { orderBy: { sortOrder: "asc" } } },
-    });
+    const auth = await requireStaffShop(request);
+    if (!auth.ok) return auth.response;
+    const shopId = auth.shopId;
+
+    const entries = await withPrismaRetry(() =>
+      prisma.waitlistEntry.findMany({
+        where: { shopId, status: "WAITING", archivedAt: null },
+        orderBy: { createdAt: "asc" },
+        include: { bikes: { orderBy: { sortOrder: "asc" } } },
+      })
+    );
 
     const uniqueIds = new Set<string>();
     for (const e of entries) {
@@ -27,10 +31,12 @@ export async function GET(request: NextRequest) {
     const serviceIdList = [...uniqueIds];
     const services =
       serviceIdList.length > 0
-        ? await prisma.service.findMany({
-            where: { id: { in: serviceIdList } },
-            select: { id: true, name: true },
-          })
+        ? await withPrismaRetry(() =>
+            prisma.service.findMany({
+              where: { id: { in: serviceIdList } },
+              select: { id: true, name: true },
+            })
+          )
         : [];
     const serviceNameById = new Map(services.map((s) => [s.id, s.name]));
 
@@ -63,4 +69,3 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Failed to fetch waitlist" }, { status: 500 });
   }
 }
-

@@ -51,7 +51,13 @@ export function mergeBoardJob(live: Job, incoming: Job): Job {
   const incomingMs = parseJobUpdatedAtMs(incoming);
 
   if (liveMs !== null && incomingMs !== null) {
-    if (incomingMs > liveMs) return incoming;
+    if (incomingMs > liveMs) {
+      // Invoice lines and other non-stage PATCHes bump updatedAt without changing stage.
+      // A poll that started before a stage PATCH can therefore look "newer" but still carry
+      // an older column — keep a forward stage the board already shows.
+      const forward = keepForwardBoardStage(live, incoming);
+      return forward.stage !== incoming.stage ? forward : incoming;
+    }
     if (incomingMs < liveMs) {
       return {
         ...incoming,

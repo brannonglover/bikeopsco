@@ -6,6 +6,7 @@ import {
   consolidateCustomerConversations,
   findOrCreateGeneralConversation,
 } from "@/lib/conversation";
+import { getEffectiveSmsConsent } from "@/lib/sms-consent";
 import { requireCurrentShop } from "@/lib/shop";
 
 const conversationInclude = {
@@ -80,7 +81,19 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    return NextResponse.json(conversations);
+    return NextResponse.json(
+      conversations.map((conversation) =>
+        conversation.customer
+          ? {
+              ...conversation,
+              customer: {
+                ...conversation.customer,
+                smsConsent: getEffectiveSmsConsent(conversation.customer),
+              },
+            }
+          : conversation
+      )
+    );
   } catch (error) {
     console.error("GET /api/conversations error:", error);
     return NextResponse.json(

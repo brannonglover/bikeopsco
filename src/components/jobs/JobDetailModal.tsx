@@ -1186,7 +1186,7 @@ function JobDetailsDateFields({
       nextMs === null
         ? { [field]: null }
         : { [field]: new Date(trimmed).toISOString() };
-    onJobUpdated({ ...job, ...body, updatedAt: new Date().toISOString() });
+    onJobUpdated({ ...job, ...body });
 
     try {
       const res = await fetch(`/api/jobs/${job.id}`, {
@@ -1239,7 +1239,7 @@ function JobDetailsDateFields({
     const version = saveVersionsRef.current[field] + 1;
     saveVersionsRef.current[field] = version;
     setFieldSaving(field, true);
-    onJobUpdated({ ...job, ...body, updatedAt: new Date().toISOString() });
+    onJobUpdated({ ...job, ...body });
 
     try {
       const res = await fetch(`/api/jobs/${job.id}`, {
@@ -1996,13 +1996,24 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
   const [reviewBanner, setReviewBanner] = useState<{ ok: boolean; text: string } | null>(null);
   const latestJobPropRef = useRef(jobProp);
   latestJobPropRef.current = jobProp;
-  /** Ignore stale modal enrich GETs after invoice line edits (same updatedAt, older quantities). */
+  /** Ignore stale modal enrich GETs after invoice line edits or board stage moves. */
   const jobEnrichGenRef = useRef(0);
   const onJobUpdatedRef = useRef(onJobUpdated);
+  const prevJobPropStageRef = useRef(jobProp?.stage);
 
   useEffect(() => {
     onJobUpdatedRef.current = onJobUpdated;
   }, [onJobUpdated]);
+
+  useEffect(() => {
+    if (!jobProp?.id) return;
+    if (prevJobPropStageRef.current !== jobProp.stage) {
+      if (prevJobPropStageRef.current !== undefined) {
+        jobEnrichGenRef.current += 1;
+      }
+      prevJobPropStageRef.current = jobProp.stage;
+    }
+  }, [jobProp?.id, jobProp?.stage]);
 
   // Mirror parent job when it changes (e.g. kanban drag PATCH updates selectedJob — same id, new object)
   useEffect(() => {

@@ -538,7 +538,7 @@ function BikeImageSearch({
 }
 
 function SmsConsentStatus({ customer }: { customer: Customer }) {
-  const hasPhone = Boolean(customer.phone);
+  const hasPhone = Boolean(customer.phone?.trim());
   const hasConsent = Boolean(customer.smsConsent);
   const updatedAt = customer.smsConsentUpdatedAt
     ? new Date(customer.smsConsentUpdatedAt).toLocaleDateString()
@@ -554,20 +554,30 @@ function SmsConsentStatus({ customer }: { customer: Customer }) {
         <span
           className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
             !hasPhone
-              ? "bg-slate-100 text-slate-600 border border-slate-200"
+              ? hasConsent
+                ? "bg-amber-50 text-amber-700 border border-amber-200"
+                : "bg-slate-100 text-slate-600 border border-slate-200"
               : hasConsent
               ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
               : "bg-slate-100 text-slate-600 border border-slate-200"
           }`}
         >
-          {!hasPhone ? "No phone" : hasConsent ? "Consented" : "Not consented"}
+          {!hasPhone
+            ? hasConsent
+              ? "Consented, no phone"
+              : "No phone"
+            : hasConsent
+            ? "Consented"
+            : "Not consented"}
         </span>
       </div>
       <p className="mt-1 text-xs text-slate-500">
         {!hasPhone
-          ? "Customer needs a phone number before SMS updates can be used."
+          ? hasConsent
+            ? "Customer opted in to SMS but needs a phone number before texts can be sent."
+            : "Customer needs a phone number before SMS updates can be used."
           : hasConsent
-          ? `Customer opted in${source ? ` via ${source}` : ""}${updatedAt ? ` on ${updatedAt}` : ""}.`
+          ? `Customer opted in${source ? ` via ${source}` : ""}${updatedAt ? ` on ${updatedAt}` : ""}. Reply STOP to opt out.`
           : "Customer has not opted in to service-related SMS."}
       </p>
     </div>
