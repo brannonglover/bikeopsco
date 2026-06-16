@@ -9,8 +9,8 @@
     "lint": "next lint",
     "db:push": "node scripts/prisma.js db push",
     "db:migrate": "node scripts/prisma.js migrate dev",
-    "db:seed": "prisma db seed",
-    "db:seed:staging": "SEED_DEMO_DATA=true prisma db seed",
+    "db:seed": "node scripts/prisma.js db seed",
+    "db:seed:staging": "SEED_DEMO_DATA=true node scripts/prisma.js db seed",
     "postinstall": "node scripts/prisma.js generate"
   },
   "prisma": {

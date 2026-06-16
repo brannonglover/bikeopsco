@@ -28,11 +28,12 @@ npm install
 2. Go to **Project Settings → Database**
 3. Under **Connection string**, select **URI** and copy it
 4. Replace `[YOUR-PASSWORD]` with your database password (from the same page)
-5. Add to `.env` (include `?sslmode=require` for Supabase):
+5. Add to `.env` (Supabase pooler — see [DEPLOYMENT.md](DEPLOYMENT.md#supabase-connection-strings-vercel)):
    ```
    DATABASE_URL="postgresql://postgres.[project-ref]:[PASSWORD]@aws-0-[region].pooler.supabase.com:6543/postgres?pgbouncer=true&sslmode=require"
+   DIRECT_URL="postgresql://postgres.[project-ref]:[PASSWORD]@aws-0-[region].pooler.supabase.com:5432/postgres?sslmode=require"
    ```
-   Or use the **Direct connection** from the Supabase dashboard (port 5432) with `?sslmode=require` appended.
+   Use **Session mode** (port 5432 on `pooler.supabase.com`) for `DIRECT_URL`. Do **not** use `db.*.supabase.co` — it is unreachable from Vercel builds.
 6. Run:
    ```bash
    npm run db:push
