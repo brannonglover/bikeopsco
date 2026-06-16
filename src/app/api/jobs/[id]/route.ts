@@ -250,6 +250,16 @@ export async function PATCH(
     if (stageChanged) {
       updateData.completedAt = data.stage === "COMPLETED" ? new Date() : null;
       updateData.columnSortOrder = null;
+      // Reopening a completed job brings it back to the active board and payment flows.
+      if (
+        data.archived === undefined &&
+        existingJob.stage === "COMPLETED" &&
+        data.stage &&
+        data.stage !== "COMPLETED" &&
+        data.stage !== "CANCELLED"
+      ) {
+        updateData.archivedAt = null;
+      }
     }
 
     if (!stageChanged && data.stage !== undefined) {

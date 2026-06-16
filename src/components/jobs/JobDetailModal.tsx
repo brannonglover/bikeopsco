@@ -1839,6 +1839,50 @@ function ReprocessStripeButton({
   );
 }
 
+function PayOnlineButton({ jobId, label }: { jobId: string; label: string }) {
+  const [opening, setOpening] = useState(false);
+  const [openError, setOpenError] = useState<string | null>(null);
+
+  const handleOpen = async () => {
+    setOpenError(null);
+    setOpening(true);
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/customer-links`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || typeof data.billUrl !== "string" || !data.billUrl) {
+        setOpenError(data.error ?? "Could not open payment page");
+        return;
+      }
+      window.open(data.billUrl, "_blank", "noopener,noreferrer");
+    } catch {
+      setOpenError("Could not open payment page");
+    } finally {
+      setOpening(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-1">
+      <button
+        type="button"
+        onClick={handleOpen}
+        disabled={opening}
+        className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+      >
+        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+        </svg>
+        {opening ? "Opening…" : label}
+      </button>
+      {openError && (
+        <p className="text-xs text-red-600" role="alert">
+          {openError}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function CopyPaymentLinkButton({ jobId }: { jobId: string }) {
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState<string | null>(null);
@@ -3834,17 +3878,10 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
         <div className="mt-4 flex flex-col gap-2">
           {paymentSummary.totalPaid > 0 && <PartialPaymentStatusBlock />}
           <div className="flex flex-wrap gap-2">
-            <a
-              href={`/pay/${job.id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700"
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-              </svg>
-              {paymentSummary.totalPaid > 0 ? "Pay remaining balance" : "Pay online"}
-            </a>
+            <PayOnlineButton
+              jobId={job.id}
+              label={paymentSummary.totalPaid > 0 ? "Pay remaining balance" : "Pay online"}
+            />
             <span className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-600">
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
