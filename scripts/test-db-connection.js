@@ -16,6 +16,7 @@ if (fs.existsSync(envPath)) {
 const url = process.env.DATABASE_URL;
 if (!url) {
   console.error("❌ DATABASE_URL not set in .env");
+  console.error("   Run: npm run db:validate-env  (after setting DATABASE_URL and DIRECT_URL)");
   process.exit(1);
 }
 
@@ -32,6 +33,7 @@ try {
   console.log("✅ Connection successful!");
 } catch (err) {
   console.error("❌ Connection failed.");
+  console.error("\nRun first: npm run db:validate-env");
   console.error("\nCommon fixes:");
   console.error("1. PAUSED PROJECT: Supabase free tier pauses after ~7 days.");
   console.error("   → Dashboard: https://supabase.com/dashboard → select project → 'Restore project'");

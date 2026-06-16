@@ -4,7 +4,11 @@
  * Schema validation requires both env vars; generate does not need a real DB.
  */
 const { spawnSync } = require("child_process");
-const { parseDbUrl } = require("./validate-db-env");
+const {
+  diagnosePair,
+  formatReport,
+  printFailureHelp,
+} = require("./db-url-diagnostics");
 
 const args = process.argv.slice(2);
 if (args.length === 0) {
@@ -103,31 +107,21 @@ if (needsDatabase) {
 }
 
 function runDbEnvValidation() {
-  const labels = ["DATABASE_URL", "DIRECT_URL"];
-  const reports = labels.map((label) => parseDbUrl(process.env[label], label));
-  const errors = reports.flatMap((r) => r.issues.map((i) => `${r.label}: ${i}`));
+  const diag = diagnosePair(process.env.DATABASE_URL, process.env.DIRECT_URL);
+  const hasErrors =
+    !diag.ok ||
+    diag.pairIssues.length > 0 ||
+    (diag.database.issues?.length ?? 0) > 0 ||
+    (diag.direct.issues?.length ?? 0) > 0;
 
-  const refs = reports.map((r) => r.projectRef).filter(Boolean);
-  if (refs.length === 2 && refs[0] !== refs[1]) {
-    errors.push(
-      "DATABASE_URL and DIRECT_URL use different Supabase project refs"
-    );
-  }
-
-  if (errors.length === 0) return;
+  if (!hasErrors) return;
 
   console.error(
     [
-      "Error: database environment variables failed validation.",
+      "Error: DATABASE_URL / DIRECT_URL failed validation before Prisma.",
       "",
-      ...reports.map((r) => {
-        const lines = [`${r.label}: host=${r.host ?? "?"}, port=${r.port ?? "?"}, user=${r.user ?? "?"}`];
-        for (const issue of r.issues) lines.push(`  ✗ ${issue}`);
-        return lines.join("\n");
-      }),
-      "",
-      "Run locally: npm run db:validate-env",
-      "See DEPLOYMENT.md § Database connection fix checklist.",
+      formatReport(diag),
+      printFailureHelp(),
     ].join("\n")
   );
   process.exit(1);

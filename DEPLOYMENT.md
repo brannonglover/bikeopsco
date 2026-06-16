@@ -80,9 +80,17 @@ Optional: run `npm run db:migrate` against the staging DB to confirm auth before
 **Success:**
 
 ```text
-Database env check (VERCEL_ENV=preview)
-✓ DATABASE_URL and DIRECT_URL structure look correct
 Applying migration ...
+```
+
+**If validation fails before Prisma** (build stops early):
+
+```text
+Error: DATABASE_URL / DIRECT_URL failed validation before Prisma.
+── DATABASE_URL ──
+  username:     postgres.[ref]
+  ...
+Run: npm run db:validate-env
 ```
 
 **Failure patterns:**
@@ -215,6 +223,18 @@ URL-encode special characters in the password (`@` → `%40`, `#` → `%23`, `%`
 Set both on **Preview** (staging) and **Production** in Vercel, then redeploy. `npm run build` runs `prisma migrate deploy` and requires a reachable `DIRECT_URL`.
 
 If the project is paused (Supabase free tier), restore it in the dashboard before redeploying.
+
+### Username correct but build still fails? (P1000 / auth)
+
+If the username is already `postgres.[project-ref]` and you still see **P1000** (auth failed) or connection errors, check these **in order**:
+
+1. **Database password (not API key)** — Supabase → **Project Settings → Database → Database password** → Reset if unsure. Do **not** paste the anon key, service_role key, or connection-pooling “pooler password” from the API page.
+2. **URL-encode the password** — If the password contains `@`, `#`, `%`, `/`, or `+`, encode them in the URL (`@` → `%40`, `#` → `%23`, `%` → `%25`). A correct username with a raw `@` in the password will still fail auth.
+3. **Same Supabase project for both URLs** — `DATABASE_URL` and `DIRECT_URL` must use the **same** `postgres.[project-ref]` (staging Preview vars → staging project; Production vars → prod project). Mixing refs causes auth failures.
+4. **Vercel scope + redeploy** — Vars must be on **Preview (develop)** for `dev.bikeops.co` and **Production** for `main`. After any change: **Deployments → … → Redeploy** (env vars do not apply to old builds).
+5. **No trailing newline** — In Vercel’s env editor, paste the URL once with no extra line break at the end. Run locally: `npm run db:validate-env` (loads `.env`) to see safe diagnostics.
+
+`npm run build` runs validation before `prisma migrate deploy`. A passing local `db:validate-env` does not prove the password is correct — only that structure, ports, and refs look right.
 
 ### Staging database
 
