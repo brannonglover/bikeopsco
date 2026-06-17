@@ -96,7 +96,8 @@ async function withGeneralConversationLock<T>(
 ): Promise<T> {
   const run = async (client: Db) => {
     const lockKey = `${shopId}:${customerId}:general`;
-    await client.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+    // pg_advisory_xact_lock returns void — must use $executeRaw ($queryRaw cannot deserialize it).
+    await client.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
     return fn(client);
   };
 

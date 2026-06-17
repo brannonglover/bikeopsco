@@ -77,21 +77,40 @@ export async function mirrorJobStageToCustomerChat({
   if (!force) {
     const conversation = await resolveGeneralConversation(shopId, customerId);
     if (conversation) {
+      // One system message per job per template (body text alone is not unique across jobs).
       const existing = await prisma.message.findFirst({
         where: {
           conversationId: conversation.id,
           sender: "SYSTEM",
-          body: built.message,
+          body: { contains: `/status/${job.id}` },
         },
-        select: { id: true },
+        select: { id: true, body: true },
       });
-      if (existing) return;
+      if (existing?.body === built.message) {
+        console.info("[system-chat] mirrorJobStageToCustomerChat: skipped duplicate", {
+          jobId: job.id,
+          customerId,
+          templateSlug: smsTemplateSlug,
+          messageId: existing.id,
+        });
+        return;
+      }
     }
   }
 
-  await addCustomerSystemChatMessage({
+  const message = await addCustomerSystemChatMessage({
     shopId,
     customerId,
     body: built.message,
   });
+
+  if (message) {
+    console.info("[system-chat] mirrorJobStageToCustomerChat: posted", {
+      jobId: job.id,
+      customerId,
+      templateSlug: smsTemplateSlug,
+      messageId: message.id,
+      conversationId: message.conversationId,
+    });
+  }
 }

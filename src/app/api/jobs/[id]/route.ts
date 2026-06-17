@@ -516,7 +516,42 @@ export async function PATCH(
       }).catch((e) => console.error("[Reject] Declined email failed:", e));
     }
 
-    // Dedup checks + sends run after the response is built so the board PATCH returns as soon as the DB work finishes.
+    const stageNotificationSlug =
+      stageChanged &&
+      data.stage &&
+      data.stage !== "CANCELLED" &&
+      data.stage !== "COMPLETED" &&
+      existingJob
+        ? getTemplateSlugForStage(data.stage, existingJob.deliveryType)
+        : null;
+
+    // Chat mirror runs before the response (serverless would drop a post-response task).
+    // Independent of SMS/email delivery flags except per-job notifyCustomer opt-out.
+    if (
+      features.chatEnabled &&
+      data.notifyCustomer !== false &&
+      stageNotificationSlug &&
+      job.customer?.id
+    ) {
+      try {
+        await mirrorJobStageToCustomerChat({
+          shopId: job.shopId,
+          customerId: job.customer.id,
+          job,
+          smsTemplateSlug: stageNotificationSlug,
+          force: Boolean(data.resendNotification),
+        });
+      } catch (e) {
+        console.error("[PATCH job] stage chat mirror failed:", {
+          jobId: id,
+          customerId: job.customer.id,
+          templateSlug: stageNotificationSlug,
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
+    }
+
+    // Email/SMS dedup + sends run after the DB update; SMS/email still respect notifyCustomerEnabled.
     if (
       features.notifyCustomerEnabled &&
       data.notifyCustomer !== false &&
@@ -529,31 +564,12 @@ export async function PATCH(
       const templateSlug = data.stage === "BIKE_READY"
         ? "bike_ready_invoice"
         : getTemplateForStage(data.stage, existingJob.deliveryType);
-      const smsTemplateSlug = getTemplateSlugForStage(data.stage, existingJob.deliveryType);
+      const smsTemplateSlug = stageNotificationSlug ?? getTemplateSlugForStage(data.stage, existingJob.deliveryType);
       const customerEmail = getEffectiveEmailUpdatesConsent(job.customer)
         ? job.customer?.email
         : null;
       const customerPhone = job.customer?.phone;
       const canSendSms = getEffectiveSmsConsent(job.customer);
-
-      if (features.chatEnabled && job.customer?.id && smsTemplateSlug) {
-        try {
-          await mirrorJobStageToCustomerChat({
-            shopId: job.shopId,
-            customerId: job.customer.id,
-            job,
-            smsTemplateSlug,
-            force: Boolean(data.resendNotification),
-          });
-        } catch (e) {
-          console.error("[PATCH job] stage chat mirror failed:", {
-            jobId: id,
-            customerId: job.customer.id,
-            templateSlug: smsTemplateSlug,
-            error: e instanceof Error ? e.message : String(e),
-          });
-        }
-      }
 
       void (async () => {
         try {
