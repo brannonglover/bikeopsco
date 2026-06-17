@@ -101,6 +101,8 @@ const SMS_TEMPLATES: Record<string, string> = {
     "{{shopName}}\n\nWe're working on your {{bikeMake}} {{bikeModel}}.\n\nTrack: {{statusUrl}}\n\nReply STOP to opt out.",
   waiting_on_parts:
     "{{shopName}}\n\nWaiting on parts for your {{bikeMake}} {{bikeModel}}.\n\nTrack: {{statusUrl}}\n\nReply STOP to opt out.",
+  waiting_on_customer:
+    "{{shopName}}\n\nWe need your approval to continue work on your {{bikeMake}} {{bikeModel}}.\n\nTrack: {{statusUrl}}\n\nReply STOP to opt out.",
   bike_ready:
     "{{shopName}}\n\n{{bikeReadyMessage}}\n\nView your itemized bill: {{billUrl}}\n\nReply STOP to opt out.",
   bike_ready_invoice:
@@ -121,6 +123,7 @@ export function getTemplateSlugForStage(
   }
   const map: Record<string, string> = {
     WORKING_ON: "working_on_bike",
+    WAITING_ON_CUSTOMER: "waiting_on_customer",
     WAITING_ON_PARTS: "waiting_on_parts",
     BIKE_READY: "bike_ready_invoice",
   };
