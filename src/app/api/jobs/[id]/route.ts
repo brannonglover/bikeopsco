@@ -4,7 +4,7 @@ import { z } from "zod";
 import { getToken } from "next-auth/jwt";
 import { requireStaffShop } from "@/lib/api-auth";
 import { sendBikeReadyInvoiceEmail, sendJobEmail, getTemplateForStage, sendBookingDeclinedEmail } from "@/lib/email";
-import { sendJobSms, getTemplateSlugForStage } from "@/lib/sms";
+import { buildJobSmsMessage, sendJobSms, getTemplateSlugForStage } from "@/lib/sms";
 import { syncCollectionJobService } from "@/lib/collection-fee";
 import { getAppFeatures } from "@/lib/app-settings";
 import { computeJobSubtotal, computeTotalPaid, getJobPaymentSummary } from "@/lib/job-payments";
@@ -562,19 +562,64 @@ export async function PATCH(
               sendJobEmail(templateSlug, customerEmail, job).catch(console.error);
             }
           }
+
+          const mirrorStageToChat = async (body: string) => {
+            if (!features.chatEnabled || !job.customer?.id) return;
+            try {
+              await addCustomerSystemChatMessage({
+                shopId: job.shopId,
+                customerId: job.customer.id,
+                body,
+              });
+            } catch (e) {
+              console.error("[PATCH job] stage chat mirror failed:", {
+                jobId: id,
+                customerId: job.customer.id,
+                error: e instanceof Error ? e.message : String(e),
+              });
+            }
+          };
+
+          const mirrorResendTemplateToChat = async () => {
+            if (!smsTemplateSlug) return;
+            const built = await buildJobSmsMessage(smsTemplateSlug, job);
+            if (!built.ok || !built.message) {
+              console.error("[PATCH job] resend chat mirror: template build failed:", {
+                jobId: id,
+                templateSlug: smsTemplateSlug,
+                error: built.error,
+              });
+              return;
+            }
+            await mirrorStageToChat(built.message);
+          };
+
           if (canSendSms && customerPhone && smsTemplateSlug && (!smsAlreadySent || data.resendNotification)) {
-            sendJobSms(smsTemplateSlug, customerPhone, job)
-              .then((result) => {
-                if (!result.ok || !result.message || !features.chatEnabled || !job.customer?.id) {
-                  return;
-                }
-                return addCustomerSystemChatMessage({
-                  shopId: job.shopId,
-                  customerId: job.customer.id,
-                  body: result.message,
-                });
-              })
-              .catch(console.error);
+            const result = await sendJobSms(smsTemplateSlug, customerPhone, job);
+            if (result.ok && result.message) {
+              await mirrorStageToChat(result.message);
+            } else if (data.resendNotification) {
+              console.warn("[PATCH job] SMS send failed on resend; mirroring to chat only:", {
+                jobId: id,
+                customerId: job.customer?.id,
+                error: result.error,
+              });
+              await mirrorResendTemplateToChat();
+            } else {
+              console.warn("[PATCH job] SMS send failed:", {
+                jobId: id,
+                error: result.error,
+              });
+            }
+          } else if (data.resendNotification && smsTemplateSlug) {
+            console.warn("[PATCH job] resend: SMS skipped; mirroring to chat only:", {
+              jobId: id,
+              customerId: job.customer?.id,
+              canSendSms,
+              hasPhone: Boolean(customerPhone),
+              smsAlreadySent: Boolean(smsAlreadySent),
+            });
+            await mirrorResendTemplateToChat();
           }
         } catch (e) {
           console.error("[PATCH job] stage notification dedup/send failed:", e);

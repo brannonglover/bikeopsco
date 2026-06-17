@@ -13,21 +13,30 @@ export async function addCustomerSystemChatMessage({
   const trimmed = body.trim();
   if (!trimmed) return null;
 
-  const conversation = await findOrCreateGeneralConversation(shopId, customerId);
+  try {
+    const conversation = await findOrCreateGeneralConversation(shopId, customerId);
 
-  const message = await prisma.message.create({
-    data: {
+    const message = await prisma.message.create({
+      data: {
+        shopId,
+        conversationId: conversation.id,
+        sender: "SYSTEM",
+        body: trimmed,
+      },
+    });
+
+    await prisma.conversation.update({
+      where: { id: conversation.id },
+      data: { updatedAt: new Date() },
+    });
+
+    return message;
+  } catch (error) {
+    console.error("[system-chat] addCustomerSystemChatMessage failed:", {
       shopId,
-      conversationId: conversation.id,
-      sender: "SYSTEM",
-      body: trimmed,
-    },
-  });
-
-  await prisma.conversation.update({
-    where: { id: conversation.id },
-    data: { updatedAt: new Date() },
-  });
-
-  return message;
+      customerId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
 }
