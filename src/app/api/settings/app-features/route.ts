@@ -32,6 +32,10 @@ const updateSchema = z.object({
       message: "Invalid timezone",
     })
     .optional(),
+  staffNotifyEmail: z
+    .union([z.string().trim().email(), z.literal(""), z.null()])
+    .optional()
+    .transform((value) => (value === "" ? null : value)),
 });
 
 export async function GET(request: NextRequest) {

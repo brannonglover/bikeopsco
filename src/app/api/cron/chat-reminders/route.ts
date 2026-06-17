@@ -10,6 +10,7 @@ import { getEffectiveEmailUpdatesConsent } from "@/lib/sms-consent";
 import { getChatCustomerReminderDelivery } from "@/lib/chat-reminder-delivery";
 import { getStaffChatOpenUrl } from "@/lib/env";
 import { getAppFeatures } from "@/lib/app-settings";
+import { getShopNotifyEmail } from "@/lib/shop-notify-email";
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
@@ -23,9 +24,6 @@ export async function GET(request: NextRequest) {
   const reminderMs = getChatReminderMs();
   const reminderMinutes = getChatReminderMinutes();
   const cutoff = new Date(Date.now() - reminderMs);
-
-  const staffEmail =
-    process.env.SHOP_NOTIFY_EMAIL?.trim() || process.env.ADMIN_EMAIL?.trim();
 
   try {
     const shops = await prisma.shop.findMany({
@@ -119,6 +117,7 @@ export async function GET(request: NextRequest) {
             nudgesCustomer++;
           }
         } else {
+          const staffEmail = await getShopNotifyEmail(shop.id);
           if (!staffEmail) continue;
 
           // Find the earliest customer message staff hasn't read yet.

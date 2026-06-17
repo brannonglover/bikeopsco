@@ -9,6 +9,7 @@ import {
 } from "@/lib/email";
 import { formatCollectionWindowRange } from "@/lib/format-collection-window";
 import { getShopTimezone } from "@/lib/shop-timezone";
+import { getShopNotifyEmail } from "@/lib/shop-notify-email";
 import { sendPushToAllStaff } from "@/lib/push";
 import { getAppUrl } from "@/lib/env";
 
@@ -193,7 +194,7 @@ function buildJobTableRows(jobs: JobRow[], shopTimeZone: string): string {
  * Daily staff digest: notifies the shop owner/staff about customers dropping off
  * or being collected today and tomorrow.
  *
- * Sends an email to SHOP_NOTIFY_EMAIL (or ADMIN_EMAIL) and a push notification
+ * Sends an email to the shop staff notification address and a push notification
  * to all registered staff devices.
  *
  * Runs daily at 8:00 AM in the shop timezone via Vercel Cron (see vercel.json).
@@ -285,13 +286,11 @@ export async function GET(request: NextRequest) {
 
     // Send email digest to shop
     const resend = getResend();
-    const notifyEmail =
-      process.env.SHOP_NOTIFY_EMAIL?.trim() ||
-      process.env.ADMIN_EMAIL?.trim();
+    const notifyEmail = await getShopNotifyEmail(DEFAULT_SHOP_ID);
 
     if (!resend || !notifyEmail) {
       console.warn(
-        "Email not sent: RESEND_API_KEY or SHOP_NOTIFY_EMAIL/ADMIN_EMAIL not configured"
+        "Email not sent: RESEND_API_KEY or staff notification email not configured"
       );
       return NextResponse.json({
         pushed: totalJobs > 0,

@@ -540,6 +540,8 @@ model AppSettings {
   reviewsEnabled           Boolean  @default(true)
   /// IANA timezone for shop scheduling (e.g. America/New_York).
   timezone                 String   @default("America/New_York")
+  /// Staff email for booking, payment, chat, and waitlist notifications.
+  staffNotifyEmail         String?
   logoUrl                  String?
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt

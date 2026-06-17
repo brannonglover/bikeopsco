@@ -16,6 +16,7 @@ export type AppFeatures = {
   chatEnabled: boolean;
   reviewsEnabled: boolean;
   timezone: string;
+  staffNotifyEmail: string | null;
 };
 
 export type ClosedDate = {
@@ -42,6 +43,7 @@ const DEFAULT_FEATURES: AppFeatures = {
   chatEnabled: true,
   reviewsEnabled: true,
   timezone: DEFAULT_SHOP_TIMEZONE,
+  staffNotifyEmail: null,
 };
 
 function normalizeClosedDates(value: unknown): ClosedDate[] {
@@ -86,6 +88,7 @@ export async function getAppFeatures(shopId?: string): Promise<AppFeatures> {
       chatEnabled: row.chatEnabled,
       reviewsEnabled: row.reviewsEnabled,
       timezone: normalizeIANATimezone(row.timezone),
+      staffNotifyEmail: row.staffNotifyEmail?.trim() || null,
     };
   } catch (e) {
     console.warn("[app-settings] Failed to load AppSettings; using defaults:", e);
@@ -124,6 +127,7 @@ export async function upsertAppFeatures(
     chatEnabled: updated.chatEnabled,
     reviewsEnabled: updated.reviewsEnabled,
     timezone: normalizeIANATimezone(updated.timezone),
+    staffNotifyEmail: updated.staffNotifyEmail?.trim() || null,
   };
 }
 

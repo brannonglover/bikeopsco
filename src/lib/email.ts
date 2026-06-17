@@ -4,6 +4,7 @@ import path from "path";
 import { formatCollectionWindowRange } from "./format-collection-window";
 import { getEffectiveEmailUpdatesConsent } from "./sms-consent";
 import { getShopTimezone } from "./shop-timezone";
+import { getShopNotifyEmail } from "./shop-notify-email";
 import type { ChatCustomerReminderDelivery } from "./chat-reminder-delivery";
 import { getCustomerBillUrl, getCustomerStatusUrl } from "./job-customer-access";
 import { getAppUrl, getCustomerNotificationBlockReason, getResendApiKey, getShopAppUrl, getStaffJobOpenUrl } from "./env";
@@ -659,10 +660,9 @@ export async function sendBookingRequestNotification(
     return { ok: false, error: "Email not configured" };
   }
 
-  const notifyEmail =
-    process.env.SHOP_NOTIFY_EMAIL?.trim() || process.env.ADMIN_EMAIL?.trim();
+  const notifyEmail = await getShopNotifyEmail(job.shopId ?? "shop_default");
   if (!notifyEmail) {
-    console.warn("SHOP_NOTIFY_EMAIL and ADMIN_EMAIL not set, skipping booking notification");
+    console.warn("No staff notification email configured, skipping booking notification");
     return { ok: false, error: "No notification email configured" };
   }
 
@@ -786,12 +786,6 @@ ${staffJobUrl ? buildCustomerEmailCtaButton(staffJobUrl, "Review & accept or rej
   }
 }
 
-function getShopNotifyEmail(): string | null {
-  return (
-    process.env.SHOP_NOTIFY_EMAIL?.trim() || process.env.ADMIN_EMAIL?.trim() || null
-  );
-}
-
 function formatPaymentMethodLabel(method: string): string {
   const normalized = method.trim().toLowerCase();
   if (!normalized || normalized === "unknown") return "Payment";
@@ -831,9 +825,9 @@ export async function sendPaymentReceivedNotification(details: {
     return { ok: false, error: "Email not configured" };
   }
 
-  const notifyEmail = getShopNotifyEmail();
+  const notifyEmail = await getShopNotifyEmail(details.shopId);
   if (!notifyEmail) {
-    console.warn("SHOP_NOTIFY_EMAIL and ADMIN_EMAIL not set, skipping payment notification");
+    console.warn("No staff notification email configured, skipping payment notification");
     return { ok: false, error: "No notification email configured" };
   }
 
@@ -1129,10 +1123,9 @@ export async function sendWaitlistRequestNotification(entry: {
     return { ok: false, error: "Email not configured" };
   }
 
-  const notifyEmail =
-    process.env.SHOP_NOTIFY_EMAIL?.trim() || process.env.ADMIN_EMAIL?.trim();
+  const notifyEmail = await getShopNotifyEmail(entry.shopId ?? "shop_default");
   if (!notifyEmail) {
-    console.warn("SHOP_NOTIFY_EMAIL and ADMIN_EMAIL not set, skipping waitlist notification");
+    console.warn("No staff notification email configured, skipping waitlist notification");
     return { ok: false, error: "No notification email configured" };
   }
 

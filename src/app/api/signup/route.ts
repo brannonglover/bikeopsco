@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      await provisionShopDefaults(tx, createdShop.id, shopName);
+      await provisionShopDefaults(tx, createdShop.id, shopName, email);
       return createdShop;
     });
 
