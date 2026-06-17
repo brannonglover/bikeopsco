@@ -168,6 +168,7 @@ model Job {
   updatedAt         DateTime     @updatedAt
 
   @@index([shopId])
+  @@index([shopId, archivedAt, stage])
 }
 
 model Payment {
@@ -185,6 +186,7 @@ model Payment {
 
   @@unique([shopId, stripePaymentIntentId])
   @@index([shopId])
+  @@index([jobId])
 }
 
 enum PaymentStatus {
@@ -236,6 +238,7 @@ model JobService {
   createdAt         DateTime @default(now())
 
   @@index([shopId])
+  @@index([jobId])
 }
 
 enum Stage {
@@ -334,6 +337,7 @@ model JobProduct {
   createdAt DateTime @default(now())
 
   @@index([shopId])
+  @@index([jobId])
 }
 
 model Conversation {

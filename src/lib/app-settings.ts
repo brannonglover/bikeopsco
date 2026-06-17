@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { prisma } from "@/lib/db";
 import { requireCurrentShop } from "@/lib/shop";
 import { DEFAULT_SHOP_TIMEZONE, normalizeIANATimezone } from "@/lib/timezone";
@@ -71,10 +72,9 @@ export const DEFAULT_BRANDING: AppBranding = {
   logoAlt: "Bike Ops",
 };
 
-export async function getAppFeatures(shopId?: string): Promise<AppFeatures> {
+async function loadAppFeaturesForShop(shopId: string): Promise<AppFeatures> {
   try {
-    const resolvedShopId = shopId ?? (await requireCurrentShop()).id;
-    const row = await prisma.appSettings.findUnique({ where: { shopId: resolvedShopId } });
+    const row = await prisma.appSettings.findUnique({ where: { shopId } });
     if (!row) return DEFAULT_FEATURES;
     return {
       bookingsEnabled: row.bookingsEnabled,
@@ -95,6 +95,11 @@ export async function getAppFeatures(shopId?: string): Promise<AppFeatures> {
     return DEFAULT_FEATURES;
   }
 }
+
+export const getAppFeatures = cache(async (shopId?: string): Promise<AppFeatures> => {
+  const resolvedShopId = shopId ?? (await requireCurrentShop()).id;
+  return loadAppFeaturesForShop(resolvedShopId);
+});
 
 export async function upsertAppFeatures(
   shopId: string,

@@ -184,18 +184,6 @@ export async function GET(request: NextRequest) {
               notes: true,
               createdAt: true,
               updatedAt: true,
-              // Include bikes so job card display can fall back to the customer's profile bike when a JobBike
-              // is not linked (bikeId null), and so nickname edits reflect on the board reliably.
-              bikes: {
-                select: {
-                  id: true,
-                  make: true,
-                  model: true,
-                  bikeType: true,
-                  nickname: true,
-                  imageUrl: true,
-                },
-              },
             },
           },
           jobBikes: {
@@ -232,7 +220,7 @@ export async function GET(request: NextRequest) {
               unitPrice: true,
               notes: true,
               jobBikeId: true,
-              service: true,
+              service: { select: { name: true, price: true } },
               jobBike: {
                 select: {
                   id: true,
@@ -251,7 +239,7 @@ export async function GET(request: NextRequest) {
               unitPrice: true,
               notes: true,
               jobBikeId: true,
-              product: true,
+              product: { select: { name: true, price: true } },
               jobBike: {
                 select: {
                   id: true,
