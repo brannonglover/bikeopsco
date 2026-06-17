@@ -786,6 +786,147 @@ ${staffJobUrl ? buildCustomerEmailCtaButton(staffJobUrl, "Review & accept or rej
   }
 }
 
+function getShopNotifyEmail(): string | null {
+  return (
+    process.env.SHOP_NOTIFY_EMAIL?.trim() || process.env.ADMIN_EMAIL?.trim() || null
+  );
+}
+
+function formatPaymentMethodLabel(method: string): string {
+  const normalized = method.trim().toLowerCase();
+  if (!normalized || normalized === "unknown") return "Payment";
+  if (normalized === "cash") return "Cash";
+  if (normalized === "terminal" || normalized === "card_present") return "Card (in person)";
+  if (normalized === "apple_pay") return "Apple Pay";
+  if (normalized === "google_pay") return "Google Pay";
+  if (normalized === "online" || normalized === "card") return "Card (online)";
+  return method.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function formatMoney(amount: number, currency = "usd"): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: currency.toUpperCase(),
+  }).format(amount);
+}
+
+export async function sendPaymentReceivedNotification(details: {
+  shopId: string;
+  jobId: string;
+  amount: number;
+  currency?: string;
+  paymentMethod: string;
+  customerName: string;
+  customerEmail?: string | null;
+  customerPhone?: string | null;
+  bikeMake: string;
+  bikeModel: string;
+  isPaidInFull?: boolean;
+  remainingBalance?: number;
+  subtotal?: number;
+  totalPaid?: number;
+}): Promise<{ ok: boolean; error?: string }> {
+  const resend = getResend();
+  if (!resend) {
+    return { ok: false, error: "Email not configured" };
+  }
+
+  const notifyEmail = getShopNotifyEmail();
+  if (!notifyEmail) {
+    console.warn("SHOP_NOTIFY_EMAIL and ADMIN_EMAIL not set, skipping payment notification");
+    return { ok: false, error: "No notification email configured" };
+  }
+
+  const currency = details.currency ?? "usd";
+  const amountFormatted = formatMoney(details.amount, currency);
+  const methodLabel = formatPaymentMethodLabel(details.paymentMethod);
+  const staffJobUrl = getStaffJobOpenUrl(details.jobId);
+  const balanceLine =
+    details.isPaidInFull === true
+      ? "Paid in full"
+      : details.remainingBalance != null && details.remainingBalance > 0
+        ? `${formatMoney(details.remainingBalance, currency)} remaining`
+        : null;
+
+  const subject = `Payment received: ${amountFormatted} — ${details.bikeMake} ${details.bikeModel}`;
+  const innerHtml = `
+<p style="margin:0 0 20px">A payment has been recorded for a job.</p>
+
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="email-table" style="margin-bottom:20px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+  <tbody>
+    <tr class="email-table-header" style="background-color:#f8fafc">
+      <td colspan="2" style="padding:12px 16px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#64748b">Payment</td>
+    </tr>
+    <tr class="email-table-row">
+      <td class="email-table-label" style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;width:40%;border-top:1px solid #e2e8f0">Amount</td>
+      <td class="email-table-value" style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(amountFormatted)}</td>
+    </tr>
+    <tr class="email-table-row email-table-row-alt" style="background-color:#f8fafc">
+      <td class="email-table-label" style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;border-top:1px solid #e2e8f0">Method</td>
+      <td class="email-table-value" style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(methodLabel)}</td>
+    </tr>
+    ${
+      balanceLine
+        ? `<tr class="email-table-row">
+      <td class="email-table-label" style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;border-top:1px solid #e2e8f0">Balance</td>
+      <td class="email-table-value" style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(balanceLine)}</td>
+    </tr>`
+        : ""
+    }
+  </tbody>
+</table>
+
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="email-table" style="margin-bottom:20px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+  <tbody>
+    <tr class="email-table-header" style="background-color:#f8fafc">
+      <td colspan="2" style="padding:12px 16px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#64748b">Job</td>
+    </tr>
+    <tr class="email-table-row">
+      <td class="email-table-label" style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;width:40%;border-top:1px solid #e2e8f0">Bike</td>
+      <td class="email-table-value" style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(details.bikeMake)} ${escapeHtml(details.bikeModel)}</td>
+    </tr>
+    <tr class="email-table-row email-table-row-alt" style="background-color:#f8fafc">
+      <td class="email-table-label" style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;border-top:1px solid #e2e8f0">Customer</td>
+      <td class="email-table-value" style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(details.customerName)}</td>
+    </tr>
+    <tr class="email-table-row">
+      <td class="email-table-label" style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;border-top:1px solid #e2e8f0">Email</td>
+      <td class="email-table-value" style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(details.customerEmail ?? "—")}</td>
+    </tr>
+    <tr class="email-table-row email-table-row-alt" style="background-color:#f8fafc">
+      <td class="email-table-label" style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;border-top:1px solid #e2e8f0">Phone</td>
+      <td class="email-table-value" style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(details.customerPhone ?? "—")}</td>
+    </tr>
+  </tbody>
+</table>
+
+${staffJobUrl ? buildCustomerEmailCtaButton(staffJobUrl, "View job") : ""}
+`.trim();
+
+  const branding = await getCustomerEmailBrandingAssets(details.shopId);
+  const html = buildCustomerEmailHtml({
+    innerHtml,
+    headerLogoSrc: branding.headerLogoSrc,
+    heading: "Payment received",
+  });
+  const attachments = customerEmailBrandingAttachments(branding);
+
+  try {
+    const { error } = await resend.emails.send({
+      from: getFromEmail(),
+      to: notifyEmail,
+      subject,
+      html,
+      ...(attachments && { attachments }),
+    });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (e) {
+    const err = e instanceof Error ? e.message : "Unknown error";
+    return { ok: false, error: err };
+  }
+}
+
 const DEFAULT_PLATFORM_SIGNUP_NOTIFY_EMAIL = "support@basementbikemechanic.com";
 
 function getPlatformSignupNotifyEmail(): string {

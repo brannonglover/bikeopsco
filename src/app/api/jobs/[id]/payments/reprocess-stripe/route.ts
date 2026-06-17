@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { requireStaffShop } from "@/lib/api-auth";
 import { sendPaymentReceiptEmail } from "@/lib/email";
 import { computeJobSubtotal, computeTotalPaid, getJobPaymentSummary } from "@/lib/job-payments";
+import { buildPaymentReceivedDetails, notifyShopOfPayment } from "@/lib/payment-notifications";
 
 export async function POST(
   request: NextRequest,
@@ -233,6 +234,56 @@ export async function POST(
     if (!result.ok) {
       console.error("Receipt email failed after reprocess:", result.error);
     }
+  }
+
+  const updatedJob = await prisma.job.findUnique({
+    where: { id: jobId },
+    include: {
+      customer: true,
+      jobServices: true,
+      jobProducts: true,
+      payments: {
+        select: {
+          amount: true,
+          status: true,
+          stripePaymentIntentId: true,
+          paymentMethod: true,
+        },
+      },
+    },
+  });
+  if (updatedJob) {
+    const updatedSubtotal = computeJobSubtotal({
+      jobServices: updatedJob.jobServices,
+      jobProducts: updatedJob.jobProducts,
+    });
+    const updatedTotalPaid = computeTotalPaid(updatedJob.payments);
+    const updatedPaymentSummary = getJobPaymentSummary({
+      currentStatus: updatedJob.paymentStatus,
+      subtotal: updatedSubtotal,
+      totalPaid: updatedTotalPaid,
+    });
+    const paymentMethod =
+      typeof paymentIntent.metadata?.mode === "string" && paymentIntent.metadata.mode.trim()
+        ? paymentIntent.metadata.mode.trim()
+        : paymentIntent.payment_method
+          ? typeof paymentIntent.payment_method === "string"
+            ? paymentIntent.payment_method
+            : (paymentIntent.payment_method as Stripe.PaymentMethod).type
+          : "card";
+    notifyShopOfPayment(
+      buildPaymentReceivedDetails({
+        shopId: updatedJob.shopId,
+        jobId: updatedJob.id,
+        amount: paymentIntent.amount / 100,
+        currency: paymentIntent.currency ?? "usd",
+        paymentMethod,
+        bikeMake: updatedJob.bikeMake,
+        bikeModel: updatedJob.bikeModel,
+        customer: updatedJob.customer,
+        paymentSummary: updatedPaymentSummary,
+      })
+    );
   }
 
   return NextResponse.json({ success: true, message: "Payment recorded successfully" });
