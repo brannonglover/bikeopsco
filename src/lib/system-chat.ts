@@ -1,9 +1,8 @@
 import { prisma } from "@/lib/db";
-import {
-  findOrCreateGeneralConversation,
-  resolveGeneralConversation,
-} from "@/lib/conversation";
+import { findOrCreateGeneralConversation } from "@/lib/conversation";
 import { buildJobSmsMessage, type JobForSms } from "@/lib/sms";
+
+type ShopSmsContext = { name: string; subdomain: string | null };
 
 export async function addCustomerSystemChatMessage({
   shopId,
@@ -55,14 +54,16 @@ export async function mirrorJobStageToCustomerChat({
   job,
   smsTemplateSlug,
   force = false,
+  shopHint,
 }: {
   shopId: string;
   customerId: string;
   job: JobForSms;
   smsTemplateSlug: string;
   force?: boolean;
+  shopHint?: ShopSmsContext;
 }): Promise<void> {
-  const built = await buildJobSmsMessage(smsTemplateSlug, job);
+  const built = await buildJobSmsMessage(smsTemplateSlug, job, shopHint);
   if (!built.ok || !built.message) {
     console.error("[system-chat] mirrorJobStageToCustomerChat: template build failed:", {
       shopId,
@@ -74,43 +75,47 @@ export async function mirrorJobStageToCustomerChat({
     return;
   }
 
+  const conversation = await findOrCreateGeneralConversation(shopId, customerId);
+
   if (!force) {
-    const conversation = await resolveGeneralConversation(shopId, customerId);
-    if (conversation) {
-      // One system message per job per template (body text alone is not unique across jobs).
-      const existing = await prisma.message.findFirst({
-        where: {
-          conversationId: conversation.id,
-          sender: "SYSTEM",
-          body: { contains: `/status/${job.id}` },
-        },
-        select: { id: true, body: true },
+    const existing = await prisma.message.findFirst({
+      where: {
+        conversationId: conversation.id,
+        sender: "SYSTEM",
+        body: { contains: `/status/${job.id}` },
+      },
+      select: { id: true, body: true },
+    });
+    if (existing?.body === built.message) {
+      console.info("[system-chat] mirrorJobStageToCustomerChat: skipped duplicate", {
+        jobId: job.id,
+        customerId,
+        templateSlug: smsTemplateSlug,
+        messageId: existing.id,
       });
-      if (existing?.body === built.message) {
-        console.info("[system-chat] mirrorJobStageToCustomerChat: skipped duplicate", {
-          jobId: job.id,
-          customerId,
-          templateSlug: smsTemplateSlug,
-          messageId: existing.id,
-        });
-        return;
-      }
+      return;
     }
   }
 
-  const message = await addCustomerSystemChatMessage({
-    shopId,
-    customerId,
-    body: built.message,
+  const message = await prisma.message.create({
+    data: {
+      shopId,
+      conversationId: conversation.id,
+      sender: "SYSTEM",
+      body: built.message,
+    },
   });
 
-  if (message) {
-    console.info("[system-chat] mirrorJobStageToCustomerChat: posted", {
-      jobId: job.id,
-      customerId,
-      templateSlug: smsTemplateSlug,
-      messageId: message.id,
-      conversationId: message.conversationId,
-    });
-  }
+  await prisma.conversation.update({
+    where: { id: conversation.id },
+    data: { updatedAt: new Date() },
+  });
+
+  console.info("[system-chat] mirrorJobStageToCustomerChat: posted", {
+    jobId: job.id,
+    customerId,
+    templateSlug: smsTemplateSlug,
+    messageId: message.id,
+    conversationId: message.conversationId,
+  });
 }

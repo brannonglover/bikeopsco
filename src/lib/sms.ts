@@ -161,19 +161,25 @@ function getBikeReadySmsMessage(job: JobForSms): string {
   return `Good news! Your ${bikeName} is ready for pickup.`;
 }
 
+type ShopSmsContext = { name: string; subdomain: string | null };
+
 export async function buildJobSmsMessage(
   templateSlug: string,
-  job: JobForSms
+  job: JobForSms,
+  shopHint?: ShopSmsContext
 ): Promise<{ ok: boolean; message?: string; error?: string }> {
   const body = SMS_TEMPLATES[templateSlug];
   if (!body) {
     return { ok: false, error: `SMS template not found: ${templateSlug}` };
   }
 
-  const { prisma } = await import("./db");
-  const shopRow = await prisma.shop
-    .findUnique({ where: { id: job.shopId }, select: { name: true, subdomain: true } })
-    .catch(() => null);
+  let shopRow = shopHint ?? null;
+  if (!shopRow) {
+    const { prisma } = await import("./db");
+    shopRow = await prisma.shop
+      .findUnique({ where: { id: job.shopId }, select: { name: true, subdomain: true } })
+      .catch(() => null);
+  }
   const shopName = shopRow?.name ?? process.env.SHOP_NAME ?? "Basement Bike Mechanic";
   const customerName = job.customer
     ? job.customer.lastName
@@ -200,9 +206,10 @@ export async function buildJobSmsMessage(
 export async function sendJobSms(
   templateSlug: string,
   phoneNumber: string,
-  job: JobForSms
+  job: JobForSms,
+  shopHint?: ShopSmsContext
 ): Promise<{ ok: boolean; message?: string; error?: string }> {
-  const built = await buildJobSmsMessage(templateSlug, job);
+  const built = await buildJobSmsMessage(templateSlug, job, shopHint);
   if (!built.ok || !built.message) {
     return { ok: false, error: built.error };
   }

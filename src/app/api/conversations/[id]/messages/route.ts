@@ -43,11 +43,16 @@ export async function GET(
     }
     ({ id: conversationId } = await params);
 
-    // Keep the base conversation fetch minimal so this route can still work if the DB
+    // Keep the conversation fetch minimal so this route can still work if the DB
     // is temporarily behind migrations (missing newer optional columns).
     const conversation = await prisma.conversation.findFirst({
       where: { id: conversationId, shopId: shop.id },
-      select: { updatedAt: true },
+      select: {
+        updatedAt: true,
+        customerTypingAt: true,
+        customerLastReadAt: true,
+        staffLastReadAt: true,
+      },
     });
 
     if (!conversation) {
@@ -72,23 +77,9 @@ export async function GET(
       });
     }
 
-    let customerTypingAtIso: string | null = null;
-    let customerLastReadAtIso: string | null = null;
-    let currentStaffLastReadAt: Date | null = null;
-    try {
-      const extra = await prisma.conversation.findFirst({
-        where: { id: conversationId, shopId: shop.id },
-        select: { customerTypingAt: true, customerLastReadAt: true, staffLastReadAt: true },
-      });
-      customerTypingAtIso = extra?.customerTypingAt?.toISOString() ?? null;
-      customerLastReadAtIso = extra?.customerLastReadAt?.toISOString() ?? null;
-      currentStaffLastReadAt = extra?.staffLastReadAt ?? null;
-    } catch (e) {
-      console.warn("[chat] Failed to load conversation extras; continuing:", {
-        conversationId,
-        error: e,
-      });
-    }
+    const customerTypingAtIso = conversation.customerTypingAt?.toISOString() ?? null;
+    const customerLastReadAtIso = conversation.customerLastReadAt?.toISOString() ?? null;
+    const currentStaffLastReadAt = conversation.staffLastReadAt ?? null;
 
     const latestCustomerMessageAt = messages.reduce<Date | null>((latest, message) => {
       if (message.sender !== "CUSTOMER") return latest;

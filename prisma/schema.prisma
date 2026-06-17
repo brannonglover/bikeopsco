@@ -383,6 +383,7 @@ model Message {
 
   @@unique([shopId, smsSid])
   @@index([shopId])
+  @@index([conversationId, createdAt])
 }
 
 model MessageReaction {

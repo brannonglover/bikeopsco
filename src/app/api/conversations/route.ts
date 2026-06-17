@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
         : {}),
     };
 
-    let conversations = await prisma.conversation.findMany({
+    const conversations = await prisma.conversation.findMany({
       where: listWhere,
       orderBy: { updatedAt: "desc" },
       include: conversationInclude,
@@ -69,16 +69,15 @@ export async function GET(request: NextRequest) {
       .map(([customerId]) => customerId);
 
     if (dupeCustomerIds.length > 0) {
-      await prisma.$transaction(async (tx) => {
-        for (const customerId of dupeCustomerIds) {
-          await consolidateCustomerConversations(shop.id, customerId, tx);
-        }
-      });
-      conversations = await prisma.conversation.findMany({
-        where: listWhere,
-        orderBy: { updatedAt: "desc" },
-        include: conversationInclude,
-      });
+      void prisma
+        .$transaction(async (tx) => {
+          for (const customerId of dupeCustomerIds) {
+            await consolidateCustomerConversations(shop.id, customerId, tx);
+          }
+        })
+        .catch((e) =>
+          console.error("[chat] Background conversation consolidation failed:", e)
+        );
     }
 
     return NextResponse.json(
