@@ -1,44 +1,67 @@
 #!/usr/bin/env node
 /**
- * Test database connection. Run: node scripts/test-db-connection.js
- * Helps diagnose Supabase connection issues.
+ * Test database connection (auth). Run: node scripts/test-db-connection.js
+ * Uses DATABASE_URL and DIRECT_URL from .env / .env.local (no secrets printed).
  */
-const fs = require("fs");
-const path = require("path");
-const envPath = path.join(process.cwd(), ".env");
-if (fs.existsSync(envPath)) {
-  fs.readFileSync(envPath, "utf8").split("\n").forEach((line) => {
-    const m = line.match(/^DATABASE_URL=(.+)$/);
-    if (m) process.env.DATABASE_URL = m[1].replace(/^["']|["']$/g, "");
-  });
+const { spawnSync } = require("child_process");
+const { loadDotEnv } = require("./db-url-diagnostics");
+
+loadDotEnv();
+
+function redact(msg) {
+  return String(msg).replace(/:([^:@/]+)@/g, ":****@");
 }
 
-const url = process.env.DATABASE_URL;
-if (!url) {
-  console.error("❌ DATABASE_URL not set in .env");
-  console.error("   Run: npm run db:validate-env  (after setting DATABASE_URL and DIRECT_URL)");
+function testUrl(label, url) {
+  if (!url) {
+    console.error(`❌ ${label} is not set`);
+    return false;
+  }
+  const safe = url.replace(/:([^:@]+)@/, ":****@");
+  console.log(`Testing ${label}: ${safe}`);
+
+  const result = spawnSync(
+    "npx",
+    ["prisma", "db", "execute", "--url", url, "--stdin"],
+    { input: "SELECT 1 as test;", encoding: "utf8" }
+  );
+
+  if (result.status === 0) {
+    console.log(`✅ ${label} connection successful`);
+    return true;
+  }
+
+  const err = redact(result.stderr || result.stdout || "");
+  const code = err.match(/P100\d|P101\d/)?.[0] || "error";
+  console.error(`❌ ${label} failed (${code})`);
+  if (code === "P1000") {
+    console.error("   Invalid database password or wrong Supabase project for this URL.");
+  }
+  return false;
+}
+
+const databaseUrl = process.env.DATABASE_URL;
+const directUrl = process.env.DIRECT_URL;
+
+if (!databaseUrl && !directUrl) {
+  console.error("❌ DATABASE_URL and DIRECT_URL are not set.");
+  console.error("   Run: npm run db:validate-env");
   process.exit(1);
 }
 
-// Hide password in output
-const safeUrl = url.replace(/:([^:@]+)@/, ":****@");
-console.log("Testing connection to:", safeUrl);
+const okDirect = testUrl("DIRECT_URL", directUrl);
+const okDatabase = testUrl("DATABASE_URL", databaseUrl);
 
-const { execSync } = require("child_process");
-try {
-  execSync("npx prisma db execute --stdin", {
-    input: "SELECT 1 as test;",
-    encoding: "utf8",
-  });
-  console.log("✅ Connection successful!");
-} catch (err) {
-  console.error("❌ Connection failed.");
-  console.error("\nRun first: npm run db:validate-env");
-  console.error("\nCommon fixes:");
-  console.error("1. PAUSED PROJECT: Supabase free tier pauses after ~7 days.");
-  console.error("   → Dashboard: https://supabase.com/dashboard → select project → 'Restore project'");
-  console.error("2. Try the SESSION POOLER connection (port 6543) from Supabase Dashboard");
-  console.error("   → Project Settings → Database → Connection string → Session mode");
-  console.error("3. Ensure password has no unencoded special chars: @ → %40, # → %23, etc.");
-  process.exit(1);
+if (okDirect && okDatabase) {
+  process.exit(0);
 }
+
+console.error("\nRun first: npm run db:validate-env");
+console.error("\nCommon fixes:");
+console.error("1. PAUSED PROJECT: Supabase free tier pauses after ~7 days.");
+console.error("   → Dashboard → select project → Restore project");
+console.error("2. Reset Database password: Supabase → Project Settings → Database");
+console.error("   → paste new password into BOTH DATABASE_URL and DIRECT_URL (.env.local + Vercel)");
+console.error("3. URL-encode special chars in password: @ → %40, # → %23, % → %25");
+console.error("4. If you see circuit-breaker errors, wait ~15 minutes after fixing the password.");
+process.exit(1);

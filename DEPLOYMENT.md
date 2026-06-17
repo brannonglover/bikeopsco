@@ -73,7 +73,7 @@ DIRECT_URL="postgresql://postgres.[ref]:[pass]@aws-0-[region].pooler.supabase.co
 npm run db:validate-env
 ```
 
-Optional: run `npm run db:migrate` against the staging DB to confirm auth before Vercel builds.
+Optional: run `npm run db:migrate` (uses `migrate deploy`, not `dev`) against the staging DB to confirm auth before Vercel builds. Use `npm run db:migrate:dev` only with a local Postgres that supports Prisma shadow databases.
 
 ### 5. What to look for in the next build log
 

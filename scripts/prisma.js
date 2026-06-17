@@ -5,10 +5,13 @@
  */
 const { spawnSync } = require("child_process");
 const {
+  loadDotEnv,
   diagnosePair,
   formatReport,
   printFailureHelp,
 } = require("./db-url-diagnostics");
+
+loadDotEnv();
 
 const args = process.argv.slice(2);
 if (args.length === 0) {
@@ -82,10 +85,27 @@ if (command === "generate" && !process.env.DATABASE_URL) {
   process.env.DIRECT_URL = PLACEHOLDER;
 }
 
-if (needsDatabase && !process.env.DATABASE_URL) {
+
+if (needsDatabase && command === "migrate" && args[1] === "dev") {
+  const host = process.env.DIRECT_URL || process.env.DATABASE_URL || "";
+  if (/supabase\.com/i.test(host)) {
+    console.warn(
+      [
+        "Note: Supabase does not support Prisma migrate dev (shadow DB → P3006).",
+        "Use: npm run db:migrate  (migrate deploy) for staging/production Supabase.",
+        "",
+      ].join("\n")
+    );
+  }
+}
+
+if (needsDatabase && !process.env.DATABASE_URL?.trim()) {
   console.error(
     [
       "Error: DATABASE_URL is not set.",
+      "",
+      "Local: put DATABASE_URL and DIRECT_URL in .env.local (Preview/staging URLs).",
+      "  `vercel env pull` often omits integration-managed DB URLs — do not rely on it alone.",
       "",
       "Vercel environment scopes (bikeopsco project):",
       "  • Preview — branch deploys (develop → dev.bikeops.co). NOT the same as “Development”.",
