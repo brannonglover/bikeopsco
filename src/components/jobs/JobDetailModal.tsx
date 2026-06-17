@@ -27,9 +27,23 @@ import { toCalendarDateInTimezone } from "@/lib/timezone";
 import { mergeBoardJob } from "@/lib/board-stage-merge";
 import {
   applyJobProductLineUpdate,
+  applyJobServiceLineAdd,
+  applyJobServiceLineRemove,
+  applyJobServiceLineReplace,
+  applyJobProductLineAdd,
+  applyJobProductLineRemove,
+  applyJobProductLineReplace,
   applyJobServiceLineUpdate,
   mergeJobPreservingInvoiceDetails,
 } from "@/lib/job-invoice-merge";
+import {
+  applyOptimisticCompleteBike,
+  applyOptimisticDeliveryType,
+  applyOptimisticResumeWork,
+  applyOptimisticUnwaitOnly,
+  applyOptimisticWaitForParts,
+  applyOptimisticWorkingOnToggle,
+} from "@/lib/optimistic-job-patch";
 import { ServiceName } from "@/components/ui/ServiceName";
 
 function formatChatPreviewTime(iso: string): string {
@@ -223,31 +237,34 @@ function InternalNotesSection({
   onJobUpdated?: (job: Job) => void;
 }) {
   const [value, setValue] = useState(job.internalNotes ?? "");
-  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setValue(job.internalNotes ?? "");
   }, [job.id, job.internalNotes]);
 
-  const persist = async () => {
+  const persist = () => {
     if (!onJobUpdated) return;
     const trimmed = value.trim();
     const current = (job.internalNotes ?? "").trim();
     if (trimmed === current) return;
-    setSaving(true);
-    try {
-      const res = await fetch(`/api/jobs/${job.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ internalNotes: trimmed || null }),
-      });
-      if (res.ok) {
-        const updated = (await res.json()) as Job;
-        onJobUpdated(updated);
+    const snapshot = job.internalNotes ?? "";
+    onJobUpdated({ ...job, internalNotes: trimmed || null });
+    void (async () => {
+      try {
+        const res = await fetch(`/api/jobs/${job.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ internalNotes: trimmed || null }),
+        });
+        if (res.ok) {
+          onJobUpdated((await res.json()) as Job);
+        } else {
+          onJobUpdated({ ...job, internalNotes: snapshot || null });
+        }
+      } catch {
+        onJobUpdated({ ...job, internalNotes: snapshot || null });
       }
-    } finally {
-      setSaving(false);
-    }
+    })();
   };
 
   return (
@@ -268,10 +285,9 @@ function InternalNotesSection({
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onBlur={persist}
-          disabled={saving}
           rows={3}
           placeholder="Add private notes about this job — not visible to the customer…"
-          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none resize-none disabled:opacity-60 placeholder:text-slate-400"
+          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none resize-none placeholder:text-slate-400"
         />
       ) : (
         value ? (
@@ -280,7 +296,6 @@ function InternalNotesSection({
           <p className="text-sm text-slate-400 italic">No internal notes.</p>
         )
       )}
-      {saving && <p className="text-xs text-slate-400 mt-1">Saving…</p>}
     </div>
   );
 }
@@ -295,7 +310,6 @@ function JobDeliveryTypeSection({
   const { collectionServiceEnabled } = useAppFeatures();
   const [deliveryType, setDeliveryType] = useState<DeliveryType>(job.deliveryType);
   const [collectionAddress, setCollectionAddress] = useState(job.collectionAddress ?? "");
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const canEdit = Boolean(onJobUpdated);
@@ -308,65 +322,77 @@ function JobDeliveryTypeSection({
     setError(null);
   }, [job.id, job.deliveryType, job.collectionAddress]);
 
-  const persistDeliveryType = async (next: DeliveryType) => {
+  const persistDeliveryType = (next: DeliveryType) => {
     if (!onJobUpdated || next === job.deliveryType) return;
-    setSaving(true);
     setError(null);
+    const trimmed = collectionAddress.trim();
+    const nextAddress =
+      next === "COLLECTION_SERVICE"
+        ? trimmed || job.customer?.address?.trim() || null
+        : null;
+    const snapshot = job;
+    onJobUpdated(applyOptimisticDeliveryType(job, next, nextAddress));
     const body: {
       deliveryType: DeliveryType;
       collectionAddress?: string | null;
     } = { deliveryType: next };
     if (next === "COLLECTION_SERVICE") {
-      const trimmed = collectionAddress.trim();
-      body.collectionAddress = trimmed || job.customer?.address?.trim() || null;
+      body.collectionAddress = nextAddress;
     }
-    try {
-      const res = await fetch(`/api/jobs/${job.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) {
-        setDeliveryType(job.deliveryType);
-        setError(data.error ?? "Failed to update delivery type");
-        return;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/jobs/${job.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = (await res.json().catch(() => ({}))) as Job & { error?: string };
+        if (!res.ok) {
+          setDeliveryType(snapshot.deliveryType);
+          setError(data.error ?? "Failed to update delivery type");
+          onJobUpdated(snapshot);
+          return;
+        }
+        onJobUpdated(data);
+      } catch {
+        setDeliveryType(snapshot.deliveryType);
+        setError("Failed to update delivery type");
+        onJobUpdated(snapshot);
       }
-      onJobUpdated(data as Job);
-    } catch {
-      setDeliveryType(job.deliveryType);
-      setError("Failed to update delivery type");
-    } finally {
-      setSaving(false);
-    }
+    })();
   };
 
-  const persistCollectionAddress = async () => {
+  const persistCollectionAddress = () => {
     if (!onJobUpdated || deliveryType !== "COLLECTION_SERVICE") return;
     const trimmed = collectionAddress.trim();
     const current = (job.collectionAddress ?? "").trim();
     if (trimmed === current) return;
-    setSaving(true);
     setError(null);
-    try {
-      const res = await fetch(`/api/jobs/${job.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ collectionAddress: trimmed || null }),
-      });
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) {
-        setCollectionAddress(job.collectionAddress ?? "");
-        setError(data.error ?? "Failed to update collection address");
-        return;
+    const snapshot = job;
+    onJobUpdated(
+      applyOptimisticDeliveryType(job, deliveryType, trimmed || null)
+    );
+    void (async () => {
+      try {
+        const res = await fetch(`/api/jobs/${job.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ collectionAddress: trimmed || null }),
+        });
+        const data = (await res.json().catch(() => ({}))) as Job & { error?: string };
+        if (!res.ok) {
+          setCollectionAddress(snapshot.collectionAddress ?? "");
+          setError(data.error ?? "Failed to update collection address");
+          onJobUpdated(snapshot);
+          return;
+        }
+        onJobUpdated(data);
+      } catch {
+        setCollectionAddress(snapshot.collectionAddress ?? "");
+        setError("Failed to update collection address");
+        onJobUpdated(snapshot);
       }
-      onJobUpdated(data as Job);
-    } catch {
-      setCollectionAddress(job.collectionAddress ?? "");
-      setError("Failed to update collection address");
-    } finally {
-      setSaving(false);
-    }
+    })();
   };
 
   const label =
@@ -390,13 +416,12 @@ function JobDeliveryTypeSection({
       </h3>
       <select
         value={deliveryType}
-        disabled={saving}
         onChange={(e) => {
           const next = e.target.value as DeliveryType;
           setDeliveryType(next);
-          void persistDeliveryType(next);
+          persistDeliveryType(next);
         }}
-        className="w-full max-w-xs px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none disabled:opacity-60"
+        className="w-full max-w-xs px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
       >
         <option value="DROP_OFF_AT_SHOP">Drop-off at shop</option>
         {showCollectionOption && (
@@ -411,18 +436,16 @@ function JobDeliveryTypeSection({
           <input
             type="text"
             value={collectionAddress}
-            disabled={saving}
             onChange={(e) => setCollectionAddress(e.target.value)}
-            onBlur={() => void persistCollectionAddress()}
+            onBlur={() => persistCollectionAddress()}
             placeholder={job.customer?.address || "Pickup/delivery address"}
-            className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none disabled:opacity-60 placeholder:text-slate-400"
+            className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none placeholder:text-slate-400"
           />
           <p className="text-xs text-slate-500 mt-1">
             Collection fee is added or removed on the invoice when you change booking type.
           </p>
         </div>
       )}
-      {saving && <p className="text-xs text-slate-400 mt-1">Saving…</p>}
       {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
     </div>
   );
@@ -457,188 +480,143 @@ function JobBikeSection({
     ? jobBikes
     : [{ id: "legacy", make: job.bikeMake, model: job.bikeModel, nickname: null, imageUrl: null, bikeId: null, sortOrder: 0, bikeType: null } as JobBike];
   const customerBikes = job.customer?.bikes;
-  const [savingIndex, setSavingIndex] = useState<number | null>(null);
   const [editingBikeIndex, setEditingBikeIndex] = useState<number | null>(null);
-  const [savingWorkingOn, setSavingWorkingOn] = useState(false);
-  const [savingComplete, setSavingComplete] = useState<string | null>(null);
-  const [savingWaiting, setSavingWaiting] = useState<string | null>(null);
   const [addingBike, setAddingBike] = useState(false);
   const [addBikeSelectValue, setAddBikeSelectValue] = useState("");
+
+  const patchJobInBackground = useCallback(
+    (
+      optimistic: Job,
+      body: Record<string, unknown>,
+      onSuccess?: (updated: Job) => void
+    ) => {
+      if (!onJobUpdated) return;
+      const snapshot = job;
+      onJobUpdated(optimistic);
+      void (async () => {
+        try {
+          const res = await fetch(`/api/jobs/${job.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          if (res.ok) {
+            const updatedJob = (await res.json()) as Job;
+            if (onSuccess) {
+              onSuccess(updatedJob);
+            } else {
+              onJobUpdated(updatedJob);
+            }
+          } else {
+            onJobUpdated(snapshot);
+          }
+        } catch {
+          onJobUpdated(snapshot);
+        }
+      })();
+    },
+    [job, onJobUpdated]
+  );
 
   // Customer bikes not yet on this job
   const existingBikeIds = new Set(jobBikes.map((jb) => jb.bikeId).filter(Boolean));
   const availableToAdd = (customerBikes ?? []).filter((cb) => !existingBikeIds.has(cb.id));
 
-  const handleAddSavedBike = async (bike: NonNullable<typeof customerBikes>[number]) => {
+  const handleAddSavedBike = (bike: NonNullable<typeof customerBikes>[number]) => {
     if (!onJobUpdated) return;
     setAddingBike(true);
-    try {
-      const res = await fetch(`/api/jobs/${job.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          addBike: {
-            make: bike.make,
-            model: bike.model,
-            nickname: bike.nickname ?? null,
-            imageUrl: bike.imageUrl ?? null,
-            bikeId: bike.id,
-            bikeType: bike.bikeType ?? undefined,
-          },
-        }),
-      });
-      if (res.ok) {
-        const updatedJob = (await res.json()) as Job;
-        onJobUpdated(updatedJob);
+    void (async () => {
+      try {
+        const res = await fetch(`/api/jobs/${job.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            addBike: {
+              make: bike.make,
+              model: bike.model,
+              nickname: bike.nickname ?? null,
+              imageUrl: bike.imageUrl ?? null,
+              bikeId: bike.id,
+              bikeType: bike.bikeType ?? undefined,
+            },
+          }),
+        });
+        if (res.ok) {
+          onJobUpdated((await res.json()) as Job);
+        }
+      } finally {
+        setAddingBike(false);
       }
-    } finally {
-      setAddingBike(false);
-    }
+    })();
   };
 
   useEffect(() => {
     setEditingBikeIndex(null);
   }, [job.id]);
 
-  const handleBikeTypeChange = async (bikeIndex: number, value: string) => {
+  const handleBikeTypeChange = (bikeIndex: number, value: string) => {
     if (!onJobUpdated) return;
     const newType = value as BikeTypeForm;
-    setSavingIndex(bikeIndex);
-    try {
-      const res = await fetch(`/api/jobs/${job.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          bikes: buildBikesPayloadForPatch(job, bikeIndex, newType),
-        }),
-      });
-      if (res.ok) {
-        const updatedJob = (await res.json()) as Job;
-        onJobUpdated(updatedJob);
-        setEditingBikeIndex(null);
-      }
-    } finally {
-      setSavingIndex(null);
-    }
+    setEditingBikeIndex(null);
+    patchJobInBackground(job, {
+      bikes: buildBikesPayloadForPatch(job, bikeIndex, newType),
+    });
   };
 
-  const handleToggleWorkingOn = async (bikeId: string) => {
-    if (!onJobUpdated || savingWorkingOn) return;
+  const handleToggleWorkingOn = (bikeId: string) => {
+    if (!onJobUpdated) return;
     const nextId = job.workingOnJobBikeId === bikeId ? null : bikeId;
-    setSavingWorkingOn(true);
-    try {
-      const body: Record<string, unknown> = { workingOnJobBikeId: nextId };
-      if (nextId && job.stage !== "WORKING_ON") {
-        body.stage = "WORKING_ON";
-        // Resume from waiting-on-parts already notified the customer; other transitions should notify.
-        if (job.stage === "WAITING_ON_PARTS") {
-          body.notifyCustomer = false;
-        }
-      }
-      const res = await fetch(`/api/jobs/${job.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (res.ok) {
-        const updatedJob = (await res.json()) as Job;
-        onJobUpdated(updatedJob);
-      }
-    } finally {
-      setSavingWorkingOn(false);
-    }
-  };
-
-  const handleToggleComplete = async (bikeId: string, isCompleted: boolean) => {
-    if (!onJobUpdated || savingComplete) return;
-    setSavingComplete(bikeId);
-    try {
-      const body = isCompleted
-        ? { uncompleteJobBikeId: bikeId }
-        : { completeJobBikeId: bikeId };
-      const res = await fetch(`/api/jobs/${job.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (res.ok) {
-        const updatedJob = (await res.json()) as Job;
-        onJobUpdated(updatedJob);
-      }
-    } finally {
-      setSavingComplete(null);
-    }
-  };
-
-  const handleWaitForParts = async (bikeId: string) => {
-    if (!onJobUpdated || savingWaiting) return;
-    setSavingWaiting(bikeId);
-    try {
-      const body: Record<string, unknown> = { waitForPartsJobBikeId: bikeId };
-      if (job.stage !== "WAITING_ON_PARTS") {
-        body.stage = "WAITING_ON_PARTS";
-      }
-      const res = await fetch(`/api/jobs/${job.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (res.ok) {
-        const updatedJob = (await res.json()) as Job;
-        onJobUpdated(updatedJob);
-      }
-    } finally {
-      setSavingWaiting(null);
-    }
-  };
-
-  const handleResumeWork = async (bikeId: string) => {
-    if (!onJobUpdated || savingWaiting) return;
-    setSavingWaiting(bikeId);
-    try {
-      const body: Record<string, unknown> = {
-        unwaitForPartsJobBikeId: bikeId,
-        workingOnJobBikeId: bikeId,
-      };
-      if (job.stage !== "WORKING_ON") {
-        body.stage = "WORKING_ON";
+    const body: Record<string, unknown> = { workingOnJobBikeId: nextId };
+    if (nextId && job.stage !== "WORKING_ON") {
+      body.stage = "WORKING_ON";
+      if (job.stage === "WAITING_ON_PARTS") {
         body.notifyCustomer = false;
       }
-      const res = await fetch(`/api/jobs/${job.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (res.ok) {
-        const updatedJob = (await res.json()) as Job;
-        onJobUpdated(updatedJob);
-      }
-    } finally {
-      setSavingWaiting(null);
     }
+    patchJobInBackground(applyOptimisticWorkingOnToggle(job, bikeId), body);
   };
 
-  const handleClearWaitingOnPartsOnly = async (bikeId: string) => {
-    if (!onJobUpdated || savingWaiting) return;
-    setSavingWaiting(bikeId);
-    try {
-      const body: Record<string, unknown> = { unwaitForPartsJobBikeId: bikeId };
-      if (job.stage !== "WORKING_ON") {
-        body.stage = "WORKING_ON";
-        body.notifyCustomer = false;
-      }
-      const res = await fetch(`/api/jobs/${job.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (res.ok) {
-        const updatedJob = (await res.json()) as Job;
-        onJobUpdated(updatedJob);
-      }
-    } finally {
-      setSavingWaiting(null);
+  const handleToggleComplete = (bikeId: string, isCompleted: boolean) => {
+    if (!onJobUpdated) return;
+    const body = isCompleted
+      ? { uncompleteJobBikeId: bikeId }
+      : { completeJobBikeId: bikeId };
+    patchJobInBackground(
+      applyOptimisticCompleteBike(job, bikeId, isCompleted),
+      body
+    );
+  };
+
+  const handleWaitForParts = (bikeId: string) => {
+    if (!onJobUpdated) return;
+    const body: Record<string, unknown> = { waitForPartsJobBikeId: bikeId };
+    if (job.stage !== "WAITING_ON_PARTS") {
+      body.stage = "WAITING_ON_PARTS";
     }
+    patchJobInBackground(applyOptimisticWaitForParts(job, bikeId), body);
+  };
+
+  const handleResumeWork = (bikeId: string) => {
+    if (!onJobUpdated) return;
+    const body: Record<string, unknown> = {
+      unwaitForPartsJobBikeId: bikeId,
+      workingOnJobBikeId: bikeId,
+    };
+    if (job.stage !== "WORKING_ON") {
+      body.stage = "WORKING_ON";
+      body.notifyCustomer = false;
+    }
+    patchJobInBackground(applyOptimisticResumeWork(job, bikeId), body);
+  };
+
+  const handleClearWaitingOnPartsOnly = (bikeId: string) => {
+    if (!onJobUpdated) return;
+    const body: Record<string, unknown> = { unwaitForPartsJobBikeId: bikeId };
+    if (job.stage !== "WORKING_ON") {
+      body.stage = "WORKING_ON";
+      body.notifyCustomer = false;
+    }
+    patchJobInBackground(applyOptimisticUnwaitOnly(job, bikeId), body);
   };
 
   return (
@@ -709,8 +687,7 @@ function JobBikeSection({
                       <button
                         type="button"
                         onClick={() => handleClearWaitingOnPartsOnly(b.id)}
-                        disabled={!!savingWaiting}
-                        className="flex-shrink-0 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-red-700 bg-red-200 px-1.5 py-0.5 rounded-md whitespace-nowrap hover:bg-red-300 transition-colors disabled:opacity-50"
+                        className="flex-shrink-0 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-red-700 bg-red-200 px-1.5 py-0.5 rounded-md whitespace-nowrap hover:bg-red-300 transition-colors"
                         title="Remove waiting on parts if this was a mistake"
                       >
                         <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20" aria-hidden>
@@ -732,8 +709,7 @@ function JobBikeSection({
                       <button
                         type="button"
                         onClick={() => handleToggleWorkingOn(b.id)}
-                        disabled={savingWorkingOn}
-                        className="flex-shrink-0 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-amber-700 bg-amber-200 px-1.5 py-0.5 rounded-md whitespace-nowrap hover:bg-amber-300 transition-colors disabled:opacity-50"
+                        className="flex-shrink-0 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-amber-700 bg-amber-200 px-1.5 py-0.5 rounded-md whitespace-nowrap hover:bg-amber-300 transition-colors"
                         title="Stop showing this bike as working on"
                       >
                         <span className="relative flex h-2 w-2">
@@ -792,8 +768,7 @@ function JobBikeSection({
                     <select
                       value={jobBikeToFormValue(b)}
                       onChange={(e) => handleBikeTypeChange(i, e.target.value)}
-                      disabled={savingIndex !== null}
-                      className="w-full text-sm px-3 py-1.5 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none disabled:opacity-60"
+                      className="w-full text-sm px-3 py-1.5 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
                     >
                       <option value="AUTO">Auto (from make/model)</option>
                       <option value="REGULAR">Standard bike</option>
@@ -802,8 +777,7 @@ function JobBikeSection({
                     <button
                       type="button"
                       onClick={() => setEditingBikeIndex(null)}
-                      disabled={savingIndex !== null}
-                      className="text-xs text-slate-500 hover:text-slate-800 underline disabled:opacity-50"
+                      className="text-xs text-slate-500 hover:text-slate-800 underline"
                     >
                       Cancel
                     </button>
@@ -816,8 +790,7 @@ function JobBikeSection({
                       <button
                         type="button"
                         onClick={() => handleToggleComplete(b.id, true)}
-                        disabled={!!savingComplete}
-                        className="inline-flex items-center gap-1.5 self-start text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors touch-manipulation min-h-[32px] disabled:opacity-50"
+                        className="inline-flex items-center gap-1.5 self-start text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors touch-manipulation min-h-[32px]"
                         title="Undo done — mark this bike as not completed"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
@@ -829,8 +802,7 @@ function JobBikeSection({
                       <button
                         type="button"
                         onClick={() => handleResumeWork(b.id)}
-                        disabled={!!savingWaiting}
-                        className="inline-flex items-center gap-1.5 self-start text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-amber-100 text-amber-800 hover:bg-amber-200 transition-colors touch-manipulation min-h-[32px] disabled:opacity-50"
+                        className="inline-flex items-center gap-1.5 self-start text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-amber-100 text-amber-800 hover:bg-amber-200 transition-colors touch-manipulation min-h-[32px]"
                         title="Parts arrived — resume working on this bike"
                       >
                         <WrenchIcon className="w-3.5 h-3.5" />
@@ -841,8 +813,7 @@ function JobBikeSection({
                         <button
                           type="button"
                           onClick={() => handleToggleComplete(b.id, false)}
-                          disabled={!!savingComplete}
-                          className="inline-flex items-center gap-1.5 self-start text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors touch-manipulation min-h-[32px] disabled:opacity-50 shadow-sm"
+                          className="inline-flex items-center gap-1.5 self-start text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors touch-manipulation min-h-[32px] shadow-sm"
                           title="Mark this bike as done"
                         >
                           <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden>
@@ -854,8 +825,7 @@ function JobBikeSection({
                           <button
                             type="button"
                             onClick={() => handleClearWaitingOnPartsOnly(b.id)}
-                            disabled={!!savingWaiting}
-                            className="inline-flex items-center gap-1.5 self-start text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-red-200 bg-white text-red-700 hover:bg-red-50 transition-colors touch-manipulation min-h-[32px] disabled:opacity-50"
+                            className="inline-flex items-center gap-1.5 self-start text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-red-200 bg-white text-red-700 hover:bg-red-50 transition-colors touch-manipulation min-h-[32px]"
                             title="Remove the parts hold on this bike (fixes stuck status after moving columns)"
                           >
                             <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden>
@@ -867,8 +837,7 @@ function JobBikeSection({
                           <button
                             type="button"
                             onClick={() => handleWaitForParts(b.id)}
-                            disabled={!!savingWaiting}
-                            className="inline-flex items-center gap-1.5 self-start text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-red-50 hover:text-red-800 hover:border-red-200 transition-colors touch-manipulation min-h-[32px] disabled:opacity-50"
+                            className="inline-flex items-center gap-1.5 self-start text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-red-50 hover:text-red-800 hover:border-red-200 transition-colors touch-manipulation min-h-[32px]"
                             title="Mark this bike as waiting on parts (customer sees this status)"
                           >
                             <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden>
@@ -882,8 +851,7 @@ function JobBikeSection({
                       <button
                         type="button"
                         onClick={() => handleToggleWorkingOn(b.id)}
-                        disabled={savingWorkingOn}
-                        className="inline-flex items-center gap-1.5 self-start text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-amber-100 hover:text-amber-800 transition-colors touch-manipulation min-h-[32px] disabled:opacity-50"
+                        className="inline-flex items-center gap-1.5 self-start text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-amber-100 hover:text-amber-800 transition-colors touch-manipulation min-h-[32px]"
                         title="Mark as working on this bike"
                       >
                         <WrenchIcon className="w-3.5 h-3.5" />
@@ -2818,16 +2786,17 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
 }
 
 function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job) => void }) {
+  const jobRef = useRef(job);
+  jobRef.current = job;
+
+  const commitJob = (next: Job) => {
+    jobRef.current = next;
+    onJobUpdated?.(next);
+  };
   const [services, setServices] = useState<{ id: string; name: string; price: number | string }[]>([]);
   const [products, setProducts] = useState<{ id: string; name: string; price: number | string }[]>([]);
   const [searchedProducts, setSearchedProducts] = useState<{ id: string; name: string; price: number | string }[] | null>(null);
   const [productsLoading, setProductsLoading] = useState(false);
-  const [adding, setAdding] = useState(false);
-  const [addingProduct, setAddingProduct] = useState(false);
-  const [removing, setRemoving] = useState<string | null>(null);
-  const [removingProduct, setRemovingProduct] = useState<string | null>(null);
-  const [updatingServiceQty, setUpdatingServiceQty] = useState<string | null>(null);
-  const [updatingProductQty, setUpdatingProductQty] = useState<string | null>(null);
   const [updatingServicePrice, setUpdatingServicePrice] = useState<string | null>(null);
   const [updatingServiceBike, setUpdatingServiceBike] = useState<string | null>(null);
   const [updatingProductBike, setUpdatingProductBike] = useState<string | null>(null);
@@ -3054,82 +3023,133 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleAddService = async (serviceId: string) => {
-    setAdding(true);
+  const handleAddService = (serviceId: string) => {
     setServicesDropdownOpen(false);
     setServiceSearch("");
     const jobBikeId = defaultJobBikeIdForCatalogService(serviceId);
-    try {
-      const res = await fetch(`/api/jobs/${job.id}/services`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ serviceId, ...(jobBikeId ? { jobBikeId } : {}) }),
-      });
-      if (res.ok) {
-        const updatedJob = await fetch(`/api/jobs/${job.id}`).then((r) => r.json());
-        onJobUpdated?.(updatedJob);
+    const catalog = services.find((s) => s.id === serviceId);
+    const placeholderId = `temp-svc-${Date.now()}`;
+    const optimisticLine: JobService = {
+      id: placeholderId,
+      jobId: job.id,
+      serviceId,
+      service: catalog
+        ? {
+            id: catalog.id,
+            name: catalog.name,
+            description: null,
+            price: catalog.price,
+            createdAt: "",
+            updatedAt: "",
+          }
+        : null,
+      quantity: 1,
+      unitPrice: catalog?.price ?? 0,
+      notes: null,
+      jobBikeId: jobBikeId ?? null,
+    };
+    commitJob(applyJobServiceLineAdd(jobRef.current, optimisticLine));
+    void (async () => {
+      try {
+        const res = await fetch(`/api/jobs/${job.id}/services`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ serviceId, ...(jobBikeId ? { jobBikeId } : {}) }),
+        });
+        if (res.ok) {
+          const line = (await res.json()) as JobService;
+          commitJob(applyJobServiceLineReplace(jobRef.current, placeholderId, line));
+        } else {
+          commitJob(applyJobServiceLineRemove(jobRef.current, placeholderId));
+        }
+      } catch {
+        commitJob(applyJobServiceLineRemove(jobRef.current, placeholderId));
       }
-    } finally {
-      setAdding(false);
-    }
+    })();
   };
 
-  const handleAddCustomService = async (name: string) => {
+  const handleAddCustomService = (name: string) => {
     const trimmed = name.trim();
     if (!trimmed) return;
-    setAdding(true);
     setServicesDropdownOpen(false);
     setServiceSearch("");
-    try {
-      const res = await fetch(`/api/jobs/${job.id}/services`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          customServiceName: trimmed,
-          unitPrice: 0,
-        }),
-      });
-      if (res.ok) {
-        const updatedJob = await fetch(`/api/jobs/${job.id}`).then((r) => r.json());
-        onJobUpdated?.(updatedJob);
+    const placeholderId = `temp-svc-${Date.now()}`;
+    const optimisticLine: JobService = {
+      id: placeholderId,
+      jobId: job.id,
+      serviceId: null,
+      service: null,
+      customServiceName: trimmed,
+      quantity: 1,
+      unitPrice: 0,
+      notes: null,
+      jobBikeId: null,
+    };
+    commitJob(applyJobServiceLineAdd(jobRef.current, optimisticLine));
+    void (async () => {
+      try {
+        const res = await fetch(`/api/jobs/${job.id}/services`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            customServiceName: trimmed,
+            unitPrice: 0,
+          }),
+        });
+        if (res.ok) {
+          const line = (await res.json()) as JobService;
+          commitJob(applyJobServiceLineReplace(jobRef.current, placeholderId, line));
+        } else {
+          commitJob(applyJobServiceLineRemove(jobRef.current, placeholderId));
+        }
+      } catch {
+        commitJob(applyJobServiceLineRemove(jobRef.current, placeholderId));
       }
-    } finally {
-      setAdding(false);
-    }
+    })();
   };
 
-  const handleRemoveService = async (jobServiceId: string) => {
-    setRemoving(jobServiceId);
-    try {
-      const res = await fetch(
-        `/api/jobs/${job.id}/services?jobServiceId=${encodeURIComponent(jobServiceId)}`,
-        { method: "DELETE" }
-      );
-      if (res.ok) {
-        const updatedJob = await fetch(`/api/jobs/${job.id}`).then((r) => r.json());
-        onJobUpdated?.(updatedJob);
+  const handleRemoveService = (jobServiceId: string) => {
+    const snapshot = jobRef.current;
+    commitJob(applyJobServiceLineRemove(jobRef.current, jobServiceId));
+    void (async () => {
+      try {
+        const res = await fetch(
+          `/api/jobs/${job.id}/services?jobServiceId=${encodeURIComponent(jobServiceId)}`,
+          { method: "DELETE" }
+        );
+        if (!res.ok) {
+          commitJob(snapshot);
+        }
+      } catch {
+        commitJob(snapshot);
       }
-    } finally {
-      setRemoving(null);
-    }
+    })();
   };
 
-  const adjustServiceQuantity = async (jobServiceId: string, quantity: number) => {
+  const adjustServiceQuantity = (jobServiceId: string, quantity: number) => {
     if (quantity < 1) return;
-    setUpdatingServiceQty(jobServiceId);
-    try {
-      const res = await fetch(`/api/jobs/${job.id}/services`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobServiceId, quantity }),
-      });
-      if (res.ok) {
-        const updatedLine = (await res.json()) as JobService;
-        onJobUpdated?.(applyJobServiceLineUpdate(job, updatedLine));
+    const line = jobServices.find((js) => js.id === jobServiceId);
+    if (!line) return;
+    const snapshot = jobRef.current;
+    commitJob(applyJobServiceLineUpdate(jobRef.current, { ...line, quantity }));
+    void (async () => {
+      try {
+        const res = await fetch(`/api/jobs/${job.id}/services`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ jobServiceId, quantity }),
+        });
+        if (res.ok) {
+          commitJob(
+            applyJobServiceLineUpdate(jobRef.current, (await res.json()) as JobService)
+          );
+        } else {
+          commitJob(snapshot);
+        }
+      } catch {
+        commitJob(snapshot);
       }
-    } finally {
-      setUpdatingServiceQty(null);
-    }
+    })();
   };
 
   const updateServiceUnitPrice = async (jobServiceId: string, unitPrice: number) => {
@@ -3149,22 +3169,30 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
     }
   };
 
-  const adjustProductQuantity = async (jobProductId: string, quantity: number) => {
+  const adjustProductQuantity = (jobProductId: string, quantity: number) => {
     if (quantity < 1) return;
-    setUpdatingProductQty(jobProductId);
-    try {
-      const res = await fetch(`/api/jobs/${job.id}/products`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobProductId, quantity }),
-      });
-      if (res.ok) {
-        const updatedLine = (await res.json()) as JobProduct;
-        onJobUpdated?.(applyJobProductLineUpdate(job, updatedLine));
+    const line = jobProductsList.find((jp) => jp.id === jobProductId);
+    if (!line) return;
+    const snapshot = jobRef.current;
+    commitJob(applyJobProductLineUpdate(jobRef.current, { ...line, quantity }));
+    void (async () => {
+      try {
+        const res = await fetch(`/api/jobs/${job.id}/products`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ jobProductId, quantity }),
+        });
+        if (res.ok) {
+          commitJob(
+            applyJobProductLineUpdate(jobRef.current, (await res.json()) as JobProduct)
+          );
+        } else {
+          commitJob(snapshot);
+        }
+      } catch {
+        commitJob(snapshot);
       }
-    } finally {
-      setUpdatingProductQty(null);
-    }
+    })();
   };
 
   const updateProductUnitPrice = async (jobProductId: string, unitPrice: number) => {
@@ -3235,39 +3263,64 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
     }
   };
 
-  const handleAddProduct = async (productId: string) => {
-    setAddingProduct(true);
+  const handleAddProduct = (productId: string) => {
     setProductsDropdownOpen(false);
     setProductSearch("");
-    try {
-      const res = await fetch(`/api/jobs/${job.id}/products`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productId }),
-      });
-      if (res.ok) {
-        const updatedJob = await fetch(`/api/jobs/${job.id}`).then((r) => r.json());
-        onJobUpdated?.(updatedJob);
+    const catalog = products.find((p) => p.id === productId);
+    const placeholderId = `temp-prod-${Date.now()}`;
+    const optimisticLine: JobProduct = {
+      id: placeholderId,
+      jobId: job.id,
+      productId,
+      product: catalog
+        ? {
+            id: catalog.id,
+            name: catalog.name,
+            description: null,
+            price: catalog.price,
+          }
+        : { id: productId, name: "Product", description: null, price: 0 },
+      quantity: 1,
+      unitPrice: catalog?.price ?? 0,
+      notes: null,
+      jobBikeId: null,
+    };
+    commitJob(applyJobProductLineAdd(jobRef.current, optimisticLine));
+    void (async () => {
+      try {
+        const res = await fetch(`/api/jobs/${job.id}/products`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ productId }),
+        });
+        if (res.ok) {
+          const line = (await res.json()) as JobProduct;
+          commitJob(applyJobProductLineReplace(jobRef.current, placeholderId, line));
+        } else {
+          commitJob(applyJobProductLineRemove(jobRef.current, placeholderId));
+        }
+      } catch {
+        commitJob(applyJobProductLineRemove(jobRef.current, placeholderId));
       }
-    } finally {
-      setAddingProduct(false);
-    }
+    })();
   };
 
-  const handleRemoveProduct = async (jobProductId: string) => {
-    setRemovingProduct(jobProductId);
-    try {
-      const res = await fetch(
-        `/api/jobs/${job.id}/products?jobProductId=${encodeURIComponent(jobProductId)}`,
-        { method: "DELETE" }
-      );
-      if (res.ok) {
-        const updatedJob = await fetch(`/api/jobs/${job.id}`).then((r) => r.json());
-        onJobUpdated?.(updatedJob);
+  const handleRemoveProduct = (jobProductId: string) => {
+    const snapshot = jobRef.current;
+    commitJob(applyJobProductLineRemove(jobRef.current, jobProductId));
+    void (async () => {
+      try {
+        const res = await fetch(
+          `/api/jobs/${job.id}/products?jobProductId=${encodeURIComponent(jobProductId)}`,
+          { method: "DELETE" }
+        );
+        if (!res.ok) {
+          commitJob(snapshot);
+        }
+      } catch {
+        commitJob(snapshot);
       }
-    } finally {
-      setRemovingProduct(null);
-    }
+    })();
   };
 
   const total =
@@ -3378,7 +3431,6 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                         const lineTotal = price * qty;
                         const isExpanded = expandedServiceIds.has(js.id);
                         const isSystemLine = Boolean(js.service?.isSystem);
-                        const qtyBusy = updatingServiceQty === js.id;
                         const serviceLabel =
                           js.service?.name ?? js.customServiceName ?? "Unknown service";
                         return (
@@ -3415,19 +3467,18 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                                     <button
                                       type="button"
                                       aria-label="Decrease quantity"
-                                      disabled={qty <= 1 || qtyBusy}
+                                      disabled={qty <= 1}
                                       onClick={() => adjustServiceQuantity(js.id, qty - 1)}
                                       className="px-2 py-1 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-transparent rounded-l-md text-sm leading-none"
                                     >
                                       −
                                     </button>
                                     <span className="min-w-[1.75rem] text-center text-sm tabular-nums text-slate-800 px-0.5">
-                                      {qtyBusy ? "…" : qty}
+                                      {qty}
                                     </span>
                                     <button
                                       type="button"
                                       aria-label="Increase quantity"
-                                      disabled={qtyBusy}
                                       onClick={() => adjustServiceQuantity(js.id, qty + 1)}
                                       className="px-2 py-1 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-transparent rounded-r-md text-sm leading-none"
                                     >
@@ -3438,7 +3489,6 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                                 <Price amount={lineTotal} variant="inline" />
                                 <button
                                   onClick={() => handleRemoveService(js.id)}
-                                  disabled={removing === js.id}
                                   className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity"
                                   aria-label="Remove service"
                                 >
@@ -3548,7 +3598,6 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                         const qty = jp.quantity || 1;
                         const lineTotal = price * qty;
                         const isExpanded = expandedProductIds.has(jp.id);
-                        const qtyBusy = updatingProductQty === jp.id;
                         return (
                           <div
                             key={`product-${jp.id}`}
@@ -3582,19 +3631,18 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                                   <button
                                     type="button"
                                     aria-label="Decrease quantity"
-                                    disabled={qty <= 1 || qtyBusy}
+                                    disabled={qty <= 1}
                                     onClick={() => adjustProductQuantity(jp.id, qty - 1)}
                                     className="px-2 py-1 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-transparent rounded-l-md text-sm leading-none"
                                   >
                                     −
                                   </button>
                                   <span className="min-w-[1.75rem] text-center text-sm tabular-nums text-slate-800 px-0.5">
-                                    {qtyBusy ? "…" : qty}
+                                    {qty}
                                   </span>
                                   <button
                                     type="button"
                                     aria-label="Increase quantity"
-                                    disabled={qtyBusy}
                                     onClick={() => adjustProductQuantity(jp.id, qty + 1)}
                                     className="px-2 py-1 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-transparent rounded-r-md text-sm leading-none"
                                   >
@@ -3604,7 +3652,6 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                                 <Price amount={lineTotal} variant="inline" />
                                 <button
                                   onClick={() => handleRemoveProduct(jp.id)}
-                                  disabled={removingProduct === jp.id}
                                   className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity"
                                   aria-label="Remove product"
                                 >
@@ -3725,10 +3772,9 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                   return !o;
                 });
               }}
-              disabled={adding}
-              className="w-full text-left text-sm px-3 py-2 border border-slate-300 rounded-lg bg-white hover:bg-slate-50 truncate disabled:opacity-50"
+              className="w-full text-left text-sm px-3 py-2 border border-slate-300 rounded-lg bg-white hover:bg-slate-50 truncate"
             >
-              {adding ? "Adding…" : "+ Add service"}
+              + Add service
             </button>
             {servicesDropdownOpen && (
               <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-[80] flex flex-col">
@@ -3761,9 +3807,9 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                       key={s.id}
                       type="button"
                       onClick={() => {
-                        if (canAdd) void handleAddService(s.id);
+                        if (canAdd) handleAddService(s.id);
                       }}
-                      disabled={!canAdd || adding}
+                      disabled={!canAdd}
                       className="w-full px-3 py-2 text-left text-sm last:rounded-b-lg flex flex-col items-start min-w-0 hover:bg-slate-50 disabled:hover:bg-white disabled:cursor-not-allowed"
                     >
                       <span className={`font-medium truncate w-full ${!canAdd ? "text-slate-400" : "text-slate-900"}`}>
@@ -3783,7 +3829,7 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                   {serviceSearch.trim() && filteredServices.length === 0 && (
                     <button
                       type="button"
-                      onClick={() => void handleAddCustomService(serviceSearch)}
+                      onClick={() => handleAddCustomService(serviceSearch)}
                       className="w-full px-3 py-2 text-left text-sm last:rounded-b-lg flex items-center gap-2 min-w-0 hover:bg-violet-50 text-violet-700"
                     >
                       <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3813,10 +3859,9 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                   return !o;
                 });
               }}
-              disabled={addingProduct}
-              className="w-full text-left text-sm px-3 py-2 border border-slate-300 rounded-lg bg-white hover:bg-slate-50 truncate disabled:opacity-50"
+              className="w-full text-left text-sm px-3 py-2 border border-slate-300 rounded-lg bg-white hover:bg-slate-50 truncate"
             >
-              {addingProduct ? "Adding…" : "+ Add product"}
+              + Add product
             </button>
             {productsDropdownOpen && (
               <div className="absolute bottom-full left-0 right-0 mb-1 bg-white border border-slate-200 rounded-lg shadow-lg z-30 flex flex-col">
@@ -3847,7 +3892,7 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                           onClick={() => {
                             if (canAddProduct) handleAddProduct(p.id);
                           }}
-                          disabled={!canAddProduct || addingProduct}
+                          disabled={!canAddProduct}
                           className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50 disabled:hover:bg-white disabled:cursor-not-allowed last:rounded-b-lg flex flex-col items-start min-w-0"
                         >
                           <span className={`font-medium truncate w-full ${!canAddProduct ? "text-slate-400" : "text-slate-900"}`}>

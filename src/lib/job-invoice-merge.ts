@@ -44,3 +44,57 @@ export function applyJobServiceLineUpdate(job: Job, line: JobService): Job {
     ),
   };
 }
+
+export function applyJobServiceLineAdd(job: Job, line: JobService): Job {
+  return {
+    ...job,
+    jobServices: [...(job.jobServices ?? []), line],
+  };
+}
+
+export function applyJobServiceLineRemove(job: Job, jobServiceId: string): Job {
+  return {
+    ...job,
+    jobServices: (job.jobServices ?? []).filter((js) => js.id !== jobServiceId),
+  };
+}
+
+export function applyJobServiceLineReplace(
+  job: Job,
+  placeholderId: string,
+  line: JobService
+): Job {
+  return {
+    ...job,
+    jobServices: (job.jobServices ?? []).map((js) =>
+      js.id === placeholderId ? line : js
+    ),
+  };
+}
+
+export function applyJobProductLineAdd(job: Job, line: JobProduct): Job {
+  return {
+    ...job,
+    jobProducts: [...(job.jobProducts ?? []), line],
+  };
+}
+
+export function applyJobProductLineRemove(job: Job, jobProductId: string): Job {
+  return {
+    ...job,
+    jobProducts: (job.jobProducts ?? []).filter((jp) => jp.id !== jobProductId),
+  };
+}
+
+export function applyJobProductLineReplace(
+  job: Job,
+  placeholderId: string,
+  line: JobProduct
+): Job {
+  return {
+    ...job,
+    jobProducts: (job.jobProducts ?? []).map((jp) =>
+      jp.id === placeholderId ? line : jp
+    ),
+  };
+}

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { DeliveryType, Job, Stage } from "@/lib/types";
+import { applyOptimisticDeliveryType } from "@/lib/optimistic-job-patch";
 import { getJobBikeDisplayTitle, getDisplayPartsForJobBikeRow } from "@/lib/job-display";
 import { useUnreadChatCustomerIds } from "@/contexts/StaffChatAttentionContext";
 import { useAppFeatures } from "@/contexts/AppFeaturesContext";
@@ -60,7 +61,6 @@ function JobDeliveryTypeControl({
 }) {
   const features = useAppFeatures();
   const [deliveryType, setDeliveryType] = useState<DeliveryType>(job.deliveryType);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const showCollectionOption =
@@ -84,37 +84,43 @@ function JobDeliveryTypeControl({
     );
   }
 
-  const persistDeliveryType = async (next: DeliveryType) => {
+  const persistDeliveryType = (next: DeliveryType) => {
     if (next === job.deliveryType) return;
-    setSaving(true);
     setError(null);
+    const addr =
+      next === "COLLECTION_SERVICE"
+        ? (job.collectionAddress ?? job.customer?.address ?? "").trim() || null
+        : null;
+    const snapshot = job;
+    onJobUpdated(applyOptimisticDeliveryType(job, next, addr));
     const body: {
       deliveryType: DeliveryType;
       collectionAddress?: string | null;
     } = { deliveryType: next };
     if (next === "COLLECTION_SERVICE") {
-      const addr = (job.collectionAddress ?? job.customer?.address ?? "").trim();
-      body.collectionAddress = addr || null;
+      body.collectionAddress = addr;
     }
-    try {
-      const res = await fetch(`/api/jobs/${job.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) {
-        setDeliveryType(job.deliveryType);
-        setError(data.error ?? "Failed to update booking type");
-        return;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/jobs/${job.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = (await res.json().catch(() => ({}))) as Job & { error?: string };
+        if (!res.ok) {
+          setDeliveryType(snapshot.deliveryType);
+          setError(data.error ?? "Failed to update booking type");
+          onJobUpdated(snapshot);
+          return;
+        }
+        onJobUpdated(data);
+      } catch {
+        setDeliveryType(snapshot.deliveryType);
+        setError("Failed to update booking type");
+        onJobUpdated(snapshot);
       }
-      onJobUpdated(data as Job);
-    } catch {
-      setDeliveryType(job.deliveryType);
-      setError("Failed to update booking type");
-    } finally {
-      setSaving(false);
-    }
+    })();
   };
 
   return (
@@ -125,15 +131,14 @@ function JobDeliveryTypeControl({
     >
       <select
         value={deliveryType}
-        disabled={saving}
         onChange={(e) => {
           const next = e.target.value as DeliveryType;
           setDeliveryType(next);
-          void persistDeliveryType(next);
+          persistDeliveryType(next);
         }}
         aria-label="Booking type"
         title={error ?? undefined}
-        className={`text-xs font-semibold px-2 py-1 rounded-lg border-0 cursor-pointer focus:ring-2 focus:ring-indigo-200 focus:outline-none disabled:opacity-60 touch-manipulation max-w-full ${badgeClass}`}
+        className={`text-xs font-semibold px-2 py-1 rounded-lg border-0 cursor-pointer focus:ring-2 focus:ring-indigo-200 focus:outline-none touch-manipulation max-w-full ${badgeClass}`}
       >
         <option value="DROP_OFF_AT_SHOP">Drop-off</option>
         {showCollectionOption && (

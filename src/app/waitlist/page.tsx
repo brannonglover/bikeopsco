@@ -37,11 +37,10 @@ function formatWhen(iso: string): string {
 export default function WaitlistPage() {
   const [entries, setEntries] = useState<WaitlistEntry[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
-  const [workingId, setWorkingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const load = async () => {
-    setStatus("loading");
+  const load = async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setStatus("loading");
     setError(null);
     try {
       const res = await fetch("/api/waitlist", { cache: "no-store" });
@@ -50,7 +49,7 @@ export default function WaitlistPage() {
       setEntries(Array.isArray(data) ? data : []);
       setStatus("ready");
     } catch {
-      setStatus("error");
+      if (!opts?.silent) setStatus("error");
     }
   };
 
@@ -63,44 +62,50 @@ export default function WaitlistPage() {
     [entries]
   );
 
-  const promote = async (id: string) => {
-    setWorkingId(id);
-    setError(null);
-    try {
-      const res = await fetch(`/api/waitlist/${encodeURIComponent(id)}/promote`, {
-        method: "POST",
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(typeof data?.error === "string" ? data.error : "Failed to promote.");
-        return;
-      }
-      await load();
-    } catch {
-      setError("Failed to promote.");
-    } finally {
-      setWorkingId(null);
-    }
+  const removeEntryOptimistically = (id: string) => {
+    setEntries((prev) => prev.filter((e) => e.id !== id));
   };
 
-  const cancel = async (id: string) => {
-    setWorkingId(id);
+  const promote = (id: string) => {
     setError(null);
-    try {
-      const res = await fetch(`/api/waitlist/${encodeURIComponent(id)}/cancel`, {
-        method: "POST",
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(typeof data?.error === "string" ? data.error : "Failed to cancel.");
-        return;
+    const snapshot = entries;
+    removeEntryOptimistically(id);
+    void (async () => {
+      try {
+        const res = await fetch(`/api/waitlist/${encodeURIComponent(id)}/promote`, {
+          method: "POST",
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setEntries(snapshot);
+          setError(typeof data?.error === "string" ? data.error : "Failed to promote.");
+        }
+      } catch {
+        setEntries(snapshot);
+        setError("Failed to promote.");
       }
-      await load();
-    } catch {
-      setError("Failed to cancel.");
-    } finally {
-      setWorkingId(null);
-    }
+    })();
+  };
+
+  const cancel = (id: string) => {
+    setError(null);
+    const snapshot = entries;
+    removeEntryOptimistically(id);
+    void (async () => {
+      try {
+        const res = await fetch(`/api/waitlist/${encodeURIComponent(id)}/cancel`, {
+          method: "POST",
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setEntries(snapshot);
+          setError(typeof data?.error === "string" ? data.error : "Failed to cancel.");
+        }
+      } catch {
+        setEntries(snapshot);
+        setError("Failed to cancel.");
+      }
+    })();
   };
 
   return (
@@ -118,7 +123,7 @@ export default function WaitlistPage() {
         </div>
         <button
           type="button"
-          onClick={load}
+          onClick={() => void load({ silent: true })}
           className="rounded-lg bg-slate-900 text-white px-3 py-2 text-sm font-semibold hover:bg-slate-800"
         >
           Refresh
@@ -153,7 +158,6 @@ export default function WaitlistPage() {
                 ? `${e.bikes[0].make}${e.bikes[0].model ? ` ${e.bikes[0].model}` : ""}`
                 : `${e.bikes.length} bikes`;
             const servicesLine = e.serviceNames?.length ? e.serviceNames.join(", ") : "None specified";
-            const disabled = workingId === e.id;
 
             return (
               <div key={e.id} className="rounded-xl border border-slate-200 bg-white p-4">
@@ -185,25 +189,15 @@ export default function WaitlistPage() {
                   <div className="flex flex-row sm:flex-col gap-2">
                     <button
                       type="button"
-                      disabled={disabled}
                       onClick={() => promote(e.id)}
-                      className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
-                        disabled
-                          ? "bg-slate-200 text-slate-500 cursor-not-allowed"
-                          : "bg-emerald-600 text-white hover:bg-emerald-700"
-                      }`}
+                      className="rounded-lg px-3 py-2 text-sm font-semibold transition-colors bg-emerald-600 text-white hover:bg-emerald-700"
                     >
                       Promote
                     </button>
                     <button
                       type="button"
-                      disabled={disabled}
                       onClick={() => cancel(e.id)}
-                      className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
-                        disabled
-                          ? "bg-slate-200 text-slate-500 cursor-not-allowed"
-                          : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                      }`}
+                      className="rounded-lg px-3 py-2 text-sm font-semibold transition-colors bg-slate-100 text-slate-700 hover:bg-slate-200"
                     >
                       Dismiss
                     </button>
@@ -217,4 +211,3 @@ export default function WaitlistPage() {
     </div>
   );
 }
-

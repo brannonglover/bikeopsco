@@ -31,6 +31,7 @@ import {
   mergeBoardJobsFromFetch,
 } from "@/lib/board-stage-merge";
 import { mergeJobPreservingInvoiceDetails } from "@/lib/job-invoice-merge";
+import { withOptimisticStageChange } from "@/lib/optimistic-job-patch";
 
 function formatShortDate(d: Date | string | null) {
   if (!d) return null;
@@ -71,51 +72,6 @@ type PendingBoardMove = {
 };
 
 /** Match PATCH semantics so the card does not “snap” again when the server JSON arrives. */
-function withOptimisticStageChange(job: Job, newStage: Stage): Job {
-  const bikes = job.jobBikes ?? [];
-  const incomplete = bikes.filter((b) => !b.completedAt);
-
-  if (newStage === "WAITING_ON_PARTS") {
-    const wid = job.workingOnJobBikeId;
-    if (job.stage !== "WAITING_ON_PARTS" && wid) {
-      const now = new Date().toISOString();
-      return {
-        ...job,
-        stage: newStage,
-        workingOnJobBikeId: null,
-        jobBikes: bikes.map((b) =>
-          b.id === wid && !b.completedAt
-            ? { ...b, waitingOnPartsAt: now }
-            : b
-        ),
-      };
-    }
-    return { ...job, stage: newStage };
-  }
-
-  let next: Job = {
-    ...job,
-    stage: newStage,
-    jobBikes: bikes.map((b) =>
-      b.completedAt ? b : { ...b, waitingOnPartsAt: null }
-    ),
-  };
-
-  if (newStage === "WORKING_ON" && incomplete.length === 1) {
-    next = { ...next, workingOnJobBikeId: incomplete[0].id };
-  } else if (newStage !== "WORKING_ON") {
-    next = { ...next, workingOnJobBikeId: null };
-  }
-
-  if (newStage === "COMPLETED") {
-    next = { ...next, completedAt: new Date().toISOString() };
-  } else {
-    next = { ...next, completedAt: null };
-  }
-
-  return next;
-}
-
 function cloneJobForRevert(job: Job): Job {
   return {
     ...job,
@@ -281,31 +237,59 @@ export function KanbanBoard() {
   }, [selectedJob]);
 
   const handleAccept = useCallback(
-    async (jobId: string) => {
-      try {
-        const body: Record<string, unknown> = { stage: "BOOKED_IN" };
-        if (!features.notifyCustomerEnabled || jobsSkippingCustomerNotify.has(jobId)) {
-          body.notifyCustomer = false;
-        }
-        const res = await fetch(`/api/jobs/${jobId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        if (res.ok) {
-          const updated = await res.json();
-          setJobs((prev) =>
-            prev.map((j) => (j.id === jobId ? updated : j))
-          );
-          if (selectedJob?.id === jobId) {
-            setSelectedJob(updated);
+    (jobId: string) => {
+      const revertSnapshots = new Map<string, Job>();
+      setJobs((prev) => {
+        const job = prev.find((j) => j.id === jobId);
+        if (!job || job.stage === "BOOKED_IN") return prev;
+        revertSnapshots.set(jobId, cloneJobForRevert(job));
+        return prev.map((j) =>
+          j.id === jobId ? withOptimisticStageChange(j, "BOOKED_IN") : j
+        );
+      });
+      setSelectedJob((sel) =>
+        sel?.id === jobId ? withOptimisticStageChange(sel, "BOOKED_IN") : sel
+      );
+
+      void (async () => {
+        try {
+          const body: Record<string, unknown> = { stage: "BOOKED_IN" };
+          if (!features.notifyCustomerEnabled || jobsSkippingCustomerNotify.has(jobId)) {
+            body.notifyCustomer = false;
+          }
+          const res = await fetch(`/api/jobs/${jobId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          if (res.ok) {
+            const updated = await res.json();
+            setJobs((prev) =>
+              prev.map((j) => (j.id === jobId ? updated : j))
+            );
+            setSelectedJob((sel) => (sel?.id === jobId ? updated : sel));
+          } else {
+            const snapshot = revertSnapshots.get(jobId);
+            if (snapshot) {
+              setJobs((prev) =>
+                prev.map((j) => (j.id === jobId ? snapshot : j))
+              );
+              setSelectedJob((sel) => (sel?.id === jobId ? snapshot : sel));
+            }
+          }
+        } catch (e) {
+          console.error("Failed to accept job", e);
+          const snapshot = revertSnapshots.get(jobId);
+          if (snapshot) {
+            setJobs((prev) =>
+              prev.map((j) => (j.id === jobId ? snapshot : j))
+            );
+            setSelectedJob((sel) => (sel?.id === jobId ? snapshot : sel));
           }
         }
-      } catch (e) {
-        console.error("Failed to accept job", e);
-      }
+      })();
     },
-    [features.notifyCustomerEnabled, jobsSkippingCustomerNotify, selectedJob?.id]
+    [features.notifyCustomerEnabled, jobsSkippingCustomerNotify]
   );
 
   const handleRejectClick = useCallback((job: Job) => {
