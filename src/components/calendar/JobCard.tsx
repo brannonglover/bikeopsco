@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { DeliveryType, Job, Stage } from "@/lib/types";
@@ -276,14 +277,20 @@ export function JobCardContent({
           </p>
         );
       })()}
-      {hasPendingChat && (
-        <p className="flex items-center gap-1 text-[11px] font-semibold text-emerald-700 mt-0.5">
+      {hasPendingChat && job.customerId && (
+        <Link
+          href={`/chat?customer=${encodeURIComponent(job.customerId)}`}
+          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+          aria-label="Open chat — customer waiting for reply"
+          className="flex items-center gap-1 text-[11px] font-semibold text-emerald-700 mt-0.5 hover:text-emerald-800 hover:underline touch-manipulation pointer-events-auto w-fit"
+        >
           <span className="relative flex h-2 w-2 flex-shrink-0">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75" />
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
           </span>
           Chat waiting
-        </p>
+        </Link>
       )}
       {job.customer && (
         <p className="text-sm text-slate-700 font-medium mt-1.5" title={`${job.customer.firstName}${job.customer.lastName ? ` ${job.customer.lastName}` : ""}`}>

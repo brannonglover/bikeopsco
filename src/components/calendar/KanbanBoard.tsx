@@ -96,6 +96,10 @@ export function KanbanBoard() {
   const [savedToast, setSavedToast] = useState<string | null>(null);
   const dismissDateToastJobIdRef = useRef<string | null>(null);
   const pendingBoardMovesRef = useRef<Map<string, PendingBoardMove>>(new Map());
+  /** Serialize PATCH /api/jobs/[id] per job so rapid drags don't overlap transactions. */
+  const jobPatchQueueRef = useRef<Map<string, Promise<void>>>(new Map());
+  /** Only the latest drag for a job may revert optimistic UI on failure. */
+  const jobPatchGenerationRef = useRef<Map<string, number>>(new Map());
   /** Job IDs for which board actions should not send customer email/SMS. */
   const [jobsSkippingCustomerNotify, setJobsSkippingCustomerNotify] = useState<
     Set<string>
@@ -451,16 +455,43 @@ export function KanbanBoard() {
         );
       };
 
-      try {
+      const generation =
+        (jobPatchGenerationRef.current.get(jobId) ?? 0) + 1;
+      jobPatchGenerationRef.current.set(jobId, generation);
+
+      const persistStage = async () => {
         const body: Record<string, unknown> = { stage: newStage };
         if (!features.notifyCustomerEnabled || jobsSkippingCustomerNotify.has(jobId)) {
           body.notifyCustomer = false;
         }
-        const res = await fetch(`/api/jobs/${jobId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
+
+        let res: Response | null = null;
+        try {
+          for (let attempt = 0; attempt < 2; attempt++) {
+            res = await fetch(`/api/jobs/${jobId}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(body),
+            });
+            if (res.ok || res.status < 500) break;
+            if (attempt === 0) {
+              await new Promise((resolve) => setTimeout(resolve, 300));
+            }
+          }
+        } catch (e) {
+          console.error("Failed to update job", e);
+          if (jobPatchGenerationRef.current.get(jobId) === generation) {
+            revert();
+          }
+          return;
+        }
+
+        if (!res) return;
+
+        if (jobPatchGenerationRef.current.get(jobId) !== generation) {
+          return;
+        }
+
         if (res.ok) {
           const updated = await res.json();
           pendingBoardMovesRef.current.set(jobId, {
@@ -487,13 +518,23 @@ export function KanbanBoard() {
             void reorderColumnJobs(sortUpdates);
           }
         } else {
-          console.error("Failed to update job stage", res.status, await res.text().catch(() => ""));
+          console.error(
+            "Failed to update job stage",
+            res.status,
+            await res.text().catch(() => "")
+          );
           revert();
         }
-      } catch (e) {
-        console.error("Failed to update job", e);
-        revert();
-      }
+      };
+
+      const prev = jobPatchQueueRef.current.get(jobId) ?? Promise.resolve();
+      const next = prev.catch(() => {}).then(persistStage);
+      jobPatchQueueRef.current.set(jobId, next);
+      void next.finally(() => {
+        if (jobPatchQueueRef.current.get(jobId) === next) {
+          jobPatchQueueRef.current.delete(jobId);
+        }
+      });
     },
     [features.notifyCustomerEnabled, jobsSkippingCustomerNotify, reorderColumnJobs]
   );

@@ -4,6 +4,7 @@ const TRANSIENT_PRISMA_CODES = new Set([
   "P1008", // Operations timed out
   "P1017", // Server closed the connection
   "P2024", // Timed out fetching a new connection from the pool
+  "P2028", // Transaction API error (e.g. unable to start tx under pool pressure)
 ]);
 
 function isTransientPrismaError(error: unknown): boolean {

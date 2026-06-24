@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 3000",
+    "dev:clean": "rm -rf .next && next dev -p 3000",
     "build": "node scripts/prisma.js migrate deploy && node scripts/prisma.js generate && next build",
     "start": "next start",
     "lint": "next lint",
