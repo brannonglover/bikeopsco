@@ -113,7 +113,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const isLoginPage = pathname === "/login";
-  const isSignupPage = pathname === "/signup";
+  const isSignupPage = pathname === "/signup" || pathname === "/signup/verify";
   const isAdminPage = pathname?.startsWith("/admin");
   const isWidgetPage = pathname?.startsWith("/widget");
   const isPublicCustomerPage =

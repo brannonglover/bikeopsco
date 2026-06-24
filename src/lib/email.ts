@@ -1107,6 +1107,51 @@ ${buildCustomerEmailCtaButton(details.loginUrl, "Open shop login")}
   }
 }
 
+export async function sendSignupVerificationEmail(details: {
+  ownerName: string;
+  ownerEmail: string;
+  shopName: string;
+  verificationUrl: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const resend = getResend();
+  if (!resend) {
+    console.warn("RESEND_API_KEY not set, skipping signup verification email");
+    return { ok: false, error: "Email not configured" };
+  }
+
+  const subject = "Confirm your email to start your Bike Ops trial";
+  const innerHtml = `
+<p style="margin:0 0 16px">Hi ${escapeHtml(details.ownerName)},</p>
+<p style="margin:0 0 16px">Thanks for signing up for <strong>${escapeHtml(details.shopName)}</strong> on Bike Ops. Confirm your email address to finish creating your workspace.</p>
+<p style="margin:0 0 16px">This link expires in 24 hours. If you did not request this, you can ignore this email.</p>
+${buildCustomerEmailCtaButton(details.verificationUrl, "Confirm email and create workspace")}
+<p class="email-muted" style="margin:24px 0 0;font-size:12px;color:#64748b;word-break:break-all">Or copy this link: <a href="${escapeHtml(details.verificationUrl)}" style="color:#4f46e5;text-decoration:underline">${escapeHtml(details.verificationUrl)}</a></p>
+`.trim();
+
+  const branding = await getCustomerEmailBrandingAssets();
+  const html = buildReadOnlyCustomerEmailHtml({
+    innerHtml,
+    headerLogoSrc: branding.headerLogoSrc,
+    heading: "Confirm your email",
+  });
+  const attachments = customerEmailBrandingAttachments(branding);
+
+  try {
+    const { error } = await resend.emails.send({
+      from: getFromEmail(),
+      to: details.ownerEmail,
+      subject,
+      html,
+      ...(attachments && { attachments }),
+    });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (e) {
+    const err = e instanceof Error ? e.message : "Unknown error";
+    return { ok: false, error: err };
+  }
+}
+
 export async function sendWaitlistRequestNotification(entry: {
   shopId?: string;
   id: string;

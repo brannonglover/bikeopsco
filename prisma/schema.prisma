@@ -462,6 +462,22 @@ model User {
   @@index([shopId])
 }
 
+model PendingSignup {
+  id           String   @id @default(cuid())
+  token        String   @unique
+  shopName     String
+  subdomain    String
+  ownerName    String
+  email        String
+  passwordHash String
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  @@index([subdomain])
+  @@index([email])
+  @@index([expiresAt])
+}
+
 model PushToken {
   id         String    @id @default(cuid())
   shopId     String

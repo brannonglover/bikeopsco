@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, CheckCircle2 } from "lucide-react";
+import { ArrowRight, Mail } from "lucide-react";
 import { FormEvent, useMemo, useState } from "react";
 
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? "bikeops.co";
@@ -25,7 +25,7 @@ export default function SignupPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [loginUrl, setLoginUrl] = useState<string | null>(null);
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
 
   const previewSubdomain = useMemo(
     () => slugifySubdomain(subdomain || shopName) || "your-shop",
@@ -61,7 +61,7 @@ export default function SignupPage() {
         setError(data?.error ?? "Could not create your shop.");
         return;
       }
-      setLoginUrl(data.loginUrl);
+      setPendingEmail(data.email ?? email);
     } catch {
       setError("Could not create your shop. Please try again.");
     } finally {
@@ -69,23 +69,21 @@ export default function SignupPage() {
     }
   };
 
-  if (loginUrl) {
+  if (pendingEmail) {
     return (
       <main className="min-h-screen w-full bg-mesh px-4 py-10 text-slate-900">
         <div className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-xl flex-col items-center justify-center">
           <div className="w-full rounded-xl border border-slate-200 bg-white p-8 text-center shadow-lg">
-            <CheckCircle2 className="mx-auto mb-4 h-12 w-12 text-emerald-600" aria-hidden />
-            <h1 className="text-2xl font-semibold">Your shop is ready</h1>
+            <Mail className="mx-auto mb-4 h-12 w-12 text-slate-700" aria-hidden />
+            <h1 className="text-2xl font-semibold">Check your email</h1>
             <p className="mt-3 text-sm leading-6 text-slate-600">
-              Sign in on your new Bike Ops workspace and start with a fresh board.
+              We sent a confirmation link to{" "}
+              <span className="font-medium text-slate-900">{pendingEmail}</span>. Click the link in
+              that email to finish creating your workspace.
             </p>
-            <Link
-              href={loginUrl}
-              className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-800 px-4 py-3 font-semibold text-white transition-colors hover:bg-slate-900"
-            >
-              Open workspace
-              <ArrowRight className="h-4 w-4" aria-hidden />
-            </Link>
+            <p className="mt-4 text-sm text-slate-500">
+              The link expires in 24 hours. If you do not see the email, check your spam folder.
+            </p>
           </div>
         </div>
       </main>
@@ -221,7 +219,7 @@ export default function SignupPage() {
               disabled={loading}
               className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-800 px-4 py-3 font-semibold text-white transition-colors hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {loading ? "Creating workspace..." : "Create workspace"}
+              {loading ? "Sending confirmation email..." : "Create workspace"}
               {!loading && <ArrowRight className="h-4 w-4" aria-hidden />}
             </button>
           </form>

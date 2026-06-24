@@ -3,13 +3,18 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import {
-  DEFAULT_ROOT_DOMAIN,
   isReservedSubdomain,
   normalizeShopSubdomain,
 } from "@/lib/tenant-domain";
-import { provisionShopDefaults } from "@/lib/shop-provisioning";
-import { addTrialDays } from "@/lib/billing";
-import { sendPlatformSignupNotification } from "@/lib/email";
+import { sendPlatformSignupNotification, sendSignupVerificationEmail } from "@/lib/email";
+import {
+  createSignupVerificationToken,
+  getSignupVerificationExpiry,
+  getSignupVerificationUrl,
+  isSubdomainTaken,
+  buildTenantUrl,
+  completeSignupFromToken,
+} from "@/lib/signup-verification";
 
 export const dynamic = "force-dynamic";
 
@@ -32,25 +37,6 @@ const signupSchema = z.object({
   password: z.string().min(8, "Password must be at least 8 characters").max(128),
 });
 
-function buildTenantUrl(request: NextRequest, subdomain: string, path = "/login"): string {
-  const rootDomain = process.env.ROOT_DOMAIN ?? DEFAULT_ROOT_DOMAIN;
-  const url = request.nextUrl.clone();
-
-  if (url.hostname === "localhost" || url.hostname.endsWith(".localhost")) {
-    url.hostname = `${subdomain}.localhost`;
-  } else if (url.hostname.endsWith(".lvh.me")) {
-    url.hostname = `${subdomain}.lvh.me`;
-  } else {
-    url.hostname = `${subdomain}.${rootDomain}`;
-    url.protocol = "https:";
-    url.port = "";
-  }
-
-  url.pathname = path;
-  url.search = "";
-  return url.toString();
-}
-
 export async function POST(request: NextRequest) {
   let body: unknown;
   try {
@@ -67,72 +53,110 @@ export async function POST(request: NextRequest) {
 
   const { shopName, subdomain, ownerName, email, password } = parsed.data;
 
-  const existingShop = await prisma.shop.findUnique({
-    where: { subdomain },
-    select: { id: true },
-  });
-  if (existingShop) {
+  if (await isSubdomainTaken(subdomain)) {
     return NextResponse.json({ error: "That subdomain is already taken" }, { status: 409 });
   }
 
   const passwordHash = await bcrypt.hash(password, 12);
+  const token = createSignupVerificationToken();
+  const expiresAt = getSignupVerificationExpiry();
 
   try {
-    const shop = await prisma.$transaction(async (tx) => {
-      const createdShop = await tx.shop.create({
-        data: {
-          name: shopName,
-          subdomain,
-          billingStatus: "trialing",
-          trialEndsAt: addTrialDays(),
+    await prisma.$transaction(async (tx) => {
+      await tx.pendingSignup.deleteMany({
+        where: {
+          OR: [{ email }, { subdomain }],
         },
       });
 
-      await tx.user.create({
+      await tx.pendingSignup.create({
         data: {
-          shopId: createdShop.id,
+          token,
+          shopName,
+          subdomain,
+          ownerName,
           email,
           passwordHash,
-          name: ownerName,
+          expiresAt,
         },
       });
-
-      await provisionShopDefaults(tx, createdShop.id, shopName, email);
-      return createdShop;
     });
+  } catch (error) {
+    console.error("POST /api/signup pending create error:", error);
+    return NextResponse.json({ error: "Could not start signup" }, { status: 500 });
+  }
 
-    const loginUrl = buildTenantUrl(request, shop.subdomain, "/login");
+  const verificationUrl = getSignupVerificationUrl(token, request);
+  const emailResult = await sendSignupVerificationEmail({
+    ownerName,
+    ownerEmail: email,
+    shopName,
+    verificationUrl,
+  });
 
-    void sendPlatformSignupNotification({
-      shopName: shop.name,
-      subdomain: shop.subdomain,
-      ownerName,
-      ownerEmail: email,
-      trialEndsAt: shop.trialEndsAt,
-      loginUrl,
-    }).catch((err) => console.error("[Signup] Platform notification email failed:", err));
-
+  if (!emailResult.ok) {
+    await prisma.pendingSignup.deleteMany({ where: { token } }).catch(() => {});
     return NextResponse.json(
       {
-        shop: {
-          id: shop.id,
-          name: shop.name,
-          subdomain: shop.subdomain,
-        },
-        loginUrl,
+        error:
+          emailResult.error === "Email not configured"
+            ? "Email verification is not available right now. Please try again later."
+            : "Could not send verification email. Please check your email address and try again.",
       },
-      { status: 201 },
+      { status: 503 },
     );
-  } catch (error) {
-    if (
-      typeof error === "object" &&
-      error !== null &&
-      "code" in error &&
-      error.code === "P2002"
-    ) {
-      return NextResponse.json({ error: "That subdomain is already taken" }, { status: 409 });
-    }
-    console.error("POST /api/signup error:", error);
-    return NextResponse.json({ error: "Could not create shop" }, { status: 500 });
   }
+
+  return NextResponse.json(
+    {
+      message: "Check your email to confirm your address and finish creating your workspace.",
+      email,
+    },
+    { status: 202 },
+  );
+}
+
+const verifySchema = z.object({
+  token: z.string().min(1),
+});
+
+export async function PUT(request: NextRequest) {
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON in request body" }, { status: 400 });
+  }
+
+  const parsed = verifySchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: "invalid" }, { status: 400 });
+  }
+
+  const result = await completeSignupFromToken(parsed.data.token);
+  if (!result.ok) {
+    const status =
+      result.reason === "expired" ? 410 : result.reason === "subdomain_taken" ? 409 : 400;
+    return NextResponse.json({ error: result.reason }, { status });
+  }
+
+  const loginUrl = buildTenantUrl(request, result.shop.subdomain, "/login");
+
+  void sendPlatformSignupNotification({
+    shopName: result.shop.name,
+    subdomain: result.shop.subdomain,
+    ownerName: result.ownerName,
+    ownerEmail: result.ownerEmail,
+    trialEndsAt: result.shop.trialEndsAt,
+    loginUrl,
+  }).catch((err) => console.error("[Signup] Platform notification email failed:", err));
+
+  return NextResponse.json({
+    shop: {
+      id: result.shop.id,
+      name: result.shop.name,
+      subdomain: result.shop.subdomain,
+    },
+    loginUrl,
+  });
 }
