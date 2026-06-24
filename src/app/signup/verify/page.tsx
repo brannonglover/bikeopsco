@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, CheckCircle2, Loader2, Mail, XCircle } from "lucide-react";
+import { ArrowRight, CheckCircle2, Loader2, XCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 
 type VerifyState =
