@@ -26,6 +26,10 @@ export default function SignupPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [pendingEmail, setPendingEmail] = useState<string | null>(null);
+  const [pendingSubdomain, setPendingSubdomain] = useState<string | null>(null);
+  const [resendMessage, setResendMessage] = useState<string | null>(null);
+  const [resendError, setResendError] = useState<string | null>(null);
+  const [resendLoading, setResendLoading] = useState(false);
 
   const previewSubdomain = useMemo(
     () => slugifySubdomain(subdomain || shopName) || "your-shop",
@@ -62,10 +66,39 @@ export default function SignupPage() {
         return;
       }
       setPendingEmail(data.email ?? email);
+      setPendingSubdomain(subdomain);
     } catch {
       setError("Could not create your shop. Please try again.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    if (!pendingEmail) return;
+    setResendMessage(null);
+    setResendError(null);
+    setResendLoading(true);
+
+    try {
+      const response = await fetch("/api/signup/resend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: pendingEmail,
+          ...(pendingSubdomain ? { subdomain: pendingSubdomain } : {}),
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setResendError(data?.error ?? "Could not resend confirmation email.");
+        return;
+      }
+      setResendMessage(data?.message ?? "We sent another confirmation email.");
+    } catch {
+      setResendError("Could not resend confirmation email. Please try again.");
+    } finally {
+      setResendLoading(false);
     }
   };
 
@@ -84,6 +117,26 @@ export default function SignupPage() {
             <p className="mt-4 text-sm text-slate-500">
               The link expires in 24 hours. If you do not see the email, check your spam folder.
             </p>
+            <div className="mt-6 space-y-3">
+              <button
+                type="button"
+                onClick={handleResend}
+                disabled={resendLoading}
+                className="inline-flex w-full items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {resendLoading ? "Sending..." : "Resend confirmation email"}
+              </button>
+              {resendMessage && (
+                <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800" role="status">
+                  {resendMessage}
+                </p>
+              )}
+              {resendError && (
+                <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
+                  {resendError}
+                </p>
+              )}
+            </div>
           </div>
         </div>
       </main>

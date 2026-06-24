@@ -15,9 +15,6 @@
     "postinstall": "node scripts/prisma.js generate",
     "db:migrate:dev": "node scripts/prisma.js migrate dev"
   },
-  "prisma": {
-    "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"
-  },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",

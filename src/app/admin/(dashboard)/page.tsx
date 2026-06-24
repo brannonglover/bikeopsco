@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { listPlatformShops } from "@/lib/platform-shops";
+import { AdminDeleteShopButton } from "./AdminDeleteShopButton";
 import { AdminLogoutButton } from "./AdminLogoutButton";
 
 export const dynamic = "force-dynamic";
@@ -61,12 +62,13 @@ export default async function PlatformAdminPage() {
                   <th className="px-4 py-3 text-left font-medium text-slate-700">Signed up</th>
                   <th className="px-4 py-3 text-left font-medium text-slate-700">Billing</th>
                   <th className="px-4 py-3 text-left font-medium text-slate-700">Usage</th>
+                  <th className="px-4 py-3 text-left font-medium text-slate-700">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {shops.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
+                    <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
                       No shops have signed up yet.
                     </td>
                   </tr>
@@ -105,6 +107,9 @@ export default async function PlatformAdminPage() {
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 align-top text-slate-600">
                         {shop.userCount} users · {shop.customerCount} customers · {shop.jobCount} jobs
+                      </td>
+                      <td className="px-4 py-3 align-top">
+                        <AdminDeleteShopButton shopId={shop.id} shopName={shop.name} />
                       </td>
                     </tr>
                   ))

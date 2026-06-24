@@ -1,6 +1,9 @@
 import "server-only";
 
 import { prisma } from "@/lib/db";
+import { getStripe } from "@/lib/stripe";
+
+const DEFAULT_SHOP_ID = "shop_default";
 
 export type PlatformShopRow = {
   id: string;
@@ -60,4 +63,52 @@ export async function listPlatformShops(): Promise<PlatformShopRow[]> {
     customerCount: shop._count.customers,
     jobCount: shop._count.jobs,
   }));
+}
+
+export type DeletePlatformShopResult =
+  | { ok: true }
+  | { ok: false; reason: "not_found" | "protected" | "error"; message?: string };
+
+export async function deletePlatformShop(shopId: string): Promise<DeletePlatformShopResult> {
+  if (shopId === DEFAULT_SHOP_ID) {
+    return { ok: false, reason: "protected", message: "The default shop cannot be deleted." };
+  }
+
+  const shop = await prisma.shop.findUnique({
+    where: { id: shopId },
+    select: {
+      id: true,
+      subdomain: true,
+      stripeSubscriptionId: true,
+    },
+  });
+
+  if (!shop) {
+    return { ok: false, reason: "not_found" };
+  }
+
+  if (shop.stripeSubscriptionId) {
+    try {
+      const stripe = getStripe();
+      await stripe.subscriptions.cancel(shop.stripeSubscriptionId);
+    } catch (error) {
+      console.error(`deletePlatformShop: Stripe cancel failed for ${shopId}:`, error);
+      return {
+        ok: false,
+        reason: "error",
+        message: "Could not cancel the shop's Stripe subscription.",
+      };
+    }
+  }
+
+  try {
+    await prisma.$transaction([
+      prisma.pendingSignup.deleteMany({ where: { subdomain: shop.subdomain } }),
+      prisma.shop.delete({ where: { id: shop.id } }),
+    ]);
+    return { ok: true };
+  } catch (error) {
+    console.error(`deletePlatformShop: delete failed for ${shopId}:`, error);
+    return { ok: false, reason: "error", message: "Could not delete shop." };
+  }
 }
