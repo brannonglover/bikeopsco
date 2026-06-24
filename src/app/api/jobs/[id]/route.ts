@@ -13,6 +13,7 @@ import { hasJobReadAccess } from "@/lib/job-customer-access";
 import { getShopForHost } from "@/lib/shop";
 import { mirrorJobStageToCustomerChat } from "@/lib/system-chat";
 import { normalizeJobCollectionWindowsForStorage } from "@/lib/normalize-job-collection-windows";
+import { withPrismaRetry } from "@/lib/prisma-retry";
 import { optionalTrimmedString } from "@/lib/zod-helpers";
 
 const bikeSchema = z.object({
@@ -283,7 +284,13 @@ export async function PATCH(
       }
     }
 
-    const job = await prisma.$transaction(async (tx) => {
+    // Stage-only PATCHs must not write null to non-nullable Job.bikeModel.
+    if ("bikeModel" in updateData && updateData.bikeModel == null) {
+      updateData.bikeModel = "";
+    }
+
+    const job = await withPrismaRetry(() =>
+      prisma.$transaction(async (tx) => {
       if (Object.keys(updateData).length > 0) {
         await tx.job.update({
           where: { id, shopId: shop.id },
@@ -291,7 +298,7 @@ export async function PATCH(
         });
       }
       if (workingOnBikeIdToClearWaiting) {
-        await tx.jobBike.update({
+        await tx.jobBike.updateMany({
           where: { id: workingOnBikeIdToClearWaiting, jobId: id, shopId: shop.id },
           data: { waitingOnPartsAt: null },
         });
@@ -490,7 +497,8 @@ export async function PATCH(
       });
       if (!result) throw new Error("Job not found");
       return result;
-    });
+    })
+    );
 
     // Send booking declined email when rejecting a pending-approval widget booking
     if (
