@@ -156,7 +156,7 @@ export default async function PlatformAdminPage() {
                       <th className="px-3 py-2.5 text-left font-medium text-slate-700">Shop</th>
                       <th className="px-3 py-2.5 text-left font-medium text-slate-700">Owner</th>
                       <th className="px-3 py-2.5 text-left font-medium text-slate-700">Status</th>
-                      <th className="sticky right-0 z-20 bg-slate-50 px-3 py-2.5 text-left font-medium text-slate-700 shadow-[-4px_0_8px_-4px_rgba(15,23,42,0.08)]">
+                      <th className="sticky right-0 z-[1] bg-slate-50 px-3 py-2.5 text-left font-medium text-slate-700 shadow-[-4px_0_8px_-4px_rgba(15,23,42,0.08)]">
                         Actions
                       </th>
                     </tr>
@@ -180,7 +180,7 @@ export default async function PlatformAdminPage() {
                             {billingLabel(shop.billingStatus, shop.trialEndsAt)}
                           </p>
                         </td>
-                        <td className="sticky right-0 z-10 bg-white px-3 py-2.5 align-top shadow-[-4px_0_8px_-4px_rgba(15,23,42,0.08)] group-hover:bg-slate-50/80">
+                        <td className="sticky right-0 z-[1] bg-white px-3 py-2.5 align-top shadow-[-4px_0_8px_-4px_rgba(15,23,42,0.08)] group-hover:bg-slate-50/80">
                           <AdminDeleteShopButton shopId={shop.id} shopName={shop.name} />
                         </td>
                       </tr>
