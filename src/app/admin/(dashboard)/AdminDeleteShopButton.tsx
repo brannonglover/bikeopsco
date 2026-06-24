@@ -56,7 +56,7 @@ export function AdminDeleteShopButton({ shopId, shopName }: AdminDeleteShopButto
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50"
+        className="whitespace-nowrap rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50"
       >
         Delete
       </button>
