@@ -216,8 +216,6 @@ function InviteButton({ customerId }: { customerId: string }) {
   const buttonLabel =
     sending
       ? "Sending…"
-      : status === "sms-active"
-        ? "SMS chat active"
       : status === "active" && daysLeft !== null && daysLeft > 0
         ? `${daysLeft} day${daysLeft === 1 ? "" : "s"} left`
         : status === "pending"
@@ -227,9 +225,23 @@ function InviteButton({ customerId }: { customerId: string }) {
   const buttonStyle =
     status === "pending"
       ? "px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-50 rounded-lg hover:bg-amber-100 disabled:opacity-50"
-      : status === "active" || status === "sms-active"
+      : status === "active"
         ? "px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100 disabled:opacity-50"
         : "px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100 disabled:opacity-50";
+
+  if (status === "sms-active") {
+    return (
+      <div
+        className="flex items-center gap-1.5 flex-shrink-0 px-3 py-1.5 text-xs font-medium text-emerald-800 bg-emerald-50 rounded-lg border border-emerald-200"
+        title="This customer has SMS consent and an active job. They can reply to your texts directly — no web chat invite is needed."
+      >
+        <svg className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+        </svg>
+        <span>SMS replies enabled</span>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center gap-2 flex-shrink-0">
@@ -237,7 +249,7 @@ function InviteButton({ customerId }: { customerId: string }) {
       <button
         type="button"
         onClick={handleClick}
-        disabled={sending || status === "sms-active"}
+        disabled={sending}
         className={buttonStyle}
       >
         {buttonLabel}

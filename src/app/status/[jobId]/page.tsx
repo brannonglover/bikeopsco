@@ -189,6 +189,7 @@ export default function StatusPage() {
   const [job, setJob] = useState<StatusJob | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const [expandedBikes, setExpandedBikes] = useState<Set<string>>(new Set());
   const [expandedServices, setExpandedServices] = useState<Set<string>>(new Set());
 
@@ -214,14 +215,46 @@ export default function StatusPage() {
     if (!jobId) return;
 
     fetch(`/api/jobs/${jobId}${jobAccessApiSuffix(jobAccess)}`, { cache: "no-store" })
-      .then((res) => {
-        if (!res.ok) throw new Error("Job not found");
-        return res.json();
+      .then(async (res) => {
+        if (res.ok) return res.json() as Promise<StatusJob>;
+        const data = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          message?: string;
+        };
+        if (res.status === 403 || data.error === "access_required") {
+          throw {
+            title: "Link incomplete",
+            detail:
+              data.message ??
+              "Use the full tracking link from your booking confirmation email or SMS, or ask the shop for a new link.",
+          };
+        }
+        if (res.status === 404 && !jobAccess) {
+          throw {
+            title: "Job not found",
+            detail:
+              "We couldn't find this repair. Check that you opened the link from the correct shop, or contact them for an updated status link.",
+          };
+        }
+        throw {
+          title: "Job not found",
+          detail: data.message ?? data.error ?? "This repair could not be found.",
+        };
       })
       .then((data: StatusJob) => {
         setJob(data);
+        setError(null);
+        setErrorDetail(null);
       })
-      .catch(() => setError("Job not found"))
+      .catch((err: { title?: string; detail?: string } | Error) => {
+        if (err && typeof err === "object" && "title" in err) {
+          setError(err.title ?? "Job not found");
+          setErrorDetail(err.detail ?? null);
+        } else {
+          setError("Job not found");
+          setErrorDetail(null);
+        }
+      })
       .finally(() => setLoading(false));
   }, [jobId, jobAccess]);
 
@@ -238,6 +271,9 @@ export default function StatusPage() {
     return (
       <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-8 shadow-sm text-center">
         <p className="text-red-600 font-medium">{error ?? "Job not found"}</p>
+        {errorDetail && (
+          <p className="mt-2 text-sm text-slate-600">{errorDetail}</p>
+        )}
       </div>
     );
   }

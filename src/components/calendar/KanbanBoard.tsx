@@ -697,7 +697,7 @@ export function KanbanBoard() {
       />
       {savedToast && (
         <div
-          className="fixed right-4 top-4 z-[70] rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 shadow-soft"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[70] rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 shadow-soft"
           role="status"
         >
           {savedToast}

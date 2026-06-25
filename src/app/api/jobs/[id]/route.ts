@@ -85,7 +85,14 @@ export async function GET(
     }
 
     if (!(await hasJobReadAccess(request, shop.id, id))) {
-      return NextResponse.json({ error: "Job not found" }, { status: 404 });
+      return NextResponse.json(
+        {
+          error: "access_required",
+          message:
+            "Use the full tracking link from your booking confirmation email or SMS, or ask the shop for a new link.",
+        },
+        { status: 403 }
+      );
     }
 
     const subtotal = computeJobSubtotal({

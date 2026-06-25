@@ -4,7 +4,10 @@ import { getConfiguredSmsProvider, sendChatStaffSms } from "@/lib/sms";
 import { sendPushToCustomer, sendPushToAllStaff } from "@/lib/push";
 import { z } from "zod";
 import { getAppFeatures } from "@/lib/app-settings";
-import { customerHasActiveChatJob } from "@/lib/chat-session";
+import {
+  customerHasActiveChatJob,
+  findActiveJobIdForCustomer,
+} from "@/lib/chat-session";
 import { getEffectiveSmsConsent } from "@/lib/sms-consent";
 import { requireCurrentShop } from "@/lib/shop";
 
@@ -196,11 +199,23 @@ export async function POST(
         getEffectiveSmsConsent(conversation.customer) &&
         (await customerHasActiveChatJob(shop.id, conversation.customerId))
       ) {
+        const activeJobId = await findActiveJobIdForCustomer(
+          shop.id,
+          conversation.customerId
+        );
+        const attachmentPayload = message.attachments.map((a) => ({
+          url: a.url,
+          mimeType: a.mimeType,
+        }));
         const updateSmsDelivery = (smsText: string, attachmentOnly = false) => {
           sendChatStaffSms(conversation.customer.phone!, smsText, {
             attachmentOnly,
+            includeChatUrl: attachmentOnly || hasAtt,
             shopSubdomain: shop.subdomain,
             messageId: message.id,
+            jobId: activeJobId ?? undefined,
+            shopId: shop.id,
+            attachments: attachmentPayload,
           })
             .then((result) =>
               prisma.message.update({
@@ -227,10 +242,7 @@ export async function POST(
         };
 
         if (hasText) {
-          const smsText = hasAtt
-            ? `${bodyText!.trim()} (see chat for photos)`
-            : bodyText!.trim();
-          updateSmsDelivery(smsText);
+          updateSmsDelivery(bodyText!.trim());
         } else if (hasAtt) {
           updateSmsDelivery("", true);
         }
