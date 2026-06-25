@@ -8,6 +8,7 @@ import type { Conversation, ChatMessage, Customer } from "@/lib/types";
 import { useChatNotifications } from "@/hooks/useChatNotifications";
 import { ChatMessageBubble } from "@/components/chat/ChatMessageBubble";
 import { ConversationListRow } from "@/components/chat/ConversationListRow";
+import { mergeChatMessagesWithServer } from "@/lib/chat-messages";
 import { isCustomerTypingRecently } from "@/lib/chat-typing";
 
 const POLL_INTERVAL_MS = 3000;
@@ -313,26 +314,7 @@ function ChatPageContent() {
   }, []);
 
   const mergeServerMessages = useCallback((serverMessages: ChatMessage[]) => {
-    setMessages((prev) => {
-      const optimistic = prev.filter((m) => m.id.startsWith("temp-"));
-      const prevById = new Map(prev.map((m) => [m.id, m] as const));
-      const byId = new Map<string, ChatMessage>();
-      for (const msg of serverMessages) {
-        const prevMsg = prevById.get(msg.id);
-        if (prevMsg?.clientDeliveryState) {
-          byId.set(msg.id, { ...msg, clientDeliveryState: prevMsg.clientDeliveryState });
-        } else {
-          byId.set(msg.id, msg);
-        }
-      }
-      for (const msg of optimistic) byId.set(msg.id, msg);
-      return [...byId.values()].sort((a, b) => {
-        const ta = new Date(a.createdAt).getTime();
-        const tb = new Date(b.createdAt).getTime();
-        if (ta !== tb) return ta - tb;
-        return a.id.localeCompare(b.id);
-      });
-    });
+    setMessages((prev) => mergeChatMessagesWithServer(prev, serverMessages));
   }, []);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const editingCountRef = useRef(0);
@@ -946,6 +928,8 @@ function ChatPageContent() {
       createdAt: new Date().toISOString(),
     };
 
+    hasPendingOptimisticRef.current = true;
+    sendingRef.current = true;
     setMessages((prev) => [...prev, optimisticMsg]);
     saveChatDraft(selectedId, { text: "", pendingImages: [] });
     setInputText("");
@@ -980,15 +964,18 @@ function ChatPageContent() {
             return a.id.localeCompare(b.id);
           });
         });
+        hasPendingOptimisticRef.current = false;
         clearClientDeliveryStateLater(deliveredMsg.id);
         fetchConversations();
       } else {
         const data = await res.json();
         // Roll back the optimistic message on failure
+        hasPendingOptimisticRef.current = false;
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
         alert(data.error ?? "Failed to send");
       }
     } finally {
+      sendingRef.current = false;
       setSending(false);
     }
   };
