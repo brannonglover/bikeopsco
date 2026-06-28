@@ -106,7 +106,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: code }, { status });
     }
 
-    const response = NextResponse.json({ ok: true });
+    const response = NextResponse.json({
+      ok: true,
+      // Native apps cannot read Set-Cookie; return token in body for SecureStore.
+      sessionToken: result.sessionToken,
+    });
     setSessionCookie(response, result.sessionToken);
     return response;
   } catch (e) {

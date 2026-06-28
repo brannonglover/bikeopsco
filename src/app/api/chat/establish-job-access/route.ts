@@ -39,7 +39,11 @@ export async function POST(request: NextRequest) {
     }
 
     const sessionToken = await createSession(customerId);
-    const response = NextResponse.json({ ok: true });
+    const response = NextResponse.json({
+      ok: true,
+      // Native apps cannot read Set-Cookie; return token in body for SecureStore.
+      sessionToken,
+    });
     response.cookies.set(getSessionCookieName(), sessionToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",

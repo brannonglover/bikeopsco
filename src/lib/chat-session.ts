@@ -1,5 +1,5 @@
 import { randomBytes } from "crypto";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { prisma } from "@/lib/db";
 import { verifyJobCustomerAccessToken } from "@/lib/job-customer-access";
 import { requireCurrentShop } from "@/lib/shop";
@@ -91,10 +91,24 @@ export async function customerHasSmsChatAccess(
   return customerHasActiveChatJob(shopId, customerId);
 }
 
+async function getChatSessionToken(): Promise<string | null> {
+  const cookieStore = await cookies();
+  const fromCookie = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+  if (fromCookie) return fromCookie;
+
+  // Native apps cannot read Set-Cookie; they send the session as Bearer instead.
+  const authHeader = (await headers()).get("authorization");
+  if (authHeader?.startsWith("Bearer ")) {
+    const bearer = authHeader.slice("Bearer ".length).trim();
+    if (bearer) return bearer;
+  }
+
+  return null;
+}
+
 export async function getCustomerFromSession(): Promise<string | null> {
   const shop = await requireCurrentShop();
-  const cookieStore = await cookies();
-  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+  const token = await getChatSessionToken();
   if (!token) return null;
 
   const session = await prisma.chatSession.findUnique({
