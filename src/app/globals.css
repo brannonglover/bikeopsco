@@ -147,6 +147,24 @@
   background-image: none;
 }
 
+/* Job board panel surface (light theme only — dark uses transparent via component overrides) */
+.bg-job-board {
+  background-color: #f2f4f7;
+}
+
+/* Job cards on gray board panel — tight downward lift for light theme */
+.shadow-job-card {
+  box-shadow:
+    0 1px 3px rgba(15, 23, 42, 0.08),
+    0 2px 6px rgba(15, 23, 42, 0.04);
+}
+
+.shadow-job-card-lg {
+  box-shadow:
+    0 2px 4px rgba(15, 23, 42, 0.1),
+    0 4px 10px rgba(15, 23, 42, 0.06);
+}
+
 /* Staff shell: dark canvas in light theme so elevated panels read clearly */
 .bg-staff-canvas {
   background-color: #0c1222;

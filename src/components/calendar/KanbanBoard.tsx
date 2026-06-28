@@ -701,7 +701,7 @@ export function KanbanBoard() {
   if (loading) {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex min-h-0 flex-1 items-center justify-center rounded-3xl bg-white p-6 shadow-float ring-1 ring-black/[0.04] dark:!bg-transparent dark:!shadow-none dark:ring-0 text-slate-500 font-medium">
+        <div className="flex min-h-0 flex-1 items-center justify-center rounded-3xl bg-job-board p-6 shadow-float ring-1 ring-black/[0.04] dark:!bg-transparent dark:!shadow-none dark:ring-0 text-slate-500 font-medium">
           Loading jobs...
         </div>
       </div>
@@ -755,7 +755,7 @@ export function KanbanBoard() {
           {savedToast}
         </div>
       )}
-      <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-hidden rounded-3xl bg-white p-5 shadow-float ring-1 ring-black/[0.04] dark:!bg-transparent dark:!shadow-none dark:ring-0 sm:p-6">
+      <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-hidden rounded-3xl bg-job-board p-5 shadow-float ring-1 ring-black/[0.04] dark:!bg-transparent dark:!shadow-none dark:ring-0 sm:p-6">
       {showPaidBanner && (
         <div
           className="flex items-center justify-between gap-4 rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3 text-emerald-800"

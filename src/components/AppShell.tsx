@@ -251,8 +251,8 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
           <aside
             className={`
           fixed inset-y-0 left-0 z-50
-          w-64 md:w-64
-          md:left-3 md:top-3 md:bottom-3 md:h-auto md:min-h-0 md:rounded-2xl
+          w-64 md:w-72
+          md:left-3 md:top-3 md:bottom-3 md:h-auto md:min-h-0 md:rounded-3xl
           border-r border-slate-600/50 md:border-0
           bg-slate-800/95 backdrop-blur-md shadow-float md:ring-1 md:ring-white/[0.07] flex flex-col
           transform transition-transform duration-200 ease-out
@@ -310,7 +310,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
           </aside>
 
           {/* Main content - offset for mobile header; left margin on desktop for fixed sidebar */}
-          <main className="flex h-dvh flex-1 min-w-0 flex-col overflow-auto p-4 pt-[calc(5.5rem+env(safe-area-inset-top,0px))] sm:p-6 md:mb-3 md:ml-[calc(0.75rem+16rem+20px)] md:mr-3 md:pt-4 md:pb-4">
+          <main className="flex h-dvh flex-1 min-w-0 flex-col overflow-auto p-4 pt-[calc(5.5rem+env(safe-area-inset-top,0px))] sm:p-6 md:mb-3 md:ml-[calc(0.75rem+18rem+1rem)] md:pl-0 md:pt-4 md:pb-4">
             <BillingGuard />
             <div
               className={

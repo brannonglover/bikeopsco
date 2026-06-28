@@ -229,7 +229,7 @@ export function JobCardContent({
   const containerClass =
     variant === "plain"
       ? "min-w-0 w-full"
-      : "group relative min-w-0 w-full overflow-hidden rounded-2xl border border-slate-100/90 bg-white p-4 shadow-soft transition-shadow hover:shadow-soft-lg dark:border-slate-700/60 dark:bg-slate-800/95 dark:shadow-none dark:hover:shadow-soft";
+      : "group relative min-w-0 w-full overflow-hidden rounded-2xl border border-black/[0.04] bg-[#ffffff] p-4 shadow-job-card transition-shadow hover:shadow-job-card-lg dark:border-slate-700/60 dark:bg-slate-800/95 dark:shadow-none dark:hover:shadow-soft";
 
   const bikeParts = getPrimaryJobBikeDisplayParts(job);
   const bikeTitle =
