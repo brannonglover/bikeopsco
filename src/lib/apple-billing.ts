@@ -130,7 +130,7 @@ export async function verifyAppleSubscriptionPurchase(input: {
     return { ok: false, reason: "apple_not_configured" };
   }
 
-  let transaction =
+  const transaction =
     (await fetchAppleTransaction(input.transactionId, false)) ??
     (await fetchAppleTransaction(input.transactionId, true));
 
