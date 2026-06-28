@@ -13,6 +13,9 @@ type BillingStatus = {
   billingActive: boolean;
   billingExempt: boolean;
   monthlyPrice: number;
+  billingProvider?: string | null;
+  hasAppleSubscription?: boolean;
+  appleCurrentPeriodEnd?: string | null;
 };
 
 function formatDate(value: string | null): string {
@@ -117,6 +120,10 @@ export default function BillingPage() {
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
                 {billing.billingExempt
                   ? "No subscription is required for this workspace."
+                  : billing.billingProvider === "apple"
+                    ? billing.hasAppleSubscription
+                      ? `Your App Store subscription renews ${formatDate(billing.appleCurrentPeriodEnd ?? billing.currentPeriodEnd)}. Manage billing in your iPhone Settings → Apple ID → Subscriptions.`
+                      : "This workspace uses App Store billing from the Bike Ops iOS app."
                   : billing.hasSubscription
                   ? billing.cancelAtPeriodEnd
                     ? `Your subscription remains available until ${formatDate(billing.currentPeriodEnd)}.`
@@ -128,7 +135,7 @@ export default function BillingPage() {
             </div>
 
             <div className="flex flex-col gap-3">
-              {!billing.billingExempt && (
+              {!billing.billingExempt && billing.billingProvider !== "apple" && (
                 <button
                   type="button"
                   onClick={() =>
@@ -141,7 +148,7 @@ export default function BillingPage() {
                   {billing.hasSubscription ? "Manage subscription" : "Add payment details"}
                 </button>
               )}
-              {billing.hasSubscription && (
+              {billing.hasSubscription && billing.billingProvider !== "apple" && (
                 <button
                   type="button"
                   onClick={() => redirectFrom("/api/billing/portal")}

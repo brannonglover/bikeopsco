@@ -203,12 +203,14 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
 
   const isStaffChatPage = pathname === "/chat";
   const isStaffWaitlistPage = pathname === "/waitlist";
+  const isJobBoardPage = pathname === "/calendar";
+  const isFullBleedStaffMain = isJobBoardPage || isStaffChatPage;
   return (
     <AppFeaturesProvider>
       <FeatureRedirector />
       <StaffWaitlistAttentionProvider syncEnabled={!isStaffWaitlistPage}>
       <StaffChatAttentionProvider syncEnabled={!isStaffChatPage}>
-        <div className="flex min-h-screen flex-1 min-w-0">
+        <div className="flex min-h-screen flex-1 min-w-0 bg-staff-canvas">
           {/* Mobile header bar - safe area spacer then centered content bar */}
           <header className="md:hidden flex-shrink-0 fixed top-0 left-0 right-0 z-40 flex flex-col bg-slate-700 border-b border-slate-600/50">
             <div className="h-[env(safe-area-inset-top,0px)]" aria-hidden />
@@ -249,8 +251,10 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
           <aside
             className={`
           fixed inset-y-0 left-0 z-50
-          w-64 md:w-56 min-h-screen
-          border-r border-slate-600/40 bg-slate-700 shadow-soft flex flex-col
+          w-64 md:w-64
+          md:left-3 md:top-3 md:bottom-3 md:h-auto md:min-h-0 md:rounded-2xl
+          border-r border-slate-600/50 md:border-0
+          bg-slate-800/95 backdrop-blur-md shadow-float md:ring-1 md:ring-white/[0.07] flex flex-col
           transform transition-transform duration-200 ease-out
           md:transform-none
           pt-[env(safe-area-inset-top,0px)] md:pt-0
@@ -306,9 +310,17 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
           </aside>
 
           {/* Main content - offset for mobile header; left margin on desktop for fixed sidebar */}
-          <main className="flex-1 min-w-0 pt-[calc(5.5rem+env(safe-area-inset-top,0px))] md:pt-6 md:ml-56 p-4 sm:p-6 flex flex-col h-dvh overflow-auto">
+          <main className="flex h-dvh flex-1 min-w-0 flex-col overflow-auto p-4 pt-[calc(5.5rem+env(safe-area-inset-top,0px))] sm:p-6 md:mb-3 md:ml-[calc(0.75rem+16rem+20px)] md:mr-3 md:pt-4 md:pb-4">
             <BillingGuard />
-            {children}
+            <div
+              className={
+                isFullBleedStaffMain
+                  ? "flex min-h-0 flex-1 flex-col"
+                  : "rounded-3xl bg-white p-5 shadow-float ring-1 ring-black/[0.04] dark:bg-surface dark:ring-white/[0.06] sm:p-6"
+              }
+            >
+              {children}
+            </div>
           </main>
         </div>
       </StaffChatAttentionProvider>

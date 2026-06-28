@@ -22,6 +22,9 @@ export async function GET(request: NextRequest) {
       stripeSubscriptionId: true,
       stripeCurrentPeriodEnd: true,
       stripeCancelAtPeriodEnd: true,
+      billingProvider: true,
+      appleOriginalTransactionId: true,
+      appleCurrentPeriodEnd: true,
     },
   });
 
@@ -37,7 +40,10 @@ export async function GET(request: NextRequest) {
     currentPeriodEnd: shop.stripeCurrentPeriodEnd?.toISOString() ?? null,
     cancelAtPeriodEnd: shop.stripeCancelAtPeriodEnd,
     hasStripeCustomer: !!shop.stripeCustomerId,
-    hasSubscription: !!shop.stripeSubscriptionId,
+    hasSubscription: !!shop.stripeSubscriptionId || !!shop.appleOriginalTransactionId,
+    billingProvider: shop.billingProvider,
+    hasAppleSubscription: !!shop.appleOriginalTransactionId,
+    appleCurrentPeriodEnd: shop.appleCurrentPeriodEnd?.toISOString() ?? null,
     billingExempt,
     billingActive: billingExempt || isBillingActive(shop),
     monthlyPrice: BIKEOPS_MONTHLY_PRICE,

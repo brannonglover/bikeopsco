@@ -65,6 +65,28 @@ const DISPLAY_STAGES: Stage[] = STAGES.filter(
   (s) => s !== "CANCELLED" && s !== "PENDING_APPROVAL"
 );
 
+type BoardFilterKey = "all" | "in_progress" | "waiting" | "ready" | "completed";
+
+const BOARD_FILTERS: {
+  key: BoardFilterKey;
+  label: string;
+  stages: Stage[] | null;
+}[] = [
+  { key: "all", label: "All", stages: null },
+  {
+    key: "in_progress",
+    label: "In progress",
+    stages: ["BOOKED_IN", "RECEIVED", "WORKING_ON"],
+  },
+  {
+    key: "waiting",
+    label: "Waiting",
+    stages: ["WAITING_ON_CUSTOMER", "WAITING_ON_PARTS"],
+  },
+  { key: "ready", label: "Ready", stages: ["BIKE_READY"] },
+  { key: "completed", label: "Completed", stages: ["COMPLETED"] },
+];
+
 type ColumnSortUpdate = { id: string; columnSortOrder: number };
 type PendingBoardMove = {
   stage: Stage;
@@ -104,6 +126,7 @@ export function KanbanBoard() {
   const [jobsSkippingCustomerNotify, setJobsSkippingCustomerNotify] = useState<
     Set<string>
   >(() => new Set());
+  const [boardFilter, setBoardFilter] = useState<BoardFilterKey>("all");
   const isMobileBoard = useIsMobileBoard();
 
   const jobNotifyCustomer = useCallback(
@@ -196,8 +219,11 @@ export function KanbanBoard() {
   const fetchJobs = useCallback((opts?: { silent?: boolean }) => {
     if (!opts?.silent) setLoading(true);
     fetch("/api/jobs?view=board", { cache: "no-store" })
-      .then((res) => res.json())
-      .then((data) => {
+      .then(async (res) => {
+        if (!res.ok) {
+          throw new Error(`Failed to load jobs (${res.status})`);
+        }
+        const data = await res.json();
         const incoming = Array.isArray(data) ? (data as Job[]) : [];
         setJobs((prev) => {
           const next = applyPendingBoardMoves(
@@ -648,16 +674,42 @@ export function KanbanBoard() {
   const pendingApprovals = jobsByStage.PENDING_APPROVAL || [];
   const completedCount = jobs.filter((j) => j.stage === "COMPLETED").length;
 
+  const filterCounts = BOARD_FILTERS.reduce(
+    (acc, filter) => {
+      if (filter.stages === null) {
+        acc[filter.key] = jobs.filter((j) =>
+          DISPLAY_STAGES.includes(j.stage as Stage)
+        ).length;
+      } else {
+        acc[filter.key] = jobs.filter((j) =>
+          filter.stages!.includes(j.stage as Stage)
+        ).length;
+      }
+      return acc;
+    },
+    {} as Record<BoardFilterKey, number>
+  );
+
+  const visibleStages = features.jobBoardFiltersEnabled
+    ? DISPLAY_STAGES.filter((stage) => {
+        if (boardFilter === "all") return true;
+        const activeFilter = BOARD_FILTERS.find((f) => f.key === boardFilter);
+        return activeFilter?.stages?.includes(stage) ?? true;
+      })
+    : DISPLAY_STAGES;
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-24 text-slate-500 font-medium">
-        Loading jobs...
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="flex min-h-0 flex-1 items-center justify-center rounded-3xl bg-white p-6 shadow-float ring-1 ring-black/[0.04] dark:!bg-transparent dark:!shadow-none dark:ring-0 text-slate-500 font-medium">
+          Loading jobs...
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-5 flex-1 min-h-0">
+    <div className="flex min-h-0 flex-1 flex-col">
       <NewJobModal
         isOpen={newJobModalOpen}
         onClose={() => setNewJobModalOpen(false)}
@@ -703,6 +755,7 @@ export function KanbanBoard() {
           {savedToast}
         </div>
       )}
+      <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-hidden rounded-3xl bg-white p-5 shadow-float ring-1 ring-black/[0.04] dark:!bg-transparent dark:!shadow-none dark:ring-0 sm:p-6">
       {showPaidBanner && (
         <div
           className="flex items-center justify-between gap-4 rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3 text-emerald-800"
@@ -724,7 +777,7 @@ export function KanbanBoard() {
       )}
       <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 flex-shrink-0">
         <div className="flex flex-col min-w-0 flex-1">
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 flex-shrink-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-heading flex-shrink-0">
             Job Board
           </h1>
           {pendingApprovals.length > 0 ? (
@@ -837,6 +890,35 @@ export function KanbanBoard() {
         </div>
       </div>
 
+      {features.jobBoardFiltersEnabled && (
+        <div className="flex flex-shrink-0 flex-wrap gap-2">
+          {BOARD_FILTERS.map((filter) => {
+            const isActive = boardFilter === filter.key;
+            return (
+              <button
+                key={filter.key}
+                type="button"
+                onClick={() => setBoardFilter(filter.key)}
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold transition-colors touch-manipulation ${
+                  isActive
+                    ? "bg-amber-500 text-white shadow-sm"
+                    : "bg-subtle-bg text-secondary hover:bg-surface-border/60 hover:text-heading"
+                }`}
+              >
+                {filter.label}
+                <span
+                  className={`tabular-nums text-xs font-bold ${
+                    isActive ? "text-white/90" : "text-tertiary"
+                  }`}
+                >
+                  {filterCounts[filter.key]}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <DndContext
         sensors={sensors}
         onDragStart={handleDragStart}
@@ -855,8 +937,8 @@ export function KanbanBoard() {
         <p className="md:hidden text-xs font-medium text-slate-400 -mb-1 flex-shrink-0">
           Swipe columns to browse — on mobile, use Status on a card to move it
         </p>
-        <div className="flex flex-1 gap-4 overflow-x-auto overflow-y-hidden pb-4 min-h-0 h-0 w-full -mx-4 px-4 sm:mx-0 sm:px-0 overscroll-x-contain">
-          {DISPLAY_STAGES.map((stage) => (
+        <div className="flex min-h-0 flex-1 gap-5 overflow-x-auto overflow-y-hidden overscroll-x-contain pb-2 w-full">
+          {visibleStages.map((stage) => (
             <StageColumn
               key={stage}
               stage={stage}
@@ -883,6 +965,7 @@ export function KanbanBoard() {
           })()}
         </DragOverlay>
       </DndContext>
+      </div>
     </div>
   );
 }

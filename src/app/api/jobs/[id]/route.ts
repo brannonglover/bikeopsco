@@ -39,6 +39,13 @@ const updateJobSchema = z.object({
   bikes: z.array(bikeSchema).optional(),
   /** Append a single bike to the job without touching existing JobBike workflow state. */
   addBike: bikeSchema.optional(),
+  /** Update image on one JobBike row without replacing the full bikes list. */
+  updateJobBikeImageUrl: z
+    .object({
+      jobBikeId: z.string().min(1),
+      imageUrl: z.string().nullable(),
+    })
+    .optional(),
   workingOnJobBikeId: z.string().optional().nullable(),
   completeJobBikeId: z.string().optional(),
   uncompleteJobBikeId: z.string().optional(),
@@ -446,6 +453,26 @@ export async function PATCH(
           where: { id: data.unwaitForPartsJobBikeId, jobId: id, shopId: shop.id },
           data: { waitingOnPartsAt: null },
         });
+      }
+      if (data.updateJobBikeImageUrl) {
+        const { jobBikeId, imageUrl } = data.updateJobBikeImageUrl;
+        const targetJobBike = await tx.jobBike.findFirst({
+          where: { id: jobBikeId, jobId: id, shopId: shop.id },
+          select: { id: true, bikeId: true },
+        });
+        if (!targetJobBike) {
+          throw new Error("Job bike not found");
+        }
+        await tx.jobBike.update({
+          where: { id: jobBikeId },
+          data: { imageUrl },
+        });
+        if (targetJobBike.bikeId) {
+          await tx.bike.update({
+            where: { id: targetJobBike.bikeId },
+            data: { imageUrl },
+          });
+        }
       }
       /** Only when the job actually moves into this column — not idempotent WOP PATCHs (would re-set waiting after resume / unwait). */
       if (

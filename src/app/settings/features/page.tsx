@@ -15,6 +15,7 @@ type AppFeatures = {
   notifyCustomerEnabled: boolean;
   chatEnabled: boolean;
   reviewsEnabled: boolean;
+  jobBoardFiltersEnabled: boolean;
   timezone: string;
   staffNotifyEmail: string | null;
 };
@@ -29,7 +30,8 @@ type FeatureFlagKey =
   | "collectionServiceEnabled"
   | "notifyCustomerEnabled"
   | "chatEnabled"
-  | "reviewsEnabled";
+  | "reviewsEnabled"
+  | "jobBoardFiltersEnabled";
 
 const DEFAULT_FEATURES: AppFeatures = {
   bookingsEnabled: true,
@@ -42,6 +44,7 @@ const DEFAULT_FEATURES: AppFeatures = {
   notifyCustomerEnabled: true,
   chatEnabled: true,
   reviewsEnabled: true,
+  jobBoardFiltersEnabled: false,
   timezone: "America/New_York",
   staffNotifyEmail: null,
 };
@@ -558,6 +561,13 @@ export default function FeatureSettingsPage() {
             checked={features.reviewsEnabled}
             disabled={featuresSaving}
             onChange={(v) => setFeatureFlag("reviewsEnabled", v)}
+          />
+          <ToggleRow
+            title="Job board filters"
+            description="Show status filter pills on the job board to narrow visible columns. Best for shops with higher intake."
+            checked={features.jobBoardFiltersEnabled}
+            disabled={featuresSaving}
+            onChange={(v) => setFeatureFlag("jobBoardFiltersEnabled", v)}
           />
 
           {(featuresError || featuresSaved) && (

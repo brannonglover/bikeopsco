@@ -184,6 +184,14 @@ export async function GET(request: NextRequest) {
               notes: true,
               createdAt: true,
               updatedAt: true,
+              bikes: {
+                select: {
+                  make: true,
+                  model: true,
+                  nickname: true,
+                  imageUrl: true,
+                },
+              },
             },
           },
           jobBikes: {

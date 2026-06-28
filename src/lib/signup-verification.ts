@@ -46,7 +46,7 @@ export function getSignupVerificationUrl(
   request?: NextRequest,
 ): string {
   const base = getAppUrl() || (request ? buildSharedAppUrl(request) : "");
-  return `${base}/signup/verify#token=${encodeURIComponent(token)}`;
+  return `${base}/signup/verify?token=${encodeURIComponent(token)}`;
 }
 
 export function buildTenantUrl(

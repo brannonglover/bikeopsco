@@ -20,6 +20,11 @@ model Shop {
   stripeCurrentPeriodEnd     DateTime?
   stripeCancelAtPeriodEnd    Boolean  @default(false)
   stripeSubscriptionUpdatedAt DateTime?
+  billingProvider            String?
+  appleOriginalTransactionId String?  @unique
+  appleProductId             String?
+  appleCurrentPeriodEnd      DateTime?
+  appleSubscriptionUpdatedAt DateTime?
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
 
@@ -119,6 +124,10 @@ model JobBike {
   sortOrder        Int       @default(0)
   completedAt      DateTime?
   waitingOnPartsAt DateTime?
+  /// Cached 99 Spokes catalog match + component specs for parts lookup
+  ninetyNineSpokesId            String?
+  ninetyNineSpokesSpecs         Json?
+  ninetyNineSpokesSpecsFetchedAt  DateTime?
   createdAt        DateTime  @default(now())
   workingOnJob Job?     @relation("WorkingOnBike")
   jobServices  JobService[]
@@ -559,6 +568,8 @@ model AppSettings {
   notifyCustomerEnabled    Boolean  @default(true)
   chatEnabled              Boolean  @default(true)
   reviewsEnabled           Boolean  @default(true)
+  /// When true, show status filter pills on the job board to narrow visible columns.
+  jobBoardFiltersEnabled   Boolean  @default(false)
   /// IANA timezone for shop scheduling (e.g. America/New_York).
   timezone                 String   @default("America/New_York")
   /// Staff email for booking, payment, chat, and waitlist notifications.

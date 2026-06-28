@@ -11,7 +11,7 @@ export default async function CalendarPage() {
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <Suspense fallback={<div className="flex items-center justify-center py-24 text-slate-500">Loading jobs...</div>}>
         <KanbanBoard />
       </Suspense>

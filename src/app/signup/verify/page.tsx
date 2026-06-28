@@ -20,11 +20,12 @@ export default function SignupVerifyPage() {
   const [state, setState] = useState<VerifyState>({ status: "loading" });
 
   useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
     const hash = window.location.hash.startsWith("#")
       ? window.location.hash.slice(1)
       : window.location.hash;
-    const params = new URLSearchParams(hash);
-    const token = params.get("token");
+    const hashParams = new URLSearchParams(hash);
+    const token = query.get("token") ?? hashParams.get("token");
 
     if (!token) {
       setState({ status: "error", code: "invalid" });

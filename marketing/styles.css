@@ -1544,6 +1544,16 @@ footer nav a:hover {
   margin-top: 16px;
 }
 
+.sticky-footer-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.sticky-footer-page > main {
+  flex: 1;
+}
+
 .blog-index-main {
   width: min(1120px, 100%);
 }
@@ -1667,12 +1677,13 @@ footer nav a:hover {
 }
 
 .blog-content {
+  --blog-content-pad: clamp(24px, 4vw, 36px);
   display: grid;
   gap: 0;
   border: 1px solid var(--line);
   border-radius: 18px;
   background: var(--paper);
-  padding: clamp(24px, 4vw, 36px);
+  padding: var(--blog-content-pad);
   box-shadow: var(--shadow-sm);
 }
 
@@ -1730,6 +1741,29 @@ footer nav a:hover {
   margin: 0.35rem 0 0.15rem;
   border: 1px solid var(--line);
   border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.blog-desktop-screenshot {
+  display: block;
+  width: calc(100% + 2 * var(--blog-content-pad));
+  max-width: none;
+  margin: 1.25rem calc(-1 * var(--blog-content-pad));
+  padding: 0;
+}
+
+.blog-desktop-screenshot:first-child {
+  margin-top: 0;
+}
+
+.blog-desktop-screenshot img {
+  display: block;
+  width: 100%;
+  max-width: none;
+  height: auto;
+  margin: 0;
+  border: 1px solid rgba(214, 226, 239, 0.95);
+  border-radius: 10px;
   box-shadow: var(--shadow-sm);
 }
 

@@ -39,7 +39,12 @@ export function isBillingExemptShop(input: { subdomain: string }): boolean {
 export function isBillingActive(input: {
   billingStatus: string;
   trialEndsAt: Date | null;
+  appleOriginalTransactionId?: string | null;
+  billingProvider?: string | null;
 }): boolean {
+  if (input.billingProvider === "apple" && input.appleOriginalTransactionId) {
+    if (ACTIVE_BILLING_STATUSES.has(input.billingStatus)) return true;
+  }
   if (ACTIVE_BILLING_STATUSES.has(input.billingStatus)) return true;
   return !!input.trialEndsAt && input.trialEndsAt.getTime() > Date.now();
 }

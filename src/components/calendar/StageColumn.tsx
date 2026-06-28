@@ -7,16 +7,16 @@ import type { Job, Stage } from "@/lib/types";
 
 type JobStageChangeHandler = (jobId: string, stage: Stage) => void;
 
-const STAGE_HEADER_COLORS: Record<Stage, string> = {
-  PENDING_APPROVAL: "bg-amber-600 dark:bg-amber-800",
-  BOOKED_IN: "bg-slate-500 dark:bg-slate-700",
-  RECEIVED: "bg-slate-600 dark:bg-slate-800",
-  WORKING_ON: "bg-amber-500 dark:bg-amber-700",
-  WAITING_ON_CUSTOMER: "bg-violet-500 dark:bg-violet-700",
-  WAITING_ON_PARTS: "bg-amber-400 dark:bg-amber-600",
-  BIKE_READY: "bg-emerald-500 dark:bg-emerald-700",
-  COMPLETED: "bg-indigo-500 dark:bg-indigo-700",
-  CANCELLED: "bg-red-500 dark:bg-red-700",
+const STAGE_DOT_COLORS: Record<Stage, string> = {
+  PENDING_APPROVAL: "bg-amber-500",
+  BOOKED_IN: "bg-slate-400 dark:bg-slate-500",
+  RECEIVED: "bg-slate-500 dark:bg-slate-400",
+  WORKING_ON: "bg-amber-500",
+  WAITING_ON_CUSTOMER: "bg-violet-500",
+  WAITING_ON_PARTS: "bg-orange-400",
+  BIKE_READY: "bg-emerald-500",
+  COMPLETED: "bg-indigo-500",
+  CANCELLED: "bg-red-500",
 };
 
 const STAGE_LABELS: Record<Stage, string> = {
@@ -65,23 +65,23 @@ export function StageColumn({
   return (
     <div
       ref={setNodeRef}
-      className={`flex-1 min-w-[200px] sm:min-w-[160px] flex-shrink-0 flex flex-col rounded-xl border transition-all duration-200 min-h-[320px] h-full ${
-        isOver
-          ? "border-indigo-400 bg-indigo-50/60 shadow-glow"
-          : "border-slate-200/80 bg-white/60 shadow-soft"
+      className={`flex h-full min-h-[320px] min-w-[200px] flex-1 flex-shrink-0 flex-col sm:min-w-[168px] transition-colors duration-200 ${
+        isOver ? "rounded-xl bg-primary-500/5 ring-1 ring-primary-500/20" : ""
       }`}
     >
-      <div className={`${STAGE_HEADER_COLORS[stage]} flex items-center justify-between gap-3 rounded-t-xl px-4 py-2.5 text-white flex-shrink-0`}>
-        <div className="flex min-w-0 items-center gap-2.5">
-          <h2 className="truncate text-sm font-semibold leading-tight">
-            {STAGE_LABELS[stage]}
-          </h2>
-        </div>
-        <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-white/20 px-2 text-xs font-bold text-white">
+      <div className="mb-3 flex flex-shrink-0 items-center gap-2 px-0.5">
+        <span
+          className={`h-2 w-2 flex-shrink-0 rounded-full ${STAGE_DOT_COLORS[stage]}`}
+          aria-hidden
+        />
+        <h2 className="min-w-0 truncate text-[13px] font-semibold uppercase tracking-wide text-text-secondary">
+          {STAGE_LABELS[stage]}
+        </h2>
+        <span className="ml-auto flex h-[22px] min-w-[22px] flex-shrink-0 items-center justify-center rounded-full bg-subtle-bg px-1.5 text-[11px] font-bold tabular-nums text-text-tertiary">
           {jobs.length}
         </span>
       </div>
-      <div className="p-3 flex flex-col gap-3 overflow-y-auto overflow-x-hidden flex-1 min-h-0 min-w-0">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-x-hidden overflow-y-auto px-0.5">
         <SortableContext items={jobs.map((j) => j.id)} strategy={verticalListSortingStrategy}>
           {jobs.length > 0 ? (
             jobs.map((job) => (
@@ -108,9 +108,7 @@ export function StageColumn({
               />
             ))
           ) : (
-            <div className="flex min-h-[96px] items-center justify-center rounded-xl border border-dashed border-surface-border bg-subtle-bg/60 px-4 py-5 text-center">
-              <p className="text-sm font-medium text-muted">No Jobs</p>
-            </div>
+            <p className="py-10 text-center text-sm font-medium text-text-muted">No jobs</p>
           )}
         </SortableContext>
       </div>

@@ -12,6 +12,7 @@ import {
   formatBikeTypeDisplayLineForJob,
   getDisplayPartsForJobBikeRow,
   getJobBikeDisplayTitle,
+  type JobBikeDisplayParts,
 } from "@/lib/job-display";
 import { getJobPaymentSummary } from "@/lib/job-payments";
 import { formatPhoneDisplay, phoneTelHref } from "@/lib/phone";
@@ -25,6 +26,8 @@ import {
 } from "@/lib/format-collection-window";
 import { toCalendarDateInTimezone } from "@/lib/timezone";
 import { mergeBoardJob } from "@/lib/board-stage-merge";
+import { BikeSpecsTab } from "@/components/jobs/BikeSpecsTab";
+import { BikeImageSearch } from "@/components/bikes/BikeImageSearch";
 import {
   applyJobProductLineUpdate,
   applyJobServiceLineAdd,
@@ -467,6 +470,192 @@ function WrenchIcon({ className }: { className?: string }) {
   );
 }
 
+function applyOptimisticJobBikeImage(
+  job: Job,
+  bike: JobBike,
+  imageUrl: string | null
+): Job {
+  if (bike.id === "legacy") {
+    const singleBike = job.customer?.bikes?.length === 1 ? job.customer.bikes[0] : null;
+    if (!singleBike || !job.customer) return job;
+    return {
+      ...job,
+      customer: {
+        ...job.customer,
+        bikes: job.customer.bikes?.map((b) =>
+          b.id === singleBike.id ? { ...b, imageUrl } : b
+        ),
+      },
+    };
+  }
+  return {
+    ...job,
+    jobBikes: job.jobBikes?.map((jb) =>
+      jb.id === bike.id
+        ? { ...jb, imageUrl, bike: jb.bike ? { ...jb.bike, imageUrl } : jb.bike }
+        : jb
+    ),
+    customer:
+      job.customer && bike.bikeId
+        ? {
+            ...job.customer,
+            bikes: job.customer.bikes?.map((b) =>
+              b.id === bike.bikeId ? { ...b, imageUrl } : b
+            ),
+          }
+        : job.customer,
+  };
+}
+
+function JobBikePhotoControl({
+  imageUrl,
+  make,
+  model,
+  sizeClass,
+  canEdit,
+  onSave,
+}: {
+  imageUrl: string | null;
+  make: string;
+  model: string;
+  sizeClass: string;
+  canEdit: boolean;
+  onSave: (imageUrl: string | null) => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
+  const saveImage = async (nextUrl: string | null) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await onSave(nextUrl);
+      setOpen(false);
+    } catch {
+      setError("Could not save photo");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/bikes/upload", { method: "POST", body: formData });
+      const data = await res.json();
+      if (res.ok && data.url) {
+        await saveImage(data.url);
+      } else {
+        setError(data.error || "Upload failed");
+      }
+    } catch {
+      setError("Upload failed");
+    } finally {
+      setBusy(false);
+      e.target.value = "";
+    }
+  };
+
+  if (!canEdit) {
+    return imageUrl ? (
+      <div className={`${sizeClass} flex-shrink-0 relative rounded-lg overflow-hidden border border-slate-100`}>
+        <Image src={imageUrl} alt="" fill className="object-cover" />
+      </div>
+    ) : (
+      <div className={`${sizeClass} flex-shrink-0 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center`}>
+        <BikePlaceholderIcon className="w-8 h-8 text-slate-400" />
+      </div>
+    );
+  }
+
+  return (
+    <div ref={panelRef} className="relative flex-shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        disabled={busy}
+        aria-label={imageUrl ? "Change bike photo" : "Add bike photo"}
+        title={imageUrl ? "Change bike photo" : "Add bike photo"}
+        className={`group/photo relative ${sizeClass} overflow-hidden rounded-lg border border-slate-200 bg-slate-50 transition-colors hover:border-indigo-300 hover:bg-indigo-50/40 disabled:opacity-60`}
+      >
+        {imageUrl ? (
+          <Image src={imageUrl} alt="" fill className="object-cover" sizes="96px" />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center">
+            <BikePlaceholderIcon className="w-8 h-8 text-slate-400" />
+          </div>
+        )}
+        <span className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover/photo:bg-black/25">
+          <svg className="h-4 w-4 text-white opacity-0 drop-shadow transition-opacity group-hover/photo:opacity-100" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+            <path fillRule="evenodd" d="M4 5a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-1.586a1 1 0 01-.707-.293l-1.121-1.121A2 2 0 0011.172 3H8.828a2 2 0 00-1.414.586L6.293 4.707A1 1 0 015.586 5H4zm6 9a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
+          </svg>
+        </span>
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full z-20 mt-2 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            Bike photo
+          </p>
+          {imageUrl ? (
+            <div className="relative mb-2 h-20 w-full overflow-hidden rounded-lg border border-slate-100">
+              <Image src={imageUrl} alt="" fill className="object-cover" sizes="256px" />
+            </div>
+          ) : null}
+          <div className="space-y-2">
+            <label className="flex cursor-pointer items-center justify-center rounded-lg border border-dashed border-slate-300 px-3 py-2 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/gif,image/webp"
+                className="hidden"
+                disabled={busy}
+                onChange={handleUpload}
+              />
+              {busy ? "Saving…" : "Upload photo"}
+            </label>
+            <BikeImageSearch
+              make={make}
+              model={model}
+              onSelect={(url) => void saveImage(url)}
+              disabled={busy}
+              onBusyChange={setBusy}
+              autoSearch={false}
+            />
+            {imageUrl ? (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void saveImage(null)}
+                className="text-xs text-red-600 hover:text-red-700 hover:underline disabled:opacity-50"
+              >
+                Remove photo
+              </button>
+            ) : null}
+          </div>
+          {error && <p className="mt-2 text-[11px] text-red-600">{error}</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function JobBikeSection({
   job,
   onJobUpdated,
@@ -563,6 +752,79 @@ function JobBikeSection({
     });
   };
 
+  const handleBikeImageSave = useCallback(
+    async (bike: JobBike, dp: JobBikeDisplayParts, imageUrl: string | null) => {
+      if (!onJobUpdated) return;
+      const snapshot = job;
+      onJobUpdated(applyOptimisticJobBikeImage(job, bike, imageUrl));
+      try {
+        if (bike.id !== "legacy" && bike.bikeId && job.customerId) {
+          const res = await fetch(`/api/customers/${job.customerId}/bikes/${bike.bikeId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ imageUrl }),
+          });
+          if (!res.ok) throw new Error("save failed");
+          const jobRes = await fetch(`/api/jobs/${job.id}`);
+          if (!jobRes.ok) throw new Error("refetch failed");
+          onJobUpdated((await jobRes.json()) as Job);
+          return;
+        }
+        if (bike.id !== "legacy") {
+          const res = await fetch(`/api/jobs/${job.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              updateJobBikeImageUrl: { jobBikeId: bike.id, imageUrl },
+            }),
+          });
+          if (!res.ok) throw new Error("save failed");
+          onJobUpdated((await res.json()) as Job);
+          return;
+        }
+        const singleCustomerBike =
+          job.customer?.bikes?.length === 1 ? job.customer.bikes[0] : null;
+        if (singleCustomerBike && job.customerId) {
+          const res = await fetch(
+            `/api/customers/${job.customerId}/bikes/${singleCustomerBike.id}`,
+            {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ imageUrl }),
+            }
+          );
+          if (!res.ok) throw new Error("save failed");
+          const jobRes = await fetch(`/api/jobs/${job.id}`);
+          if (!jobRes.ok) throw new Error("refetch failed");
+          onJobUpdated((await jobRes.json()) as Job);
+          return;
+        }
+        if (!dp.make.trim()) throw new Error("no make");
+        const res = await fetch(`/api/jobs/${job.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            bikes: [
+              {
+                make: dp.make,
+                model: dp.model,
+                nickname: dp.nickname,
+                imageUrl,
+                bikeId: null,
+              },
+            ],
+          }),
+        });
+        if (!res.ok) throw new Error("save failed");
+        onJobUpdated((await res.json()) as Job);
+      } catch {
+        onJobUpdated(snapshot);
+        throw new Error("save failed");
+      }
+    },
+    [job, onJobUpdated]
+  );
+
   const handleToggleWorkingOn = (bikeId: string) => {
     if (!onJobUpdated) return;
     const nextId = job.workingOnJobBikeId === bikeId ? null : bikeId;
@@ -657,20 +919,14 @@ function JobBikeSection({
                       : "border-slate-200 bg-white"
               } ${hasMultiple ? "" : "flex-1"}`}
             >
-              {imageUrl ? (
-                <div className={`${size} flex-shrink-0 relative rounded-lg overflow-hidden border border-slate-100`}>
-                  <Image
-                    src={imageUrl}
-                    alt={displayName}
-                    fill
-                    className="object-cover"
-                  />
-                </div>
-              ) : (
-                <div className={`${size} flex-shrink-0 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center`}>
-                  <BikePlaceholderIcon className="w-8 h-8 text-slate-400" />
-                </div>
-              )}
+              <JobBikePhotoControl
+                imageUrl={imageUrl}
+                make={dp.make}
+                model={dp.model ?? ""}
+                sizeClass={size}
+                canEdit={!!onJobUpdated}
+                onSave={(nextUrl) => handleBikeImageSave(b, dp, nextUrl)}
+              />
               <div className="min-w-0 flex-1 flex flex-col">
                 <div className="flex items-start justify-between gap-1">
                   <p className={`font-medium truncate ${isCompleted || isWaitingOnParts ? "text-slate-500" : "text-slate-900"}`}>{displayName}</p>
@@ -1502,7 +1758,7 @@ interface JobDetailModalProps {
   onJobDeleted?: (jobId: string) => void;
 }
 
-type Tab = "details" | "invoice";
+type Tab = "details" | "invoice" | "bike_specs";
 
 function PaidStatusBlock({ job }: { job: Job }) {
   const [resending, setResending] = useState(false);
@@ -2445,10 +2701,22 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
           >
             Invoice
           </button>
+          <button
+            onClick={() => setActiveTab("bike_specs")}
+            className={`flex-1 sm:flex-none px-4 sm:px-6 py-3 text-sm font-medium transition-colors touch-manipulation ${
+              activeTab === "bike_specs"
+                ? "text-blue-600 border-b-2 border-blue-600"
+                : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            Parts info
+          </button>
         </div>
 
         <div className="overflow-y-auto p-4 sm:p-6 flex-1 space-y-6">
-          {activeTab === "invoice" ? (
+          {activeTab === "bike_specs" ? (
+            <BikeSpecsTab job={job} />
+          ) : activeTab === "invoice" ? (
             <InvoiceTab
               job={job}
               onJobUpdated={(updated) => {
