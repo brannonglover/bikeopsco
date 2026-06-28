@@ -1,4 +1,4 @@
-#!/usr/bin/env ts-node
+#!/usr/bin/env node
 /**
  * Backfill missing SYSTEM chat messages for job status transitions.
  *
@@ -13,12 +13,12 @@
  * - Uses the same SMS template text as live mirroring (see src/lib/sms.ts).
  *
  * Usage:
- *   # Dry run (default) — log stages/templates only, no DB writes
- *   npx ts-node scripts/backfill-job-status-chat.ts
- *   npx ts-node scripts/backfill-job-status-chat.ts cmqt0vnvu0001la04457tx7k1
+ *   # Dry run — preview messages, no DB writes
+ *   node scripts/backfill-job-status-chat.js <jobId>
+ *   node scripts/backfill-job-status-chat.js cmqt0vnvu0001la04457tx7k1
  *
  *   # Apply — create chat messages (force: true bypasses duplicate detection)
- *   npx ts-node scripts/backfill-job-status-chat.ts cmqt0vnvu0001la04457tx7k1 --apply
+ *   node scripts/backfill-job-status-chat.js cmqt0vnvu0001la04457tx7k1 --apply
  *
  * Requirements:
  *   - DATABASE_URL in .env / .env.local (see scripts/db-url-diagnostics.js)
@@ -27,16 +27,14 @@
  * Caveats:
  *   - Re-running with --apply always posts new messages (force: true). Check the thread first.
  *   - Does not send SMS/email — chat history only.
- *   - CANCELLED jobs are skipped unless the job id is explicitly provided and you accept
- *     that backfill may not match the customer's actual journey.
+ *   - Point DATABASE_URL at the environment where the job exists (prod vs local).
  */
 
-import fs from "node:fs";
-import path from "node:path";
-import { createHmac } from "node:crypto";
-import { PrismaClient } from "@prisma/client";
-
-const DEFAULT_JOB_ID = "cmqt0vnvu0001la04457tx7k1";
+const fs = require("node:fs");
+const path = require("node:path");
+const { createHmac } = require("node:crypto");
+const { PrismaClient } = require("@prisma/client");
+const { loadDotEnv } = require("./db-url-diagnostics");
 
 /** Board column order — stages at or before the job's current stage are backfilled. */
 const STAGE_FLOW = [
@@ -46,11 +44,9 @@ const STAGE_FLOW = [
   "WAITING_ON_CUSTOMER",
   "WAITING_ON_PARTS",
   "BIKE_READY",
-] as const;
+];
 
-type FlowStage = (typeof STAGE_FLOW)[number];
-
-const SMS_TEMPLATES: Record<string, string> = {
+const SMS_TEMPLATES = {
   booking_confirmation_dropoff:
     "{{shopName}}\n\nBooking confirmed! Your {{bikeMake}} {{bikeModel}} is scheduled.\n\nDrop off at the shop.\n\nTrack: {{statusUrl}}\n\nReply STOP to opt out.",
   booking_confirmation_collection:
@@ -64,12 +60,13 @@ const SMS_TEMPLATES: Record<string, string> = {
   waiting_on_parts:
     "{{shopName}}\n\nWaiting on parts for your {{bikeMake}} {{bikeModel}}.\n\nTrack status: {{statusUrl}}\n\nReply STOP to opt out.",
   waiting_on_customer:
-    "{{shopName}}\n\nWe need your approval to continue work on your {{bikeMake}} {{bikeModel}}.\n\nTrack: {{statusUrl}}\n\nReply STOP to opt out.",
+    "{{shopName}}\n\nWe need your approval to continue work on your {{bikeMake}} {{bikeModel}}.\n\nTrack status: {{statusUrl}}\n\nReply STOP to opt out.",
   bike_ready_invoice:
     "{{shopName}}\n\n{{bikeReadyMessage}}\n\nView your itemized bill: {{billUrl}}\n\nReply STOP to opt out.",
 };
 
-function loadDotEnvIfPresent() {
+function loadAllDotEnv() {
+  loadDotEnv();
   const cwd = process.cwd();
   for (const name of [".env", ".env.local"]) {
     const envPath = path.join(cwd, name);
@@ -94,7 +91,7 @@ function loadDotEnvIfPresent() {
   }
 }
 
-function getTemplateSlugForStage(stage: string, deliveryType: string): string | null {
+function getTemplateSlugForStage(stage, deliveryType) {
   if (stage === "BOOKED_IN") {
     return deliveryType === "COLLECTION_SERVICE"
       ? "booking_confirmation_collection"
@@ -103,7 +100,7 @@ function getTemplateSlugForStage(stage: string, deliveryType: string): string | 
   if (stage === "RECEIVED") {
     return deliveryType === "COLLECTION_SERVICE" ? "bike_collected" : "bike_arrived";
   }
-  const map: Record<string, string> = {
+  const map = {
     WORKING_ON: "working_on_bike",
     WAITING_ON_CUSTOMER: "waiting_on_customer",
     WAITING_ON_PARTS: "waiting_on_parts",
@@ -112,7 +109,7 @@ function getTemplateSlugForStage(stage: string, deliveryType: string): string | 
   return map[stage] ?? null;
 }
 
-function getSigningSecret(): string {
+function getSigningSecret() {
   const secret =
     process.env.CUSTOMER_JOB_ACCESS_SECRET?.trim() ||
     process.env.NEXTAUTH_SECRET?.trim();
@@ -124,7 +121,7 @@ function getSigningSecret(): string {
   return secret;
 }
 
-function getShopAppUrl(shopSubdomain: string | null | undefined): string {
+function getShopAppUrl(shopSubdomain) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
   if (appUrl) return appUrl.replace(/\/$/, "");
   if (shopSubdomain?.trim()) {
@@ -134,11 +131,7 @@ function getShopAppUrl(shopSubdomain: string | null | undefined): string {
   return "";
 }
 
-function getCustomerStatusUrl(
-  jobId: string,
-  shopId: string,
-  shopSubdomain: string | null | undefined
-): string {
+function getCustomerStatusUrl(jobId, shopId, shopSubdomain) {
   const shopUrl = getShopAppUrl(shopSubdomain);
   if (!shopUrl) return "";
   const token = createHmac("sha256", getSigningSecret())
@@ -148,11 +141,7 @@ function getCustomerStatusUrl(
   return `${base}?access=${encodeURIComponent(token)}`;
 }
 
-function getCustomerBillUrl(
-  jobId: string,
-  shopId: string,
-  shopSubdomain: string | null | undefined
-): string {
+function getCustomerBillUrl(jobId, shopId, shopSubdomain) {
   const shopUrl = getShopAppUrl(shopSubdomain);
   if (!shopUrl) return "";
   const token = createHmac("sha256", getSigningSecret())
@@ -162,11 +151,7 @@ function getCustomerBillUrl(
   return `${base}?access=${encodeURIComponent(token)}`;
 }
 
-function getBikeReadyMessage(
-  bikeMake: string,
-  bikeModel: string,
-  deliveryType: string
-): string {
+function getBikeReadyMessage(bikeMake, bikeModel, deliveryType) {
   const bikeName = `${bikeMake} ${bikeModel}`.trim();
   if (deliveryType === "COLLECTION_SERVICE") {
     return `Good news! Your ${bikeName} is ready and raring to roll. We'll be in touch to schedule its return home.`;
@@ -174,18 +159,7 @@ function getBikeReadyMessage(
   return `Good news! Your ${bikeName} is ready for pickup.`;
 }
 
-function buildJobStatusChatMessage(
-  templateSlug: string,
-  job: {
-    id: string;
-    shopId: string;
-    bikeMake: string;
-    bikeModel: string;
-    deliveryType: string;
-    customer: { firstName: string; lastName: string | null } | null;
-  },
-  shop: { name: string; subdomain: string | null }
-): { ok: true; message: string } | { ok: false; error: string } {
+function buildJobStatusChatMessage(templateSlug, job, shop) {
   const template = SMS_TEMPLATES[templateSlug];
   if (!template) {
     return { ok: false, error: `SMS template not found: ${templateSlug}` };
@@ -197,7 +171,7 @@ function buildJobStatusChatMessage(
       : job.customer.firstName
     : "Customer";
 
-  const vars: Record<string, string> = {
+  const vars = {
     customerName,
     bikeMake: job.bikeMake,
     bikeModel: job.bikeModel,
@@ -214,12 +188,12 @@ function buildJobStatusChatMessage(
   return { ok: true, message };
 }
 
-function stageIndex(stage: string): number {
+function stageIndex(stage) {
   if (stage === "COMPLETED") return STAGE_FLOW.length - 1;
-  return STAGE_FLOW.indexOf(stage as FlowStage);
+  return STAGE_FLOW.indexOf(stage);
 }
 
-function stagesToBackfill(currentStage: string): FlowStage[] {
+function stagesToBackfill(currentStage) {
   const idx = stageIndex(currentStage);
   if (idx < 0) return [];
   return STAGE_FLOW.slice(0, idx + 1);
@@ -227,16 +201,20 @@ function stagesToBackfill(currentStage: string): FlowStage[] {
 
 function parseArgs() {
   const positional = process.argv.filter((a) => !a.startsWith("-"));
-  const jobId = positional[2] ?? DEFAULT_JOB_ID;
+  const jobId = positional[2]?.trim() || null;
   const apply = process.argv.includes("--apply");
   return { jobId, apply };
 }
 
-async function findOrCreateGeneralConversation(
-  prisma: PrismaClient,
-  shopId: string,
-  customerId: string
-) {
+function printUsage() {
+  console.error("Usage: node scripts/backfill-job-status-chat.js <jobId> [--apply]");
+  console.error("");
+  console.error("Examples:");
+  console.error("  node scripts/backfill-job-status-chat.js cmqt0vnvu0001la04457tx7k1");
+  console.error("  node scripts/backfill-job-status-chat.js cmqt0vnvu0001la04457tx7k1 --apply");
+}
+
+async function findOrCreateGeneralConversation(prisma, shopId, customerId) {
   const existing = await prisma.conversation.findFirst({
     where: { shopId, customerId, archived: false },
     orderBy: [{ jobId: "asc" }, { updatedAt: "desc" }],
@@ -255,30 +233,17 @@ async function findOrCreateGeneralConversation(
   });
 }
 
-async function mirrorStageMessage(
-  prisma: PrismaClient,
-  opts: {
-    shopId: string;
-    customerId: string;
-    job: {
-      id: string;
-      shopId: string;
-      bikeMake: string;
-      bikeModel: string;
-      deliveryType: string;
-      customer: { firstName: string; lastName: string | null } | null;
-    };
-    shop: { name: string; subdomain: string | null };
-    stage: FlowStage;
-    templateSlug: string;
-    apply: boolean;
-    force: boolean;
-  }
-): Promise<"posted" | "skipped" | "dry-run" | "failed"> {
+async function mirrorStageMessage(prisma, opts) {
   const built = buildJobStatusChatMessage(opts.templateSlug, opts.job, opts.shop);
   if (!built.ok) {
     console.error(`  ✗ ${opts.stage} (${opts.templateSlug}): ${built.error}`);
     return "failed";
+  }
+
+  if (!opts.apply) {
+    console.log(`  → ${opts.stage} (${opts.templateSlug}): would post`);
+    console.log(`    ${built.message.split("\n").join("\n    ")}`);
+    return "dry-run";
   }
 
   const conversation = await findOrCreateGeneralConversation(
@@ -304,12 +269,6 @@ async function mirrorStageMessage(
     }
   }
 
-  if (!opts.apply) {
-    console.log(`  → ${opts.stage} (${opts.templateSlug}): would post`);
-    console.log(`    ${built.message.split("\n").join("\n    ")}`);
-    return "dry-run";
-  }
-
   const message = await prisma.message.create({
     data: {
       shopId: opts.shopId,
@@ -331,13 +290,19 @@ async function mirrorStageMessage(
 }
 
 async function main() {
-  loadDotEnvIfPresent();
+  loadAllDotEnv();
   const { jobId, apply } = parseArgs();
-  const mode = apply ? "APPLY" : "DRY RUN";
 
+  if (!jobId) {
+    printUsage();
+    process.exitCode = 1;
+    return;
+  }
+
+  const mode = apply ? "APPLY" : "DRY RUN";
   console.log(`[${mode}] Backfilling status chat messages for job ${jobId}`);
 
-  const prisma = new PrismaClient();
+  const prisma = new PrismaClient({ log: ["error"] });
 
   try {
     const job = await prisma.job.findUnique({
@@ -354,6 +319,9 @@ async function main() {
 
     if (!job) {
       console.error(`Job not found: ${jobId}`);
+      console.error(
+        "Tip: confirm DATABASE_URL points at the environment where this job exists (prod vs local)."
+      );
       process.exitCode = 1;
       return;
     }
