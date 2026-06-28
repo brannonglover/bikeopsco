@@ -5,9 +5,11 @@ import { z } from "zod";
 import { getAuthorizedShopId, requireStaffShop } from "@/lib/api-auth";
 import { withPrismaRetry } from "@/lib/prisma-retry";
 import { sendJobEmail, getTemplateForStage } from "@/lib/email";
+import { getTemplateSlugForStage } from "@/lib/sms";
 import { syncCollectionJobService } from "@/lib/collection-fee";
 import { sendPushToAllStaff } from "@/lib/push";
 import { getAppFeatures } from "@/lib/app-settings";
+import { mirrorJobStageToCustomerChat } from "@/lib/system-chat";
 import { computeJobSubtotal, computeTotalPaid, getJobPaymentSummary } from "@/lib/job-payments";
 import { getEffectiveEmailUpdatesConsent, getEffectiveSmsConsent } from "@/lib/sms-consent";
 import { normalizeJobCollectionWindowsForStorage } from "@/lib/normalize-job-collection-windows";
@@ -518,6 +520,31 @@ export async function POST(request: NextRequest) {
       body: `${customerName} — ${job.bikeMake} ${job.bikeModel}`.trim(),
       data: { type: "new_job", jobId: job.id },
     }).catch((e) => console.error("[Job created] Staff push failed:", e));
+
+    if (features.chatEnabled && job.customer?.id) {
+      const chatTemplateSlug = getTemplateSlugForStage("BOOKED_IN", job.deliveryType);
+      if (chatTemplateSlug) {
+        const shopRow = await prisma.shop.findUnique({
+          where: { id: shopId },
+          select: { name: true, subdomain: true },
+        });
+        try {
+          await mirrorJobStageToCustomerChat({
+            shopId,
+            customerId: job.customer.id,
+            job,
+            smsTemplateSlug: chatTemplateSlug,
+            shopHint: shopRow ?? undefined,
+          });
+        } catch (e) {
+          console.error("[Job created] stage chat mirror failed:", {
+            jobId: job.id,
+            customerId: job.customer?.id,
+            error: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }
+    }
 
     return NextResponse.json(job);
   } catch (error) {

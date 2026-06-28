@@ -562,14 +562,9 @@ export async function PATCH(
         ? getTemplateSlugForStage(data.stage, existingJob.deliveryType)
         : null;
 
-    // Customer notifications (chat mirror + SMS/email) run after the response so the
-    // board UI is not blocked by Twilio latency or conversation consolidation.
     const shopSmsContext = { name: shop.name, subdomain: shop.subdomain };
     const shouldMirrorChat =
-      features.chatEnabled &&
-      data.notifyCustomer !== false &&
-      stageNotificationSlug &&
-      job.customer?.id;
+      features.chatEnabled && stageNotificationSlug && job.customer?.id;
     const shouldNotifyCustomer =
       features.notifyCustomerEnabled &&
       data.notifyCustomer !== false &&
@@ -579,105 +574,99 @@ export async function PATCH(
       data.stage !== "COMPLETED" &&
       existingJob;
 
-    if (shouldMirrorChat || shouldNotifyCustomer) {
+    // Chat mirror is in-app history (not SMS/email); run before the response so
+    // serverless does not drop the write. SMS/email run after the response.
+    if (shouldMirrorChat && job.customer?.id) {
+      try {
+        await mirrorJobStageToCustomerChat({
+          shopId: job.shopId,
+          customerId: job.customer.id,
+          job,
+          smsTemplateSlug: stageNotificationSlug!,
+          force: Boolean(data.resendNotification),
+          shopHint: shopSmsContext,
+        });
+      } catch (e) {
+        console.error("[PATCH job] stage chat mirror failed:", {
+          jobId: id,
+          customerId: job.customer.id,
+          templateSlug: stageNotificationSlug,
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
+    }
+
+    if (shouldNotifyCustomer) {
       void (async () => {
-        const tasks: Promise<void>[] = [];
+        try {
+          const templateSlug = data.stage === "BIKE_READY"
+            ? "bike_ready_invoice"
+            : getTemplateForStage(data.stage!, existingJob.deliveryType);
+          const smsTemplateSlug =
+            stageNotificationSlug ??
+            getTemplateSlugForStage(data.stage!, existingJob.deliveryType);
+          const customerEmail = getEffectiveEmailUpdatesConsent(job.customer)
+            ? job.customer?.email
+            : null;
+          const customerPhone = job.customer?.phone;
+          const canSendSms = getEffectiveSmsConsent(job.customer);
 
-        if (shouldMirrorChat && job.customer?.id) {
-          tasks.push(
-            mirrorJobStageToCustomerChat({
-              shopId: job.shopId,
-              customerId: job.customer.id,
-              job,
-              smsTemplateSlug: stageNotificationSlug!,
-              force: Boolean(data.resendNotification),
-              shopHint: shopSmsContext,
-            }).catch((e) => {
-              console.error("[PATCH job] stage chat mirror failed:", {
-                jobId: id,
-                customerId: job.customer?.id,
-                templateSlug: stageNotificationSlug,
-                error: e instanceof Error ? e.message : String(e),
-              });
-            })
-          );
-        }
-
-        if (shouldNotifyCustomer) {
-          tasks.push(
-            (async () => {
-              const templateSlug = data.stage === "BIKE_READY"
-                ? "bike_ready_invoice"
-                : getTemplateForStage(data.stage!, existingJob.deliveryType);
-              const smsTemplateSlug =
-                stageNotificationSlug ??
-                getTemplateSlugForStage(data.stage!, existingJob.deliveryType);
-              const customerEmail = getEffectiveEmailUpdatesConsent(job.customer)
-                ? job.customer?.email
-                : null;
-              const customerPhone = job.customer?.phone;
-              const canSendSms = getEffectiveSmsConsent(job.customer);
-
-              const emailPromise =
-                customerEmail && templateSlug
-                  ? prisma.jobEmail.findFirst({
-                      where: { shopId: job.shopId, jobId: id, templateSlug },
-                    })
-                  : Promise.resolve(null);
-              const smsPromise =
-                canSendSms && customerPhone && smsTemplateSlug
-                  ? prisma.jobSms.findFirst({
-                      where: {
-                        shopId: job.shopId,
-                        jobId: id,
-                        templateSlug: smsTemplateSlug,
-                      },
-                    })
-                  : Promise.resolve(null);
-              const [emailAlreadySent, smsAlreadySent] = await Promise.all([
-                emailPromise,
-                smsPromise,
-              ]);
-
-              if (
-                customerEmail &&
-                templateSlug &&
-                (!emailAlreadySent || data.resendNotification)
-              ) {
-                if (data.stage === "BIKE_READY") {
-                  const totalPaid = computeTotalPaid(job.payments);
-                  sendBikeReadyInvoiceEmail(job, totalPaid).catch(console.error);
-                } else {
-                  sendJobEmail(templateSlug, customerEmail, job).catch(console.error);
-                }
-              }
-
-              if (
-                canSendSms &&
-                customerPhone &&
-                smsTemplateSlug &&
-                (!smsAlreadySent || data.resendNotification)
-              ) {
-                const result = await sendJobSms(
-                  smsTemplateSlug,
-                  customerPhone,
-                  job,
-                  shopSmsContext
-                );
-                if (!result.ok) {
-                  console.warn("[PATCH job] SMS send failed:", {
+          const emailPromise =
+            customerEmail && templateSlug
+              ? prisma.jobEmail.findFirst({
+                  where: { shopId: job.shopId, jobId: id, templateSlug },
+                })
+              : Promise.resolve(null);
+          const smsPromise =
+            canSendSms && customerPhone && smsTemplateSlug
+              ? prisma.jobSms.findFirst({
+                  where: {
+                    shopId: job.shopId,
                     jobId: id,
-                    error: result.error,
-                  });
-                }
-              }
-            })().catch((e) => {
-              console.error("[PATCH job] stage notification dedup/send failed:", e);
-            })
-          );
-        }
+                    templateSlug: smsTemplateSlug,
+                  },
+                })
+              : Promise.resolve(null);
+          const [emailAlreadySent, smsAlreadySent] = await Promise.all([
+            emailPromise,
+            smsPromise,
+          ]);
 
-        await Promise.all(tasks);
+          if (
+            customerEmail &&
+            templateSlug &&
+            (!emailAlreadySent || data.resendNotification)
+          ) {
+            if (data.stage === "BIKE_READY") {
+              const totalPaid = computeTotalPaid(job.payments);
+              sendBikeReadyInvoiceEmail(job, totalPaid).catch(console.error);
+            } else {
+              sendJobEmail(templateSlug, customerEmail, job).catch(console.error);
+            }
+          }
+
+          if (
+            canSendSms &&
+            customerPhone &&
+            smsTemplateSlug &&
+            (!smsAlreadySent || data.resendNotification)
+          ) {
+            const result = await sendJobSms(
+              smsTemplateSlug,
+              customerPhone,
+              job,
+              shopSmsContext
+            );
+            if (!result.ok) {
+              console.warn("[PATCH job] SMS send failed:", {
+                jobId: id,
+                error: result.error,
+              });
+            }
+          }
+        } catch (e) {
+          console.error("[PATCH job] stage notification dedup/send failed:", e);
+        }
       })();
     }
 
