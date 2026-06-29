@@ -13,6 +13,15 @@ export type JobBikeDisplayParts = {
   imageUrl: string | null;
 };
 
+/** Prefer live profile bike image over denormalized JobBike snapshot when linked. */
+function resolveJobBikeImageUrl(
+  jb: JobBike,
+  profileBike?: { imageUrl: string | null } | null
+): string | null {
+  const linked = profileBike ?? jb.bike;
+  return linked?.imageUrl ?? jb.imageUrl ?? null;
+}
+
 /** Resolved make/model/nickname/image for one job bike row (detail modal, invoice section). */
 export function resolveJobBikeDisplayParts(job: Job, jb: JobBike): JobBikeDisplayParts {
   const customerBikes = job.customer?.bikes;
@@ -23,7 +32,7 @@ export function resolveJobBikeDisplayParts(job: Job, jb: JobBike): JobBikeDispla
       make: cb.make,
       model: cb.model,
       nickname: nick,
-      imageUrl: jb.imageUrl ?? jb.bike?.imageUrl ?? cb.imageUrl ?? null,
+      imageUrl: resolveJobBikeImageUrl(jb, cb),
     };
   }
   if (jb.bikeId && jb.bike) {
@@ -33,14 +42,14 @@ export function resolveJobBikeDisplayParts(job: Job, jb: JobBike): JobBikeDispla
       make: jb.bike.make,
       model: jb.bike.model,
       nickname: nick,
-      imageUrl: jb.imageUrl ?? jb.bike.imageUrl ?? null,
+      imageUrl: resolveJobBikeImageUrl(jb),
     };
   }
   return {
     make: jb.make,
     model: jb.model,
     nickname: jb.nickname?.trim() || null,
-    imageUrl: jb.imageUrl ?? jb.bike?.imageUrl ?? null,
+    imageUrl: resolveJobBikeImageUrl(jb),
   };
 }
 
