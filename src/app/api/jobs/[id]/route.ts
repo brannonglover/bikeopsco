@@ -518,6 +518,7 @@ export async function PATCH(
 
     // Dedup checks + sends run after the response is built so the board PATCH returns as soon as the DB work finishes.
     if (
+      stageChanged &&
       features.notifyCustomerEnabled &&
       data.notifyCustomer !== false &&
       data.stage &&
