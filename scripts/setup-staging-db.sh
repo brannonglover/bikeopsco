@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Apply schema + seed demo data on a staging Supabase project.
+# Apply schema + seed demo data on the BikeOps develop Supabase project.
 # Never run against production DATABASE_URL values.
 #
 # Usage:
-#   DATABASE_URL="postgresql://postgres.[staging-ref]:..." \
-#   DIRECT_URL="postgresql://postgres.[staging-ref]:..." \
+#   DATABASE_URL="postgresql://postgres.[develop-ref]:..." \
+#   DIRECT_URL="postgresql://postgres.[develop-ref]:..." \
 #   ADMIN_EMAIL="you@example.com" \
 #   ADMIN_PASSWORD="your-staging-password" \
 #   ./scripts/setup-staging-db.sh
@@ -14,7 +14,7 @@
 set -euo pipefail
 
 if [[ -z "${DATABASE_URL:-}" || -z "${DIRECT_URL:-}" ]]; then
-  echo "Error: DATABASE_URL and DIRECT_URL must be set to your staging Supabase pooler URLs." >&2
+  echo "Error: DATABASE_URL and DIRECT_URL must be set to your develop Supabase pooler URLs." >&2
   exit 1
 fi
 
@@ -24,7 +24,7 @@ const { diagnosePair } = require("./scripts/db-url-diagnostics");
 const ref = diagnosePair(process.env.DATABASE_URL, process.env.DIRECT_URL).database?.projectRef;
 if (ref && ref === process.env.PRODUCTION_SUPABASE_PROJECT_REF) {
   console.error(
-    `Error: DATABASE_URL uses production Supabase ref ${ref}. Use a separate staging project.`
+    `Error: DATABASE_URL uses production Supabase ref ${ref}. Use the BikeOps develop project instead.`
   );
   process.exit(1);
 }
@@ -42,7 +42,7 @@ npm run db:seed:staging
 
 echo ""
 echo "Done. Next steps:"
-echo "  1. vercel env add DATABASE_URL preview develop   # paste staging Transaction URL (6543)"
-echo "  2. vercel env add DIRECT_URL preview develop     # paste staging Session URL (5432)"
+echo "  1. vercel env add DATABASE_URL preview develop   # paste develop Transaction URL (6543)"
+echo "  2. vercel env add DIRECT_URL preview develop     # paste develop Session URL (5432)"
 echo "  3. Redeploy develop (push commit or Vercel → Redeploy)"
 echo "  4. Verify: curl -sL https://dev.bikeops.co/api/debug/env | jq .databaseUrlHostHint"

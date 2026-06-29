@@ -58,7 +58,7 @@ function checkPreviewDbIsolation(options = {}) {
       previewHost ? `  preview host:   ${previewHost}` : null,
       "",
       "Fix:",
-      "  1. Create a new Supabase project for staging (empty — do not clone production).",
+      "  1. Use the BikeOps develop Supabase project (Settings → General → Reference ID must differ from production).",
       "  2. Vercel → bikeopsco → Settings → Environment Variables:",
       "     Update Preview (develop) DATABASE_URL + DIRECT_URL only.",
       "  3. npm run db:migrate && npm run db:seed:staging against the staging URLs.",

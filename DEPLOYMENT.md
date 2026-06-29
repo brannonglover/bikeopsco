@@ -178,7 +178,7 @@ CLI check: `vercel env ls | rg DATABASE` — confirm separate rows for **Product
 
 ### Environment variables (Preview / staging)
 
-**Confirmed (2026-06-29):** Preview `DATABASE_URL` / `DIRECT_URL` are scoped to **Preview (develop)** only (no longer shared with Production targets), but values still use production Supabase project ref `nshrozsfixyeihthjxxi`. Provision a separate Postgres project and update Preview URLs. Build guard: `PRODUCTION_SUPABASE_PROJECT_REF` on Preview (develop) blocks deploys until refs differ. Verify with `GET /api/debug/env` → `databaseUrlHostHint`. Full audit: [docs/staging-environment.md](docs/staging-environment.md).
+**Confirmed (2026-06-29):** Preview `DATABASE_URL` / `DIRECT_URL` are scoped to **Preview (develop)** only, but values still use production Supabase ref `nshrozsfixyeihthjxxi`. Point Preview at the existing **BikeOps develop** Supabase project (different ref). Build guard: `PRODUCTION_SUPABASE_PROJECT_REF` on Preview (develop) blocks deploys until refs differ. Verify with `GET /api/debug/env` → `databaseUrlHostHint`. Full audit: [docs/staging-environment.md](docs/staging-environment.md).
 
 In **bikeopsco** → Settings → Environment Variables, set **Preview** values (optionally scoped to branch `develop`):
 
@@ -236,9 +236,9 @@ If the username is already `postgres.[project-ref]` and you still see **P1000** 
 
 `npm run build` runs validation before `prisma migrate deploy`. A passing local `db:validate-env` does not prove the password is correct — only that structure, ports, and refs look right.
 
-### Staging database
+### Staging database (BikeOps develop Supabase project)
 
-On a fresh staging database:
+Use the existing **develop** Supabase project — not production (`nshrozsfixyeihthjxxi`). On that project (empty or reset; do not clone prod):
 
 ```bash
 # Recommended one-shot setup (validate → migrate → seed)
