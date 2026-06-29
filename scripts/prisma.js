@@ -19,8 +19,39 @@ if (args.length === 0) {
 const command = args[0];
 const needsDatabase = command === "migrate" || command === "db";
 
+/** Append ?pgbouncer=true when transaction pooler URL omits it (common Vercel paste mistake). */
+function normalizeDatabaseUrlPgbouncer() {
+  const databaseUrl = process.env.DATABASE_URL?.trim();
+  if (!databaseUrl) return;
+
+  try {
+    const parsed = new URL(databaseUrl);
+    if (parsed.port !== "6543") return;
+    if (parsed.searchParams.get("pgbouncer") === "true") return;
+    parsed.searchParams.set("pgbouncer", "true");
+    process.env.DATABASE_URL = parsed.toString();
+  } catch {
+    // diagnosePair will report invalid URL
+  }
+}
+
+/** Append ?sslmode=require when Supabase Session URL omits it (common paste mistake). */
+function normalizeDirectUrlSslMode() {
+  const directUrl = process.env.DIRECT_URL?.trim();
+  if (!directUrl) return;
+
+  try {
+    const parsed = new URL(directUrl);
+    if (parsed.searchParams.get("sslmode") === "require") return;
+    parsed.searchParams.set("sslmode", "require");
+    process.env.DIRECT_URL = parsed.toString();
+  } catch {
+    // diagnosePair will report invalid URL
+  }
+}
+
 /** Supabase db.*.supabase.co is often IPv6-only and unreachable from Vercel builds. */
-function validateSupabaseDirectUrl() {
+function validateSupabaseDirectUrl(directUrlWasUnset) {
   const directUrl = process.env.DIRECT_URL?.trim();
   if (!directUrl) return;
 
@@ -61,10 +92,24 @@ function validateSupabaseDirectUrl() {
   }
 
   if (issues.length > 0) {
-    console.error(["Error: invalid DIRECT_URL for Prisma migrations.", "", ...issues].join("\n"));
+    const preamble = directUrlWasUnset
+      ? [
+          "Error: DIRECT_URL is not set.",
+          "",
+          "Prisma copied DATABASE_URL for validation, but migrations need a separate Session pooler URL:",
+          "  postgresql://postgres.[project-ref]:[PASSWORD]@aws-0-[region].pooler.supabase.com:5432/postgres?sslmode=require",
+          "",
+          "Supabase Dashboard → Project Settings → Database → Connection string → Session mode (port 5432).",
+          "In Vercel, set DIRECT_URL on Preview (develop) or Production — not Development only.",
+          "",
+        ]
+      : ["Error: invalid DIRECT_URL for Prisma migrations.", ""];
+    console.error([...preamble, ...issues].join("\n"));
     process.exit(1);
   }
 }
+
+const directUrlWasUnset = !process.env.DIRECT_URL?.trim();
 
 // Mirror missing direct/pooled URLs so schema validation (P1012) passes.
 if (!process.env.DIRECT_URL && process.env.DATABASE_URL) {
@@ -102,7 +147,9 @@ if (needsDatabase && !process.env.DATABASE_URL) {
 }
 
 if (needsDatabase) {
-  validateSupabaseDirectUrl();
+  normalizeDatabaseUrlPgbouncer();
+  normalizeDirectUrlSslMode();
+  validateSupabaseDirectUrl(directUrlWasUnset);
   runDbEnvValidation();
 }
 
