@@ -13,6 +13,7 @@
     "db:seed": "node scripts/prisma.js db seed",
     "db:seed:staging": "SEED_DEMO_DATA=true node scripts/prisma.js db seed",
     "db:validate-env": "node scripts/validate-db-env.js",
+    "db:check-isolation": "node scripts/check-preview-db-isolation.js",
     "postinstall": "node scripts/prisma.js generate",
     "db:migrate:dev": "node scripts/prisma.js migrate dev"
   },

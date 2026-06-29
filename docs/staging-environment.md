@@ -2,9 +2,11 @@
 
 Use this workflow to test changes (for example chat sign-in magic links) on a stable URL before merging to `main` and deploying production.
 
-## Audit summary (2026-06-14, re-verified)
+## Audit summary (2026-06-29)
 
-**Preview is still sharing the production database.** `vercel env ls` shows `DATABASE_URL` and `DIRECT_URL` scoped to **Production, Preview, and Development**. Pulling both environments with `vercel env pull` confirms **identical values** — Supabase pooler host `aws-0-us-west-2.pooler.supabase.com`. That is why `dev.bikeops.co` shows real production customers and jobs.
+**Preview still uses the production database.** `DATABASE_URL` and `DIRECT_URL` are now scoped separately (**Preview develop** vs **Production** only — fixed 2026-06-29), but both still point at the same Supabase project ref `nshrozsfixyeihthjxxi` on `aws-0-us-west-2.pooler.supabase.com`. That is why `dev.bikeops.co` shows real production customers and jobs.
+
+A build guard is in place: `PRODUCTION_SUPABASE_PROJECT_REF` is set on Preview (develop). After the next `develop` deploy that includes `scripts/check-preview-db-isolation.js`, Preview builds **fail** until staging `DATABASE_URL` / `DIRECT_URL` use a different Supabase project.
 
 After you provision a separate staging DB, confirm isolation:
 
@@ -147,6 +149,18 @@ Verify isolation: after redeploy, `dev.bikeops.co` should show an empty calendar
 #### Seed staging with fake data only
 
 From your machine (never against production URLs):
+
+```bash
+# One-shot: validate, migrate, seed (see scripts/setup-staging-db.sh)
+DATABASE_URL="postgresql://…staging-pooler…" \
+DIRECT_URL="postgresql://…staging-direct…" \
+ADMIN_EMAIL="you@example.com" \
+ADMIN_PASSWORD="your-staging-password" \
+PRODUCTION_SUPABASE_PROJECT_REF="nshrozsfixyeihthjxxi" \
+./scripts/setup-staging-db.sh
+```
+
+Or step by step:
 
 ```bash
 # Apply schema to the new empty staging DB

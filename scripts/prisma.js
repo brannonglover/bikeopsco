@@ -10,6 +10,7 @@ const {
   formatReport,
   printFailureHelp,
 } = require("./db-url-diagnostics");
+const { checkPreviewDbIsolation } = require("./check-preview-db-isolation");
 
 loadDotEnv();
 
@@ -171,6 +172,9 @@ if (needsDatabase) {
   normalizeDirectUrlSslMode();
   validateSupabaseDirectUrl(directUrlWasUnset);
   runDbEnvValidation();
+  if (command === "migrate" && args[1] === "deploy") {
+    checkPreviewDbIsolation({ exitOnFailure: true });
+  }
 }
 
 function runDbEnvValidation() {
