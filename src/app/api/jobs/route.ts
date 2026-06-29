@@ -2,11 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { Stage } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
-import { getAuthorizedShopId } from "@/lib/api-auth";
+import { getAuthorizedShopId, requireStaffShop } from "@/lib/api-auth";
+import { withPrismaRetry } from "@/lib/prisma-retry";
 import { sendJobEmail, getTemplateForStage } from "@/lib/email";
+import { getTemplateSlugForStage } from "@/lib/sms";
 import { syncCollectionJobService } from "@/lib/collection-fee";
 import { sendPushToAllStaff } from "@/lib/push";
 import { getAppFeatures } from "@/lib/app-settings";
+import { mirrorJobStageToCustomerChat } from "@/lib/system-chat";
 import { computeJobSubtotal, computeTotalPaid, getJobPaymentSummary } from "@/lib/job-payments";
 import { getEffectiveEmailUpdatesConsent, getEffectiveSmsConsent } from "@/lib/sms-consent";
 import { normalizeJobCollectionWindowsForStorage } from "@/lib/normalize-job-collection-windows";
@@ -43,12 +46,10 @@ const createJobSchema = z.object({
 });
 
 export async function GET(request: NextRequest) {
-  const shopId = await getAuthorizedShopId(request);
-  if (!shopId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   try {
+    const auth = await requireStaffShop(request);
+    if (!auth.ok) return auth.response;
+    const shopId = auth.shopId;
     const { searchParams } = new URL(request.url);
     const weekStart = searchParams.get("weekStart");
     const weekEnd = searchParams.get("weekEnd");
@@ -127,18 +128,21 @@ export async function GET(request: NextRequest) {
             ];
 
     if (summary) {
-      const jobs = await prisma.job.findMany({
-        where,
-        select: { id: true, stage: true },
-        orderBy,
-      });
+      const jobs = await withPrismaRetry(() =>
+        prisma.job.findMany({
+          where,
+          select: { id: true, stage: true, updatedAt: true },
+          orderBy,
+        })
+      );
       const res = NextResponse.json(jobs);
       res.headers.set("Cache-Control", "no-store");
       return res;
     }
 
     if (view === "board") {
-      const jobs = await prisma.job.findMany({
+      const jobs = await withPrismaRetry(() =>
+        prisma.job.findMany({
         where,
         select: {
           id: true,
@@ -182,14 +186,10 @@ export async function GET(request: NextRequest) {
               notes: true,
               createdAt: true,
               updatedAt: true,
-              // Include bikes so job card display can fall back to the customer's profile bike when a JobBike
-              // is not linked (bikeId null), and so nickname edits reflect on the board reliably.
               bikes: {
                 select: {
-                  id: true,
                   make: true,
                   model: true,
-                  bikeType: true,
                   nickname: true,
                   imageUrl: true,
                 },
@@ -230,7 +230,7 @@ export async function GET(request: NextRequest) {
               unitPrice: true,
               notes: true,
               jobBikeId: true,
-              service: true,
+              service: { select: { name: true, price: true } },
               jobBike: {
                 select: {
                   id: true,
@@ -249,7 +249,7 @@ export async function GET(request: NextRequest) {
               unitPrice: true,
               notes: true,
               jobBikeId: true,
-              product: true,
+              product: { select: { name: true, price: true } },
               jobBike: {
                 select: {
                   id: true,
@@ -270,7 +270,8 @@ export async function GET(request: NextRequest) {
           },
         },
         orderBy,
-      });
+        })
+      );
       const jobsWithPaymentState = jobs.map((job) => {
         const subtotal = computeJobSubtotal({
           jobServices: job.jobServices,
@@ -301,7 +302,8 @@ export async function GET(request: NextRequest) {
       return res;
     }
 
-    const jobs = await prisma.job.findMany({
+    const jobs = await withPrismaRetry(() =>
+      prisma.job.findMany({
       where,
       include: {
         customer: { include: { bikes: true } },
@@ -320,7 +322,8 @@ export async function GET(request: NextRequest) {
         },
       },
       orderBy,
-    });
+      })
+    );
     const jobsWithPaymentState = jobs.map((job) => {
       const subtotal = computeJobSubtotal({
         jobServices: job.jobServices,
@@ -517,6 +520,31 @@ export async function POST(request: NextRequest) {
       body: `${customerName} — ${job.bikeMake} ${job.bikeModel}`.trim(),
       data: { type: "new_job", jobId: job.id },
     }).catch((e) => console.error("[Job created] Staff push failed:", e));
+
+    if (features.chatEnabled && job.customer?.id) {
+      const chatTemplateSlug = getTemplateSlugForStage("BOOKED_IN", job.deliveryType);
+      if (chatTemplateSlug) {
+        const shopRow = await prisma.shop.findUnique({
+          where: { id: shopId },
+          select: { name: true, subdomain: true },
+        });
+        try {
+          await mirrorJobStageToCustomerChat({
+            shopId,
+            customerId: job.customer.id,
+            job,
+            smsTemplateSlug: chatTemplateSlug,
+            shopHint: shopRow ?? undefined,
+          });
+        } catch (e) {
+          console.error("[Job created] stage chat mirror failed:", {
+            jobId: job.id,
+            customerId: job.customer?.id,
+            error: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }
+    }
 
     return NextResponse.json(job);
   } catch (error) {

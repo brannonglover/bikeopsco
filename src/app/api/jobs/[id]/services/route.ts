@@ -338,10 +338,14 @@ export async function PATCH(
       updateData.jobBikeId = data.jobBikeId ?? null;
     }
 
-    const updated = await prisma.jobService.update({
-      where: { id: data.jobServiceId, shopId },
-      data: updateData,
-      include: { service: true, jobBike: { select: { id: true, make: true, model: true, nickname: true } } },
+    const updated = await prisma.$transaction(async (tx) => {
+      const line = await tx.jobService.update({
+        where: { id: data.jobServiceId, shopId },
+        data: updateData,
+        include: { service: true, jobBike: { select: { id: true, make: true, model: true, nickname: true } } },
+      });
+      await tx.job.update({ where: { id: jobId, shopId }, data: {} });
+      return line;
     });
 
     return NextResponse.json(updated);

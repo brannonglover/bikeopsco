@@ -2,8 +2,12 @@ import "server-only";
 
 import bcrypt from "bcryptjs";
 import { encode } from "next-auth/jwt";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { isPlatformAdminHost } from "@/lib/platform-admin-host";
 import {
   getPlatformAdminEmail,
+  getPlatformAdminSession,
   PLATFORM_ADMIN_MAX_AGE_SECONDS,
   type PlatformAdminSession,
 } from "@/lib/platform-admin-session";
@@ -61,4 +65,23 @@ export async function createPlatformAdminSessionToken(
     secret,
     maxAge: PLATFORM_ADMIN_MAX_AGE_SECONDS,
   });
+}
+
+type RequirePlatformAdminResult =
+  | { ok: true; session: PlatformAdminSession }
+  | { ok: false; response: NextResponse };
+
+export async function requirePlatformAdmin(
+  request: NextRequest,
+): Promise<RequirePlatformAdminResult> {
+  if (!isPlatformAdminHost(request.headers.get("host"))) {
+    return { ok: false, response: NextResponse.json({ error: "Not found" }, { status: 404 }) };
+  }
+
+  const session = await getPlatformAdminSession(request);
+  if (!session) {
+    return { ok: false, response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
+  }
+
+  return { ok: true, session };
 }

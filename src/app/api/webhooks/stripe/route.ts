@@ -4,6 +4,7 @@ import { getStripe } from "@/lib/stripe";
 import { prisma } from "@/lib/db";
 import { sendPaymentReceiptEmail } from "@/lib/email";
 import { computeJobSubtotal, computeTotalPaid, getJobPaymentSummary } from "@/lib/job-payments";
+import { buildPaymentReceivedDetails, notifyShopOfPayment } from "@/lib/payment-notifications";
 import { syncStripeSubscription, toStripeDate } from "@/lib/billing";
 
 async function refreshJobPaymentStatus(jobId: string) {
@@ -165,7 +166,7 @@ export async function POST(request: NextRequest) {
           },
         });
       });
-      await refreshJobPaymentStatus(jobId);
+      const paymentSummary = await refreshJobPaymentStatus(jobId);
 
       const job = await prisma.job.findUnique({
         where: { id: jobId },
@@ -223,6 +224,30 @@ export async function POST(request: NextRequest) {
         }
       } else if (!recipientEmail) {
         console.warn(`No email for payment receipt: job ${jobId} has no customer email and Stripe billing_details has no email. Link a customer with email to the job, or the Payment Element will collect email when configured.`);
+      }
+
+      if (job) {
+        const paymentMethod =
+          typeof paymentIntent.metadata?.mode === "string" && paymentIntent.metadata.mode.trim()
+            ? paymentIntent.metadata.mode.trim()
+            : paymentIntent.payment_method
+              ? typeof paymentIntent.payment_method === "string"
+                ? paymentIntent.payment_method
+                : (paymentIntent.payment_method as Stripe.PaymentMethod).type
+              : "card";
+        notifyShopOfPayment(
+          buildPaymentReceivedDetails({
+            shopId: job.shopId,
+            jobId: job.id,
+            amount: paymentIntent.amount / 100,
+            currency: paymentIntent.currency ?? "usd",
+            paymentMethod,
+            bikeMake: job.bikeMake,
+            bikeModel: job.bikeModel,
+            customer: job.customer,
+            paymentSummary,
+          })
+        );
       }
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);

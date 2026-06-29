@@ -31,24 +31,32 @@ export async function resolveStaffShopId(request: NextRequest): Promise<string |
 }
 
 export async function requireStaffShop(request: NextRequest): Promise<StaffShopAuth> {
-  const tokenShopId = await resolveStaffShopId(request);
+  try {
+    const tokenShopId = await resolveStaffShopId(request);
 
-  if (!tokenShopId) {
+    if (!tokenShopId) {
+      return {
+        ok: false,
+        response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+      };
+    }
+
+    const shop = await getRequestShop(request);
+    if (!shop || shop.id !== tokenShopId) {
+      return {
+        ok: false,
+        response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+      };
+    }
+
+    return { ok: true, shop, shopId: tokenShopId };
+  } catch (error) {
+    console.error("requireStaffShop error:", error);
     return {
       ok: false,
-      response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+      response: NextResponse.json({ error: "Authentication failed" }, { status: 503 }),
     };
   }
-
-  const shop = await getRequestShop(request);
-  if (!shop || shop.id !== tokenShopId) {
-    return {
-      ok: false,
-      response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
-    };
-  }
-
-  return { ok: true, shop, shopId: tokenShopId };
 }
 
 /** Convenience for routes that only need the authorized shop id. */

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import type { ChatMessage } from "@/lib/types";
+import { mergeChatMessagesWithServer } from "@/lib/chat-messages";
 import { useCustomerChatNotifications } from "@/hooks/useCustomerChatNotifications";
 import { ChatMessageBubble } from "@/components/chat/ChatMessageBubble";
 import { jobAccessApiSuffix, readJobAccessParam, withJobAccessQuery } from "@/lib/job-access-url";
@@ -104,26 +105,7 @@ export default function CustomerChatPage() {
   }, []);
 
   const mergeServerMessages = useCallback((serverMessages: ChatMessage[]) => {
-    setMessages((prev) => {
-      const optimistic = prev.filter((m) => m.id.startsWith("temp-"));
-      const prevById = new Map(prev.map((m) => [m.id, m] as const));
-      const byId = new Map<string, ChatMessage>();
-      for (const msg of serverMessages) {
-        const prevMsg = prevById.get(msg.id);
-        if (prevMsg?.clientDeliveryState) {
-          byId.set(msg.id, { ...msg, clientDeliveryState: prevMsg.clientDeliveryState });
-        } else {
-          byId.set(msg.id, msg);
-        }
-      }
-      for (const msg of optimistic) byId.set(msg.id, msg);
-      return [...byId.values()].sort((a, b) => {
-        const ta = new Date(a.createdAt).getTime();
-        const tb = new Date(b.createdAt).getTime();
-        if (ta !== tb) return ta - tb;
-        return a.id.localeCompare(b.id);
-      });
-    });
+    setMessages((prev) => mergeChatMessagesWithServer(prev, serverMessages));
   }, []);
 
   const fetchMessages = useCallback(async () => {
@@ -517,6 +499,8 @@ export default function CustomerChatPage() {
       createdAt: new Date().toISOString(),
     };
 
+    hasPendingOptimisticRef.current = true;
+    sendingRef.current = true;
     setMessages((prev) => [...prev, optimisticMsg]);
     setInputText("");
     setPendingImages([]);
@@ -540,12 +524,15 @@ export default function CustomerChatPage() {
         const deliveredMsg: ChatMessage = { ...newMsg, clientDeliveryState: "DELIVERED" };
         // Replace the optimistic placeholder with the confirmed server message
         setMessages((prev) => prev.map((m) => (m.id === tempId ? deliveredMsg : m)));
+        hasPendingOptimisticRef.current = false;
         clearClientDeliveryStateLater(deliveredMsg.id);
       } else {
         // Roll back the optimistic message on failure
+        hasPendingOptimisticRef.current = false;
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
       }
     } finally {
+      sendingRef.current = false;
       setSending(false);
     }
   };

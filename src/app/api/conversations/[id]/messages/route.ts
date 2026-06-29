@@ -4,7 +4,10 @@ import { getConfiguredSmsProvider, sendChatStaffSms } from "@/lib/sms";
 import { sendPushToCustomer, sendPushToAllStaff } from "@/lib/push";
 import { z } from "zod";
 import { getAppFeatures } from "@/lib/app-settings";
-import { customerHasActiveChatJob } from "@/lib/chat-session";
+import {
+  customerHasActiveChatJob,
+  findActiveJobIdForCustomer,
+} from "@/lib/chat-session";
 import { getEffectiveSmsConsent } from "@/lib/sms-consent";
 import { requireCurrentShop } from "@/lib/shop";
 
@@ -43,11 +46,16 @@ export async function GET(
     }
     ({ id: conversationId } = await params);
 
-    // Keep the base conversation fetch minimal so this route can still work if the DB
+    // Keep the conversation fetch minimal so this route can still work if the DB
     // is temporarily behind migrations (missing newer optional columns).
     const conversation = await prisma.conversation.findFirst({
       where: { id: conversationId, shopId: shop.id },
-      select: { updatedAt: true },
+      select: {
+        updatedAt: true,
+        customerTypingAt: true,
+        customerLastReadAt: true,
+        staffLastReadAt: true,
+      },
     });
 
     if (!conversation) {
@@ -72,23 +80,9 @@ export async function GET(
       });
     }
 
-    let customerTypingAtIso: string | null = null;
-    let customerLastReadAtIso: string | null = null;
-    let currentStaffLastReadAt: Date | null = null;
-    try {
-      const extra = await prisma.conversation.findFirst({
-        where: { id: conversationId, shopId: shop.id },
-        select: { customerTypingAt: true, customerLastReadAt: true, staffLastReadAt: true },
-      });
-      customerTypingAtIso = extra?.customerTypingAt?.toISOString() ?? null;
-      customerLastReadAtIso = extra?.customerLastReadAt?.toISOString() ?? null;
-      currentStaffLastReadAt = extra?.staffLastReadAt ?? null;
-    } catch (e) {
-      console.warn("[chat] Failed to load conversation extras; continuing:", {
-        conversationId,
-        error: e,
-      });
-    }
+    const customerTypingAtIso = conversation.customerTypingAt?.toISOString() ?? null;
+    const customerLastReadAtIso = conversation.customerLastReadAt?.toISOString() ?? null;
+    const currentStaffLastReadAt = conversation.staffLastReadAt ?? null;
 
     const latestCustomerMessageAt = messages.reduce<Date | null>((latest, message) => {
       if (message.sender !== "CUSTOMER") return latest;
@@ -205,11 +199,23 @@ export async function POST(
         getEffectiveSmsConsent(conversation.customer) &&
         (await customerHasActiveChatJob(shop.id, conversation.customerId))
       ) {
+        const activeJobId = await findActiveJobIdForCustomer(
+          shop.id,
+          conversation.customerId
+        );
+        const attachmentPayload = message.attachments.map((a) => ({
+          url: a.url,
+          mimeType: a.mimeType,
+        }));
         const updateSmsDelivery = (smsText: string, attachmentOnly = false) => {
           sendChatStaffSms(conversation.customer.phone!, smsText, {
             attachmentOnly,
+            includeChatUrl: attachmentOnly || hasAtt,
             shopSubdomain: shop.subdomain,
             messageId: message.id,
+            jobId: activeJobId ?? undefined,
+            shopId: shop.id,
+            attachments: attachmentPayload,
           })
             .then((result) =>
               prisma.message.update({
@@ -236,10 +242,7 @@ export async function POST(
         };
 
         if (hasText) {
-          const smsText = hasAtt
-            ? `${bodyText!.trim()} (see chat for photos)`
-            : bodyText!.trim();
-          updateSmsDelivery(smsText);
+          updateSmsDelivery(bodyText!.trim());
         } else if (hasAtt) {
           updateSmsDelivery("", true);
         }

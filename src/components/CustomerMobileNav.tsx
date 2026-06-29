@@ -124,7 +124,7 @@ export function CustomerMobileNav() {
           )}
           {isPayPage && jobId && (
             <Link
-              href={`/status/${jobId}`}
+              href={withJobAccessQuery(`/status/${jobId}`, jobAccess)}
               onClick={() => setMenuOpen(false)}
               className="flex items-center gap-3 px-4 py-3 rounded-lg text-slate-700 hover:bg-slate-50 font-medium"
             >

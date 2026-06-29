@@ -2,26 +2,43 @@
  * Safe DATABASE_URL / DIRECT_URL diagnostics — never prints passwords or full URLs.
  */
 
+function parseEnvLine(line) {
+  const m = line.match(/^(DATABASE_URL|DIRECT_URL)=(.*)$/);
+  if (!m) return null;
+  let val = m[2].trim();
+  if (
+    (val.startsWith('"') && val.endsWith('"')) ||
+    (val.startsWith("'") && val.endsWith("'"))
+  ) {
+    val = val.slice(1, -1);
+  }
+  return { key: m[1], val };
+}
+
+/** Load DATABASE_URL / DIRECT_URL from .env then .env.local (Next.js order). */
 function loadDotEnv() {
   try {
     const fs = require("fs");
     const path = require("path");
-    const envPath = path.join(process.cwd(), ".env");
-    if (!fs.existsSync(envPath)) return;
-    fs.readFileSync(envPath, "utf8")
-      .split("\n")
-      .forEach((line) => {
-        const m = line.match(/^(DATABASE_URL|DIRECT_URL)=(.*)$/);
-        if (!m || process.env[m[1]]) return;
-        let val = m[2].trim();
-        if (
-          (val.startsWith('"') && val.endsWith('"')) ||
-          (val.startsWith("'") && val.endsWith("'"))
-        ) {
-          val = val.slice(1, -1);
-        }
-        process.env[m[1]] = val;
-      });
+    const cwd = process.cwd();
+    const shellDatabase = process.env.DATABASE_URL?.trim();
+    const shellDirect = process.env.DIRECT_URL?.trim();
+
+    for (const name of [".env", ".env.local"]) {
+      const envPath = path.join(cwd, name);
+      if (!fs.existsSync(envPath)) continue;
+      fs.readFileSync(envPath, "utf8")
+        .split("\n")
+        .forEach((line) => {
+          const parsed = parseEnvLine(line);
+          if (!parsed) return;
+          const val = parsed.val?.trim();
+          if (!val) return;
+          if (parsed.key === "DATABASE_URL" && shellDatabase) return;
+          if (parsed.key === "DIRECT_URL" && shellDirect) return;
+          process.env[parsed.key] = val;
+        });
+    }
   } catch {
     // ignore
   }

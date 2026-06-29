@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireStaffShop } from "@/lib/api-auth";
 import { sendPaymentReceiptEmail } from "@/lib/email";
 import { computeJobSubtotal, computeTotalPaid, getJobPaymentSummary } from "@/lib/job-payments";
+import { buildPaymentReceivedDetails, notifyShopOfPayment } from "@/lib/payment-notifications";
 
 export async function POST(
   request: NextRequest,
@@ -110,6 +111,25 @@ export async function POST(
         console.error("Payment receipt email failed for cash payment:", result.error);
       }
     }
+
+    notifyShopOfPayment(
+      buildPaymentReceivedDetails({
+        shopId: job.shopId,
+        jobId: job.id,
+        amount,
+        currency: "usd",
+        paymentMethod: "cash",
+        bikeMake: job.bikeMake,
+        bikeModel: job.bikeModel,
+        customer: job.customer,
+        paymentSummary: {
+          isPaidInFull: true,
+          remaining: 0,
+          subtotal,
+          totalPaid: subtotal,
+        },
+      })
+    );
 
     return NextResponse.json({
       success: true,

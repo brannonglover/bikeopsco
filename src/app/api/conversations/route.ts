@@ -6,6 +6,7 @@ import {
   consolidateCustomerConversations,
   findOrCreateGeneralConversation,
 } from "@/lib/conversation";
+import { getEffectiveSmsConsent } from "@/lib/sms-consent";
 import { requireCurrentShop } from "@/lib/shop";
 
 const conversationInclude = {
@@ -53,7 +54,7 @@ export async function GET(request: NextRequest) {
         : {}),
     };
 
-    let conversations = await prisma.conversation.findMany({
+    const conversations = await prisma.conversation.findMany({
       where: listWhere,
       orderBy: { updatedAt: "desc" },
       include: conversationInclude,
@@ -68,19 +69,30 @@ export async function GET(request: NextRequest) {
       .map(([customerId]) => customerId);
 
     if (dupeCustomerIds.length > 0) {
-      await prisma.$transaction(async (tx) => {
-        for (const customerId of dupeCustomerIds) {
-          await consolidateCustomerConversations(shop.id, customerId, tx);
-        }
-      });
-      conversations = await prisma.conversation.findMany({
-        where: listWhere,
-        orderBy: { updatedAt: "desc" },
-        include: conversationInclude,
-      });
+      void prisma
+        .$transaction(async (tx) => {
+          for (const customerId of dupeCustomerIds) {
+            await consolidateCustomerConversations(shop.id, customerId, tx);
+          }
+        })
+        .catch((e) =>
+          console.error("[chat] Background conversation consolidation failed:", e)
+        );
     }
 
-    return NextResponse.json(conversations);
+    return NextResponse.json(
+      conversations.map((conversation) =>
+        conversation.customer
+          ? {
+              ...conversation,
+              customer: {
+                ...conversation.customer,
+                smsConsent: getEffectiveSmsConsent(conversation.customer),
+              },
+            }
+          : conversation
+      )
+    );
   } catch (error) {
     console.error("GET /api/conversations error:", error);
     return NextResponse.json(

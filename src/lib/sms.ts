@@ -1,6 +1,11 @@
 import Twilio from "twilio";
+import { resolveOutboundMmsMediaUrls, type MmsAttachment } from "./blob";
 import { getCustomerNotificationBlockReason } from "./env";
-import { getCustomerBillUrl, getCustomerStatusUrl } from "./job-customer-access";
+import {
+  getCustomerBillUrl,
+  getCustomerChatUrl,
+  getCustomerStatusUrl,
+} from "./job-customer-access";
 import { normalizePhone } from "./phone";
 
 type SmsProvider = "twilio";
@@ -41,7 +46,8 @@ function getSmsNotConfiguredError(): string {
 
 async function sendTwilioSms(
   to: string,
-  text: string
+  text: string,
+  mediaUrl?: string[]
 ): Promise<SmsSendResult> {
   if (!twilio || !TWILIO_FROM_NUMBER) {
     console.warn(
@@ -51,11 +57,21 @@ async function sendTwilioSms(
   }
 
   try {
-    const response = await twilio.messages.create({
+    const payload: {
+      body: string;
+      from: string;
+      to: string;
+      mediaUrl?: string[];
+    } = {
       body: text,
       from: TWILIO_FROM_NUMBER,
       to,
-    });
+    };
+    if (mediaUrl && mediaUrl.length > 0) {
+      payload.mediaUrl = mediaUrl;
+    }
+
+    const response = await twilio.messages.create(payload);
 
     return { ok: true, provider: "twilio", externalMessageId: response.sid };
   } catch (e) {
@@ -67,7 +83,8 @@ async function sendTwilioSms(
 
 async function sendSms(
   phoneNumber: string,
-  text: string
+  text: string,
+  mediaUrl?: string[]
 ): Promise<SmsSendResult> {
   const blockReason = getCustomerNotificationBlockReason();
   if (blockReason) {
@@ -84,7 +101,7 @@ async function sendSms(
     return { ok: false, error: "Invalid phone number" };
   }
 
-  return sendTwilioSms(normalized, text);
+  return sendTwilioSms(normalized, text, mediaUrl);
 }
 
 /** SMS templates - slugs match email templates. {{statusUrl}} links to /status/[jobId] */
@@ -101,6 +118,8 @@ const SMS_TEMPLATES: Record<string, string> = {
     "{{shopName}}\n\nWe're working on your {{bikeMake}} {{bikeModel}}.\n\nTrack: {{statusUrl}}\n\nReply STOP to opt out.",
   waiting_on_parts:
     "{{shopName}}\n\nWaiting on parts for your {{bikeMake}} {{bikeModel}}.\n\nTrack: {{statusUrl}}\n\nReply STOP to opt out.",
+  waiting_on_customer:
+    "{{shopName}}\n\nWe need your approval to continue work on your {{bikeMake}} {{bikeModel}}.\n\nTrack: {{statusUrl}}\n\nReply STOP to opt out.",
   bike_ready:
     "{{shopName}}\n\n{{bikeReadyMessage}}\n\nView your itemized bill: {{billUrl}}\n\nReply STOP to opt out.",
   bike_ready_invoice:
@@ -121,6 +140,7 @@ export function getTemplateSlugForStage(
   }
   const map: Record<string, string> = {
     WORKING_ON: "working_on_bike",
+    WAITING_ON_CUSTOMER: "waiting_on_customer",
     WAITING_ON_PARTS: "waiting_on_parts",
     BIKE_READY: "bike_ready_invoice",
   };
@@ -158,19 +178,25 @@ function getBikeReadySmsMessage(job: JobForSms): string {
   return `Good news! Your ${bikeName} is ready for pickup.`;
 }
 
+type ShopSmsContext = { name: string; subdomain: string | null };
+
 export async function buildJobSmsMessage(
   templateSlug: string,
-  job: JobForSms
+  job: JobForSms,
+  shopHint?: ShopSmsContext
 ): Promise<{ ok: boolean; message?: string; error?: string }> {
   const body = SMS_TEMPLATES[templateSlug];
   if (!body) {
     return { ok: false, error: `SMS template not found: ${templateSlug}` };
   }
 
-  const { prisma } = await import("./db");
-  const shopRow = await prisma.shop
-    .findUnique({ where: { id: job.shopId }, select: { name: true, subdomain: true } })
-    .catch(() => null);
+  let shopRow = shopHint ?? null;
+  if (!shopRow) {
+    const { prisma } = await import("./db");
+    shopRow = await prisma.shop
+      .findUnique({ where: { id: job.shopId }, select: { name: true, subdomain: true } })
+      .catch(() => null);
+  }
   const shopName = shopRow?.name ?? process.env.SHOP_NAME ?? "Basement Bike Mechanic";
   const customerName = job.customer
     ? job.customer.lastName
@@ -197,9 +223,10 @@ export async function buildJobSmsMessage(
 export async function sendJobSms(
   templateSlug: string,
   phoneNumber: string,
-  job: JobForSms
+  job: JobForSms,
+  shopHint?: ShopSmsContext
 ): Promise<{ ok: boolean; message?: string; error?: string }> {
-  const built = await buildJobSmsMessage(templateSlug, job);
+  const built = await buildJobSmsMessage(templateSlug, job, shopHint);
   if (!built.ok || !built.message) {
     return { ok: false, error: built.error };
   }
@@ -240,23 +267,70 @@ const CHAT_SMS_MAX_LEN = 1500;
 export async function sendChatStaffSms(
   phoneNumber: string,
   messageText: string,
-  opts?: { attachmentOnly?: boolean; shopSubdomain?: string; messageId?: string }
+  opts?: {
+    attachmentOnly?: boolean;
+    includeChatUrl?: boolean;
+    shopSubdomain?: string;
+    messageId?: string;
+    jobId?: string;
+    shopId?: string;
+    attachments?: MmsAttachment[];
+  }
 ): Promise<SmsSendResult> {
   const shopName = process.env.SHOP_NAME || "Basement Bike Mechanic";
-  let body: string;
-  if (opts?.attachmentOnly) {
-    body = `${shopName}\n\nWe sent you a photo in chat.\n\nReply to this text to message us.\n\nReply STOP to opt out.`;
-  } else {
+  const chatUrl =
+    opts?.jobId && opts?.shopId
+      ? getCustomerChatUrl(opts.jobId, opts.shopId, opts.shopSubdomain)
+      : "";
+  const chatUrlLine =
+    opts?.includeChatUrl && chatUrl ? `\n\nOpen chat: ${chatUrl}` : "";
+
+  const mediaUrls = opts?.attachments?.length
+    ? resolveOutboundMmsMediaUrls(opts.attachments, opts.shopSubdomain)
+    : [];
+
+  const buildTextOnlyBody = (): string | null => {
+    if (opts?.attachmentOnly) {
+      return `${shopName}\n\nWe sent you a photo in chat.${chatUrlLine}\n\nReply to this text to message us.\n\nReply STOP to opt out.`;
+    }
     const trimmed = messageText.trim();
     if (!trimmed) {
-      return { ok: false, error: "Empty message" };
+      return null;
     }
-    body = `${trimmed}\n\n— ${shopName}\nReply to this text to continue. Reply STOP to opt out.`;
+    return `${trimmed}${chatUrlLine}\n\n— ${shopName}\nReply to this text to continue. Reply STOP to opt out.`;
+  };
+
+  const buildMmsBody = (): string => {
+    if (opts?.attachmentOnly) {
+      return `${shopName}\n\nReply to this text to message us.\n\nReply STOP to opt out.`;
+    }
+    const trimmed = messageText.trim();
+    return `${trimmed}\n\n— ${shopName}\nReply to this text to continue. Reply STOP to opt out.`;
+  };
+
+  const truncate = (body: string) =>
+    body.length > CHAT_SMS_MAX_LEN
+      ? body.slice(0, CHAT_SMS_MAX_LEN - 3) + "..."
+      : body;
+
+  if (mediaUrls.length > 0) {
+    const mmsBody = truncate(buildMmsBody());
+    const mmsResult = await sendSms(phoneNumber, mmsBody, mediaUrls);
+    if (mmsResult.ok) {
+      return mmsResult;
+    }
+    console.warn(
+      "[sms] MMS send failed, falling back to text-only:",
+      mmsResult.error
+    );
   }
-  if (body.length > CHAT_SMS_MAX_LEN) {
-    body = body.slice(0, CHAT_SMS_MAX_LEN - 3) + "...";
+
+  const body = buildTextOnlyBody();
+  if (!body) {
+    return { ok: false, error: "Empty message" };
   }
-  const result = await sendSms(phoneNumber, body);
+
+  const result = await sendSms(phoneNumber, truncate(body));
   if (!result.ok) {
     console.error("Chat SMS send error:", result.error);
   }

@@ -98,13 +98,17 @@ export async function PATCH(
     if (data.quantity !== undefined) updateData.quantity = data.quantity;
     if (data.unitPrice !== undefined) updateData.unitPrice = Math.round(data.unitPrice * 100) / 100;
 
-    const updated = await prisma.jobProduct.update({
-      where: { id: data.jobProductId },
-      data: updateData,
-      include: {
-        product: true,
-        jobBike: { select: { id: true, make: true, model: true, nickname: true } },
-      },
+    const updated = await prisma.$transaction(async (tx) => {
+      const line = await tx.jobProduct.update({
+        where: { id: data.jobProductId },
+        data: updateData,
+        include: {
+          product: true,
+          jobBike: { select: { id: true, make: true, model: true, nickname: true } },
+        },
+      });
+      await tx.job.update({ where: { id: jobId, shopId }, data: {} });
+      return line;
     });
 
     return NextResponse.json(updated);

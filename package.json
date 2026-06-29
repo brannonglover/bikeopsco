@@ -3,19 +3,18 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 3000",
+    "dev:clean": "rm -rf .next && next dev -p 3000",
     "build": "node scripts/prisma.js migrate deploy && node scripts/prisma.js generate && next build",
     "start": "next start",
     "lint": "next lint",
     "db:push": "node scripts/prisma.js db push",
-    "db:migrate": "node scripts/prisma.js migrate dev",
+    "db:migrate": "node scripts/prisma.js migrate deploy",
     "db:seed": "node scripts/prisma.js db seed",
     "db:seed:staging": "SEED_DEMO_DATA=true node scripts/prisma.js db seed",
     "db:validate-env": "node scripts/validate-db-env.js",
-    "postinstall": "node scripts/prisma.js generate"
-  },
-  "prisma": {
-    "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"
+    "postinstall": "node scripts/prisma.js generate",
+    "db:migrate:dev": "node scripts/prisma.js migrate dev"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

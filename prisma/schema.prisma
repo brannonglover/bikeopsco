@@ -20,6 +20,11 @@ model Shop {
   stripeCurrentPeriodEnd     DateTime?
   stripeCancelAtPeriodEnd    Boolean  @default(false)
   stripeSubscriptionUpdatedAt DateTime?
+  billingProvider            String?
+  appleOriginalTransactionId String?  @unique
+  appleProductId             String?
+  appleCurrentPeriodEnd      DateTime?
+  appleSubscriptionUpdatedAt DateTime?
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
 
@@ -119,6 +124,10 @@ model JobBike {
   sortOrder        Int       @default(0)
   completedAt      DateTime?
   waitingOnPartsAt DateTime?
+  /// Cached 99 Spokes catalog match + component specs for parts lookup
+  ninetyNineSpokesId            String?
+  ninetyNineSpokesSpecs         Json?
+  ninetyNineSpokesSpecsFetchedAt  DateTime?
   createdAt        DateTime  @default(now())
   workingOnJob Job?     @relation("WorkingOnBike")
   jobServices  JobService[]
@@ -168,6 +177,7 @@ model Job {
   updatedAt         DateTime     @updatedAt
 
   @@index([shopId])
+  @@index([shopId, archivedAt, stage])
 }
 
 model Payment {
@@ -185,6 +195,7 @@ model Payment {
 
   @@unique([shopId, stripePaymentIntentId])
   @@index([shopId])
+  @@index([jobId])
 }
 
 enum PaymentStatus {
@@ -236,6 +247,7 @@ model JobService {
   createdAt         DateTime @default(now())
 
   @@index([shopId])
+  @@index([jobId])
 }
 
 enum Stage {
@@ -334,6 +346,7 @@ model JobProduct {
   createdAt DateTime @default(now())
 
   @@index([shopId])
+  @@index([jobId])
 }
 
 model Conversation {
@@ -383,6 +396,7 @@ model Message {
 
   @@unique([shopId, smsSid])
   @@index([shopId])
+  @@index([conversationId, createdAt])
 }
 
 model MessageReaction {
@@ -455,6 +469,22 @@ model User {
 
   @@unique([shopId, email])
   @@index([shopId])
+}
+
+model PendingSignup {
+  id           String   @id @default(cuid())
+  token        String   @unique
+  shopName     String
+  subdomain    String
+  ownerName    String
+  email        String
+  passwordHash String
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  @@index([subdomain])
+  @@index([email])
+  @@index([expiresAt])
 }
 
 model PushToken {

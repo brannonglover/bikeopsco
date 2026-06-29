@@ -29,26 +29,33 @@ async function moveConversationData(
 
   const reminders = await tx.chatReminderEmail.findMany({
     where: { conversationId: fromId },
+    select: { id: true, messageId: true, kind: true },
   });
-  for (const reminder of reminders) {
-    const conflict = await tx.chatReminderEmail.findUnique({
-      where: {
-        conversationId_messageId_kind: {
-          conversationId: toId,
-          messageId: reminder.messageId,
-          kind: reminder.kind,
-        },
-      },
-    });
-    if (conflict) {
-      await tx.chatReminderEmail.delete({ where: { id: reminder.id } });
-    } else {
-      await tx.chatReminderEmail.update({
-        where: { id: reminder.id },
-        data: { conversationId: toId },
-      });
-    }
+  if (reminders.length === 0) return;
+
+  const conflicts = await tx.chatReminderEmail.findMany({
+    where: {
+      conversationId: toId,
+      OR: reminders.map((r) => ({
+        messageId: r.messageId,
+        kind: r.kind,
+      })),
+    },
+    select: { messageId: true, kind: true },
+  });
+  const conflictKeys = new Set(
+    conflicts.map((c) => `${c.messageId}:${c.kind}`)
+  );
+  const duplicateIds = reminders
+    .filter((r) => conflictKeys.has(`${r.messageId}:${r.kind}`))
+    .map((r) => r.id);
+  if (duplicateIds.length > 0) {
+    await tx.chatReminderEmail.deleteMany({ where: { id: { in: duplicateIds } } });
   }
+  await tx.chatReminderEmail.updateMany({
+    where: { conversationId: fromId },
+    data: { conversationId: toId },
+  });
 }
 
 /**
@@ -96,7 +103,8 @@ async function withGeneralConversationLock<T>(
 ): Promise<T> {
   const run = async (client: Db) => {
     const lockKey = `${shopId}:${customerId}:general`;
-    await client.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+    // pg_advisory_xact_lock returns void — must use $executeRaw ($queryRaw cannot deserialize it).
+    await client.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
     return fn(client);
   };
 

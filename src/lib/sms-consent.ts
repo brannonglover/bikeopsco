@@ -42,6 +42,34 @@ export function buildSmsConsentUpdate(
   };
 }
 
+/** Only write consent fields when the customer opts in (never clear on re-booking). */
+export function buildSmsConsentOptInUpdate(
+  smsConsent: boolean,
+  smsConsentSource: string
+) {
+  if (!smsConsent) return {};
+  return buildSmsConsentUpdate(true, smsConsentSource);
+}
+
+type SmsConsentRecordLike = SmsConsentLike & {
+  smsConsentSource?: string | null;
+};
+
+/** When merging customers, keep opt-in from either profile unless target explicitly opted out. */
+export function mergeSmsConsentFields(
+  target: SmsConsentRecordLike,
+  source: SmsConsentRecordLike
+) {
+  if (!source.smsConsent) return {};
+  if (target.smsConsent) return {};
+  if (target.smsConsentUpdatedAt && !target.smsConsent) return {};
+  return {
+    smsConsent: true,
+    smsConsentSource: source.smsConsentSource ?? "MERGE",
+    smsConsentUpdatedAt: source.smsConsentUpdatedAt ?? new Date(),
+  };
+}
+
 export function buildEmailUpdatesConsentUpdate(
   emailUpdatesConsent: boolean,
   emailUpdatesConsentSource: string
@@ -62,12 +90,13 @@ export function getEffectiveEmailUpdatesConsent(
 
 /**
  * Customers must explicitly opt in before receiving service-related texts.
- * If a preference was already stored before timestamp tracking existed, honor it.
+ * Once smsConsent is true it stays effective until an explicit opt-out writes false
+ * (STOP, preferences, status page). Legacy rows without smsConsentUpdatedAt still
+ * honor smsConsent when true.
  */
 export function getEffectiveSmsConsent(customer: SmsConsentLike | null | undefined): boolean {
-  if (!customer?.phone) return false;
-  if (customer.smsConsentUpdatedAt) return customer.smsConsent;
-  return customer.smsConsent;
+  if (!customer?.phone?.trim()) return false;
+  return customer.smsConsent === true;
 }
 
 export function parseSmsConsentKeyword(

@@ -8,6 +8,7 @@ import type { Conversation, ChatMessage, Customer } from "@/lib/types";
 import { useChatNotifications } from "@/hooks/useChatNotifications";
 import { ChatMessageBubble } from "@/components/chat/ChatMessageBubble";
 import { ConversationListRow } from "@/components/chat/ConversationListRow";
+import { mergeChatMessagesWithServer } from "@/lib/chat-messages";
 import { isCustomerTypingRecently } from "@/lib/chat-typing";
 
 const POLL_INTERVAL_MS = 3000;
@@ -216,8 +217,6 @@ function InviteButton({ customerId }: { customerId: string }) {
   const buttonLabel =
     sending
       ? "Sending…"
-      : status === "sms-active"
-        ? "SMS chat active"
       : status === "active" && daysLeft !== null && daysLeft > 0
         ? `${daysLeft} day${daysLeft === 1 ? "" : "s"} left`
         : status === "pending"
@@ -227,9 +226,23 @@ function InviteButton({ customerId }: { customerId: string }) {
   const buttonStyle =
     status === "pending"
       ? "px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-50 rounded-lg hover:bg-amber-100 disabled:opacity-50"
-      : status === "active" || status === "sms-active"
+      : status === "active"
         ? "px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100 disabled:opacity-50"
         : "px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100 disabled:opacity-50";
+
+  if (status === "sms-active") {
+    return (
+      <div
+        className="flex items-center gap-1.5 flex-shrink-0 px-3 py-1.5 text-xs font-medium text-emerald-800 bg-emerald-50 rounded-lg border border-emerald-200"
+        title="This customer has SMS consent and an active job. They can reply to your texts directly — no web chat invite is needed."
+      >
+        <svg className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+        </svg>
+        <span>SMS replies enabled</span>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center gap-2 flex-shrink-0">
@@ -237,7 +250,7 @@ function InviteButton({ customerId }: { customerId: string }) {
       <button
         type="button"
         onClick={handleClick}
-        disabled={sending || status === "sms-active"}
+        disabled={sending}
         className={buttonStyle}
       >
         {buttonLabel}
@@ -301,26 +314,7 @@ function ChatPageContent() {
   }, []);
 
   const mergeServerMessages = useCallback((serverMessages: ChatMessage[]) => {
-    setMessages((prev) => {
-      const optimistic = prev.filter((m) => m.id.startsWith("temp-"));
-      const prevById = new Map(prev.map((m) => [m.id, m] as const));
-      const byId = new Map<string, ChatMessage>();
-      for (const msg of serverMessages) {
-        const prevMsg = prevById.get(msg.id);
-        if (prevMsg?.clientDeliveryState) {
-          byId.set(msg.id, { ...msg, clientDeliveryState: prevMsg.clientDeliveryState });
-        } else {
-          byId.set(msg.id, msg);
-        }
-      }
-      for (const msg of optimistic) byId.set(msg.id, msg);
-      return [...byId.values()].sort((a, b) => {
-        const ta = new Date(a.createdAt).getTime();
-        const tb = new Date(b.createdAt).getTime();
-        if (ta !== tb) return ta - tb;
-        return a.id.localeCompare(b.id);
-      });
-    });
+    setMessages((prev) => mergeChatMessagesWithServer(prev, serverMessages));
   }, []);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const editingCountRef = useRef(0);
@@ -934,6 +928,8 @@ function ChatPageContent() {
       createdAt: new Date().toISOString(),
     };
 
+    hasPendingOptimisticRef.current = true;
+    sendingRef.current = true;
     setMessages((prev) => [...prev, optimisticMsg]);
     saveChatDraft(selectedId, { text: "", pendingImages: [] });
     setInputText("");
@@ -968,15 +964,18 @@ function ChatPageContent() {
             return a.id.localeCompare(b.id);
           });
         });
+        hasPendingOptimisticRef.current = false;
         clearClientDeliveryStateLater(deliveredMsg.id);
         fetchConversations();
       } else {
         const data = await res.json();
         // Roll back the optimistic message on failure
+        hasPendingOptimisticRef.current = false;
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
         alert(data.error ?? "Failed to send");
       }
     } finally {
+      sendingRef.current = false;
       setSending(false);
     }
   };

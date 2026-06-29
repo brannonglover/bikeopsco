@@ -160,7 +160,7 @@ STAGING_TEST_EMAIL="you@example.com" \
 npm run db:seed:staging
 ```
 
-`db:seed:staging` sets `SEED_DEMO_DATA=true`: creates a demo customer (`staging-test@example.com` by default), one `BOOKED_IN` job, and turns off `notifyCustomerEnabled` in App Settings.
+`db:seed:staging` sets `SEED_DEMO_DATA=true`: creates a demo customer (`staging-test@example.com` by default) and one `BOOKED_IN` job. Customer email/SMS on Preview are blocked by env guards (`VERCEL_ENV=preview`, `dev.bikeops.co`, etc.); set `ALLOW_CUSTOMER_NOTIFICATIONS=true` only on an isolated staging DB with test recipients.
 
 #### Preview env var checklist
 

@@ -18,6 +18,7 @@ export async function provisionShopDefaults(
   tx: Prisma.TransactionClient,
   shopId: string,
   shopName: string,
+  ownerEmail?: string,
 ) {
   const [defaultSettings, defaultTemplates] = await Promise.all([
     tx.appSettings.findUnique({ where: { shopId: DEFAULT_SHOP_ID } }).catch(() => null),
@@ -39,6 +40,7 @@ export async function provisionShopDefaults(
       notifyCustomerEnabled: defaultSettings?.notifyCustomerEnabled ?? true,
       chatEnabled: defaultSettings?.chatEnabled ?? true,
       reviewsEnabled: defaultSettings?.reviewsEnabled ?? true,
+      staffNotifyEmail: ownerEmail?.trim() || null,
     },
   });
 

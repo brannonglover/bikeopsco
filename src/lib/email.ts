@@ -4,6 +4,7 @@ import path from "path";
 import { formatCollectionWindowRange } from "./format-collection-window";
 import { getEffectiveEmailUpdatesConsent } from "./sms-consent";
 import { getShopTimezone } from "./shop-timezone";
+import { getShopNotifyEmail } from "./shop-notify-email";
 import type { ChatCustomerReminderDelivery } from "./chat-reminder-delivery";
 import { getCustomerBillUrl, getCustomerStatusUrl } from "./job-customer-access";
 import { getAppUrl, getCustomerNotificationBlockReason, getResendApiKey, getShopAppUrl, getStaffJobOpenUrl } from "./env";
@@ -659,10 +660,9 @@ export async function sendBookingRequestNotification(
     return { ok: false, error: "Email not configured" };
   }
 
-  const notifyEmail =
-    process.env.SHOP_NOTIFY_EMAIL?.trim() || process.env.ADMIN_EMAIL?.trim();
+  const notifyEmail = await getShopNotifyEmail(job.shopId ?? "shop_default");
   if (!notifyEmail) {
-    console.warn("SHOP_NOTIFY_EMAIL and ADMIN_EMAIL not set, skipping booking notification");
+    console.warn("No staff notification email configured, skipping booking notification");
     return { ok: false, error: "No notification email configured" };
   }
 
@@ -767,6 +767,141 @@ ${staffJobUrl ? buildCustomerEmailCtaButton(staffJobUrl, "Review & accept or rej
     innerHtml,
     headerLogoSrc: branding.headerLogoSrc,
     heading: "New booking request",
+  });
+  const attachments = customerEmailBrandingAttachments(branding);
+
+  try {
+    const { error } = await resend.emails.send({
+      from: getFromEmail(),
+      to: notifyEmail,
+      subject,
+      html,
+      ...(attachments && { attachments }),
+    });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (e) {
+    const err = e instanceof Error ? e.message : "Unknown error";
+    return { ok: false, error: err };
+  }
+}
+
+function formatPaymentMethodLabel(method: string): string {
+  const normalized = method.trim().toLowerCase();
+  if (!normalized || normalized === "unknown") return "Payment";
+  if (normalized === "cash") return "Cash";
+  if (normalized === "terminal" || normalized === "card_present") return "Card (in person)";
+  if (normalized === "apple_pay") return "Apple Pay";
+  if (normalized === "google_pay") return "Google Pay";
+  if (normalized === "online" || normalized === "card") return "Card (online)";
+  return method.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function formatMoney(amount: number, currency = "usd"): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: currency.toUpperCase(),
+  }).format(amount);
+}
+
+export async function sendPaymentReceivedNotification(details: {
+  shopId: string;
+  jobId: string;
+  amount: number;
+  currency?: string;
+  paymentMethod: string;
+  customerName: string;
+  customerEmail?: string | null;
+  customerPhone?: string | null;
+  bikeMake: string;
+  bikeModel: string;
+  isPaidInFull?: boolean;
+  remainingBalance?: number;
+  subtotal?: number;
+  totalPaid?: number;
+}): Promise<{ ok: boolean; error?: string }> {
+  const resend = getResend();
+  if (!resend) {
+    return { ok: false, error: "Email not configured" };
+  }
+
+  const notifyEmail = await getShopNotifyEmail(details.shopId);
+  if (!notifyEmail) {
+    console.warn("No staff notification email configured, skipping payment notification");
+    return { ok: false, error: "No notification email configured" };
+  }
+
+  const currency = details.currency ?? "usd";
+  const amountFormatted = formatMoney(details.amount, currency);
+  const methodLabel = formatPaymentMethodLabel(details.paymentMethod);
+  const staffJobUrl = getStaffJobOpenUrl(details.jobId);
+  const balanceLine =
+    details.isPaidInFull === true
+      ? "Paid in full"
+      : details.remainingBalance != null && details.remainingBalance > 0
+        ? `${formatMoney(details.remainingBalance, currency)} remaining`
+        : null;
+
+  const subject = `Payment received: ${amountFormatted} — ${details.bikeMake} ${details.bikeModel}`;
+  const innerHtml = `
+<p style="margin:0 0 20px">A payment has been recorded for a job.</p>
+
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="email-table" style="margin-bottom:20px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+  <tbody>
+    <tr class="email-table-header" style="background-color:#f8fafc">
+      <td colspan="2" style="padding:12px 16px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#64748b">Payment</td>
+    </tr>
+    <tr class="email-table-row">
+      <td class="email-table-label" style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;width:40%;border-top:1px solid #e2e8f0">Amount</td>
+      <td class="email-table-value" style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(amountFormatted)}</td>
+    </tr>
+    <tr class="email-table-row email-table-row-alt" style="background-color:#f8fafc">
+      <td class="email-table-label" style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;border-top:1px solid #e2e8f0">Method</td>
+      <td class="email-table-value" style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(methodLabel)}</td>
+    </tr>
+    ${
+      balanceLine
+        ? `<tr class="email-table-row">
+      <td class="email-table-label" style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;border-top:1px solid #e2e8f0">Balance</td>
+      <td class="email-table-value" style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(balanceLine)}</td>
+    </tr>`
+        : ""
+    }
+  </tbody>
+</table>
+
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="email-table" style="margin-bottom:20px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+  <tbody>
+    <tr class="email-table-header" style="background-color:#f8fafc">
+      <td colspan="2" style="padding:12px 16px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#64748b">Job</td>
+    </tr>
+    <tr class="email-table-row">
+      <td class="email-table-label" style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;width:40%;border-top:1px solid #e2e8f0">Bike</td>
+      <td class="email-table-value" style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(details.bikeMake)} ${escapeHtml(details.bikeModel)}</td>
+    </tr>
+    <tr class="email-table-row email-table-row-alt" style="background-color:#f8fafc">
+      <td class="email-table-label" style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;border-top:1px solid #e2e8f0">Customer</td>
+      <td class="email-table-value" style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(details.customerName)}</td>
+    </tr>
+    <tr class="email-table-row">
+      <td class="email-table-label" style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;border-top:1px solid #e2e8f0">Email</td>
+      <td class="email-table-value" style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(details.customerEmail ?? "—")}</td>
+    </tr>
+    <tr class="email-table-row email-table-row-alt" style="background-color:#f8fafc">
+      <td class="email-table-label" style="padding:10px 16px;font-size:14px;font-weight:600;color:#475569;border-top:1px solid #e2e8f0">Phone</td>
+      <td class="email-table-value" style="padding:10px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0">${escapeHtml(details.customerPhone ?? "—")}</td>
+    </tr>
+  </tbody>
+</table>
+
+${staffJobUrl ? buildCustomerEmailCtaButton(staffJobUrl, "View job") : ""}
+`.trim();
+
+  const branding = await getCustomerEmailBrandingAssets(details.shopId);
+  const html = buildCustomerEmailHtml({
+    innerHtml,
+    headerLogoSrc: branding.headerLogoSrc,
+    heading: "Payment received",
   });
   const attachments = customerEmailBrandingAttachments(branding);
 
@@ -972,6 +1107,51 @@ ${buildCustomerEmailCtaButton(details.loginUrl, "Open shop login")}
   }
 }
 
+export async function sendSignupVerificationEmail(details: {
+  ownerName: string;
+  ownerEmail: string;
+  shopName: string;
+  verificationUrl: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const resend = getResend();
+  if (!resend) {
+    console.warn("RESEND_API_KEY not set, skipping signup verification email");
+    return { ok: false, error: "Email not configured" };
+  }
+
+  const subject = "Confirm your email to start your Bike Ops trial";
+  const innerHtml = `
+<p style="margin:0 0 16px">Hi ${escapeHtml(details.ownerName)},</p>
+<p style="margin:0 0 16px">Thanks for signing up for <strong>${escapeHtml(details.shopName)}</strong> on Bike Ops. Confirm your email address to finish creating your workspace.</p>
+<p style="margin:0 0 16px">This link expires in 24 hours. If you did not request this, you can ignore this email.</p>
+${buildCustomerEmailCtaButton(details.verificationUrl, "Confirm email and create workspace")}
+<p class="email-muted" style="margin:24px 0 0;font-size:12px;color:#64748b;word-break:break-all">Or copy this link: <a href="${escapeHtml(details.verificationUrl)}" style="color:#4f46e5;text-decoration:underline">${escapeHtml(details.verificationUrl)}</a></p>
+`.trim();
+
+  const branding = await getCustomerEmailBrandingAssets();
+  const html = buildReadOnlyCustomerEmailHtml({
+    innerHtml,
+    headerLogoSrc: branding.headerLogoSrc,
+    heading: "Confirm your email",
+  });
+  const attachments = customerEmailBrandingAttachments(branding);
+
+  try {
+    const { error } = await resend.emails.send({
+      from: getFromEmail(),
+      to: details.ownerEmail,
+      subject,
+      html,
+      ...(attachments && { attachments }),
+    });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (e) {
+    const err = e instanceof Error ? e.message : "Unknown error";
+    return { ok: false, error: err };
+  }
+}
+
 export async function sendWaitlistRequestNotification(entry: {
   shopId?: string;
   id: string;
@@ -988,10 +1168,9 @@ export async function sendWaitlistRequestNotification(entry: {
     return { ok: false, error: "Email not configured" };
   }
 
-  const notifyEmail =
-    process.env.SHOP_NOTIFY_EMAIL?.trim() || process.env.ADMIN_EMAIL?.trim();
+  const notifyEmail = await getShopNotifyEmail(entry.shopId ?? "shop_default");
   if (!notifyEmail) {
-    console.warn("SHOP_NOTIFY_EMAIL and ADMIN_EMAIL not set, skipping waitlist notification");
+    console.warn("No staff notification email configured, skipping waitlist notification");
     return { ok: false, error: "No notification email configured" };
   }
 

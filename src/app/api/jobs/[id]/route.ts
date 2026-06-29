@@ -11,8 +11,9 @@ import { computeJobSubtotal, computeTotalPaid, getJobPaymentSummary } from "@/li
 import { getEffectiveEmailUpdatesConsent, getEffectiveSmsConsent } from "@/lib/sms-consent";
 import { hasJobReadAccess } from "@/lib/job-customer-access";
 import { getShopForHost } from "@/lib/shop";
-import { addCustomerSystemChatMessage } from "@/lib/system-chat";
+import { mirrorJobStageToCustomerChat } from "@/lib/system-chat";
 import { normalizeJobCollectionWindowsForStorage } from "@/lib/normalize-job-collection-windows";
+import { withPrismaRetry } from "@/lib/prisma-retry";
 import { optionalTrimmedString } from "@/lib/zod-helpers";
 
 const bikeSchema = z.object({
@@ -38,6 +39,13 @@ const updateJobSchema = z.object({
   bikes: z.array(bikeSchema).optional(),
   /** Append a single bike to the job without touching existing JobBike workflow state. */
   addBike: bikeSchema.optional(),
+  /** Update image on one JobBike row without replacing the full bikes list. */
+  updateJobBikeImageUrl: z
+    .object({
+      jobBikeId: z.string().min(1),
+      imageUrl: z.string().nullable(),
+    })
+    .optional(),
   workingOnJobBikeId: z.string().optional().nullable(),
   completeJobBikeId: z.string().optional(),
   uncompleteJobBikeId: z.string().optional(),
@@ -69,11 +77,6 @@ export async function GET(
       return NextResponse.json({ error: "Shop not found" }, { status: 404 });
     }
 
-    const features = await getAppFeatures(shop.id);
-    if (features.collectionServiceEnabled) {
-      await prisma.$transaction((tx) => syncCollectionJobService(tx, id));
-    }
-
     const job = await prisma.job.findFirst({
       where: { id, shopId: shop.id },
       include: {
@@ -89,7 +92,14 @@ export async function GET(
     }
 
     if (!(await hasJobReadAccess(request, shop.id, id))) {
-      return NextResponse.json({ error: "Job not found" }, { status: 404 });
+      return NextResponse.json(
+        {
+          error: "access_required",
+          message:
+            "Use the full tracking link from your booking confirmation email or SMS, or ask the shop for a new link.",
+        },
+        { status: 403 }
+      );
     }
 
     const subtotal = computeJobSubtotal({
@@ -288,7 +298,13 @@ export async function PATCH(
       }
     }
 
-    const job = await prisma.$transaction(async (tx) => {
+    // Stage-only PATCHs must not write null to non-nullable Job.bikeModel.
+    if ("bikeModel" in updateData && updateData.bikeModel == null) {
+      updateData.bikeModel = "";
+    }
+
+    const job = await withPrismaRetry(() =>
+      prisma.$transaction(async (tx) => {
       if (Object.keys(updateData).length > 0) {
         await tx.job.update({
           where: { id, shopId: shop.id },
@@ -296,7 +312,7 @@ export async function PATCH(
         });
       }
       if (workingOnBikeIdToClearWaiting) {
-        await tx.jobBike.update({
+        await tx.jobBike.updateMany({
           where: { id: workingOnBikeIdToClearWaiting, jobId: id, shopId: shop.id },
           data: { waitingOnPartsAt: null },
         });
@@ -438,6 +454,26 @@ export async function PATCH(
           data: { waitingOnPartsAt: null },
         });
       }
+      if (data.updateJobBikeImageUrl) {
+        const { jobBikeId, imageUrl } = data.updateJobBikeImageUrl;
+        const targetJobBike = await tx.jobBike.findFirst({
+          where: { id: jobBikeId, jobId: id, shopId: shop.id },
+          select: { id: true, bikeId: true },
+        });
+        if (!targetJobBike) {
+          throw new Error("Job bike not found");
+        }
+        await tx.jobBike.update({
+          where: { id: jobBikeId },
+          data: { imageUrl },
+        });
+        if (targetJobBike.bikeId) {
+          await tx.bike.update({
+            where: { id: targetJobBike.bikeId },
+            data: { imageUrl },
+          });
+        }
+      }
       /** Only when the job actually moves into this column — not idempotent WOP PATCHs (would re-set waiting after resume / unwait). */
       if (
         stageChanged &&
@@ -495,7 +531,8 @@ export async function PATCH(
       });
       if (!result) throw new Error("Job not found");
       return result;
-    });
+    })
+    );
 
     // Send booking declined email when rejecting a pending-approval widget booking
     if (
@@ -516,28 +553,64 @@ export async function PATCH(
       }).catch((e) => console.error("[Reject] Declined email failed:", e));
     }
 
-    // Dedup checks + sends run after the response is built so the board PATCH returns as soon as the DB work finishes.
-    if (
+    const stageNotificationSlug =
       stageChanged &&
-      features.notifyCustomerEnabled &&
-      data.notifyCustomer !== false &&
       data.stage &&
       data.stage !== "CANCELLED" &&
       data.stage !== "COMPLETED" &&
       existingJob
-    ) {
-      const templateSlug = data.stage === "BIKE_READY"
-        ? "bike_ready_invoice"
-        : getTemplateForStage(data.stage, existingJob.deliveryType);
-      const smsTemplateSlug = getTemplateSlugForStage(data.stage, existingJob.deliveryType);
-      const customerEmail = getEffectiveEmailUpdatesConsent(job.customer)
-        ? job.customer?.email
+        ? getTemplateSlugForStage(data.stage, existingJob.deliveryType)
         : null;
-      const customerPhone = job.customer?.phone;
-      const canSendSms = getEffectiveSmsConsent(job.customer);
 
+    const shopSmsContext = { name: shop.name, subdomain: shop.subdomain };
+    const shouldMirrorChat =
+      features.chatEnabled && stageNotificationSlug && job.customer?.id;
+    const shouldNotifyCustomer =
+      features.notifyCustomerEnabled &&
+      data.notifyCustomer !== false &&
+      stageChanged &&
+      data.stage &&
+      data.stage !== "CANCELLED" &&
+      data.stage !== "COMPLETED" &&
+      existingJob;
+
+    // Chat mirror is in-app history (not SMS/email); run before the response so
+    // serverless does not drop the write. SMS/email run after the response.
+    if (shouldMirrorChat && job.customer?.id) {
+      try {
+        await mirrorJobStageToCustomerChat({
+          shopId: job.shopId,
+          customerId: job.customer.id,
+          job,
+          smsTemplateSlug: stageNotificationSlug!,
+          force: Boolean(data.resendNotification),
+          shopHint: shopSmsContext,
+        });
+      } catch (e) {
+        console.error("[PATCH job] stage chat mirror failed:", {
+          jobId: id,
+          customerId: job.customer.id,
+          templateSlug: stageNotificationSlug,
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
+    }
+
+    if (shouldNotifyCustomer) {
       void (async () => {
         try {
+          const templateSlug = data.stage === "BIKE_READY"
+            ? "bike_ready_invoice"
+            : getTemplateForStage(data.stage!, existingJob.deliveryType);
+          const smsTemplateSlug =
+            stageNotificationSlug ??
+            getTemplateSlugForStage(data.stage!, existingJob.deliveryType);
+          const customerEmail = getEffectiveEmailUpdatesConsent(job.customer)
+            ? job.customer?.email
+            : null;
+          const customerPhone = job.customer?.phone;
+          const canSendSms = getEffectiveSmsConsent(job.customer);
+
           const emailPromise =
             customerEmail && templateSlug
               ? prisma.jobEmail.findFirst({
@@ -547,14 +620,23 @@ export async function PATCH(
           const smsPromise =
             canSendSms && customerPhone && smsTemplateSlug
               ? prisma.jobSms.findFirst({
-                  where: { shopId: job.shopId, jobId: id, templateSlug: smsTemplateSlug },
+                  where: {
+                    shopId: job.shopId,
+                    jobId: id,
+                    templateSlug: smsTemplateSlug,
+                  },
                 })
               : Promise.resolve(null);
           const [emailAlreadySent, smsAlreadySent] = await Promise.all([
             emailPromise,
             smsPromise,
           ]);
-          if (customerEmail && templateSlug && (!emailAlreadySent || data.resendNotification)) {
+
+          if (
+            customerEmail &&
+            templateSlug &&
+            (!emailAlreadySent || data.resendNotification)
+          ) {
             if (data.stage === "BIKE_READY") {
               const totalPaid = computeTotalPaid(job.payments);
               sendBikeReadyInvoiceEmail(job, totalPaid).catch(console.error);
@@ -562,19 +644,25 @@ export async function PATCH(
               sendJobEmail(templateSlug, customerEmail, job).catch(console.error);
             }
           }
-          if (canSendSms && customerPhone && smsTemplateSlug && (!smsAlreadySent || data.resendNotification)) {
-            sendJobSms(smsTemplateSlug, customerPhone, job)
-              .then((result) => {
-                if (!result.ok || !result.message || !features.chatEnabled || !job.customer?.id) {
-                  return;
-                }
-                return addCustomerSystemChatMessage({
-                  shopId: job.shopId,
-                  customerId: job.customer.id,
-                  body: result.message,
-                });
-              })
-              .catch(console.error);
+
+          if (
+            canSendSms &&
+            customerPhone &&
+            smsTemplateSlug &&
+            (!smsAlreadySent || data.resendNotification)
+          ) {
+            const result = await sendJobSms(
+              smsTemplateSlug,
+              customerPhone,
+              job,
+              shopSmsContext
+            );
+            if (!result.ok) {
+              console.warn("[PATCH job] SMS send failed:", {
+                jobId: id,
+                error: result.error,
+              });
+            }
           }
         } catch (e) {
           console.error("[PATCH job] stage notification dedup/send failed:", e);
