@@ -7,8 +7,54 @@ import { getShopTimezone } from "./shop-timezone";
 import { getShopNotifyEmail } from "./shop-notify-email";
 import type { ChatCustomerReminderDelivery } from "./chat-reminder-delivery";
 import { getCustomerBillUrl, getCustomerStatusUrl } from "./job-customer-access";
-import { getAppUrl, getCustomerNotificationBlockReason, getResendApiKey, getShopAppUrl, getStaffJobOpenUrl } from "./env";
+import {
+  getAppUrl,
+  getCustomerNotificationBlockReason,
+  getEmailRedirectTo,
+  getEmailSendingDisabledReason,
+  getResendApiKey,
+  getShopAppUrl,
+  getStaffJobOpenUrl,
+} from "./env";
 import { phoneTelHref } from "./phone";
+
+type ResendSendOptions = Parameters<Resend["emails"]["send"]>[0];
+
+export type ResendSendResult = {
+  data: { id: string } | null;
+  error: { message: string } | null;
+  redirectedFrom?: string;
+};
+
+/** Central outbound email gate — honors EMAIL_DISABLE and non-production EMAIL_REDIRECT_TO. */
+export async function sendResendEmail(
+  resend: Resend,
+  options: ResendSendOptions
+): Promise<ResendSendResult> {
+  const disableReason = getEmailSendingDisabledReason();
+  if (disableReason) {
+    console.warn(`[email] Skipping send: ${disableReason}`, options.subject);
+    return { data: null, error: { message: disableReason } };
+  }
+
+  const redirectTo = getEmailRedirectTo();
+  let payload = options;
+  let redirectedFrom: string | undefined;
+  if (redirectTo) {
+    const originalTo = Array.isArray(options.to) ? options.to.join(", ") : String(options.to);
+    redirectedFrom = originalTo;
+    payload = {
+      ...options,
+      to: redirectTo,
+      subject: `[redirect: ${originalTo}] ${options.subject}`,
+    };
+    console.warn(`[email] Redirecting ${originalTo} → ${redirectTo}`);
+  }
+
+  const { data, error } = await resend.emails.send(payload);
+  if (error) return { data: null, error };
+  return { data, error: null, redirectedFrom };
+}
 
 function getResend(): Resend | null {
   const key = getResendApiKey();
@@ -452,7 +498,7 @@ export async function sendEmailTemplateTestEmail(
   const attachments = customerEmailBrandingAttachments(branding);
 
   try {
-    const { error } = await resend.emails.send({
+    const { error } = await sendResendEmail(resend, {
       ...getCustomerEmailSendOptions(),
       to: trimmedTo,
       subject,
@@ -611,7 +657,7 @@ export async function sendJobEmail(
   const attachments = customerEmailBrandingAttachments(branding);
 
   try {
-    const { error } = await resend.emails.send({
+    const { error } = await sendResendEmail(resend, {
       ...getCustomerEmailSendOptions(),
       to: recipient,
       subject,
@@ -771,7 +817,7 @@ ${staffJobUrl ? buildCustomerEmailCtaButton(staffJobUrl, "Review & accept or rej
   const attachments = customerEmailBrandingAttachments(branding);
 
   try {
-    const { error } = await resend.emails.send({
+    const { error } = await sendResendEmail(resend, {
       from: getFromEmail(),
       to: notifyEmail,
       subject,
@@ -906,7 +952,7 @@ ${staffJobUrl ? buildCustomerEmailCtaButton(staffJobUrl, "View job") : ""}
   const attachments = customerEmailBrandingAttachments(branding);
 
   try {
-    const { error } = await resend.emails.send({
+    const { error } = await sendResendEmail(resend, {
       from: getFromEmail(),
       to: notifyEmail,
       subject,
@@ -984,7 +1030,7 @@ ${quoLine}
   const attachments = customerEmailBrandingAttachments(branding);
 
   try {
-    const { error } = await resend.emails.send({
+    const { error } = await sendResendEmail(resend, {
       from: getFromEmail(),
       to: notifyEmail,
       subject,
@@ -1092,7 +1138,7 @@ ${buildCustomerEmailCtaButton(details.loginUrl, "Open shop login")}
   const attachments = customerEmailBrandingAttachments(branding);
 
   try {
-    const { error } = await resend.emails.send({
+    const { error } = await sendResendEmail(resend, {
       from: getFromEmail(),
       to: notifyEmail,
       subject,
@@ -1137,7 +1183,7 @@ ${buildCustomerEmailCtaButton(details.verificationUrl, "Confirm email and create
   const attachments = customerEmailBrandingAttachments(branding);
 
   try {
-    const { error } = await resend.emails.send({
+    const { error } = await sendResendEmail(resend, {
       from: getFromEmail(),
       to: details.ownerEmail,
       subject,
@@ -1200,7 +1246,7 @@ export async function sendWaitlistRequestNotification(entry: {
   const attachments = customerEmailBrandingAttachments(branding);
 
   try {
-    const { error } = await resend.emails.send({
+    const { error } = await sendResendEmail(resend, {
       from: getFromEmail(),
       to: notifyEmail,
       subject: `Waitlist request — ${process.env.SHOP_NAME || "Basement Bike Mechanic"}`,
@@ -1249,7 +1295,7 @@ export async function sendWaitlistReceivedEmail(entry: {
   const attachments = customerEmailBrandingAttachments(branding);
 
   try {
-    const { error } = await resend.emails.send({
+    const { error } = await sendResendEmail(resend, {
       ...getCustomerEmailSendOptions(),
       to: entry.recipient,
       subject: `Waitlist confirmation — ${shopName}`,
@@ -1378,7 +1424,7 @@ ${ctaButton}
   const attachments = customerEmailBrandingAttachments(branding);
 
   try {
-    const { error } = await resend.emails.send({
+    const { error } = await sendResendEmail(resend, {
       ...getCustomerEmailSendOptions(),
       to: customerEmail,
       subject: `We received your booking request — ${job.bikeMake} ${job.bikeModel}`,
@@ -1452,7 +1498,7 @@ export async function sendBookingDeclinedEmail(
   const attachments = customerEmailBrandingAttachments(branding);
 
   try {
-    const { error } = await resend.emails.send({
+    const { error } = await sendResendEmail(resend, {
       ...getCustomerEmailSendOptions(),
       to: recipient,
       subject,
@@ -1826,7 +1872,7 @@ ${buildCustomerEmailCtaButton(magicLinkUrl, "Sign in to your account")}
   const customerEmailSendOptions = getCustomerEmailSendOptions();
   console.log("[sendChatMagicLinkEmail] from:", customerEmailSendOptions.from, "| to:", recipient);
   try {
-    const { data, error } = await resend.emails.send({
+    const { data, error } = await sendResendEmail(resend, {
       ...customerEmailSendOptions,
       to: recipient,
       subject,
@@ -1966,7 +2012,7 @@ ${replyOptions.html}
   const attachments = customerEmailBrandingAttachments(branding);
 
   try {
-    const { error } = await resend.emails.send({
+    const { error } = await sendResendEmail(resend, {
       ...getCustomerEmailSendOptions(),
       to: customerEmail,
       subject,
@@ -2027,7 +2073,7 @@ export async function sendChatStaffReplyReminder(
   `.trim();
 
   try {
-    const { error } = await resend.emails.send({
+    const { error } = await sendResendEmail(resend, {
       from: getFromEmail(),
       to: staffEmail,
       subject,
@@ -2088,7 +2134,7 @@ export async function sendPaymentReceiptEmail(
   const attachments = customerEmailBrandingAttachments(branding);
 
   try {
-    const { data, error } = await resend.emails.send({
+    const { data, error } = await sendResendEmail(resend, {
       ...getCustomerEmailSendOptions(),
       to: email,
       subject,
@@ -2163,7 +2209,7 @@ export async function sendBikeReadyInvoiceEmail(
   const attachments = customerEmailBrandingAttachments(branding);
 
   try {
-    const { error } = await resend.emails.send({
+    const { error } = await sendResendEmail(resend, {
       ...getCustomerEmailSendOptions(),
       to: email,
       subject,
@@ -2255,11 +2301,14 @@ export async function sendReviewRequestEmail({
     heading: "How did we do?",
   });
 
-  await resend.emails.send({
+  const { error } = await sendResendEmail(resend, {
     ...getCustomerEmailSendOptions(),
     to: recipientEmail,
     subject: subjectByWave[followUpNumber],
     html,
     ...(branding.attachments ? { attachments: branding.attachments } : {}),
   });
+  if (error) {
+    throw new Error(error.message);
+  }
 }
