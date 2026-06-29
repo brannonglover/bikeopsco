@@ -69,7 +69,7 @@ export function StageColumn({
         isOver ? "rounded-xl bg-primary-500/5 ring-1 ring-primary-500/20" : ""
       }`}
     >
-      <div className="mb-3 flex flex-shrink-0 items-center gap-2 px-0.5">
+      <div className="mb-3 flex flex-shrink-0 items-center gap-2 rounded-full px-3 py-1.5">
         <span
           className={`h-2 w-2 flex-shrink-0 rounded-full ${STAGE_DOT_COLORS[stage]}`}
           aria-hidden

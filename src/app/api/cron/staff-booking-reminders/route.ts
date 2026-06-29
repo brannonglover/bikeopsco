@@ -6,6 +6,7 @@ import {
   buildCustomerEmailCtaButton,
   getCustomerEmailBrandingAssets,
   customerEmailBrandingAttachments,
+  sendResendEmail,
 } from "@/lib/email";
 import { formatCollectionWindowRange } from "@/lib/format-collection-window";
 import { getShopTimezone } from "@/lib/shop-timezone";
@@ -352,7 +353,7 @@ ${buildJobTableRows(tomorrowJobs, timezone)}`;
         ? `No upcoming bookings for ${formatShortDate(todayStart, timezone)} or ${formatShortDate(tomorrowStart, timezone)}`
         : `Upcoming bookings: ${subjectParts.join(", ")}`;
 
-    const { error } = await resend.emails.send({
+    const { error } = await sendResendEmail(resend, {
       from: getFromEmail(),
       to: notifyEmail,
       subject,

@@ -6,7 +6,7 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { DeliveryType, Job, Stage } from "@/lib/types";
 import { applyOptimisticDeliveryType } from "@/lib/optimistic-job-patch";
-import { getJobBikeDisplayTitle, getDisplayPartsForJobBikeRow, getPrimaryJobBikeDisplayParts, getJobServiceSummary } from "@/lib/job-display";
+import { getJobCardBikeTitle, getDisplayPartsForJobBikeRow, getJobServiceSummary } from "@/lib/job-display";
 import { useUnreadChatCustomerIds } from "@/contexts/StaffChatAttentionContext";
 import { useAppFeatures } from "@/contexts/AppFeaturesContext";
 import {
@@ -231,11 +231,7 @@ export function JobCardContent({
       ? "min-w-0 w-full"
       : "group relative min-w-0 w-full overflow-hidden rounded-2xl border border-black/[0.04] bg-[#ffffff] p-4 shadow-job-card transition-shadow hover:shadow-job-card-lg dark:border-slate-700/60 dark:bg-slate-800/95 dark:shadow-none dark:hover:shadow-soft";
 
-  const bikeParts = getPrimaryJobBikeDisplayParts(job);
-  const bikeTitle =
-    bikeParts.nickname?.trim() ||
-    [bikeParts.make, bikeParts.model].filter(Boolean).join(" ") ||
-    getJobBikeDisplayTitle(job);
+  const bikeTitle = getJobCardBikeTitle(job);
   const serviceSummary = getJobServiceSummary(job);
 
   return (

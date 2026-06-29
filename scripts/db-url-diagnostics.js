@@ -200,7 +200,8 @@ function diagnosePair(databaseUrl, directUrl) {
   if (direct.port && direct.port !== "5432") {
     pairWarnings.push(`DIRECT_URL port is ${direct.port} (expected 5432 for session pooler)`);
   }
-  if (direct.sslmode !== "require") {
+  const directIsSet = directUrl != null && directUrl !== "" && !direct.issues?.includes("not set");
+  if (directIsSet && direct.sslmode !== "require") {
     pairWarnings.push('DIRECT_URL missing ?sslmode=require');
   }
 

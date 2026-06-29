@@ -26,6 +26,7 @@ import {
 } from "@/lib/format-collection-window";
 import { toCalendarDateInTimezone } from "@/lib/timezone";
 import { mergeBoardJob } from "@/lib/board-stage-merge";
+import { JOBS_REFRESH_EVENT } from "@/lib/jobs-refresh";
 import { BikeSpecsTab } from "@/components/jobs/BikeSpecsTab";
 import { BikeImageSearch } from "@/components/bikes/BikeImageSearch";
 import {
@@ -163,7 +164,7 @@ function CustomerChatSection({ customerId }: { customerId: string }) {
 }
 
 function resolveBikeImageUrl(b: JobBike, customerBikes?: { make: string; model: string | null; imageUrl: string | null }[]): string | null {
-  const url = b.imageUrl ?? b.bike?.imageUrl ?? null;
+  const url = b.bike?.imageUrl ?? b.imageUrl ?? null;
   if (url) return url;
   if (!customerBikes?.length) return null;
   const makeNorm = (b.make ?? "").trim().toLowerCase();
@@ -2262,7 +2263,25 @@ const CANCELLATION_REASONS = [
 
 function mergeFetchedJobWithLiveBoard(live: Job, fetched: Job): Job {
   const merged = mergeJobPreservingInvoiceDetails(live, fetched);
-  return mergeBoardJob(live, merged);
+  const boardMerged = mergeBoardJob(live, merged);
+  const liveMs = Date.parse(live.updatedAt);
+  const fetchedMs = Date.parse(fetched.updatedAt);
+  // Profile bike edits (e.g. image) bump JobBike rows but not Job.updatedAt. A modal enrich
+  // GET started at open can finish after a board refresh and must not clobber fresher jobBikes.
+  if (Number.isFinite(liveMs) && Number.isFinite(fetchedMs) && fetchedMs <= liveMs) {
+    return {
+      ...boardMerged,
+      jobBikes: live.jobBikes ?? boardMerged.jobBikes,
+      customer: live.customer
+        ? {
+            ...(boardMerged.customer ?? {}),
+            ...live.customer,
+            bikes: live.customer.bikes ?? boardMerged.customer?.bikes,
+          }
+        : boardMerged.customer,
+    };
+  }
+  return boardMerged;
 }
 
 export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, onDismissIntent, onJobDateSaved, onJobDeleted }: JobDetailModalProps) {
@@ -2323,25 +2342,50 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
   // a newer job from the parent (e.g. board drag PATCH cleared waiting flags; GET started at open still has old rows).
   useEffect(() => {
     if (!isOpen || !jobProp?.id) return;
-    const ac = new AbortController();
     const openedJobId = jobProp.id;
     const enrichGen = jobEnrichGenRef.current;
-    fetch(`/api/jobs/${openedJobId}`, { signal: ac.signal })
+
+    const applyFetchedJob = (
+      fetched: Job | null,
+      ac: AbortController,
+      enrichGeneration?: number
+    ) => {
+      if (!fetched || ac.signal.aborted) return;
+      if (
+        enrichGeneration !== undefined &&
+        enrichGeneration !== jobEnrichGenRef.current
+      ) {
+        return;
+      }
+      const live = latestJobPropRef.current;
+      if (!live || live.id !== openedJobId) return;
+      const fetchedMs = Date.parse(fetched.updatedAt);
+      const liveMs = Date.parse(live.updatedAt);
+      if (Number.isFinite(fetchedMs) && Number.isFinite(liveMs) && fetchedMs < liveMs) return;
+      const merged = mergeFetchedJobWithLiveBoard(live, fetched);
+      setJob(merged);
+      onJobUpdatedRef.current?.(merged);
+    };
+
+    const ac = new AbortController();
+    fetch(`/api/jobs/${openedJobId}`, { signal: ac.signal, cache: "no-store" })
       .then((res) => (res.ok ? res.json() : null))
-      .then((fetched: Job | null) => {
-        if (!fetched || ac.signal.aborted || enrichGen !== jobEnrichGenRef.current) return;
-        const live = latestJobPropRef.current;
-        if (!live || live.id !== openedJobId) return;
-        const fetchedMs = Date.parse(fetched.updatedAt);
-        const liveMs = Date.parse(live.updatedAt);
-        if (Number.isFinite(fetchedMs) && Number.isFinite(liveMs) && fetchedMs < liveMs) return;
-        const merged = mergeFetchedJobWithLiveBoard(live, fetched);
-        setJob(merged);
-        // Keep the parent (board/archive list) in sync so the card updates too.
-        onJobUpdatedRef.current?.(merged);
-      })
+      .then((fetched: Job | null) => applyFetchedJob(fetched, ac, enrichGen))
       .catch(() => {});
-    return () => ac.abort();
+
+    const onJobsRefresh = () => {
+      const refreshAc = new AbortController();
+      fetch(`/api/jobs/${openedJobId}`, { signal: refreshAc.signal, cache: "no-store" })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((fetched: Job | null) => applyFetchedJob(fetched, refreshAc))
+        .catch(() => {});
+    };
+    window.addEventListener(JOBS_REFRESH_EVENT, onJobsRefresh);
+
+    return () => {
+      ac.abort();
+      window.removeEventListener(JOBS_REFRESH_EVENT, onJobsRefresh);
+    };
   }, [isOpen, jobProp?.id]);
 
   const handleCancelJobClick = () => {

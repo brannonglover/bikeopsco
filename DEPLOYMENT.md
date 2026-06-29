@@ -178,7 +178,7 @@ CLI check: `vercel env ls | rg DATABASE` — confirm separate rows for **Product
 
 ### Environment variables (Preview / staging)
 
-**Confirmed (2026-06-14):** Preview still shares Production `DATABASE_URL` / `DIRECT_URL` (same Supabase host `aws-0-us-west-2.pooler.supabase.com`). Provision a separate Postgres project and scope those vars to Preview only. Verify with `GET /api/debug/env` → `databaseUrlHostHint`. Full audit and checklist: [docs/staging-environment.md](docs/staging-environment.md).
+**Confirmed (2026-06-29):** Preview `DATABASE_URL` / `DIRECT_URL` are scoped to **Preview (develop)** only, but values still use production Supabase ref `nshrozsfixyeihthjxxi`. Point Preview at the existing **BikeOps develop** Supabase project (different ref). Build guard: `PRODUCTION_SUPABASE_PROJECT_REF` on Preview (develop) blocks deploys until refs differ. Verify with `GET /api/debug/env` → `databaseUrlHostHint`. Full audit: [docs/staging-environment.md](docs/staging-environment.md).
 
 In **bikeopsco** → Settings → Environment Variables, set **Preview** values (optionally scoped to branch `develop`):
 
@@ -236,14 +236,26 @@ If the username is already `postgres.[project-ref]` and you still see **P1000** 
 
 `npm run build` runs validation before `prisma migrate deploy`. A passing local `db:validate-env` does not prove the password is correct — only that structure, ports, and refs look right.
 
-### Staging database
+### Staging database (BikeOps develop Supabase project)
 
-On a fresh staging database:
+Use the existing **develop** Supabase project — not production (`nshrozsfixyeihthjxxi`). On that project (empty or reset; do not clone prod):
+
+```bash
+# Recommended one-shot setup (validate → migrate → seed)
+DATABASE_URL="..." DIRECT_URL="..." \
+ADMIN_EMAIL=... ADMIN_PASSWORD=... STAGING_TEST_EMAIL=... \
+PRODUCTION_SUPABASE_PROJECT_REF="nshrozsfixyeihthjxxi" \
+./scripts/setup-staging-db.sh
+```
+
+Or manually:
 
 ```bash
 DATABASE_URL="..." DIRECT_URL="..." npm run db:push
 DATABASE_URL="..." ADMIN_EMAIL=... ADMIN_PASSWORD=... STAGING_TEST_EMAIL=... npm run db:seed:staging
 ```
+
+Preview builds run `npm run db:check-isolation` (via `prisma migrate deploy`) when `PRODUCTION_SUPABASE_PROJECT_REF` is set on Preview.
 
 `db:seed:staging` creates templates, services, a demo customer/job. Preview deploys block customer notifications via env guards.
 

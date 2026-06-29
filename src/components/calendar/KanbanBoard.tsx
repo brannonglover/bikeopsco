@@ -27,7 +27,6 @@ import { getJobBikeDisplayTitle } from "@/lib/job-display";
 import { useAppFeatures } from "@/contexts/AppFeaturesContext";
 import { JOBS_REFRESH_EVENT } from "@/lib/jobs-refresh";
 import {
-  mergeBoardJob,
   mergeBoardJobsFromFetch,
 } from "@/lib/board-stage-merge";
 import { mergeJobPreservingInvoiceDetails } from "@/lib/job-invoice-merge";
@@ -202,7 +201,7 @@ export function KanbanBoard() {
         if (ownMove && merged.stage !== ownMove.stage) {
           return withOptimisticStageChange(merged, ownMove.stage);
         }
-        return mergeBoardJob(current, merged);
+        return merged;
       };
       setSelectedJob((prev) =>
         prev?.id === updated.id ? mergeFromUpdate(prev) : prev

@@ -49,6 +49,17 @@ export function getResendApiKey(): string | null {
   return key || null;
 }
 
+/** Local `next dev` / localhost URLs — not Vercel Preview or production. */
+export function isLocalDevelopment(): boolean {
+  if (process.env.NODE_ENV === "development") return true;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim().toLowerCase() ?? "";
+  return (
+    appUrl.includes("localhost") ||
+    appUrl.includes("127.0.0.1") ||
+    appUrl.includes(".lvh.me")
+  );
+}
+
 /**
  * When set, overrides the default staging guard for customer-facing email/SMS.
  * - "true" — allow sends (use only on an isolated staging DB with test recipients)
@@ -63,6 +74,10 @@ export function getCustomerNotificationBlockReason(): string | null {
 
   // Production must never inherit preview/staging guards (e.g. mis-scoped env vars).
   if (isProductionDeployment()) return null;
+
+  if (isLocalDevelopment()) {
+    return "Customer notifications disabled in local development";
+  }
 
   const vercelEnv = process.env.VERCEL_ENV?.trim();
   if (vercelEnv === "preview") {
@@ -80,6 +95,29 @@ export function getCustomerNotificationBlockReason(): string | null {
   }
 
   return null;
+}
+
+/** When set to true/1, all outbound email is skipped (any environment). */
+export function getEmailSendingDisabledReason(): string | null {
+  const flag =
+    process.env.EMAIL_DISABLE?.trim().toLowerCase() ||
+    process.env.SKIP_EMAIL?.trim().toLowerCase();
+  if (flag === "true" || flag === "1") {
+    return "Email disabled (EMAIL_DISABLE / SKIP_EMAIL)";
+  }
+  return null;
+}
+
+/**
+ * Non-production redirect inbox — rewrites every outbound `to` address.
+ * Set EMAIL_REDIRECT_TO (or DEV_EMAIL_REDIRECT) on local dev / Preview when testing email flows.
+ */
+export function getEmailRedirectTo(): string | null {
+  if (isProductionDeployment()) return null;
+  const redirect =
+    process.env.EMAIL_REDIRECT_TO?.trim() ||
+    process.env.DEV_EMAIL_REDIRECT?.trim();
+  return redirect || null;
 }
 
 export function areCustomerNotificationsEnabled(): boolean {

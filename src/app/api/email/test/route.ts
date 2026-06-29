@@ -5,8 +5,13 @@ import {
   customerEmailBrandingAttachments,
   getCustomerEmailBrandingAssets,
   getCustomerEmailSendOptions,
+  sendResendEmail,
 } from "@/lib/email";
-import { getResendApiKey } from "@/lib/env";
+import {
+  getEmailRedirectTo,
+  getEmailSendingDisabledReason,
+  getResendApiKey,
+} from "@/lib/env";
 
 /**
  * Test endpoint to verify Resend email config.
@@ -23,6 +28,16 @@ export async function GET(request: NextRequest) {
       { status: 400 }
     );
   }
+
+  const disableReason = getEmailSendingDisabledReason();
+  if (disableReason) {
+    return NextResponse.json(
+      { error: disableReason },
+      { status: 503 }
+    );
+  }
+
+  const redirectTo = getEmailRedirectTo();
 
   const apiKey = getResendApiKey();
   const resend = apiKey ? new Resend(apiKey) : null;
@@ -43,7 +58,7 @@ export async function GET(request: NextRequest) {
   const attachments = customerEmailBrandingAttachments(branding);
 
   try {
-    const { data, error } = await resend.emails.send({
+    const { data, error, redirectedFrom } = await sendResendEmail(resend, {
       ...getCustomerEmailSendOptions(),
       to,
       subject: "BBM Services – Email test",
@@ -64,8 +79,11 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `Test email sent to ${to}. Check inbox and spam.`,
+      message: redirectedFrom
+        ? `Test email redirected to ${redirectTo} (requested ${redirectedFrom}). Check inbox and spam.`
+        : `Test email sent to ${to}. Check inbox and spam.`,
       id: data?.id,
+      redirectedTo: redirectTo ?? undefined,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown error";

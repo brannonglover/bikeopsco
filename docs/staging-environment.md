@@ -2,9 +2,11 @@
 
 Use this workflow to test changes (for example chat sign-in magic links) on a stable URL before merging to `main` and deploying production.
 
-## Audit summary (2026-06-14, re-verified)
+## Audit summary (2026-06-29)
 
-**Preview is still sharing the production database.** `vercel env ls` shows `DATABASE_URL` and `DIRECT_URL` scoped to **Production, Preview, and Development**. Pulling both environments with `vercel env pull` confirms **identical values** — Supabase pooler host `aws-0-us-west-2.pooler.supabase.com`. That is why `dev.bikeops.co` shows real production customers and jobs.
+**Preview still uses the production database.** `DATABASE_URL` and `DIRECT_URL` are now scoped separately (**Preview develop** vs **Production** only — fixed 2026-06-29), but both still point at the same Supabase project ref `nshrozsfixyeihthjxxi` on `aws-0-us-west-2.pooler.supabase.com`. That is why `dev.bikeops.co` shows real production customers and jobs.
+
+A build guard is in place: `PRODUCTION_SUPABASE_PROJECT_REF` is set on Preview (develop). After the next `develop` deploy that includes `scripts/check-preview-db-isolation.js`, Preview builds **fail** until staging `DATABASE_URL` / `DIRECT_URL` use a different Supabase project.
 
 After you provision a separate staging DB, confirm isolation:
 
@@ -122,21 +124,22 @@ Do **not** put staging DB URLs under **Development** only — Preview builds wil
 
 #### Critical: separate database (required)
 
-1. Create a **new** Postgres database (do not clone production data):
-   - **Supabase:** [supabase.com](https://supabase.com) → New project → Settings → Database → copy **Transaction** (6543) for `DATABASE_URL` and **Session** (5432) for `DIRECT_URL`. Do **not** use `db.*.supabase.co` — it fails on Vercel builds (P1001). See [DEPLOYMENT.md](../DEPLOYMENT.md#supabase-connection-strings-vercel).
-   - **Neon:** [neon.tech](https://neon.tech) or Vercel Storage → Create Database → copy pooled + direct URLs.
-2. In Vercel, **split** `DATABASE_URL` and `DIRECT_URL` so Preview uses staging only:
+Use the existing **BikeOps develop** Supabase project — you do **not** need to create another one. It must be a **different project ref** from production (`nshrozsfixyeihthjxxi`). Do not clone production data into it.
+
+1. **Supabase develop project** → [supabase.com/dashboard](https://supabase.com/dashboard) → open **BikeOps develop** (or your develop-named project) → **Project Settings → Database** → Connection string:
+   - **Transaction** mode (port **6543**) → `DATABASE_URL`
+   - **Session** mode (port **5432**) → `DIRECT_URL`
+   - Username is `postgres.[develop-project-ref]` — confirm under **Settings → General → Reference ID** that it is **not** `nshrozsfixyeihthjxxi`.
+   - Do **not** use `db.*.supabase.co` — it fails on Vercel builds (P1001). See [DEPLOYMENT.md](../DEPLOYMENT.md#supabase-connection-strings-vercel).
+2. In Vercel, point **Preview (develop)** `DATABASE_URL` and `DIRECT_URL` at the develop project only:
    - Dashboard: edit each var → remove **Preview** from the Production entry → add a new Preview-only entry (scope to Git branch `develop` if you like).
-   - CLI (after creating the staging project):
+   - CLI (replace Preview develop URLs with your develop project pooler strings):
 
 ```bash
-# Remove Preview from production-scoped DB vars (re-add Production + Development only)
-vercel env rm DATABASE_URL preview --yes
-vercel env rm DIRECT_URL preview --yes
-
-# Add Preview-only staging URLs (paste when prompted)
-vercel env add DATABASE_URL preview develop
-vercel env add DIRECT_URL preview develop
+vercel env rm DATABASE_URL preview develop --yes
+vercel env rm DIRECT_URL preview develop --yes
+vercel env add DATABASE_URL preview develop   # paste develop Transaction URL (6543)
+vercel env add DIRECT_URL preview develop     # paste develop Session URL (5432)
 ```
 
    - Leave **Production** entries unchanged.
@@ -149,7 +152,19 @@ Verify isolation: after redeploy, `dev.bikeops.co` should show an empty calendar
 From your machine (never against production URLs):
 
 ```bash
-# Apply schema to the new empty staging DB
+# One-shot: validate, migrate, seed (see scripts/setup-staging-db.sh)
+DATABASE_URL="postgresql://postgres.[develop-ref]:…@…pooler.supabase.com:6543/…" \
+DIRECT_URL="postgresql://postgres.[develop-ref]:…@…pooler.supabase.com:5432/…" \
+ADMIN_EMAIL="you@example.com" \
+ADMIN_PASSWORD="your-staging-password" \
+PRODUCTION_SUPABASE_PROJECT_REF="nshrozsfixyeihthjxxi" \
+./scripts/setup-staging-db.sh
+```
+
+Or step by step:
+
+```bash
+# Apply schema to the develop Supabase project (empty or reset — not production)
 DATABASE_URL="postgresql://…staging-pooler…" DIRECT_URL="postgresql://…staging-direct…" npm run db:push
 
 # Templates, services, admin user, demo customer + job
@@ -258,7 +273,7 @@ After `develop` is deployed and the domain is active:
 | Add `dev.bikeops.co` domain + branch assignment | You |
 | DNS CNAME for `dev` | You (registrar or Vercel DNS) |
 | Preview environment variables | You — **separate DATABASE_URL required** |
-| Staging database provision + seed | You |
+| Wire develop Supabase URLs + seed | You |
 | `git push origin develop` (if not pushed yet) | You — approve push |
 | Vercel CLI locally (`vercel login`) | Optional; dashboard is enough |
 
