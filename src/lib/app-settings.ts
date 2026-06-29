@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { prisma } from "@/lib/db";
 import { requireCurrentShop } from "@/lib/shop";
 import { DEFAULT_SHOP_TIMEZONE, normalizeIANATimezone } from "@/lib/timezone";
@@ -15,7 +16,9 @@ export type AppFeatures = {
   notifyCustomerEnabled: boolean;
   chatEnabled: boolean;
   reviewsEnabled: boolean;
+  jobBoardFiltersEnabled: boolean;
   timezone: string;
+  staffNotifyEmail: string | null;
 };
 
 export type ClosedDate = {
@@ -41,7 +44,9 @@ const DEFAULT_FEATURES: AppFeatures = {
   notifyCustomerEnabled: true,
   chatEnabled: true,
   reviewsEnabled: true,
+  jobBoardFiltersEnabled: false,
   timezone: DEFAULT_SHOP_TIMEZONE,
+  staffNotifyEmail: null,
 };
 
 function normalizeClosedDates(value: unknown): ClosedDate[] {
@@ -69,10 +74,9 @@ export const DEFAULT_BRANDING: AppBranding = {
   logoAlt: "Bike Ops",
 };
 
-export async function getAppFeatures(shopId?: string): Promise<AppFeatures> {
+async function loadAppFeaturesForShop(shopId: string): Promise<AppFeatures> {
   try {
-    const resolvedShopId = shopId ?? (await requireCurrentShop()).id;
-    const row = await prisma.appSettings.findUnique({ where: { shopId: resolvedShopId } });
+    const row = await prisma.appSettings.findUnique({ where: { shopId } });
     if (!row) return DEFAULT_FEATURES;
     return {
       bookingsEnabled: row.bookingsEnabled,
@@ -85,13 +89,20 @@ export async function getAppFeatures(shopId?: string): Promise<AppFeatures> {
       notifyCustomerEnabled: row.notifyCustomerEnabled,
       chatEnabled: row.chatEnabled,
       reviewsEnabled: row.reviewsEnabled,
+      jobBoardFiltersEnabled: row.jobBoardFiltersEnabled,
       timezone: normalizeIANATimezone(row.timezone),
+      staffNotifyEmail: row.staffNotifyEmail?.trim() || null,
     };
   } catch (e) {
     console.warn("[app-settings] Failed to load AppSettings; using defaults:", e);
     return DEFAULT_FEATURES;
   }
 }
+
+export const getAppFeatures = cache(async (shopId?: string): Promise<AppFeatures> => {
+  const resolvedShopId = shopId ?? (await requireCurrentShop()).id;
+  return loadAppFeaturesForShop(resolvedShopId);
+});
 
 export async function upsertAppFeatures(
   shopId: string,
@@ -123,7 +134,9 @@ export async function upsertAppFeatures(
     notifyCustomerEnabled: updated.notifyCustomerEnabled,
     chatEnabled: updated.chatEnabled,
     reviewsEnabled: updated.reviewsEnabled,
+    jobBoardFiltersEnabled: updated.jobBoardFiltersEnabled,
     timezone: normalizeIANATimezone(updated.timezone),
+    staffNotifyEmail: updated.staffNotifyEmail?.trim() || null,
   };
 }
 

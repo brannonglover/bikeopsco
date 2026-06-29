@@ -15,7 +15,9 @@ type AppFeatures = {
   notifyCustomerEnabled: boolean;
   chatEnabled: boolean;
   reviewsEnabled: boolean;
+  jobBoardFiltersEnabled: boolean;
   timezone: string;
+  staffNotifyEmail: string | null;
 };
 
 type ClosedDate = {
@@ -28,7 +30,8 @@ type FeatureFlagKey =
   | "collectionServiceEnabled"
   | "notifyCustomerEnabled"
   | "chatEnabled"
-  | "reviewsEnabled";
+  | "reviewsEnabled"
+  | "jobBoardFiltersEnabled";
 
 const DEFAULT_FEATURES: AppFeatures = {
   bookingsEnabled: true,
@@ -41,7 +44,9 @@ const DEFAULT_FEATURES: AppFeatures = {
   notifyCustomerEnabled: true,
   chatEnabled: true,
   reviewsEnabled: true,
+  jobBoardFiltersEnabled: false,
   timezone: "America/New_York",
+  staffNotifyEmail: null,
 };
 
 function ToggleRow({
@@ -91,6 +96,8 @@ export default function FeatureSettingsPage() {
   const [closedDateInput, setClosedDateInput] = useState("");
   const [closedDateReasonInput, setClosedDateReasonInput] = useState("");
   const [bookingSettingsSaving, setBookingSettingsSaving] = useState(false);
+  const [staffNotifyEmailInput, setStaffNotifyEmailInput] = useState("");
+  const [staffNotifyEmailDirty, setStaffNotifyEmailDirty] = useState(false);
 
   const fetchFeatures = useCallback(async () => {
     setFeaturesError(null);
@@ -107,6 +114,8 @@ export default function FeatureSettingsPage() {
       setCollectionFeeRegularInput(String(next.collectionFeeRegular));
       setCollectionFeeEbikeInput(String(next.collectionFeeEbike));
       setCollectionDirty(false);
+      setStaffNotifyEmailInput(next.staffNotifyEmail ?? "");
+      setStaffNotifyEmailDirty(false);
       setClosedDateInput("");
       setClosedDateReasonInput("");
     } catch {
@@ -144,6 +153,8 @@ export default function FeatureSettingsPage() {
       setCollectionFeeRegularInput(String(updated.collectionFeeRegular));
       setCollectionFeeEbikeInput(String(updated.collectionFeeEbike));
       setCollectionDirty(false);
+      setStaffNotifyEmailInput(updated.staffNotifyEmail ?? "");
+      setStaffNotifyEmailDirty(false);
       setBookingSettingsSaving(false);
       setFeaturesSaved(true);
       window.setTimeout(() => setFeaturesSaved(false), 1500);
@@ -239,6 +250,22 @@ export default function FeatureSettingsPage() {
     void saveFeatures(next);
   };
 
+  const saveStaffNotifyEmail = () => {
+    const trimmed = staffNotifyEmailInput.trim();
+    if (trimmed && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      setFeaturesError("Enter a valid staff notification email.");
+      return;
+    }
+
+    const next: AppFeatures = {
+      ...features,
+      staffNotifyEmail: trimmed || null,
+    };
+    setFeatures(next);
+    setStaffNotifyEmailDirty(false);
+    void saveFeatures(next);
+  };
+
   const formatClosedDate = (date: string) => {
     const [year, month, day] = date.split("-").map(Number);
     return new Intl.DateTimeFormat("en-US", {
@@ -282,6 +309,41 @@ export default function FeatureSettingsPage() {
                 </option>
               ))}
             </select>
+          </div>
+          <div className="rounded-lg border border-surface-border bg-subtle-bg px-3 py-3">
+            <label className="block text-sm font-semibold text-foreground">Staff notification email</label>
+            <p className="mt-0.5 text-sm text-text-secondary">
+              Receives booking requests, payments, waitlist signups, chat reminders, and daily booking digests.
+              Leave blank to use the platform default from environment variables.
+            </p>
+            <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+              <input
+                type="email"
+                value={staffNotifyEmailInput}
+                disabled={featuresSaving}
+                onChange={(e) => {
+                  setStaffNotifyEmailInput(e.target.value);
+                  setStaffNotifyEmailDirty(true);
+                  setFeatures((p) => ({ ...p, staffNotifyEmail: e.target.value.trim() || null }));
+                }}
+                placeholder="owner@yourshop.com"
+                className="w-full rounded-lg border border-surface-border bg-background px-3 py-2 text-sm text-foreground"
+              />
+              <div className="flex items-end justify-end">
+                <button
+                  type="button"
+                  onClick={saveStaffNotifyEmail}
+                  disabled={featuresSaving || !staffNotifyEmailDirty}
+                  className={`h-10 rounded-lg px-3 text-sm font-semibold transition-colors ${
+                    featuresSaving || !staffNotifyEmailDirty
+                      ? "cursor-not-allowed bg-surface-border text-text-muted"
+                      : "bg-amber-600 text-white hover:bg-amber-700"
+                  }`}
+                >
+                  Save email
+                </button>
+              </div>
+            </div>
           </div>
           <ToggleRow
             title="Accept bookings"
@@ -499,6 +561,13 @@ export default function FeatureSettingsPage() {
             checked={features.reviewsEnabled}
             disabled={featuresSaving}
             onChange={(v) => setFeatureFlag("reviewsEnabled", v)}
+          />
+          <ToggleRow
+            title="Job board filters"
+            description="Show status filter pills on the job board to narrow visible columns. Best for shops with higher intake."
+            checked={features.jobBoardFiltersEnabled}
+            disabled={featuresSaving}
+            onChange={(v) => setFeatureFlag("jobBoardFiltersEnabled", v)}
           />
 
           {(featuresError || featuresSaved) && (

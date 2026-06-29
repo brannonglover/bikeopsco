@@ -30,6 +30,8 @@ import {
   mergeBoardJob,
   mergeBoardJobsFromFetch,
 } from "@/lib/board-stage-merge";
+import { mergeJobPreservingInvoiceDetails } from "@/lib/job-invoice-merge";
+import { withOptimisticStageChange } from "@/lib/optimistic-job-patch";
 
 function formatShortDate(d: Date | string | null) {
   if (!d) return null;
@@ -44,25 +46,6 @@ function customerLine(job: Job) {
   if (!job.customer) return "Customer";
   const { firstName, lastName } = job.customer;
   return lastName ? `${firstName} ${lastName}` : firstName;
-}
-
-function mergeJobPreservingInvoiceDetails(prev: Job, next: Job): Job {
-  const merged = { ...prev, ...next };
-  const nextServices = next.jobServices ?? [];
-  const nextProducts = next.jobProducts ?? [];
-  const isIncompleteServiceLine = (js: NonNullable<Job["jobServices"]>[number]) =>
-    !js.id || (Boolean(js.serviceId) && !js.service) || (!js.serviceId && !js.customServiceName && !js.service);
-  const isIncompleteProductLine = (jp: NonNullable<Job["jobProducts"]>[number]) =>
-    !jp.id || !jp.productId || !jp.product;
-
-  if (nextServices.length > 0 && nextServices.some(isIncompleteServiceLine)) {
-    merged.jobServices = prev.jobServices;
-  }
-  if (nextProducts.length > 0 && nextProducts.some(isIncompleteProductLine)) {
-    merged.jobProducts = prev.jobProducts;
-  }
-
-  return merged;
 }
 
 const STAGES: Stage[] = [
@@ -82,6 +65,28 @@ const DISPLAY_STAGES: Stage[] = STAGES.filter(
   (s) => s !== "CANCELLED" && s !== "PENDING_APPROVAL"
 );
 
+type BoardFilterKey = "all" | "in_progress" | "waiting" | "ready" | "completed";
+
+const BOARD_FILTERS: {
+  key: BoardFilterKey;
+  label: string;
+  stages: Stage[] | null;
+}[] = [
+  { key: "all", label: "All", stages: null },
+  {
+    key: "in_progress",
+    label: "In progress",
+    stages: ["BOOKED_IN", "RECEIVED", "WORKING_ON"],
+  },
+  {
+    key: "waiting",
+    label: "Waiting",
+    stages: ["WAITING_ON_CUSTOMER", "WAITING_ON_PARTS"],
+  },
+  { key: "ready", label: "Ready", stages: ["BIKE_READY"] },
+  { key: "completed", label: "Completed", stages: ["COMPLETED"] },
+];
+
 type ColumnSortUpdate = { id: string; columnSortOrder: number };
 type PendingBoardMove = {
   stage: Stage;
@@ -89,51 +94,6 @@ type PendingBoardMove = {
 };
 
 /** Match PATCH semantics so the card does not “snap” again when the server JSON arrives. */
-function withOptimisticStageChange(job: Job, newStage: Stage): Job {
-  const bikes = job.jobBikes ?? [];
-  const incomplete = bikes.filter((b) => !b.completedAt);
-
-  if (newStage === "WAITING_ON_PARTS") {
-    const wid = job.workingOnJobBikeId;
-    if (job.stage !== "WAITING_ON_PARTS" && wid) {
-      const now = new Date().toISOString();
-      return {
-        ...job,
-        stage: newStage,
-        workingOnJobBikeId: null,
-        jobBikes: bikes.map((b) =>
-          b.id === wid && !b.completedAt
-            ? { ...b, waitingOnPartsAt: now }
-            : b
-        ),
-      };
-    }
-    return { ...job, stage: newStage };
-  }
-
-  let next: Job = {
-    ...job,
-    stage: newStage,
-    jobBikes: bikes.map((b) =>
-      b.completedAt ? b : { ...b, waitingOnPartsAt: null }
-    ),
-  };
-
-  if (newStage === "WORKING_ON" && incomplete.length === 1) {
-    next = { ...next, workingOnJobBikeId: incomplete[0].id };
-  } else if (newStage !== "WORKING_ON") {
-    next = { ...next, workingOnJobBikeId: null };
-  }
-
-  if (newStage === "COMPLETED") {
-    next = { ...next, completedAt: new Date().toISOString() };
-  } else {
-    next = { ...next, completedAt: null };
-  }
-
-  return next;
-}
-
 function cloneJobForRevert(job: Job): Job {
   return {
     ...job,
@@ -158,10 +118,15 @@ export function KanbanBoard() {
   const [savedToast, setSavedToast] = useState<string | null>(null);
   const dismissDateToastJobIdRef = useRef<string | null>(null);
   const pendingBoardMovesRef = useRef<Map<string, PendingBoardMove>>(new Map());
+  /** Serialize PATCH /api/jobs/[id] per job so rapid drags don't overlap transactions. */
+  const jobPatchQueueRef = useRef<Map<string, Promise<void>>>(new Map());
+  /** Only the latest drag for a job may revert optimistic UI on failure. */
+  const jobPatchGenerationRef = useRef<Map<string, number>>(new Map());
   /** Job IDs for which board actions should not send customer email/SMS. */
   const [jobsSkippingCustomerNotify, setJobsSkippingCustomerNotify] = useState<
     Set<string>
   >(() => new Set());
+  const [boardFilter, setBoardFilter] = useState<BoardFilterKey>("all");
   const isMobileBoard = useIsMobileBoard();
 
   const jobNotifyCustomer = useCallback(
@@ -254,8 +219,11 @@ export function KanbanBoard() {
   const fetchJobs = useCallback((opts?: { silent?: boolean }) => {
     if (!opts?.silent) setLoading(true);
     fetch("/api/jobs?view=board", { cache: "no-store" })
-      .then((res) => res.json())
-      .then((data) => {
+      .then(async (res) => {
+        if (!res.ok) {
+          throw new Error(`Failed to load jobs (${res.status})`);
+        }
+        const data = await res.json();
         const incoming = Array.isArray(data) ? (data as Job[]) : [];
         setJobs((prev) => {
           const next = applyPendingBoardMoves(
@@ -299,31 +267,59 @@ export function KanbanBoard() {
   }, [selectedJob]);
 
   const handleAccept = useCallback(
-    async (jobId: string) => {
-      try {
-        const body: Record<string, unknown> = { stage: "BOOKED_IN" };
-        if (!features.notifyCustomerEnabled || jobsSkippingCustomerNotify.has(jobId)) {
-          body.notifyCustomer = false;
-        }
-        const res = await fetch(`/api/jobs/${jobId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        if (res.ok) {
-          const updated = await res.json();
-          setJobs((prev) =>
-            prev.map((j) => (j.id === jobId ? updated : j))
-          );
-          if (selectedJob?.id === jobId) {
-            setSelectedJob(updated);
+    (jobId: string) => {
+      const revertSnapshots = new Map<string, Job>();
+      setJobs((prev) => {
+        const job = prev.find((j) => j.id === jobId);
+        if (!job || job.stage === "BOOKED_IN") return prev;
+        revertSnapshots.set(jobId, cloneJobForRevert(job));
+        return prev.map((j) =>
+          j.id === jobId ? withOptimisticStageChange(j, "BOOKED_IN") : j
+        );
+      });
+      setSelectedJob((sel) =>
+        sel?.id === jobId ? withOptimisticStageChange(sel, "BOOKED_IN") : sel
+      );
+
+      void (async () => {
+        try {
+          const body: Record<string, unknown> = { stage: "BOOKED_IN" };
+          if (!features.notifyCustomerEnabled || jobsSkippingCustomerNotify.has(jobId)) {
+            body.notifyCustomer = false;
+          }
+          const res = await fetch(`/api/jobs/${jobId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          if (res.ok) {
+            const updated = await res.json();
+            setJobs((prev) =>
+              prev.map((j) => (j.id === jobId ? updated : j))
+            );
+            setSelectedJob((sel) => (sel?.id === jobId ? updated : sel));
+          } else {
+            const snapshot = revertSnapshots.get(jobId);
+            if (snapshot) {
+              setJobs((prev) =>
+                prev.map((j) => (j.id === jobId ? snapshot : j))
+              );
+              setSelectedJob((sel) => (sel?.id === jobId ? snapshot : sel));
+            }
+          }
+        } catch (e) {
+          console.error("Failed to accept job", e);
+          const snapshot = revertSnapshots.get(jobId);
+          if (snapshot) {
+            setJobs((prev) =>
+              prev.map((j) => (j.id === jobId ? snapshot : j))
+            );
+            setSelectedJob((sel) => (sel?.id === jobId ? snapshot : sel));
           }
         }
-      } catch (e) {
-        console.error("Failed to accept job", e);
-      }
+      })();
     },
-    [features.notifyCustomerEnabled, jobsSkippingCustomerNotify, selectedJob?.id]
+    [features.notifyCustomerEnabled, jobsSkippingCustomerNotify]
   );
 
   const handleRejectClick = useCallback((job: Job) => {
@@ -485,16 +481,43 @@ export function KanbanBoard() {
         );
       };
 
-      try {
+      const generation =
+        (jobPatchGenerationRef.current.get(jobId) ?? 0) + 1;
+      jobPatchGenerationRef.current.set(jobId, generation);
+
+      const persistStage = async () => {
         const body: Record<string, unknown> = { stage: newStage };
         if (!features.notifyCustomerEnabled || jobsSkippingCustomerNotify.has(jobId)) {
           body.notifyCustomer = false;
         }
-        const res = await fetch(`/api/jobs/${jobId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
+
+        let res: Response | null = null;
+        try {
+          for (let attempt = 0; attempt < 2; attempt++) {
+            res = await fetch(`/api/jobs/${jobId}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(body),
+            });
+            if (res.ok || res.status < 500) break;
+            if (attempt === 0) {
+              await new Promise((resolve) => setTimeout(resolve, 300));
+            }
+          }
+        } catch (e) {
+          console.error("Failed to update job", e);
+          if (jobPatchGenerationRef.current.get(jobId) === generation) {
+            revert();
+          }
+          return;
+        }
+
+        if (!res) return;
+
+        if (jobPatchGenerationRef.current.get(jobId) !== generation) {
+          return;
+        }
+
         if (res.ok) {
           const updated = await res.json();
           pendingBoardMovesRef.current.set(jobId, {
@@ -521,13 +544,23 @@ export function KanbanBoard() {
             void reorderColumnJobs(sortUpdates);
           }
         } else {
-          console.error("Failed to update job stage", res.status, await res.text().catch(() => ""));
+          console.error(
+            "Failed to update job stage",
+            res.status,
+            await res.text().catch(() => "")
+          );
           revert();
         }
-      } catch (e) {
-        console.error("Failed to update job", e);
-        revert();
-      }
+      };
+
+      const prev = jobPatchQueueRef.current.get(jobId) ?? Promise.resolve();
+      const next = prev.catch(() => {}).then(persistStage);
+      jobPatchQueueRef.current.set(jobId, next);
+      void next.finally(() => {
+        if (jobPatchQueueRef.current.get(jobId) === next) {
+          jobPatchQueueRef.current.delete(jobId);
+        }
+      });
     },
     [features.notifyCustomerEnabled, jobsSkippingCustomerNotify, reorderColumnJobs]
   );
@@ -641,16 +674,42 @@ export function KanbanBoard() {
   const pendingApprovals = jobsByStage.PENDING_APPROVAL || [];
   const completedCount = jobs.filter((j) => j.stage === "COMPLETED").length;
 
+  const filterCounts = BOARD_FILTERS.reduce(
+    (acc, filter) => {
+      if (filter.stages === null) {
+        acc[filter.key] = jobs.filter((j) =>
+          DISPLAY_STAGES.includes(j.stage as Stage)
+        ).length;
+      } else {
+        acc[filter.key] = jobs.filter((j) =>
+          filter.stages!.includes(j.stage as Stage)
+        ).length;
+      }
+      return acc;
+    },
+    {} as Record<BoardFilterKey, number>
+  );
+
+  const visibleStages = features.jobBoardFiltersEnabled
+    ? DISPLAY_STAGES.filter((stage) => {
+        if (boardFilter === "all") return true;
+        const activeFilter = BOARD_FILTERS.find((f) => f.key === boardFilter);
+        return activeFilter?.stages?.includes(stage) ?? true;
+      })
+    : DISPLAY_STAGES;
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-24 text-slate-500 font-medium">
-        Loading jobs...
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="flex min-h-0 flex-1 items-center justify-center rounded-3xl bg-job-board p-6 shadow-float ring-1 ring-black/[0.04] dark:!bg-transparent dark:!shadow-none dark:ring-0 text-slate-500 font-medium">
+          Loading jobs...
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-5 flex-1 min-h-0">
+    <div className="flex min-h-0 flex-1 flex-col">
       <NewJobModal
         isOpen={newJobModalOpen}
         onClose={() => setNewJobModalOpen(false)}
@@ -690,12 +749,13 @@ export function KanbanBoard() {
       />
       {savedToast && (
         <div
-          className="fixed right-4 top-4 z-[70] rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 shadow-soft"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[70] rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 shadow-soft"
           role="status"
         >
           {savedToast}
         </div>
       )}
+      <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-hidden rounded-3xl bg-job-board p-5 shadow-float ring-1 ring-black/[0.04] dark:!bg-transparent dark:!shadow-none dark:ring-0 sm:p-6">
       {showPaidBanner && (
         <div
           className="flex items-center justify-between gap-4 rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3 text-emerald-800"
@@ -717,7 +777,7 @@ export function KanbanBoard() {
       )}
       <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 flex-shrink-0">
         <div className="flex flex-col min-w-0 flex-1">
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 flex-shrink-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-heading flex-shrink-0">
             Job Board
           </h1>
           {pendingApprovals.length > 0 ? (
@@ -830,6 +890,35 @@ export function KanbanBoard() {
         </div>
       </div>
 
+      {features.jobBoardFiltersEnabled && (
+        <div className="flex flex-shrink-0 flex-wrap gap-2">
+          {BOARD_FILTERS.map((filter) => {
+            const isActive = boardFilter === filter.key;
+            return (
+              <button
+                key={filter.key}
+                type="button"
+                onClick={() => setBoardFilter(filter.key)}
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold transition-colors touch-manipulation ${
+                  isActive
+                    ? "bg-amber-500 text-white shadow-sm"
+                    : "bg-subtle-bg text-secondary hover:bg-surface-border/60 hover:text-heading"
+                }`}
+              >
+                {filter.label}
+                <span
+                  className={`tabular-nums text-xs font-bold ${
+                    isActive ? "text-white/90" : "text-tertiary"
+                  }`}
+                >
+                  {filterCounts[filter.key]}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <DndContext
         sensors={sensors}
         onDragStart={handleDragStart}
@@ -848,8 +937,8 @@ export function KanbanBoard() {
         <p className="md:hidden text-xs font-medium text-slate-400 -mb-1 flex-shrink-0">
           Swipe columns to browse — on mobile, use Status on a card to move it
         </p>
-        <div className="flex flex-1 gap-4 overflow-x-auto overflow-y-hidden pb-4 min-h-0 h-0 w-full -mx-4 px-4 sm:mx-0 sm:px-0 overscroll-x-contain">
-          {DISPLAY_STAGES.map((stage) => (
+        <div className="flex min-h-0 flex-1 gap-5 overflow-x-auto overflow-y-hidden overscroll-x-contain pb-2 w-full">
+          {visibleStages.map((stage) => (
             <StageColumn
               key={stage}
               stage={stage}
@@ -876,6 +965,7 @@ export function KanbanBoard() {
           })()}
         </DragOverlay>
       </DndContext>
+      </div>
     </div>
   );
 }

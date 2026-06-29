@@ -538,6 +538,8 @@ model AppSettings {
   notifyCustomerEnabled    Boolean  @default(true)
   chatEnabled              Boolean  @default(true)
   reviewsEnabled           Boolean  @default(true)
+  /// When true, show status filter pills on the job board to narrow visible columns.
+  jobBoardFiltersEnabled   Boolean  @default(false)
   /// IANA timezone for shop scheduling (e.g. America/New_York).
   timezone                 String   @default("America/New_York")
   logoUrl                  String?

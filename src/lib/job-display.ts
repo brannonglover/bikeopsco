@@ -97,12 +97,41 @@ export function formatBikeTypeDisplayLineForJob(job: Job, b: JobBike): string {
  * stale; if the customer still has exactly one bike, we use that as the display source
  * so remove-and-replace flows match the board after refresh.
  */
+/** Primary bike row on the job — active working bike, else first by sort order. */
+export function getPrimaryJobBikeRow(job: Job): JobBike | null {
+  const rows = [...(job.jobBikes ?? [])].sort((a, b) => a.sortOrder - b.sortOrder);
+  if (rows.length === 0) return null;
+  if (job.workingOnJobBikeId != null) {
+    return rows.find((b) => b.id === job.workingOnJobBikeId) ?? rows[0];
+  }
+  return rows[0];
+}
+
+/** Primary bike row for card imagery — active working bike, else first by sort order. */
+export function getPrimaryJobBikeDisplayParts(job: Job): JobBikeDisplayParts {
+  const active = getPrimaryJobBikeRow(job);
+  if (!active) {
+    return resolveLegacyJobBikeDisplayParts(job);
+  }
+  return getDisplayPartsForJobBikeRow(job, active);
+}
+
+/** Short service line for job cards (first two services). */
+export function getJobServiceSummary(job: Job): string | null {
+  const names = (job.jobServices ?? [])
+    .map((s) => s.service?.name ?? s.customServiceName?.trim() ?? null)
+    .filter((n): n is string => !!n);
+  if (names.length === 0) return null;
+  if (names.length <= 2) return names.join(" · ");
+  return `${names.slice(0, 2).join(" · ")} +${names.length - 2}`;
+}
+
 export function getJobBikeDisplayTitle(job: Job): string {
   const rows = [...(job.jobBikes ?? [])].sort((a, b) => a.sortOrder - b.sortOrder);
 
   if (rows.length === 0) {
     if (job.bikeMake === "Multiple") {
-      return `Multiple · ${job.bikeModel}`.trim();
+      return `Multiple - ${job.bikeModel}`.trim();
     }
     const leg = resolveLegacyJobBikeDisplayParts(job);
     return [leg.make, leg.model].filter(Boolean).join(" ");
@@ -111,5 +140,19 @@ export function getJobBikeDisplayTitle(job: Job): string {
     const dp = resolveJobBikeDisplayParts(job, rows[0]);
     return [dp.make, dp.model].filter(Boolean).join(" ");
   }
-  return `Multiple · ${rows.length} bikes`;
+  return `Multiple - ${rows.length} bikes`;
+}
+
+/** Bike line on job board cards — nickname for a single bike, aggregate label when several. */
+export function getJobCardBikeTitle(job: Job): string {
+  const rows = [...(job.jobBikes ?? [])].sort((a, b) => a.sortOrder - b.sortOrder);
+  if (rows.length > 1 || (rows.length === 0 && job.bikeMake === "Multiple")) {
+    return getJobBikeDisplayTitle(job);
+  }
+  const dp = getPrimaryJobBikeDisplayParts(job);
+  return (
+    dp.nickname?.trim() ||
+    [dp.make, dp.model].filter(Boolean).join(" ") ||
+    getJobBikeDisplayTitle(job)
+  );
 }

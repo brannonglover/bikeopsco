@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { DeliveryType, Job, Stage } from "@/lib/types";
-import { getJobBikeDisplayTitle, getDisplayPartsForJobBikeRow } from "@/lib/job-display";
+import { applyOptimisticDeliveryType } from "@/lib/optimistic-job-patch";
+import { getJobCardBikeTitle, getDisplayPartsForJobBikeRow, getJobServiceSummary } from "@/lib/job-display";
 import { useUnreadChatCustomerIds } from "@/contexts/StaffChatAttentionContext";
 import { useAppFeatures } from "@/contexts/AppFeaturesContext";
 import {
@@ -51,6 +53,18 @@ function formatDate(d: Date | string | null) {
   });
 }
 
+function customerInitials(job: Job): string {
+  if (!job.customer) return "?";
+  const first = job.customer.firstName?.trim()?.[0] ?? "";
+  const last = job.customer.lastName?.trim()?.[0] ?? "";
+  const initials = `${first}${last}`.toUpperCase();
+  return initials || "?";
+}
+
+function jobCardRef(job: Job): string {
+  return `#${job.id.slice(-4).toUpperCase()}`;
+}
+
 function JobDeliveryTypeControl({
   job,
   onJobUpdated,
@@ -60,7 +74,6 @@ function JobDeliveryTypeControl({
 }) {
   const features = useAppFeatures();
   const [deliveryType, setDeliveryType] = useState<DeliveryType>(job.deliveryType);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const showCollectionOption =
@@ -84,37 +97,43 @@ function JobDeliveryTypeControl({
     );
   }
 
-  const persistDeliveryType = async (next: DeliveryType) => {
+  const persistDeliveryType = (next: DeliveryType) => {
     if (next === job.deliveryType) return;
-    setSaving(true);
     setError(null);
+    const addr =
+      next === "COLLECTION_SERVICE"
+        ? (job.collectionAddress ?? job.customer?.address ?? "").trim() || null
+        : null;
+    const snapshot = job;
+    onJobUpdated(applyOptimisticDeliveryType(job, next, addr));
     const body: {
       deliveryType: DeliveryType;
       collectionAddress?: string | null;
     } = { deliveryType: next };
     if (next === "COLLECTION_SERVICE") {
-      const addr = (job.collectionAddress ?? job.customer?.address ?? "").trim();
-      body.collectionAddress = addr || null;
+      body.collectionAddress = addr;
     }
-    try {
-      const res = await fetch(`/api/jobs/${job.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) {
-        setDeliveryType(job.deliveryType);
-        setError(data.error ?? "Failed to update booking type");
-        return;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/jobs/${job.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = (await res.json().catch(() => ({}))) as Job & { error?: string };
+        if (!res.ok) {
+          setDeliveryType(snapshot.deliveryType);
+          setError(data.error ?? "Failed to update booking type");
+          onJobUpdated(snapshot);
+          return;
+        }
+        onJobUpdated(data);
+      } catch {
+        setDeliveryType(snapshot.deliveryType);
+        setError("Failed to update booking type");
+        onJobUpdated(snapshot);
       }
-      onJobUpdated(data as Job);
-    } catch {
-      setDeliveryType(job.deliveryType);
-      setError("Failed to update booking type");
-    } finally {
-      setSaving(false);
-    }
+    })();
   };
 
   return (
@@ -125,15 +144,14 @@ function JobDeliveryTypeControl({
     >
       <select
         value={deliveryType}
-        disabled={saving}
         onChange={(e) => {
           const next = e.target.value as DeliveryType;
           setDeliveryType(next);
-          void persistDeliveryType(next);
+          persistDeliveryType(next);
         }}
         aria-label="Booking type"
         title={error ?? undefined}
-        className={`text-xs font-semibold px-2 py-1 rounded-lg border-0 cursor-pointer focus:ring-2 focus:ring-indigo-200 focus:outline-none disabled:opacity-60 touch-manipulation max-w-full ${badgeClass}`}
+        className={`text-xs font-semibold px-2 py-1 rounded-lg border-0 cursor-pointer focus:ring-2 focus:ring-indigo-200 focus:outline-none touch-manipulation max-w-full ${badgeClass}`}
       >
         <option value="DROP_OFF_AT_SHOP">Drop-off</option>
         {showCollectionOption && (
@@ -211,27 +229,50 @@ export function JobCardContent({
   const containerClass =
     variant === "plain"
       ? "min-w-0 w-full"
-      : "bg-white rounded-xl border border-slate-200/80 p-4 shadow-soft min-w-0 w-full";
+      : "group relative min-w-0 w-full overflow-hidden rounded-2xl border border-black/[0.04] bg-[#ffffff] p-4 shadow-job-card transition-shadow hover:shadow-job-card-lg dark:border-slate-700/60 dark:bg-slate-800/95 dark:shadow-none dark:hover:shadow-soft";
+
+  const bikeTitle = getJobCardBikeTitle(job);
+  const serviceSummary = getJobServiceSummary(job);
 
   return (
     <div className={containerClass}>
-      <div className="flex items-start justify-between gap-2 mb-2 flex-wrap">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <JobDeliveryTypeControl job={job} onJobUpdated={onJobUpdated} />
-          {job.paymentStatus === "PAID" ? (
-            <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 whitespace-nowrap">
-              Paid
-            </span>
-          ) : job.paymentStatus === "PENDING" ? (
-            <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-amber-100 text-amber-800 whitespace-nowrap">
-              Partially paid
-            </span>
-          ) : null}
-        </div>
-      </div>
-      <h3 className="font-semibold text-slate-900">
-        {getJobBikeDisplayTitle(job)}
-      </h3>
+      <div className="relative min-w-0">
+          <div className="mb-2 flex items-start justify-between gap-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+              <span className="text-[10px] font-semibold tabular-nums text-slate-400 dark:text-slate-500">
+                {jobCardRef(job)}
+              </span>
+              <JobDeliveryTypeControl job={job} onJobUpdated={onJobUpdated} />
+            </div>
+            {job.customer && (
+              <span
+                className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-[10px] font-bold text-slate-600 dark:bg-slate-700 dark:text-slate-200"
+                aria-hidden
+              >
+                {customerInitials(job)}
+              </span>
+            )}
+          </div>
+
+          <div className="flex min-w-0 items-center gap-2">
+            <h3 className="min-w-0 flex-1 truncate text-[15px] font-semibold leading-snug text-slate-900 dark:text-white">
+              {bikeTitle}
+            </h3>
+            {job.paymentStatus === "PAID" ? (
+              <span className="flex-shrink-0 whitespace-nowrap rounded-lg bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
+                Paid
+              </span>
+            ) : job.paymentStatus === "PENDING" ? (
+              <span className="flex-shrink-0 whitespace-nowrap rounded-lg bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                Partially paid
+              </span>
+            ) : null}
+          </div>
+          {serviceSummary && (
+            <p className="mt-0.5 line-clamp-1 text-xs text-slate-500 dark:text-slate-400">
+              {serviceSummary}
+            </p>
+          )}
       {(() => {
         if (job.stage === "COMPLETED" || job.stage === "CANCELLED") {
           return null;
@@ -271,24 +312,30 @@ export function JobCardContent({
           </p>
         );
       })()}
-      {hasPendingChat && (
-        <p className="flex items-center gap-1 text-[11px] font-semibold text-emerald-700 mt-0.5">
+      {hasPendingChat && job.customerId && (
+        <Link
+          href={`/chat?customer=${encodeURIComponent(job.customerId)}`}
+          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+          aria-label="Open chat — customer waiting for reply"
+          className="flex items-center gap-1 text-[11px] font-semibold text-emerald-700 mt-0.5 hover:text-emerald-800 hover:underline touch-manipulation pointer-events-auto w-fit"
+        >
           <span className="relative flex h-2 w-2 flex-shrink-0">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75" />
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
           </span>
           Chat waiting
-        </p>
+        </Link>
       )}
       {job.customer && (
-        <p className="text-sm text-slate-700 font-medium mt-1.5" title={`${job.customer.firstName}${job.customer.lastName ? ` ${job.customer.lastName}` : ""}`}>
+        <p className="mt-1.5 text-sm font-medium text-slate-700 dark:text-slate-300" title={`${job.customer.firstName}${job.customer.lastName ? ` ${job.customer.lastName}` : ""}`}>
           {job.customer.lastName
             ? `${job.customer.firstName} ${job.customer.lastName}`
             : job.customer.firstName}
         </p>
       )}
       {(job.dropOffDate || job.pickupDate || isCollection || job.stage === "PENDING_APPROVAL") && (
-        <div className="mt-3 space-y-1 text-xs text-slate-500">
+        <div className="mt-2.5 space-y-1 text-xs text-slate-500 dark:text-slate-400">
           <p>
             {isCollection ? "Collection" : "Drop-off"}:{" "}
             {job.dropOffDate ? (
@@ -335,8 +382,8 @@ export function JobCardContent({
         </p>
       )}
       {address && (
-        <div className="mt-3 pt-3 border-t border-slate-100">
-          <p className="text-xs text-slate-600 mb-1 truncate" title={address}>
+        <div className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-700/60">
+          <p className="mb-1 truncate text-xs text-slate-600 dark:text-slate-400" title={address}>
             {address}
           </p>
           {mapsUrl && (
@@ -366,7 +413,7 @@ export function JobCardContent({
         </div>
       )}
       {onAccept && onReject && job.stage === "PENDING_APPROVAL" && (
-        <div className="mt-3 pt-3 border-t border-slate-100 flex gap-2">
+        <div className="mt-3 flex gap-2 border-t border-slate-100 pt-3 dark:border-slate-700/60">
           <button
             type="button"
             onClick={(e) => {
@@ -391,7 +438,7 @@ export function JobCardContent({
       )}
       {showMobileStageSelect && onStageChange && (
         <div
-          className="mt-3 pt-3 border-t border-slate-100 md:hidden"
+          className="mt-3 border-t border-slate-100 pt-3 md:hidden dark:border-slate-700/60"
           onClick={(e) => e.stopPropagation()}
           onPointerDown={(e) => e.stopPropagation()}
         >
@@ -418,7 +465,7 @@ export function JobCardContent({
       )}
       {showNotifyToggle && (
         <div
-          className="mt-3 pt-3 border-t border-slate-100"
+          className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-700/60"
           onClick={(e) => e.stopPropagation()}
           onPointerDown={(e) => e.stopPropagation()}
         >
@@ -444,6 +491,7 @@ export function JobCardContent({
           </label>
         </div>
       )}
+      </div>
     </div>
   );
 }
@@ -519,7 +567,7 @@ export function JobCard({
       `}
     >
       {isDragging ? (
-        <div className="rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 p-4 min-h-[120px]" />
+        <div className="min-h-[120px] rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 p-4 dark:border-slate-600 dark:bg-slate-800/50" />
       ) : (
         <JobCardContent
           job={job}
