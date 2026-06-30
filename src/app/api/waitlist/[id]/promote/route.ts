@@ -23,7 +23,6 @@ export async function POST(
     const { id } = await params;
     const shopId = token.shopId;
     const features = await getAppFeatures(shopId);
-    const maxActiveBikes = features.maxActiveBikes ?? 5;
 
     const entry = await prisma.waitlistEntry.findUnique({
       where: { id },
@@ -39,23 +38,7 @@ export async function POST(
       return NextResponse.json({ error: "Waitlist entry is not waiting" }, { status: 400 });
     }
 
-    const entryBikeCount = entry.bikes.length;
-    if (maxActiveBikes > 0) {
-      const activeBikesCount = await prisma.jobBike.count({
-        where: {
-          shopId,
-          job: { archivedAt: null, stage: { in: [Stage.RECEIVED, Stage.WORKING_ON] } },
-        },
-      });
-      if (activeBikesCount + entryBikeCount > maxActiveBikes) {
-        return NextResponse.json(
-          { error: `Capacity is currently full (${activeBikesCount}/${maxActiveBikes} bikes).` },
-          { status: 400 }
-        );
-      }
-    }
-
-      const job = await prisma.$transaction(async (tx) => {
+    const job = await prisma.$transaction(async (tx) => {
         // Find or create customer
         const emailNormalized = entry.email.trim().toLowerCase();
         const customer =

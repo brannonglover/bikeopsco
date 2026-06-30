@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useCallback, useEffect, useState, useRef } from "react";
-import type { DeliveryType, Job, JobBike, JobProduct, JobService, Stage } from "@/lib/types";
+import type { Bike, DeliveryType, Job, JobBike, JobProduct, JobService, Stage } from "@/lib/types";
 import { Price } from "@/components/ui/Price";
 import { BikePlaceholderIcon } from "@/components/ui/BikePlaceholderIcon";
 import { useAppFeatures } from "@/contexts/AppFeaturesContext";
@@ -2261,6 +2261,20 @@ const CANCELLATION_REASONS = [
   "Other",
 ] as const;
 
+function mergeCustomerBikesForModal(
+  liveBikes: Bike[] | undefined,
+  fetchedBikes: Bike[] | undefined
+): Bike[] | undefined {
+  const live = liveBikes ?? [];
+  const fetched = fetchedBikes ?? [];
+  if (live.length === 0) return fetched.length > 0 ? fetched : undefined;
+  // Board list payloads omit bike ids; prefer enriched GET /api/jobs/[id] rows for add-bike UI.
+  if (live.some((b) => !b.id) && fetched.some((b) => b.id)) {
+    return fetched;
+  }
+  return live;
+}
+
 function mergeFetchedJobWithLiveBoard(live: Job, fetched: Job): Job {
   const merged = mergeJobPreservingInvoiceDetails(live, fetched);
   const boardMerged = mergeBoardJob(live, merged);
@@ -2276,7 +2290,10 @@ function mergeFetchedJobWithLiveBoard(live: Job, fetched: Job): Job {
         ? {
             ...(boardMerged.customer ?? {}),
             ...live.customer,
-            bikes: live.customer.bikes ?? boardMerged.customer?.bikes,
+            bikes: mergeCustomerBikesForModal(
+              live.customer.bikes,
+              boardMerged.customer?.bikes
+            ),
           }
         : boardMerged.customer,
     };

@@ -188,8 +188,10 @@ export async function GET(request: NextRequest) {
               updatedAt: true,
               bikes: {
                 select: {
+                  id: true,
                   make: true,
                   model: true,
+                  bikeType: true,
                   nickname: true,
                   imageUrl: true,
                 },
