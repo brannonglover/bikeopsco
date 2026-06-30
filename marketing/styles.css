@@ -1795,6 +1795,44 @@ footer nav a:hover {
     0 4px 12px rgba(16, 32, 51, 0.08);
 }
 
+.blog-content table {
+  display: block;
+  width: 100%;
+  margin: 1.25rem 0 1.5rem;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-collapse: collapse;
+  font-size: 0.98rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.blog-content table thead,
+.blog-content table tbody {
+  display: table;
+  width: 100%;
+}
+
+.blog-content th,
+.blog-content td {
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+  color: #31425c;
+  line-height: 1.5;
+}
+
+.blog-content th {
+  background: var(--sky);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.blog-content tbody tr:nth-child(even) {
+  background: rgba(244, 248, 252, 0.65);
+}
+
 .blog-post-footer {
   display: flex;
   flex-wrap: wrap;
