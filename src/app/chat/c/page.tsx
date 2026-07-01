@@ -7,7 +7,8 @@ import { useSearchParams } from "next/navigation";
 import type { ChatMessage } from "@/lib/types";
 import { mergeChatMessagesWithServer } from "@/lib/chat-messages";
 import { useCustomerChatNotifications } from "@/hooks/useCustomerChatNotifications";
-import { useVisibilityAwarePolling } from "@/hooks/useVisibilityAwarePolling";
+import { useChatEventSource } from "@/hooks/useChatEventSource";
+import type { CustomerConversationMessagesPayload } from "@/lib/chat/customer-conversation-messages";
 import { ChatMessageBubble } from "@/components/chat/ChatMessageBubble";
 import { jobAccessApiSuffix, readJobAccessParam, withJobAccessQuery } from "@/lib/job-access-url";
 
@@ -109,18 +110,25 @@ export default function CustomerChatPage() {
     setMessages((prev) => mergeChatMessagesWithServer(prev, serverMessages));
   }, []);
 
+  const applyMessagesPayload = useCallback(
+    (data: CustomerConversationMessagesPayload) => {
+      mergeServerMessages(data.messages as ChatMessage[]);
+      setStaffLastReadAt(data.staffLastReadAt ?? null);
+    },
+    [mergeServerMessages]
+  );
+
   const fetchMessages = useCallback(async () => {
     const res = await fetch("/api/chat/conversation/messages", { credentials: "include" });
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data)) {
-        mergeServerMessages(data);
+        applyMessagesPayload({ messages: data, staffLastReadAt: null });
       } else {
-        mergeServerMessages(data.messages ?? []);
-        setStaffLastReadAt(data.staffLastReadAt ?? null);
+        applyMessagesPayload(data as CustomerConversationMessagesPayload);
       }
     }
-  }, [mergeServerMessages]);
+  }, [applyMessagesPayload]);
 
   useEffect(() => {
     let cancelled = false;
@@ -264,15 +272,17 @@ export default function CustomerChatPage() {
     }
   }, [status, fetchMessages]);
 
-  useVisibilityAwarePolling(
-    () => {
+  useChatEventSource<CustomerConversationMessagesPayload>({
+    url: status === "chat" ? "/api/chat/conversation/messages/stream" : null,
+    enabled: status === "chat",
+    onUpdate: (data) => {
       if (sendingRef.current) return;
       if (hasPendingOptimisticRef.current) return;
-      void fetchMessages();
+      applyMessagesPayload(data);
     },
-    POLL_INTERVAL_MS,
-    { enabled: status === "chat", runImmediately: false }
-  );
+    fallbackPoll: fetchMessages,
+    fallbackIntervalMs: POLL_INTERVAL_MS,
+  });
 
   useCustomerChatNotifications(messages, status === "chat");
 

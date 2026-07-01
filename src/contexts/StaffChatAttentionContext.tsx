@@ -11,7 +11,8 @@ import {
 } from "react";
 import type { Conversation } from "@/lib/types";
 import { hasUnreadCustomerMessage } from "@/lib/chat-unread";
-import { useChatNotifications } from "@/hooks/useChatNotifications";
+import { useChatNotifications, NOTIFICATION_POLL_MS } from "@/hooks/useChatNotifications";
+import { useChatEventSource } from "@/hooks/useChatEventSource";
 
 const StaffChatAttentionContext = createContext(0);
 const StaffChatUnreadCustomerIdsContext = createContext<ReadonlySet<string>>(new Set());
@@ -26,14 +27,18 @@ export function StaffChatAttentionProvider({
 }) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
 
+  const applyConversations = useCallback((data: Conversation[]) => {
+    setConversations(data);
+  }, []);
+
   const fetchConversations = useCallback(async () => {
     if (!syncEnabled) return;
     const res = await fetch("/api/conversations", { cache: "no-store" });
     if (res.ok) {
       const data = await res.json();
-      setConversations(data);
+      applyConversations(data);
     }
-  }, [syncEnabled]);
+  }, [syncEnabled, applyConversations]);
 
   useEffect(() => {
     if (syncEnabled) {
@@ -43,7 +48,15 @@ export function StaffChatAttentionProvider({
     }
   }, [syncEnabled, fetchConversations]);
 
-  useChatNotifications(conversations, fetchConversations, null, syncEnabled);
+  useChatEventSource<Conversation[]>({
+    url: syncEnabled ? "/api/conversations/stream" : null,
+    enabled: syncEnabled,
+    onUpdate: applyConversations,
+    fallbackPoll: fetchConversations,
+    fallbackIntervalMs: NOTIFICATION_POLL_MS,
+  });
+
+  useChatNotifications(conversations, fetchConversations, null, false);
 
   const waitingCount = useMemo(
     () => (syncEnabled ? conversations.filter(hasUnreadCustomerMessage).length : 0),

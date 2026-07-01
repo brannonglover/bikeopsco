@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
 import { getCustomerFromSession } from "@/lib/chat-session";
-import {
-  findOrCreateGeneralConversation,
-  resolveGeneralConversation,
-} from "@/lib/conversation";
+import { loadCustomerConversationMessages } from "@/lib/chat/customer-conversation-messages";
+import { findOrCreateGeneralConversation } from "@/lib/conversation";
 import { sendPushToAllStaff } from "@/lib/push";
 import { z } from "zod";
 import { getAppFeatures } from "@/lib/app-settings";
+import { prisma } from "@/lib/db";
 import { requireCurrentShop } from "@/lib/shop";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +20,6 @@ const createSchema = z.object({
  */
 export async function GET() {
   let customerId: string | null = null;
-  let conversationId: string | null = null;
   try {
     const shop = await requireCurrentShop();
     const features = await getAppFeatures(shop.id);
@@ -34,51 +31,11 @@ export async function GET() {
       return NextResponse.json({ error: "Not signed in" }, { status: 401 });
     }
 
-    const conversation = await resolveGeneralConversation(shop.id, customerId);
-
-    if (!conversation) {
-      return NextResponse.json({ messages: [], staffLastReadAt: null });
-    }
-    conversationId = conversation.id;
-
-    const messages = await prisma.message.findMany({
-      where: { shopId: shop.id, conversationId: conversation.id },
-      orderBy: { createdAt: "asc" },
-      include: { attachments: true, reactions: true },
-    });
-
-    const latestShopMessageAt = messages.reduce<Date | null>((latest, message) => {
-      if (message.sender !== "STAFF" && message.sender !== "SYSTEM") return latest;
-      if (!latest || message.createdAt > latest) return message.createdAt;
-      return latest;
-    }, null);
-
-    let staffLastReadAt = conversation.staffLastReadAt?.toISOString() ?? null;
-    const shouldMarkRead =
-      latestShopMessageAt !== null &&
-      (!conversation.customerLastReadAt ||
-        latestShopMessageAt.getTime() > conversation.customerLastReadAt.getTime());
-
-    if (shouldMarkRead) {
-      const readUpdate = await prisma.conversation.update({
-        where: { id: conversation.id },
-        data: {
-          customerLastReadAt: new Date(),
-          updatedAt: conversation.updatedAt,
-        },
-        select: { staffLastReadAt: true },
-      });
-      staffLastReadAt = readUpdate.staffLastReadAt?.toISOString() ?? null;
-    }
-
-    return NextResponse.json({
-      messages,
-      staffLastReadAt,
-    });
+    const payload = await loadCustomerConversationMessages(shop.id, customerId);
+    return NextResponse.json(payload);
   } catch (error) {
     console.error("GET /api/chat/conversation/messages error:", {
       customerId,
-      conversationId,
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
     });

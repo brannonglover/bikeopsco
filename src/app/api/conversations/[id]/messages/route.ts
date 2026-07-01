@@ -4,28 +4,14 @@ import { getConfiguredSmsProvider, sendChatStaffSms } from "@/lib/sms";
 import { sendPushToCustomer, sendPushToAllStaff } from "@/lib/push";
 import { z } from "zod";
 import { getAppFeatures } from "@/lib/app-settings";
+import { loadStaffConversationMessages } from "@/lib/chat/staff-conversation-messages";
 import {
   customerHasActiveChatJob,
   findActiveJobIdForCustomer,
 } from "@/lib/chat-session";
-import { getEffectiveSmsConsent } from "@/lib/sms-consent";
 import { requireCurrentShop } from "@/lib/shop";
 
 export const dynamic = "force-dynamic";
-
-type ChatMessageRow = {
-  sender: "STAFF" | "CUSTOMER" | "SYSTEM";
-  createdAt: Date;
-  id?: string;
-  smsProvider?: string | null;
-  smsSid?: string | null;
-  smsDeliveryStatus?: string | null;
-  smsDeliveryStatusName?: string | null;
-  smsDeliveryStatusDescription?: string | null;
-  smsDeliveryError?: string | null;
-  smsDeliveredAt?: Date | null;
-  [key: string]: unknown;
-};
 
 const createSchema = z.object({
   sender: z.enum(["STAFF", "CUSTOMER"]),
@@ -46,82 +32,12 @@ export async function GET(
     }
     ({ id: conversationId } = await params);
 
-    // Keep the conversation fetch minimal so this route can still work if the DB
-    // is temporarily behind migrations (missing newer optional columns).
-    const conversation = await prisma.conversation.findFirst({
-      where: { id: conversationId, shopId: shop.id },
-      select: {
-        updatedAt: true,
-        customerTypingAt: true,
-        customerLastReadAt: true,
-        staffLastReadAt: true,
-      },
-    });
-
-    if (!conversation) {
+    const payload = await loadStaffConversationMessages(shop.id, conversationId);
+    if (!payload) {
       return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
     }
 
-    let messages: ChatMessageRow[] = [];
-    try {
-      messages = await prisma.message.findMany({
-        where: { shopId: shop.id, conversationId },
-        orderBy: { createdAt: "asc" },
-        include: { attachments: true, reactions: true },
-      });
-    } catch (e) {
-      console.warn(
-        "[chat] Failed to load message includes (attachments/reactions); falling back:",
-        { conversationId, error: e }
-      );
-      messages = await prisma.message.findMany({
-        where: { shopId: shop.id, conversationId },
-        orderBy: { createdAt: "asc" },
-      });
-    }
-
-    const customerTypingAtIso = conversation.customerTypingAt?.toISOString() ?? null;
-    const customerLastReadAtIso = conversation.customerLastReadAt?.toISOString() ?? null;
-    const currentStaffLastReadAt = conversation.staffLastReadAt ?? null;
-
-    const latestCustomerMessageAt = messages.reduce<Date | null>((latest, message) => {
-      if (message.sender !== "CUSTOMER") return latest;
-      if (!latest || message.createdAt > latest) return message.createdAt;
-      return latest;
-    }, null);
-
-    // Preserve updatedAt so marking read does not reorder the inbox (list is sorted by updatedAt).
-    let staffLastReadAtIso: string | null = currentStaffLastReadAt?.toISOString() ?? null;
-    const shouldMarkRead =
-      latestCustomerMessageAt !== null &&
-      (!currentStaffLastReadAt ||
-        latestCustomerMessageAt.getTime() > currentStaffLastReadAt.getTime());
-
-    if (shouldMarkRead) {
-      try {
-        const readUpdate = await prisma.conversation.update({
-          where: { id: conversationId },
-          data: {
-            staffLastReadAt: new Date(),
-            updatedAt: conversation.updatedAt,
-          },
-          select: { staffLastReadAt: true },
-        });
-        staffLastReadAtIso = (readUpdate.staffLastReadAt ?? new Date()).toISOString();
-      } catch (e) {
-        console.warn("[chat] Failed to mark staffLastReadAt; continuing:", {
-          conversationId,
-          error: e,
-        });
-      }
-    }
-
-    return NextResponse.json({
-      messages,
-      customerTypingAt: customerTypingAtIso,
-      staffLastReadAt: staffLastReadAtIso,
-      customerLastReadAt: customerLastReadAtIso,
-    });
+    return NextResponse.json(payload);
   } catch (error) {
     console.error("GET /api/conversations/[id]/messages error:", {
       conversationId,

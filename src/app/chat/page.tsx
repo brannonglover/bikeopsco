@@ -6,7 +6,9 @@ import { useState, useEffect, useRef, useCallback, useLayoutEffect, Suspense } f
 import { useSearchParams, useRouter } from "next/navigation";
 import type { Conversation, ChatMessage, Customer } from "@/lib/types";
 import { useChatNotifications, CHAT_PAGE_CONVERSATIONS_POLL_MS } from "@/hooks/useChatNotifications";
+import { useChatEventSource } from "@/hooks/useChatEventSource";
 import { useVisibilityAwarePolling } from "@/hooks/useVisibilityAwarePolling";
+import type { StaffConversationMessagesPayload } from "@/lib/chat/staff-conversation-messages";
 import { ChatMessageBubble } from "@/components/chat/ChatMessageBubble";
 import { ConversationListRow } from "@/components/chat/ConversationListRow";
 import { mergeChatMessagesWithServer } from "@/lib/chat-messages";
@@ -369,20 +371,24 @@ function ChatPageContent() {
     };
   }, []);
 
+  const applyConversations = useCallback((data: Conversation[]) => {
+    setConversations((prev) => {
+      const selected = selectedIdRef.current;
+      const pinned = selected ? prev.find((c) => c.id === selected) : undefined;
+      if (pinned && !data.some((c) => c.id === pinned.id)) {
+        return [pinned, ...data];
+      }
+      return data;
+    });
+  }, []);
+
   const fetchConversations = useCallback(async () => {
     const res = await fetch("/api/conversations", { cache: "no-store" });
     if (res.ok) {
       const data = (await res.json()) as Conversation[];
-      setConversations((prev) => {
-        const selected = selectedIdRef.current;
-        const pinned = selected ? prev.find((c) => c.id === selected) : undefined;
-        if (pinned && !data.some((c) => c.id === pinned.id)) {
-          return [pinned, ...data];
-        }
-        return data;
-      });
+      applyConversations(data);
     }
-  }, []);
+  }, [applyConversations]);
 
   useEffect(() => {
     const id = window.setTimeout(() => {
@@ -426,6 +432,26 @@ function ChatPageContent() {
     return () => ac.abort();
   }, [debouncedChatSearch]);
 
+  const applyMessagesPayload = useCallback(
+    (data: StaffConversationMessagesPayload, convId: string) => {
+      if (selectedIdRef.current !== convId) return;
+      mergeServerMessages(data.messages as ChatMessage[]);
+      setCustomerTypingAt(data.customerTypingAt ?? null);
+      setCustomerLastReadAt(data.customerLastReadAt ?? null);
+      if (typeof data.staffLastReadAt === "string") {
+        setConversations((prev) => {
+          if (prev.length === 0) return prev;
+          const idx = prev.findIndex((c) => c.id === convId);
+          if (idx === -1) return prev;
+          const next = [...prev];
+          next[idx] = { ...next[idx], staffLastReadAt: data.staffLastReadAt };
+          return next;
+        });
+      }
+    },
+    [mergeServerMessages]
+  );
+
   const fetchMessages = useCallback(async (convId: string, options?: { signal?: AbortSignal }) => {
     let res: Response;
     try {
@@ -442,24 +468,19 @@ function ChatPageContent() {
     const data = await res.json();
     if (selectedIdRef.current !== convId) return;
     if (Array.isArray(data)) {
-      mergeServerMessages(data);
-      setCustomerTypingAt(null);
+      applyMessagesPayload(
+        {
+          messages: data,
+          customerTypingAt: null,
+          staffLastReadAt: null,
+          customerLastReadAt: null,
+        },
+        convId
+      );
     } else {
-      mergeServerMessages(data.messages ?? []);
-      setCustomerTypingAt(data.customerTypingAt ?? null);
-      setCustomerLastReadAt(data.customerLastReadAt ?? null);
-      if (typeof data.staffLastReadAt === "string") {
-        setConversations((prev) => {
-          if (prev.length === 0) return prev;
-          const idx = prev.findIndex((c) => c.id === convId);
-          if (idx === -1) return prev;
-          const next = [...prev];
-          next[idx] = { ...next[idx], staffLastReadAt: data.staffLastReadAt };
-          return next;
-        });
-      }
+      applyMessagesPayload(data as StaffConversationMessagesPayload, convId);
     }
-  }, [mergeServerMessages]);
+  }, [applyMessagesPayload]);
 
   useEffect(() => {
     setLoading(true);
@@ -565,24 +586,31 @@ function ChatPageContent() {
     return () => ac.abort();
   }, [selectedId, fetchMessages]);
 
-  useVisibilityAwarePolling(
-    () => {
+  useChatEventSource<StaffConversationMessagesPayload>({
+    url: selectedId
+      ? `/api/conversations/${encodeURIComponent(selectedId)}/messages/stream`
+      : null,
+    enabled: !!selectedId,
+    onUpdate: (data) => {
       if (!selectedId) return;
       if (sendingRef.current) return;
       if (hasPendingOptimisticRef.current) return;
-      void fetchMessages(selectedId);
+      applyMessagesPayload(data, selectedId);
     },
-    POLL_INTERVAL_MS,
-    { enabled: !!selectedId, runImmediately: false }
-  );
+    fallbackPoll: () => {
+      if (selectedId) void fetchMessages(selectedId);
+    },
+    fallbackIntervalMs: POLL_INTERVAL_MS,
+  });
 
-  useChatNotifications(
-    conversations,
-    fetchConversations,
-    selectedId,
-    true,
-    CHAT_PAGE_CONVERSATIONS_POLL_MS
-  );
+  useChatEventSource<Conversation[]>({
+    url: "/api/conversations/stream",
+    onUpdate: applyConversations,
+    fallbackPoll: fetchConversations,
+    fallbackIntervalMs: CHAT_PAGE_CONVERSATIONS_POLL_MS,
+  });
+
+  useChatNotifications(conversations, fetchConversations, selectedId, false);
 
   useEffect(() => {
     const customerId = conversations.find((c) => c.id === selectedId)?.customerId;

@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { getAppFeatures } from "@/lib/app-settings";
 import {
-  consolidateCustomerConversations,
   findOrCreateGeneralConversation,
 } from "@/lib/conversation";
+import { loadStaffConversations } from "@/lib/chat/staff-conversations";
 import { getEffectiveSmsConsent } from "@/lib/sms-consent";
+import { prisma } from "@/lib/db";
 import { requireCurrentShop } from "@/lib/shop";
 
 const conversationInclude = {
@@ -54,45 +54,29 @@ export async function GET(request: NextRequest) {
         : {}),
     };
 
-    const conversations = await prisma.conversation.findMany({
-      where: listWhere,
-      orderBy: { updatedAt: "desc" },
-      include: conversationInclude,
-    });
-
-    const customerCounts = new Map<string, number>();
-    for (const c of conversations) {
-      customerCounts.set(c.customerId, (customerCounts.get(c.customerId) ?? 0) + 1);
-    }
-    const dupeCustomerIds = [...customerCounts.entries()]
-      .filter(([, count]) => count > 1)
-      .map(([customerId]) => customerId);
-
-    if (dupeCustomerIds.length > 0) {
-      void prisma
-        .$transaction(async (tx) => {
-          for (const customerId of dupeCustomerIds) {
-            await consolidateCustomerConversations(shop.id, customerId, tx);
-          }
-        })
-        .catch((e) =>
-          console.error("[chat] Background conversation consolidation failed:", e)
-        );
+    if (terms.length > 0) {
+      const conversations = await prisma.conversation.findMany({
+        where: listWhere,
+        orderBy: { updatedAt: "desc" },
+        include: conversationInclude,
+      });
+      return NextResponse.json(
+        conversations.map((conversation) =>
+          conversation.customer
+            ? {
+                ...conversation,
+                customer: {
+                  ...conversation.customer,
+                  smsConsent: getEffectiveSmsConsent(conversation.customer),
+                },
+              }
+            : conversation
+        )
+      );
     }
 
-    return NextResponse.json(
-      conversations.map((conversation) =>
-        conversation.customer
-          ? {
-              ...conversation,
-              customer: {
-                ...conversation.customer,
-                smsConsent: getEffectiveSmsConsent(conversation.customer),
-              },
-            }
-          : conversation
-      )
-    );
+    const conversations = await loadStaffConversations(shop.id);
+    return NextResponse.json(conversations);
   } catch (error) {
     console.error("GET /api/conversations error:", error);
     return NextResponse.json(
