@@ -9,6 +9,7 @@ import {
   customerHasActiveChatJob,
   findActiveJobIdForCustomer,
 } from "@/lib/chat-session";
+import { getEffectiveSmsConsent } from "@/lib/sms-consent";
 import { requireCurrentShop } from "@/lib/shop";
 
 export const dynamic = "force-dynamic";
