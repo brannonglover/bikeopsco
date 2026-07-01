@@ -3,6 +3,7 @@
 import { useEffect, useRef, useCallback } from "react";
 import type { Job } from "@/lib/types";
 import { playNotificationSound } from "@/lib/notificationSound";
+import { useVisibilityAwarePolling } from "@/hooks/useVisibilityAwarePolling";
 
 const JOB_POLL_MS = 5000;
 const FULL_BOARD_REFRESH_MS = 60_000;
@@ -46,48 +47,39 @@ export function useJobNotifications(jobs: Job[], fetchJobs: () => void): void {
     }
   }, [jobs]);
 
-  useEffect(() => {
-    let cancelled = false;
+  const pollBoardSummary = useCallback(async () => {
+    try {
+      const res = await fetch(BOARD_SUMMARY_URL, { cache: "no-store" });
+      if (!res.ok) return;
 
-    const pollBoardSummary = async () => {
-      try {
-        const res = await fetch(BOARD_SUMMARY_URL, { cache: "no-store" });
-        if (!res.ok || cancelled) return;
+      const data = await res.json();
+      if (!Array.isArray(data)) return;
 
-        const data = await res.json();
-        if (!Array.isArray(data) || cancelled) return;
+      const rows = data as BoardSummaryRow[];
+      const fingerprint = boardSummaryFingerprint(rows);
 
-        const rows = data as BoardSummaryRow[];
-        const fingerprint = boardSummaryFingerprint(rows);
-
-        if (summaryBaseline.current === null) {
-          summaryBaseline.current = fingerprint;
-          lastFullRefreshAt.current = Date.now();
-          return;
-        }
-
-        const summaryChanged = fingerprint !== summaryBaseline.current;
-        const refreshDue = Date.now() - lastFullRefreshAt.current >= FULL_BOARD_REFRESH_MS;
-
-        if (summaryChanged || refreshDue) {
-          summaryBaseline.current = fingerprint;
-          lastFullRefreshAt.current = Date.now();
-          fetchJobs();
-        }
-      } catch {
-        // Ignore transient poll errors; next interval retries.
+      if (summaryBaseline.current === null) {
+        summaryBaseline.current = fingerprint;
+        lastFullRefreshAt.current = Date.now();
+        return;
       }
-    };
 
-    const interval = setInterval(() => {
-      void pollBoardSummary();
-    }, JOB_POLL_MS);
+      const summaryChanged = fingerprint !== summaryBaseline.current;
+      const refreshDue = Date.now() - lastFullRefreshAt.current >= FULL_BOARD_REFRESH_MS;
 
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
+      if (summaryChanged || refreshDue) {
+        summaryBaseline.current = fingerprint;
+        lastFullRefreshAt.current = Date.now();
+        fetchJobs();
+      }
+    } catch {
+      // Ignore transient poll errors; next interval retries.
+    }
   }, [fetchJobs]);
+
+  useVisibilityAwarePolling(() => {
+    void pollBoardSummary();
+  }, JOB_POLL_MS);
 
   useEffect(() => {
     if (typeof window === "undefined" || !("Notification" in window)) return;

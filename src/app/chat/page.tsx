@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useState, useEffect, useRef, useCallback, useLayoutEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import type { Conversation, ChatMessage, Customer } from "@/lib/types";
-import { useChatNotifications } from "@/hooks/useChatNotifications";
+import { useChatNotifications, CHAT_PAGE_CONVERSATIONS_POLL_MS } from "@/hooks/useChatNotifications";
+import { useVisibilityAwarePolling } from "@/hooks/useVisibilityAwarePolling";
 import { ChatMessageBubble } from "@/components/chat/ChatMessageBubble";
 import { ConversationListRow } from "@/components/chat/ConversationListRow";
 import { mergeChatMessagesWithServer } from "@/lib/chat-messages";
@@ -185,11 +186,7 @@ function InviteButton({ customerId }: { customerId: string }) {
       });
   }, [customerId]);
 
-  useEffect(() => {
-    refetchSession();
-    const id = setInterval(refetchSession, 10000);
-    return () => clearInterval(id);
-  }, [refetchSession]);
+  useVisibilityAwarePolling(refetchSession, 10_000, { hiddenIntervalMs: 60_000 });
 
   const handleClick = async () => {
     setSending(true);
@@ -568,17 +565,24 @@ function ChatPageContent() {
     return () => ac.abort();
   }, [selectedId, fetchMessages]);
 
-  useEffect(() => {
-    if (!selectedId) return;
-    const id = setInterval(() => {
+  useVisibilityAwarePolling(
+    () => {
+      if (!selectedId) return;
       if (sendingRef.current) return;
       if (hasPendingOptimisticRef.current) return;
       void fetchMessages(selectedId);
-    }, POLL_INTERVAL_MS);
-    return () => clearInterval(id);
-  }, [selectedId, fetchMessages]);
+    },
+    POLL_INTERVAL_MS,
+    { enabled: !!selectedId, runImmediately: false }
+  );
 
-  useChatNotifications(conversations, fetchConversations, selectedId);
+  useChatNotifications(
+    conversations,
+    fetchConversations,
+    selectedId,
+    true,
+    CHAT_PAGE_CONVERSATIONS_POLL_MS
+  );
 
   useEffect(() => {
     const customerId = conversations.find((c) => c.id === selectedId)?.customerId;

@@ -7,6 +7,7 @@ import { useSearchParams } from "next/navigation";
 import type { ChatMessage } from "@/lib/types";
 import { mergeChatMessagesWithServer } from "@/lib/chat-messages";
 import { useCustomerChatNotifications } from "@/hooks/useCustomerChatNotifications";
+import { useVisibilityAwarePolling } from "@/hooks/useVisibilityAwarePolling";
 import { ChatMessageBubble } from "@/components/chat/ChatMessageBubble";
 import { jobAccessApiSuffix, readJobAccessParam, withJobAccessQuery } from "@/lib/job-access-url";
 
@@ -263,15 +264,15 @@ export default function CustomerChatPage() {
     }
   }, [status, fetchMessages]);
 
-  useEffect(() => {
-    if (status !== "chat") return;
-    const id = setInterval(() => {
+  useVisibilityAwarePolling(
+    () => {
       if (sendingRef.current) return;
       if (hasPendingOptimisticRef.current) return;
       void fetchMessages();
-    }, POLL_INTERVAL_MS);
-    return () => clearInterval(id);
-  }, [status, fetchMessages]);
+    },
+    POLL_INTERVAL_MS,
+    { enabled: status === "chat", runImmediately: false }
+  );
 
   useCustomerChatNotifications(messages, status === "chat");
 

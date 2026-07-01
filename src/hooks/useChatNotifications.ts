@@ -3,8 +3,11 @@
 import { useEffect, useRef, useCallback } from "react";
 import type { Conversation } from "@/lib/types";
 import { playNotificationSound } from "@/lib/notificationSound";
+import { useVisibilityAwarePolling } from "@/hooks/useVisibilityAwarePolling";
 
-const NOTIFICATION_POLL_MS = 4000;
+export const NOTIFICATION_POLL_MS = 4000;
+/** Slower conversation poll on /chat — messages are polled separately. */
+export const CHAT_PAGE_CONVERSATIONS_POLL_MS = 15_000;
 
 function getCustomerName(conv: Conversation): string {
   const c = conv.customer;
@@ -23,7 +26,8 @@ export function useChatNotifications(
   conversations: Conversation[],
   fetchConversations: () => void,
   selectedId: string | null,
-  poll = true
+  poll = true,
+  pollIntervalMs = NOTIFICATION_POLL_MS
 ) {
   const seenMessageIds = useRef<Set<string>>(new Set());
   const permissionRequested = useRef(false);
@@ -54,18 +58,7 @@ export function useChatNotifications(
     requestPermission();
   }, [requestPermission]);
 
-  useEffect(() => {
-    if (!poll) return;
-    const interval = setInterval(fetchConversations, NOTIFICATION_POLL_MS);
-    const onVisible = () => {
-      if (document.visibilityState === "visible") fetchConversations();
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => {
-      clearInterval(interval);
-      document.removeEventListener("visibilitychange", onVisible);
-    };
-  }, [fetchConversations, poll]);
+  useVisibilityAwarePolling(fetchConversations, pollIntervalMs, { enabled: poll });
 
   useEffect(() => {
     if (typeof window === "undefined" || !("Notification" in window)) return;
