@@ -1,20 +1,11 @@
 import { prisma } from "@/lib/db";
 import { resolveGeneralConversation } from "@/lib/conversation";
+import { serializeChatMessages } from "@/lib/chat/serialize-messages";
+import type { ChatMessage } from "@/lib/types";
 
 export type CustomerConversationMessagesPayload = {
-  messages: ChatMessageRow[];
+  messages: ChatMessage[];
   staffLastReadAt: string | null;
-};
-
-type ChatMessageRow = {
-  sender: "STAFF" | "CUSTOMER" | "SYSTEM";
-  createdAt: Date;
-  id: string;
-  body: string | null;
-  editedAt: Date | null;
-  attachments: unknown[];
-  reactions: unknown[];
-  [key: string]: unknown;
 };
 
 export async function getCustomerConversationMessagesFingerprint(
@@ -89,5 +80,5 @@ export async function loadCustomerConversationMessages(
     staffLastReadAt = readUpdate.staffLastReadAt?.toISOString() ?? null;
   }
 
-  return { messages, staffLastReadAt };
+  return { messages: serializeChatMessages(messages), staffLastReadAt };
 }

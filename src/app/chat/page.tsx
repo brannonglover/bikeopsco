@@ -435,7 +435,7 @@ function ChatPageContent() {
   const applyMessagesPayload = useCallback(
     (data: StaffConversationMessagesPayload, convId: string) => {
       if (selectedIdRef.current !== convId) return;
-      mergeServerMessages(data.messages as ChatMessage[]);
+      mergeServerMessages(data.messages);
       setCustomerTypingAt(data.customerTypingAt ?? null);
       setCustomerLastReadAt(data.customerLastReadAt ?? null);
       if (typeof data.staffLastReadAt === "string") {

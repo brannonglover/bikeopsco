@@ -1,21 +1,9 @@
 import { prisma } from "@/lib/db";
-
-type ChatMessageRow = {
-  sender: "STAFF" | "CUSTOMER" | "SYSTEM";
-  createdAt: Date;
-  id?: string;
-  smsProvider?: string | null;
-  smsSid?: string | null;
-  smsDeliveryStatus?: string | null;
-  smsDeliveryStatusName?: string | null;
-  smsDeliveryStatusDescription?: string | null;
-  smsDeliveryError?: string | null;
-  smsDeliveredAt?: Date | null;
-  [key: string]: unknown;
-};
+import type { ChatMessage } from "@/lib/types";
+import { serializeChatMessages } from "@/lib/chat/serialize-messages";
 
 export type StaffConversationMessagesPayload = {
-  messages: ChatMessageRow[];
+  messages: ChatMessage[];
   customerTypingAt: string | null;
   staffLastReadAt: string | null;
   customerLastReadAt: string | null;
@@ -74,7 +62,7 @@ export async function loadStaffConversationMessages(
 
   if (!conversation) return null;
 
-  let messages: ChatMessageRow[] = [];
+  let messages;
   try {
     messages = await prisma.message.findMany({
       where: { shopId, conversationId },
@@ -86,10 +74,15 @@ export async function loadStaffConversationMessages(
       "[chat] Failed to load message includes (attachments/reactions); falling back:",
       { conversationId, error: e }
     );
-    messages = await prisma.message.findMany({
+    const baseMessages = await prisma.message.findMany({
       where: { shopId, conversationId },
       orderBy: { createdAt: "asc" },
     });
+    messages = baseMessages.map((message) => ({
+      ...message,
+      attachments: [],
+      reactions: [],
+    }));
   }
 
   const customerTypingAtIso = conversation.customerTypingAt?.toISOString() ?? null;
@@ -128,7 +121,7 @@ export async function loadStaffConversationMessages(
   }
 
   return {
-    messages,
+    messages: serializeChatMessages(messages),
     customerTypingAt: customerTypingAtIso,
     staffLastReadAt: staffLastReadAtIso,
     customerLastReadAt: customerLastReadAtIso,

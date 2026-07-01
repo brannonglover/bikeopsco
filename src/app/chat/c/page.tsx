@@ -112,7 +112,7 @@ export default function CustomerChatPage() {
 
   const applyMessagesPayload = useCallback(
     (data: CustomerConversationMessagesPayload) => {
-      mergeServerMessages(data.messages as ChatMessage[]);
+      mergeServerMessages(data.messages);
       setStaffLastReadAt(data.staffLastReadAt ?? null);
     },
     [mergeServerMessages]
