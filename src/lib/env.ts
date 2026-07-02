@@ -211,6 +211,10 @@ export function getStaffJobDeepLink(jobId: string): string {
   return `${getStaffAppScheme()}://jobs/${encodeURIComponent(jobId)}`;
 }
 
+export function getStaffCalendarDeepLink(): string {
+  return `${getStaffAppScheme()}://calendar`;
+}
+
 export function getStaffChatDeepLink(
   conversationId: string,
   messageId?: string
@@ -273,4 +277,10 @@ export function getStaffChatOpenUrl(
 export function getStaffJobOpenUrl(jobId: string): string {
   const appUrl = getAppUrl();
   return appUrl ? `${appUrl}/open/staff/jobs/${encodeURIComponent(jobId)}` : "";
+}
+
+/** HTTPS trampoline for the staff calendar (email / SMS). Prefer shop tenant host. */
+export function getStaffCalendarOpenUrl(shopSubdomain?: string | null): string {
+  const base = getShopAppUrl(shopSubdomain) || getCanonicalAppBaseUrl();
+  return base ? `${base.replace(/\/$/, "")}/open/staff/calendar` : "";
 }

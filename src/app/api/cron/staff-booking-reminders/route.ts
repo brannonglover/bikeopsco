@@ -12,7 +12,7 @@ import { formatCollectionWindowRange } from "@/lib/format-collection-window";
 import { getShopTimezone } from "@/lib/shop-timezone";
 import { getShopNotifyEmail } from "@/lib/shop-notify-email";
 import { sendPushToAllStaff } from "@/lib/push";
-import { getAppUrl } from "@/lib/env";
+import { getStaffCalendarOpenUrl } from "@/lib/env";
 
 const DEFAULT_SHOP_ID = "shop_default";
 
@@ -301,8 +301,13 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const baseUrl = getAppUrl();
-    const calendarUrl = baseUrl ? `${baseUrl}/calendar` : "";
+    const shopRow = await prisma.shop
+      .findUnique({
+        where: { id: DEFAULT_SHOP_ID },
+        select: { subdomain: true },
+      })
+      .catch(() => null);
+    const calendarUrl = getStaffCalendarOpenUrl(shopRow?.subdomain);
     const todayLabel = formatDate(todayStart, timezone);
     const tomorrowLabel = formatDate(tomorrowStart, timezone);
 
