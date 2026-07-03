@@ -35,6 +35,7 @@ export async function GET(request: NextRequest) {
   const billingExempt = isBillingExemptShop(shop);
 
   return NextResponse.json({
+    shopId: shop.id,
     status: shop.billingStatus,
     trialEndsAt: shop.trialEndsAt?.toISOString() ?? null,
     currentPeriodEnd: shop.stripeCurrentPeriodEnd?.toISOString() ?? null,

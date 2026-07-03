@@ -25,6 +25,12 @@
     <priority>0.3</priority>
   </url>
   <url>
+    <loc>https://bikeops.co/terms</loc>
+    <lastmod>2026-07-02</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
     <loc>https://bikeops.co/blog</loc>
     <lastmod>2026-07-01</lastmod>
     <changefreq>weekly</changefreq>
