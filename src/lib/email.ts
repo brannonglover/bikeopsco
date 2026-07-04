@@ -461,6 +461,38 @@ const LEGACY_WAITING_ON_CUSTOMER_TEMPLATE_BODY =
 const WAITING_ON_CUSTOMER_TEMPLATE_BODY =
   `<p>Hi {{customerName}},</p><p>We’re ready to move forward with your {{bikeMake}} {{bikeModel}}, but we need your approval before we continue.</p><p>Please contact the shop to approve the work so we can continue.</p><p style="margin: 20px 0;">{{statusButtonHtml}}</p><p>Thanks,<br/>The {{shopName}} Team</p>`;
 
+const WAITLIST_PROMOTED_DROPOFF_TEMPLATE_BODY =
+  `<p>Hi {{customerName}},</p><p>Great news — a spot has opened up and we’ve booked in your {{bikeMake}} {{bikeModel}}! You’re off the waitlist.</p><p>Please drop your bike off at {{shopName}} at your scheduled time. We’ll keep you posted as the repair progresses.</p><p style="margin: 20px 0;">{{statusButtonHtml}}</p><p>Thanks,<br/>The {{shopName}} Team</p>`;
+
+const WAITLIST_PROMOTED_COLLECTION_TEMPLATE_BODY =
+  `<p>Hi {{customerName}},</p><p>Great news — a spot has opened up and we’ve booked in your {{bikeMake}} {{bikeModel}}! You’re off the waitlist.</p><p>We’ll collect your bike at the arranged time and keep you posted as the repair progresses.</p><p style="margin: 20px 0;">{{statusButtonHtml}}</p><p>Thanks,<br/>The {{shopName}} Team</p>`;
+
+/** Default content for waitlist-promotion templates, used to backfill un-reseeded databases. */
+const WAITLIST_PROMOTED_TEMPLATE_DEFAULTS: Record<
+  string,
+  { name: string; subject: string; bodyHtml: string; deliveryType: "DROP_OFF_AT_SHOP" | "COLLECTION_SERVICE" }
+> = {
+  waitlist_promoted_dropoff: {
+    name: "Waitlist Promoted (Drop-off)",
+    subject: "Good news — a spot opened up for your {{bikeMake}} {{bikeModel}}! – {{shopName}}",
+    bodyHtml: WAITLIST_PROMOTED_DROPOFF_TEMPLATE_BODY,
+    deliveryType: "DROP_OFF_AT_SHOP",
+  },
+  waitlist_promoted_collection: {
+    name: "Waitlist Promoted (Collection)",
+    subject: "Good news — a spot opened up for your {{bikeMake}} {{bikeModel}}! – {{shopName}}",
+    bodyHtml: WAITLIST_PROMOTED_COLLECTION_TEMPLATE_BODY,
+    deliveryType: "COLLECTION_SERVICE",
+  },
+};
+
+/** Slug for the email sent when a waitlist entry is promoted to a booked-in job. */
+export function getWaitlistPromotedTemplateSlug(deliveryType: string): string {
+  return deliveryType === "COLLECTION_SERVICE"
+    ? "waitlist_promoted_collection"
+    : "waitlist_promoted_dropoff";
+}
+
 /**
  * Send one customer-style email using a DB template slug + preview merge data (for staff testing).
  */
@@ -602,6 +634,30 @@ export async function sendJobEmail(
       });
     } catch {
       template = { ...template, bodyHtml: WAITING_ON_CUSTOMER_TEMPLATE_BODY };
+    }
+  }
+
+  // Backfill waitlist-promotion templates for databases that predate them.
+  if (!template && WAITLIST_PROMOTED_TEMPLATE_DEFAULTS[templateSlug]) {
+    const def = WAITLIST_PROMOTED_TEMPLATE_DEFAULTS[templateSlug];
+    try {
+      template = await prisma.emailTemplate.create({
+        data: {
+          shopId,
+          slug: templateSlug,
+          name: def.name,
+          subject: def.subject,
+          bodyHtml: def.bodyHtml,
+          triggerType: "MANUAL",
+          stage: null,
+          deliveryType: def.deliveryType,
+          delayDays: null,
+        },
+      });
+    } catch {
+      template = await prisma.emailTemplate.findUnique({
+        where: { shopId_slug: { shopId, slug: templateSlug } },
+      });
     }
   }
 

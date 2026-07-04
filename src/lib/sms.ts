@@ -124,7 +124,18 @@ const SMS_TEMPLATES: Record<string, string> = {
     "{{shopName}}\n\n{{bikeReadyMessage}}\n\nView your itemized bill: {{billUrl}}\n\nReply STOP to opt out.",
   bike_ready_invoice:
     "{{shopName}}\n\n{{bikeReadyMessage}}\n\nView your itemized bill: {{billUrl}}\n\nReply STOP to opt out.",
+  waitlist_promoted_dropoff:
+    "{{shopName}}\n\nGreat news — a spot opened up! Your {{bikeMake}} {{bikeModel}} is now booked in and off the waitlist.\n\nDrop off at the shop.\n\nTrack: {{statusUrl}}\n\nReply STOP to opt out.",
+  waitlist_promoted_collection:
+    "{{shopName}}\n\nGreat news — a spot opened up! Your {{bikeMake}} {{bikeModel}} is now booked in and off the waitlist.\n\nWe'll collect it as arranged.\n\nTrack: {{statusUrl}}\n\nReply STOP to opt out.",
 };
+
+/** Slug for the SMS sent when a waitlist entry is promoted to a booked-in job. */
+export function getWaitlistPromotedSmsSlug(deliveryType: string): string {
+  return deliveryType === "COLLECTION_SERVICE"
+    ? "waitlist_promoted_collection"
+    : "waitlist_promoted_dropoff";
+}
 
 export function getTemplateSlugForStage(
   stage: string,

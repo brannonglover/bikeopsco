@@ -4,6 +4,10 @@ import { prisma } from "@/lib/db";
 import { Stage } from "@prisma/client";
 import { getAppFeatures } from "@/lib/app-settings";
 import { syncCollectionJobService } from "@/lib/collection-fee";
+import { sendJobEmail, getWaitlistPromotedTemplateSlug } from "@/lib/email";
+import { getWaitlistPromotedSmsSlug, sendJobSms } from "@/lib/sms";
+import { mirrorJobStageToCustomerChat } from "@/lib/system-chat";
+import { getEffectiveEmailUpdatesConsent, getEffectiveSmsConsent } from "@/lib/sms-consent";
 
 function safeServiceIds(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
@@ -161,6 +165,71 @@ export async function POST(
 
       return newJob;
     });
+
+    // Promotion moves the job to BOOKED_IN, so notify the customer with the
+    // dedicated "a spot opened up" waitlist templates (email + SMS + chat mirror).
+    if (features.notifyCustomerEnabled) {
+      try {
+        const jobForNotify = await prisma.job.findUnique({
+          where: { id: job.id, shopId },
+          include: {
+            customer: true,
+            jobBikes: { include: { bike: true }, orderBy: { sortOrder: "asc" } },
+            jobServices: { include: { service: true } },
+            jobProducts: { include: { product: true } },
+          },
+        });
+
+        if (jobForNotify) {
+          const templateSlug = getWaitlistPromotedTemplateSlug(jobForNotify.deliveryType);
+          const smsTemplateSlug = getWaitlistPromotedSmsSlug(jobForNotify.deliveryType);
+          const customerEmail = getEffectiveEmailUpdatesConsent(jobForNotify.customer)
+            ? jobForNotify.customer?.email?.trim()
+            : null;
+          const customerPhone = getEffectiveSmsConsent(jobForNotify.customer)
+            ? jobForNotify.customer?.phone
+            : null;
+
+          const needsShop = Boolean(customerPhone && smsTemplateSlug) ||
+            Boolean(features.chatEnabled && smsTemplateSlug && jobForNotify.customer?.id);
+          const shop = needsShop
+            ? await prisma.shop.findUnique({
+                where: { id: shopId },
+                select: { name: true, subdomain: true },
+              })
+            : null;
+
+          if (customerEmail && templateSlug) {
+            sendJobEmail(templateSlug, customerEmail, jobForNotify).catch((e) =>
+              console.error("[Waitlist promote] Booking email failed:", e)
+            );
+          }
+
+          if (customerPhone && smsTemplateSlug) {
+            sendJobSms(smsTemplateSlug, customerPhone, jobForNotify, shop ?? undefined)
+              .then((result) => {
+                if (!result.ok)
+                  console.error("[Waitlist promote] SMS failed:", result.error);
+              })
+              .catch((e) => console.error("[Waitlist promote] SMS threw:", e));
+          }
+
+          if (features.chatEnabled && jobForNotify.customer?.id && smsTemplateSlug) {
+            mirrorJobStageToCustomerChat({
+              shopId,
+              customerId: jobForNotify.customer.id,
+              job: jobForNotify,
+              smsTemplateSlug,
+              shopHint: shop ?? undefined,
+            }).catch((e) =>
+              console.error("[Waitlist promote] chat mirror failed:", e)
+            );
+          }
+        }
+      } catch (e) {
+        console.error("[Waitlist promote] Customer notification failed:", e);
+      }
+    }
 
     return NextResponse.json({ jobId: job.id });
   } catch (error) {
