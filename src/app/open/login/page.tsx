@@ -10,29 +10,43 @@ function getTokenFromHash(): string | null {
   return params.get("token");
 }
 
-function webChatUrlForToken(token: string | null): string {
-  if (!token) return "/chat/c";
-  return `/chat/c#token=${encodeURIComponent(token)}`;
+async function verifyInBrowser(token: string): Promise<boolean> {
+  const res = await fetch("/api/chat/verify", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+  return res.ok;
 }
 
 export default function OpenLoginPage() {
-  const [webChatUrl, setWebChatUrl] = useState("/chat/c");
+  const [browserHref, setBrowserHref] = useState("/book");
 
   useEffect(() => {
     const token = getTokenFromHash();
-    const chatUrl = webChatUrlForToken(token);
-    setWebChatUrl(chatUrl);
-
     if (!token) {
-      window.location.replace("/chat/c");
+      window.location.replace("/book");
       return;
     }
+
+    void verifyInBrowser(token).then((ok) => {
+      if (ok) setBrowserHref("/book");
+    });
 
     // Prefer native app when installed (Universal Link may open the app before this runs).
     window.location.href = `bikeops://login#token=${encodeURIComponent(token)}`;
 
     const fallbackTimer = window.setTimeout(() => {
-      window.location.replace(chatUrl);
+      void (async () => {
+        const ok = await verifyInBrowser(token);
+        if (ok) {
+          window.history.replaceState(null, "", "/open/login");
+          window.location.replace("/book");
+          return;
+        }
+        window.location.replace(`/chat/c#token=${encodeURIComponent(token)}`);
+      })();
     }, 2500);
 
     return () => window.clearTimeout(fallbackTimer);
@@ -53,10 +67,10 @@ export default function OpenLoginPage() {
       <h1 style={{ fontSize: 24, fontWeight: 600, marginBottom: 12 }}>Signing you in…</h1>
       <p style={{ color: "#64748b", textAlign: "center", maxWidth: 360, marginBottom: 24 }}>
         Opening the BikeOps app if it&apos;s installed. You can also continue in your browser to
-        chat with your shop.
+        view your account.
       </p>
       <Link
-        href={webChatUrl}
+        href={browserHref}
         style={{
           color: "#4f46e5",
           fontWeight: 600,

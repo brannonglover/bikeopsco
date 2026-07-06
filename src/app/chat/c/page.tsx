@@ -14,6 +14,27 @@ import { jobAccessApiSuffix, readJobAccessParam, withJobAccessQuery } from "@/li
 
 const POLL_INTERVAL_MS = 3000;
 
+function isChatInviteUrl(): boolean {
+  if (typeof window === "undefined") return false;
+  return new URLSearchParams(window.location.search).get("src") === "chat";
+}
+
+async function redirectAfterAccountSignIn(): Promise<void> {
+  try {
+    const res = await fetch("/api/chat/my-jobs", { credentials: "include" });
+    if (res.ok) {
+      const jobs = (await res.json()) as { id: string }[];
+      if (Array.isArray(jobs) && jobs.length > 0) {
+        window.location.replace(`/status/${jobs[0].id}`);
+        return;
+      }
+    }
+  } catch {
+    // ignore
+  }
+  window.location.replace("/book");
+}
+
 export default function CustomerChatPage() {
   const searchParams = useSearchParams();
   const jobAccess = readJobAccessParam(searchParams);
@@ -247,7 +268,11 @@ export default function CustomerChatPage() {
           const data = await me.json();
           setCustomerName(data.lastName ? `${data.firstName} ${data.lastName}` : data.firstName);
           setInviteToken(null);
-          setStatus("chat");
+          if (isChatInviteUrl()) {
+            setStatus("chat");
+          } else {
+            await redirectAfterAccountSignIn();
+          }
           return;
         }
       }
@@ -568,35 +593,46 @@ export default function CustomerChatPage() {
   }
 
   if (status === "inviteConsent") {
+    const chatInvite = isChatInviteUrl();
     return (
       <div className="flex-1 flex items-center justify-center p-6">
         <div className="w-full max-w-md">
           <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h1 className="text-xl font-semibold text-slate-900 mb-2">Join the chat</h1>
+            <h1 className="text-xl font-semibold text-slate-900 mb-2">
+              {chatInvite ? "Join the chat" : "Sign in to your account"}
+            </h1>
             <p className="text-slate-600 text-sm mb-6">
-              You can also opt into service-related text messages before you start chatting.
+              {chatInvite
+                ? "You can also opt into service-related text messages before you start chatting."
+                : "Continue to view your repairs, bookings, and messages with your shop."}
             </p>
             <form onSubmit={handleInviteAccept} className="space-y-4">
-              <label className="flex cursor-pointer gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <input
-                  type="checkbox"
-                  checked={inviteSmsConsent}
-                  onChange={(e) => setInviteSmsConsent(e.target.checked)}
-                  className="mt-1 h-4 w-4 shrink-0 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500/20"
-                />
-                <span className="text-sm leading-snug text-slate-700">
-                  Optional: I agree to receive service-related SMS about my repair,
-                  including status updates and questions about my bike. No marketing.
-                  Message frequency varies. Message &amp; data rates may apply. Reply{" "}
-                  <strong>STOP</strong> to opt out.
-                </span>
-              </label>
+              {chatInvite ? (
+                <label className="flex cursor-pointer gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <input
+                    type="checkbox"
+                    checked={inviteSmsConsent}
+                    onChange={(e) => setInviteSmsConsent(e.target.checked)}
+                    className="mt-1 h-4 w-4 shrink-0 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500/20"
+                  />
+                  <span className="text-sm leading-snug text-slate-700">
+                    Optional: I agree to receive service-related SMS about my repair,
+                    including status updates and questions about my bike. No marketing.
+                    Message frequency varies. Message &amp; data rates may apply. Reply{" "}
+                    <strong>STOP</strong> to opt out.
+                  </span>
+                </label>
+              ) : null}
               <button
                 type="submit"
                 disabled={inviteAccepting}
                 className="w-full rounded-lg bg-emerald-600 px-4 py-3 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {inviteAccepting ? "Opening chat…" : "Continue to chat"}
+                {inviteAccepting
+                  ? "Signing in…"
+                  : chatInvite
+                    ? "Continue to chat"
+                    : "Continue"}
               </button>
             </form>
             {inviteMessage && (

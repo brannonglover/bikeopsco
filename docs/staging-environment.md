@@ -249,8 +249,8 @@ After `develop` is deployed and the domain is active:
 2. Enter an email that exists as a customer on the **staging** database.
 3. Submit **Send sign-in link**.
 4. Open the email and confirm the link target is:
-   - **`https://dev.bikeops.co/chat/c#token=...`** (fragment, not `/open/login?token=`)
-5. Click the link (or **Continue in browser** if the mail client opened `/open/login#token=...` first).
+   - **`https://dev.bikeops.co/open/login#token=...`** (bridge page prefers the native app, then web chat)
+5. Click the link — the BikeOps app should open when installed; otherwise use **Continue in browser**.
 6. Confirm you land in the chat UI (not a dead end or expired-token loop).
 
 **Debug endpoints (Preview only):**

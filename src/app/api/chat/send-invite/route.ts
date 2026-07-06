@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
 import { prisma } from "@/lib/db";
 import { getAppUrl, getResendApiKey } from "@/lib/env";
+import { buildCustomerMagicLinkUrl } from "@/lib/customer-magic-link";
 import { sendChatMagicLinkEmail } from "@/lib/email";
 import { z } from "zod";
 import { getAppFeatures } from "@/lib/app-settings";
@@ -59,8 +60,7 @@ export async function POST(request: NextRequest) {
       request.headers.get("x-forwarded-host") ?? request.headers.get("host");
     const proto = request.headers.get("x-forwarded-proto") ?? "https";
     const baseUrl = host ? `${proto}://${host}` : getAppUrl();
-    // Fragment so link scanners don't prefetch and burn the one-time token (GET never sees #…).
-    const magicLinkUrl = `${baseUrl}/chat/c#token=${encodeURIComponent(token)}`;
+    const magicLinkUrl = buildCustomerMagicLinkUrl(baseUrl, token, "chat");
 
     const apiKey = getResendApiKey();
     const resend = apiKey ? new Resend(apiKey) : null;
