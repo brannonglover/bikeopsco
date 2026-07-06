@@ -254,6 +254,10 @@ const CUSTOMER_EMAIL_FOOTER_BRAND = "Bike Ops";
 const CUSTOMER_EMAIL_FOOTER_TAGLINE = "Thanks for choosing us for your bike care.";
 const PLATFORM_EMAIL_FOOTER_TAGLINE =
   "Software for bike shops — bookings, repairs, and customer communication.";
+const PLATFORM_SIGNUP_EMAIL_DISCLAIMER =
+  "You received this email because you started signing up for Bike Ops. If you didn't create an account, you can ignore this message.";
+const PLATFORM_SIGNUP_READ_ONLY_NOTICE =
+  "This inbox is not monitored. Please do not reply to this email — use the confirmation link above to finish setting up your workspace.";
 
 function bikeOpsEmailShopSubtitle(): string | null {
   const shop = process.env.SHOP_NAME?.trim();
@@ -410,8 +414,9 @@ export function buildCustomerEmailHtml(options: {
 </html>`;
 }
 
-function buildCustomerReadOnlyNoticeHtml(): string {
-  return `<p class="email-muted" style="margin:24px 0 0;font-size:12px;line-height:1.6;color:#64748b">This inbox is not monitored. Please do not reply to this email — use the links in this email or contact the shop directly if you need help.</p>`;
+function buildCustomerReadOnlyNoticeHtml(notice?: string): string {
+  const text = notice ?? getCustomerReadOnlyNoticeText();
+  return `<p class="email-muted" style="margin:24px 0 0;font-size:12px;line-height:1.6;color:#64748b">${escapeHtml(text)}</p>`;
 }
 
 function getCustomerReadOnlyNoticeText(): string {
@@ -426,10 +431,11 @@ export function buildReadOnlyCustomerEmailHtml(options: {
   footerSecondary?: string | null;
   footerTagline?: string;
   footerDisclaimer?: string;
+  readOnlyNotice?: string;
 }): string {
   return buildCustomerEmailHtml({
     ...options,
-    innerHtml: `${options.innerHtml}${buildCustomerReadOnlyNoticeHtml()}`,
+    innerHtml: `${options.innerHtml}${buildCustomerReadOnlyNoticeHtml(options.readOnlyNotice)}`,
   });
 }
 
@@ -1267,8 +1273,8 @@ ${buildCustomerEmailCtaButton(details.verificationUrl, "Confirm email and create
     heading: "Confirm your email",
     footerSecondary: null,
     footerTagline: PLATFORM_EMAIL_FOOTER_TAGLINE,
-    footerDisclaimer:
-      "You are receiving this because you started signing up for Bike Ops. If this was not you, you can ignore this message.",
+    footerDisclaimer: PLATFORM_SIGNUP_EMAIL_DISCLAIMER,
+    readOnlyNotice: PLATFORM_SIGNUP_READ_ONLY_NOTICE,
   });
   const attachments = customerEmailBrandingAttachments(branding);
 
