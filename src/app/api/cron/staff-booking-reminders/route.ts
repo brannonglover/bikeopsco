@@ -6,6 +6,7 @@ import {
   buildCustomerEmailCtaButton,
   getCustomerEmailBrandingAssets,
   customerEmailBrandingAttachments,
+  getPlatformFromEmail,
   sendResendEmail,
 } from "@/lib/email";
 import { formatCollectionWindowRange } from "@/lib/format-collection-window";
@@ -21,14 +22,6 @@ function getResend(): Resend | null {
     process.env.RESEND_API_KEY?.trim() ||
     process.env.BIKEOPS_RESEND_API_KEY?.trim();
   return key ? new Resend(key) : null;
-}
-
-function getFromEmail(): string {
-  const raw = process.env.FROM_EMAIL?.trim();
-  if (!raw) return "BBM Services <onboarding@resend.dev>";
-  const match = raw.match(/<([^>]+)>/);
-  const email = match ? match[1].trim() : raw;
-  return `BBM Services <${email}>`;
 }
 
 function escapeHtml(str: string): string {
@@ -359,7 +352,7 @@ ${buildJobTableRows(tomorrowJobs, timezone)}`;
         : `Upcoming bookings: ${subjectParts.join(", ")}`;
 
     const { error } = await sendResendEmail(resend, {
-      from: getFromEmail(),
+      from: getPlatformFromEmail(),
       to: notifyEmail,
       subject,
       html,

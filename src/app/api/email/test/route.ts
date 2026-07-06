@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
   const html = buildReadOnlyCustomerEmailHtml({
     innerHtml: "<p style=\"margin:0\">If you got this, Resend is working.</p>",
     headerLogoSrc: branding.headerLogoSrc,
-    heading: "BBM Services – Email test",
+    heading: "Bike Ops – Email test",
   });
   const attachments = customerEmailBrandingAttachments(branding);
 
@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
     const { data, error, redirectedFrom } = await sendResendEmail(resend, {
       ...getCustomerEmailSendOptions(),
       to,
-      subject: "BBM Services – Email test",
+      subject: "Bike Ops – Email test",
       html,
       ...(attachments && { attachments }),
     });

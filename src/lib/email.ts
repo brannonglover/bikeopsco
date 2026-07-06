@@ -80,9 +80,19 @@ function extractEmailAddress(raw: string | null | undefined): string | null {
   return email || null;
 }
 
+const DEFAULT_EMAIL_FROM_NAME = "Bike Ops";
+
+function formatFromEmail(displayName: string, rawFromEnv?: string | null): string {
+  const email = extractEmailAddress(rawFromEnv) ?? "onboarding@resend.dev";
+  return `${displayName} <${email}>`;
+}
+
+export function getPlatformFromEmail(): string {
+  return formatFromEmail(DEFAULT_EMAIL_FROM_NAME, process.env.FROM_EMAIL);
+}
+
 function getFromEmail(): string {
-  const email = extractEmailAddress(process.env.FROM_EMAIL) ?? "onboarding@resend.dev";
-  return `BBM Services <${email}>`;
+  return getPlatformFromEmail();
 }
 
 function getCustomerNoReplyEmail(): string {
@@ -100,7 +110,7 @@ function getCustomerNoReplyEmail(): string {
 export function getCustomerEmailSendOptions(): { from: string; replyTo: string } {
   const noReplyEmail = getCustomerNoReplyEmail();
   return {
-    from: `BBM Services <${noReplyEmail}>`,
+    from: formatFromEmail(DEFAULT_EMAIL_FROM_NAME, noReplyEmail),
     replyTo: noReplyEmail,
   };
 }
@@ -240,19 +250,22 @@ const BIKE_OPS_EMAIL_DARK = {
   tableRowAlt: "#1a1a26",
 } as const;
 
-const CUSTOMER_EMAIL_FOOTER_BRAND = "Basement Bike Mechanic";
+const CUSTOMER_EMAIL_FOOTER_BRAND = "Bike Ops";
+const CUSTOMER_EMAIL_FOOTER_TAGLINE = "Thanks for choosing us for your bike care.";
+const PLATFORM_EMAIL_FOOTER_TAGLINE =
+  "Software for bike shops — bookings, repairs, and customer communication.";
 
 function bikeOpsEmailShopSubtitle(): string | null {
   const shop = process.env.SHOP_NAME?.trim();
   if (!shop) return null;
   const norm = shop.replace(/\s+/g, " ").toLowerCase();
-  if (norm === "bike ops" || norm === "basement bike mechanic") return null;
+  if (norm === "bike ops") return null;
   return shop;
 }
 
 /** Header logo: height-led so wide wordmarks stay proportional (not full-card width). */
-const EMAIL_HEADER_LOGO_MAX_HEIGHT_PX = 88;
-const EMAIL_HEADER_LOGO_MAX_WIDTH_PX = 320;
+const EMAIL_HEADER_LOGO_MAX_HEIGHT_PX = 112;
+const EMAIL_HEADER_LOGO_MAX_WIDTH_PX = 400;
 
 function resolveEmailImageSrc(src: string, baseUrl = getAppUrl()): string {
   const trimmed = src.trim();
@@ -289,8 +302,20 @@ export function buildCustomerEmailHtml(options: {
   innerHtml: string;
   headerLogoSrc: string;
   heading?: string;
+  footerBrand?: string;
+  /** Omit for shop subtitle from env; pass `null` to hide secondary footer line. */
+  footerSecondary?: string | null;
+  footerTagline?: string;
+  footerDisclaimer?: string;
 }): string {
-  const { innerHtml, headerLogoSrc, heading } = options;
+  const {
+    innerHtml,
+    headerLogoSrc,
+    heading,
+    footerBrand = CUSTOMER_EMAIL_FOOTER_BRAND,
+    footerTagline = CUSTOMER_EMAIL_FOOTER_TAGLINE,
+    footerDisclaimer = "You are receiving this because you booked or interacted with our shop. If this was not you, you can ignore this message.",
+  } = options;
   const { font, bgPage, bgCard, bgFooter, border, text, heading: headColor, muted, accentBar } =
     BIKE_OPS_EMAIL;
 
@@ -304,7 +329,8 @@ export function buildCustomerEmailHtml(options: {
   </tr>`
     : "";
 
-  const shopSub = bikeOpsEmailShopSubtitle();
+  const shopSub =
+    options.footerSecondary === undefined ? bikeOpsEmailShopSubtitle() : options.footerSecondary;
   const footerSecondary = shopSub
     ? `<p class="email-footer-secondary" style="margin:6px 0 0;font-family:${font};font-size:13px;line-height:1.5;color:${muted}">${escapeHtml(shopSub)}</p>`
     : "";
@@ -318,7 +344,7 @@ export function buildCustomerEmailHtml(options: {
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="color-scheme" content="light dark" />
   <meta name="supported-color-schemes" content="light dark" />
-  <title>${escapeHtml(CUSTOMER_EMAIL_FOOTER_BRAND)}</title>
+  <title>${escapeHtml(footerBrand)}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&amp;display=swap" rel="stylesheet" />
@@ -368,15 +394,15 @@ export function buildCustomerEmailHtml(options: {
         </tr>
         <tr>
           <td class="email-footer" style="padding:24px 40px 28px;background-color:${bgFooter};border-top:1px solid ${border}">
-            <p class="email-footer-brand" style="margin:0;font-family:${font};font-size:14px;line-height:1.5;font-weight:600;color:${headColor}">${escapeHtml(CUSTOMER_EMAIL_FOOTER_BRAND)}</p>
+            <p class="email-footer-brand" style="margin:0;font-family:${font};font-size:14px;line-height:1.5;font-weight:600;color:${headColor}">${escapeHtml(footerBrand)}</p>
             ${footerSecondary}
-            <p class="email-muted" style="margin:10px 0 0;font-family:${font};font-size:12px;line-height:1.5;color:${muted}">Thanks for choosing us for your bike care.</p>
+            <p class="email-muted" style="margin:10px 0 0;font-family:${font};font-size:12px;line-height:1.5;color:${muted}">${escapeHtml(footerTagline)}</p>
           </td>
         </tr>
       </tbody>
     </table>
     <p class="email-disclaimer" style="margin:16px 0 0;font-family:${font};font-size:11px;line-height:1.4;color:${muted};max-width:640px">
-      You are receiving this because you booked or interacted with our shop. If this was not you, you can ignore this message.
+      ${escapeHtml(footerDisclaimer)}
     </p>
   </td></tr></tbody>
 </table>
@@ -396,6 +422,10 @@ export function buildReadOnlyCustomerEmailHtml(options: {
   innerHtml: string;
   headerLogoSrc: string;
   heading?: string;
+  footerBrand?: string;
+  footerSecondary?: string | null;
+  footerTagline?: string;
+  footerDisclaimer?: string;
 }): string {
   return buildCustomerEmailHtml({
     ...options,
@@ -1235,6 +1265,10 @@ ${buildCustomerEmailCtaButton(details.verificationUrl, "Confirm email and create
     innerHtml,
     headerLogoSrc: branding.headerLogoSrc,
     heading: "Confirm your email",
+    footerSecondary: null,
+    footerTagline: PLATFORM_EMAIL_FOOTER_TAGLINE,
+    footerDisclaimer:
+      "You are receiving this because you started signing up for Bike Ops. If this was not you, you can ignore this message.",
   });
   const attachments = customerEmailBrandingAttachments(branding);
 
