@@ -15,6 +15,7 @@ import { mirrorJobStageToCustomerChat } from "@/lib/system-chat";
 import { normalizeJobCollectionWindowsForStorage } from "@/lib/normalize-job-collection-windows";
 import { withPrismaRetry } from "@/lib/prisma-retry";
 import { optionalTrimmedString } from "@/lib/zod-helpers";
+import { getJobQueueInfo } from "@/lib/job-queue-position";
 
 const bikeSchema = z.object({
   make: z.string().min(1),
@@ -121,11 +122,13 @@ export async function GET(
           }
         : null;
     const jobWithoutPayments = { ...job, payments: undefined };
+    const queueInfo = await getJobQueueInfo(prisma, shop.id, job);
     const res = NextResponse.json({
       ...jobWithoutPayments,
       customer,
       paymentStatus: paymentSummary.paymentStatus,
       totalPaid,
+      queueInfo,
     });
     res.headers.set("Cache-Control", "no-store");
     return res;
@@ -260,6 +263,9 @@ export async function PATCH(
     if (stageChanged) {
       updateData.completedAt = data.stage === "COMPLETED" ? new Date() : null;
       updateData.columnSortOrder = null;
+      if (data.stage === "RECEIVED") {
+        updateData.receivedAt = new Date();
+      }
       // Reopening a completed job brings it back to the active board and payment flows.
       if (
         data.archived === undefined &&
@@ -689,11 +695,13 @@ export async function PATCH(
           }
         : null;
     const jobWithoutPayments = { ...job, payments: undefined };
+    const queueInfo = await getJobQueueInfo(prisma, shop.id, job);
     const res = NextResponse.json({
       ...jobWithoutPayments,
       customer,
       paymentStatus: paymentSummary.paymentStatus,
       totalPaid,
+      queueInfo,
     });
     res.headers.set("Cache-Control", "no-store");
     return res;

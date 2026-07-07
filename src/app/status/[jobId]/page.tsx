@@ -33,6 +33,23 @@ const STAGE_DESCRIPTIONS: Record<string, string> = {
   CANCELLED: "This job has been cancelled.",
 };
 
+function QueuePositionBanner({ queueInfo }: { queueInfo: JobQueueInfo }) {
+  const title =
+    queueInfo.stage === "BOOKED_IN" ? "Booking queue" : "Service queue";
+
+  return (
+    <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5">
+      <p className="text-xs font-semibold uppercase tracking-wide text-blue-800">
+        {title}
+      </p>
+      <p className="mt-1 text-sm font-medium text-blue-900">
+        #{queueInfo.position} of {queueInfo.queueSize}
+      </p>
+      <p className="mt-0.5 text-sm text-blue-800">{queueInfo.label}</p>
+    </div>
+  );
+}
+
 const BIKE_STATUS_LABEL: Record<string, string> = {
   PENDING_APPROVAL: "Awaiting confirmation",
   BOOKED_IN: "Booked in",
@@ -72,12 +89,21 @@ type StatusJobService = {
   jobBike?: { id: string } | null;
 };
 
+type JobQueueInfo = {
+  stage: "BOOKED_IN" | "RECEIVED";
+  position: number;
+  queueSize: number;
+  aheadCount: number;
+  label: string;
+};
+
 type StatusJob = {
   id: string;
   bikeMake: string;
   bikeModel: string;
   stage: string;
   workingOnJobBikeId?: string | null;
+  queueInfo?: JobQueueInfo | null;
   jobBikes?: StatusJobBike[];
   customer?: {
     bikes?: { make: string; model: string; imageUrl: string | null }[];
@@ -357,6 +383,7 @@ export default function StatusPage() {
                   {job.cancellationReason}
                 </p>
               )}
+            {job.queueInfo && <QueuePositionBanner queueInfo={job.queueInfo} />}
           </div>
         </div>
 

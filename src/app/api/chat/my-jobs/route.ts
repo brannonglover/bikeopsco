@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCustomerFromSession } from "@/lib/chat-session";
 import { getAppFeatures } from "@/lib/app-settings";
+import { getJobQueueInfo } from "@/lib/job-queue-position";
 
 export const dynamic = "force-dynamic";
 
@@ -28,11 +29,24 @@ export async function GET() {
     take: 5,
     select: {
       id: true,
+      shopId: true,
       bikeMake: true,
       bikeModel: true,
       stage: true,
+      createdAt: true,
+      receivedAt: true,
     },
   });
 
-  return NextResponse.json(jobs);
+  const jobsWithQueue = await Promise.all(
+    jobs.map(async (job) => ({
+      id: job.id,
+      bikeMake: job.bikeMake,
+      bikeModel: job.bikeModel,
+      stage: job.stage,
+      queueInfo: await getJobQueueInfo(prisma, job.shopId, job),
+    }))
+  );
+
+  return NextResponse.json(jobsWithQueue);
 }

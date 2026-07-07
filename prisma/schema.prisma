@@ -162,6 +162,7 @@ model Job {
   customerNotes     String?
   cancellationReason String?
   completedAt       DateTime?
+  receivedAt        DateTime?
   archivedAt        DateTime?
   columnSortOrder   Float?
   paymentStatus     PaymentStatus @default(UNPAID)

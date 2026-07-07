@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { getCustomerFromSession } from "@/lib/chat-session";
 import { getAppFeatures } from "@/lib/app-settings";
 import { requireCurrentShop } from "@/lib/shop";
+import { getJobQueueInfo } from "@/lib/job-queue-position";
 
 export const dynamic = "force-dynamic";
 
@@ -29,5 +30,12 @@ export async function GET() {
     },
   });
 
-  return NextResponse.json(jobs);
+  const jobsWithQueue = await Promise.all(
+    jobs.map(async (job) => ({
+      ...job,
+      queueInfo: await getJobQueueInfo(prisma, shop.id, job),
+    }))
+  );
+
+  return NextResponse.json(jobsWithQueue);
 }

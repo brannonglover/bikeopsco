@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef } from "react";
 
 function getTokenFromHash(): string | null {
   if (typeof window === "undefined") return null;
@@ -21,7 +21,7 @@ async function verifyInBrowser(token: string): Promise<boolean> {
 }
 
 export default function OpenLoginPage() {
-  const [browserHref, setBrowserHref] = useState("/book");
+  const verifiedRef = useRef(false);
 
   useEffect(() => {
     const token = getTokenFromHash();
@@ -30,16 +30,14 @@ export default function OpenLoginPage() {
       return;
     }
 
-    void verifyInBrowser(token).then((ok) => {
-      if (ok) setBrowserHref("/book");
-    });
-
     // Prefer native app when installed (Universal Link may open the app before this runs).
     window.location.href = `bikeops://login#token=${encodeURIComponent(token)}`;
 
     const fallbackTimer = window.setTimeout(() => {
       void (async () => {
+        if (verifiedRef.current) return;
         const ok = await verifyInBrowser(token);
+        verifiedRef.current = true;
         if (ok) {
           window.history.replaceState(null, "", "/open/login");
           window.location.replace("/book");
@@ -70,7 +68,18 @@ export default function OpenLoginPage() {
         view your account.
       </p>
       <Link
-        href={browserHref}
+        href="/book"
+        onClick={(e) => {
+          const token = getTokenFromHash();
+          if (!token || verifiedRef.current) return;
+          e.preventDefault();
+          void (async () => {
+            const ok = await verifyInBrowser(token);
+            verifiedRef.current = true;
+            window.history.replaceState(null, "", "/open/login");
+            window.location.replace(ok ? "/book" : `/chat/c#token=${encodeURIComponent(token)}`);
+          })();
+        }}
         style={{
           color: "#4f46e5",
           fontWeight: 600,
