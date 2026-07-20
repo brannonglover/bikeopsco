@@ -21,6 +21,7 @@ const updateSchema = z.object({
     .nullable()
     .optional(),
   shopPhone: z.string().trim().nullable().optional(),
+  address: z.string().trim().max(300).nullable().optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -44,9 +45,13 @@ export async function PUT(request: NextRequest) {
     const body = await request.json();
     const data = updateSchema.parse(body);
 
-    if (data.logoUrl === undefined && data.shopPhone === undefined) {
+    if (
+      data.logoUrl === undefined &&
+      data.shopPhone === undefined &&
+      data.address === undefined
+    ) {
       return NextResponse.json(
-        { error: "Provide logoUrl and/or shopPhone to update." },
+        { error: "Provide logoUrl, shopPhone, and/or address to update." },
         { status: 400 }
       );
     }
@@ -67,6 +72,7 @@ export async function PUT(request: NextRequest) {
       await updateAppBranding(token.shopId, {
         ...(data.logoUrl !== undefined ? { logoUrl: data.logoUrl } : {}),
         ...(shopPhone !== undefined ? { shopPhone } : {}),
+        ...(data.address !== undefined ? { address: data.address } : {}),
       })
     );
   } catch (error) {

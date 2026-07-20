@@ -33,7 +33,10 @@ function normalizeRadiusMiles(raw: number | null | undefined): number {
   return Math.max(0.1, Math.min(100, val));
 }
 
-function haversineMiles(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+export function haversineMiles(
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number }
+): number {
   const toRad = (deg: number) => (deg * Math.PI) / 180;
   const R = 3958.7613; // Earth radius in miles
   const dLat = toRad(b.lat - a.lat);
@@ -47,7 +50,10 @@ function haversineMiles(a: { lat: number; lng: number }, b: { lat: number; lng: 
   return R * c;
 }
 
-async function geocodeAddress(address: string, apiKey: string): Promise<{
+export async function geocodeAddress(
+  address: string,
+  apiKey: string
+): Promise<{
   location: { lat: number; lng: number };
   formattedAddress: string | null;
 } | null> {

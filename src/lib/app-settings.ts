@@ -32,6 +32,10 @@ export type AppBranding = {
   logoAlt: string;
   /** Public shop phone for customer call-to-action (E.164 when set). */
   shopPhone: string | null;
+  /** Public street address used for nearby shop search. */
+  address: string | null;
+  latitude: number | null;
+  longitude: number | null;
 };
 
 const CLOSED_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -76,6 +80,9 @@ export const DEFAULT_BRANDING: AppBranding = {
   logoUrl: null,
   logoAlt: "Bike Ops",
   shopPhone: null,
+  address: null,
+  latitude: null,
+  longitude: null,
 };
 
 /** Normalize/clear shop phone. Throws if a non-empty value is invalid. */
@@ -158,12 +165,23 @@ export async function upsertAppFeatures(
 
 function toBranding(
   settings: { logoUrl: string | null; shopPhone: string | null } | null | undefined,
-  shopName: string | null | undefined,
+  shop:
+    | {
+        name: string | null | undefined;
+        address?: string | null;
+        latitude?: number | null;
+        longitude?: number | null;
+      }
+    | null
+    | undefined,
 ): AppBranding {
   return {
     logoUrl: settings?.logoUrl?.trim() || null,
-    logoAlt: shopName?.trim() || DEFAULT_BRANDING.logoAlt,
+    logoAlt: shop?.name?.trim() || DEFAULT_BRANDING.logoAlt,
     shopPhone: settings?.shopPhone?.trim() || null,
+    address: shop?.address?.trim() || null,
+    latitude: shop?.latitude ?? null,
+    longitude: shop?.longitude ?? null,
   };
 }
 
@@ -177,11 +195,11 @@ export async function getAppBranding(shopId?: string): Promise<AppBranding> {
       }),
       prisma.shop.findUnique({
         where: { id: resolvedShopId },
-        select: { name: true },
+        select: { name: true, address: true, latitude: true, longitude: true },
       }),
     ]);
 
-    return toBranding(settings, shop?.name);
+    return toBranding(settings, shop);
   } catch (e) {
     console.warn("[app-settings] Failed to load branding; using defaults:", e);
     return DEFAULT_BRANDING;
@@ -190,7 +208,7 @@ export async function getAppBranding(shopId?: string): Promise<AppBranding> {
 
 export async function updateAppBranding(
   shopId: string,
-  next: Partial<Pick<AppBranding, "logoUrl" | "shopPhone">>,
+  next: Partial<Pick<AppBranding, "logoUrl" | "shopPhone" | "address">>,
 ): Promise<AppBranding> {
   const updateData: { logoUrl?: string | null; shopPhone?: string | null } = {};
   if (next.logoUrl !== undefined) updateData.logoUrl = next.logoUrl;
@@ -208,9 +226,40 @@ export async function updateAppBranding(
     select: {
       logoUrl: true,
       shopPhone: true,
-      shop: { select: { name: true } },
+      shop: {
+        select: { name: true, address: true, latitude: true, longitude: true },
+      },
     },
   });
 
-  return toBranding(updated, updated.shop.name);
+  let shop = updated.shop;
+
+  if (next.address !== undefined) {
+    const trimmed = next.address?.trim() || null;
+    let latitude: number | null = null;
+    let longitude: number | null = null;
+    let address = trimmed;
+
+    if (trimmed) {
+      const { getGooglePlacesApiKey } = await import("@/lib/env");
+      const { geocodeAddress } = await import("@/lib/collection-radius");
+      const apiKey = getGooglePlacesApiKey();
+      if (apiKey) {
+        const geo = await geocodeAddress(trimmed, apiKey);
+        if (geo) {
+          latitude = geo.location.lat;
+          longitude = geo.location.lng;
+          address = geo.formattedAddress ?? trimmed;
+        }
+      }
+    }
+
+    shop = await prisma.shop.update({
+      where: { id: shopId },
+      data: { address, latitude, longitude },
+      select: { name: true, address: true, latitude: true, longitude: true },
+    });
+  }
+
+  return toBranding(updated, shop);
 }

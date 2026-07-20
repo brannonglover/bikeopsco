@@ -12,6 +12,7 @@
 
   position: fixed;
   right: max(1rem, env(safe-area-inset-right));
+  /* Leave room for the closed launcher; open panel can sit lower for height. */
   bottom: max(4.5rem, calc(env(safe-area-inset-bottom) + 4rem));
   z-index: 9990;
   font-family:
@@ -71,6 +72,10 @@
   background: var(--sc-paper);
   box-shadow: var(--sc-shadow);
   overflow: hidden;
+}
+
+.site-chat-root.is-open {
+  bottom: max(1rem, env(safe-area-inset-bottom));
 }
 
 .site-chat-root.is-open .site-chat-panel {
@@ -227,10 +232,14 @@
   color: #94a3b8;
 }
 
-.site-chat-intake > .site-chat-send {
+.site-chat-root.is-intake .site-chat-input-wrap {
+  display: none;
+}
+
+.site-chat-root.is-intake .site-chat-composer > .site-chat-send {
   width: 100%;
   min-height: 2.75rem;
-  margin-top: 0.15rem;
+  height: auto;
   border-radius: 0.75rem;
 }
 

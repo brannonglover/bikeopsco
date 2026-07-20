@@ -22,7 +22,9 @@
     '<button type="button" class="site-chat-close" aria-label="Close chat">&times;</button>' +
     "</header>" +
     '<form class="site-chat-form" id="site-chat-form" novalidate>' +
-    '<input class="site-chat-honeypot" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" />' +
+    // Intentionally obscure name — "website" gets autofilled by browsers/password managers,
+    // which falsely tripped the server honeypot and opened an empty chat with no session.
+    '<input class="site-chat-honeypot" type="text" name="sc_hp" id="site-chat-hp" value="" tabindex="-1" autocomplete="new-password" aria-hidden="true" />' +
     '<div class="site-chat-body">' +
     '<div class="site-chat-welcome" id="site-chat-welcome">' +
     "<strong>Start a conversation</strong>" +
@@ -82,7 +84,7 @@
   var nameEl = root.querySelector("#site-chat-name");
   var phoneEl = root.querySelector("#site-chat-phone");
   var consentEl = root.querySelector("#site-chat-consent");
-  var honeypot = form.querySelector('input[name="website"]');
+  var honeypot = form.querySelector("#site-chat-hp");
 
   var state = {
     sessionToken: null,
@@ -92,14 +94,23 @@
     sending: false,
   };
 
+  // Password managers often autofill hidden fields. Clear on real-field focus so
+  // humans are not treated as bots; bots that mass-fill still get caught.
+  function clearAutofilledHoneypot() {
+    if (honeypot && honeypot.value) honeypot.value = "";
+  }
+  [nameEl, phoneEl, inputEl, consentEl].forEach(function (el) {
+    el.addEventListener("focus", clearAutofilledHoneypot);
+  });
+
   function mountIntakeComposer() {
     messageField.appendChild(inputEl);
-    if (errorEl.nextSibling !== sendBtn) {
-      intakeEl.insertBefore(errorEl, sendBtn);
+    if (errorEl.parentElement !== composerEl) {
+      composerEl.insertBefore(errorEl, composerWrap);
     }
-    if (sendBtn.parentElement !== intakeEl) {
-      intakeEl.appendChild(sendBtn);
-    }
+    // Keep Start chat pinned in the footer so it is never clipped by the
+    // scrollable intake body.
+    composerEl.appendChild(sendBtn);
   }
 
   function mountChatComposer() {
@@ -110,25 +121,34 @@
     composerWrap.appendChild(sendBtn);
   }
 
+  function syncSendLabel() {
+    if (state.sending) {
+      sendBtn.textContent = state.started ? "Sending…" : "Starting…";
+      return;
+    }
+    sendBtn.textContent = state.started ? "Send" : "Start chat";
+  }
+
   function setMode(mode) {
     var isChat = mode === "chat";
     root.classList.toggle("is-intake", !isChat);
     root.classList.toggle("is-chat", isChat);
-    sendBtn.textContent = isChat ? "Send" : "Start chat";
+    syncSendLabel();
     inputEl.placeholder = isChat
       ? "Type a message…"
       : "What would you like to know?";
     inputEl.rows = isChat ? 1 : 3;
+    // Composer footer stays visible in both modes so the primary action is
+    // never scrolled out of view during intake.
+    composerEl.hidden = false;
     if (isChat) {
       mountChatComposer();
       intakeEl.setAttribute("hidden", "");
       welcomeEl.setAttribute("hidden", "");
-      composerEl.hidden = false;
     } else {
       mountIntakeComposer();
       intakeEl.removeAttribute("hidden");
       welcomeEl.removeAttribute("hidden");
-      composerEl.hidden = true;
     }
   }
 
@@ -173,13 +193,7 @@
     state.sending = sending;
     sendBtn.disabled = sending;
     sendBtn.setAttribute("aria-busy", sending ? "true" : "false");
-    if (sending) {
-      sendBtn.dataset.label = sendBtn.textContent || "Send";
-      sendBtn.textContent = state.started ? "Sending…" : "Starting…";
-    } else {
-      sendBtn.textContent =
-        sendBtn.dataset.label || (state.started ? "Send" : "Start chat");
-    }
+    syncSendLabel();
   }
 
   function clearSession() {
@@ -389,6 +403,10 @@
       return;
     }
 
+    // Autofill often stuffs the hidden honeypot; once a human has passed
+    // intake validation, ignore that noise so we don't fake-succeed without a session.
+    clearAutofilledHoneypot();
+
     setSendingUi(true);
 
     if (!state.started) {
@@ -403,6 +421,16 @@
         .then(function (result) {
           if (!result.ok) {
             setError(result.data.error || "Could not start chat. Try again.");
+            return;
+          }
+          // Honeypot / malformed responses can be HTTP 200 without a session.
+          // Never enter chat mode without one — that shows an empty thread and
+          // the next send kicks the user back to intake.
+          if (
+            !result.data.sessionToken ||
+            typeof result.data.sessionToken !== "string"
+          ) {
+            setError("Could not start chat. Try again.");
             return;
           }
           state.sessionToken = result.data.sessionToken;
@@ -450,6 +478,12 @@
           renderMessages();
           inputEl.value = text;
           setError(result.data.error || "Could not send message.");
+          return;
+        }
+        if (!result.data.message) {
+          renderMessages();
+          inputEl.value = text;
+          setError("Could not send message. Try again.");
           return;
         }
         mergeMessages([result.data.message]);
