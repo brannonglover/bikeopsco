@@ -4,6 +4,7 @@ import { cache } from "react";
 import { prisma } from "@/lib/db";
 import { requireCurrentShop } from "@/lib/shop";
 import { DEFAULT_SHOP_TIMEZONE, normalizeIANATimezone } from "@/lib/timezone";
+import { normalizePhone } from "@/lib/phone";
 
 export type AppFeatures = {
   bookingsEnabled: boolean;
@@ -29,6 +30,8 @@ export type ClosedDate = {
 export type AppBranding = {
   logoUrl: string | null;
   logoAlt: string;
+  /** Public shop phone for customer call-to-action (E.164 when set). */
+  shopPhone: string | null;
 };
 
 const CLOSED_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -72,7 +75,20 @@ function normalizeClosedDates(value: unknown): ClosedDate[] {
 export const DEFAULT_BRANDING: AppBranding = {
   logoUrl: null,
   logoAlt: "Bike Ops",
+  shopPhone: null,
 };
+
+/** Normalize/clear shop phone. Throws if a non-empty value is invalid. */
+export function coerceShopPhone(value: string | null | undefined): string | null {
+  if (value === undefined || value === null) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const normalized = normalizePhone(trimmed);
+  if (!normalized) {
+    throw new Error("Enter a valid phone number.");
+  }
+  return normalized;
+}
 
 async function loadAppFeaturesForShop(shopId: string): Promise<AppFeatures> {
   try {
@@ -140,13 +156,24 @@ export async function upsertAppFeatures(
   };
 }
 
+function toBranding(
+  settings: { logoUrl: string | null; shopPhone: string | null } | null | undefined,
+  shopName: string | null | undefined,
+): AppBranding {
+  return {
+    logoUrl: settings?.logoUrl?.trim() || null,
+    logoAlt: shopName?.trim() || DEFAULT_BRANDING.logoAlt,
+    shopPhone: settings?.shopPhone?.trim() || null,
+  };
+}
+
 export async function getAppBranding(shopId?: string): Promise<AppBranding> {
   try {
     const resolvedShopId = shopId ?? (await requireCurrentShop()).id;
     const [settings, shop] = await Promise.all([
       prisma.appSettings.findUnique({
         where: { shopId: resolvedShopId },
-        select: { logoUrl: true },
+        select: { logoUrl: true, shopPhone: true },
       }),
       prisma.shop.findUnique({
         where: { id: resolvedShopId },
@@ -154,10 +181,7 @@ export async function getAppBranding(shopId?: string): Promise<AppBranding> {
       }),
     ]);
 
-    return {
-      logoUrl: settings?.logoUrl?.trim() || null,
-      logoAlt: shop?.name?.trim() || DEFAULT_BRANDING.logoAlt,
-    };
+    return toBranding(settings, shop?.name);
   } catch (e) {
     console.warn("[app-settings] Failed to load branding; using defaults:", e);
     return DEFAULT_BRANDING;
@@ -166,26 +190,27 @@ export async function getAppBranding(shopId?: string): Promise<AppBranding> {
 
 export async function updateAppBranding(
   shopId: string,
-  next: Partial<Pick<AppBranding, "logoUrl">>,
+  next: Partial<Pick<AppBranding, "logoUrl" | "shopPhone">>,
 ): Promise<AppBranding> {
+  const updateData: { logoUrl?: string | null; shopPhone?: string | null } = {};
+  if (next.logoUrl !== undefined) updateData.logoUrl = next.logoUrl;
+  if (next.shopPhone !== undefined) updateData.shopPhone = next.shopPhone;
+
   const updated = await prisma.appSettings.upsert({
     where: { shopId },
     create: {
       shopId,
       ...DEFAULT_FEATURES,
       logoUrl: next.logoUrl ?? null,
+      shopPhone: next.shopPhone ?? null,
     },
-    update: {
-      logoUrl: next.logoUrl ?? null,
-    },
+    update: updateData,
     select: {
       logoUrl: true,
+      shopPhone: true,
       shop: { select: { name: true } },
     },
   });
 
-  return {
-    logoUrl: updated.logoUrl?.trim() || null,
-    logoAlt: updated.shop.name?.trim() || DEFAULT_BRANDING.logoAlt,
-  };
+  return toBranding(updated, updated.shop.name);
 }

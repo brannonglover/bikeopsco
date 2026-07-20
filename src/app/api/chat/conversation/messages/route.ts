@@ -3,6 +3,7 @@ import { getCustomerFromSession } from "@/lib/chat-session";
 import { loadCustomerConversationMessages } from "@/lib/chat/customer-conversation-messages";
 import { findOrCreateGeneralConversation } from "@/lib/conversation";
 import { sendPushToAllStaff } from "@/lib/push";
+import { sendStaffNewChatMessageNotification } from "@/lib/email";
 import { z } from "zod";
 import { getAppFeatures } from "@/lib/app-settings";
 import { prisma } from "@/lib/db";
@@ -112,6 +113,14 @@ export async function POST(request: NextRequest) {
       messageId: message.id,
     },
   }).catch((err) => console.error("Push notify staff:", err));
+
+  void sendStaffNewChatMessageNotification({
+    shopId: shop.id,
+    conversationId: conversation.id,
+    messageId: message.id,
+    customerName,
+    messagePreview: pushBody,
+  }).catch((err) => console.error("Email notify staff chat:", err));
 
   return NextResponse.json(message);
 }

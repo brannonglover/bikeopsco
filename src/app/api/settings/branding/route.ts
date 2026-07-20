@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { z } from "zod";
-import { DEFAULT_BRANDING, getAppBranding, updateAppBranding } from "@/lib/app-settings";
+import {
+  DEFAULT_BRANDING,
+  coerceShopPhone,
+  getAppBranding,
+  updateAppBranding,
+} from "@/lib/app-settings";
 import { getShopForHost } from "@/lib/shop";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +18,9 @@ const updateSchema = z.object({
     .refine((value) => value.startsWith("/api/blob") || z.string().url().safeParse(value).success, {
       message: "Logo URL must be a valid URL.",
     })
-    .nullable(),
+    .nullable()
+    .optional(),
+  shopPhone: z.string().trim().nullable().optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -36,7 +43,32 @@ export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
     const data = updateSchema.parse(body);
-    return NextResponse.json(await updateAppBranding(token.shopId, data));
+
+    if (data.logoUrl === undefined && data.shopPhone === undefined) {
+      return NextResponse.json(
+        { error: "Provide logoUrl and/or shopPhone to update." },
+        { status: 400 }
+      );
+    }
+
+    let shopPhone: string | null | undefined;
+    if (data.shopPhone !== undefined) {
+      try {
+        shopPhone = coerceShopPhone(data.shopPhone);
+      } catch (err) {
+        return NextResponse.json(
+          { error: err instanceof Error ? err.message : "Invalid phone number." },
+          { status: 400 }
+        );
+      }
+    }
+
+    return NextResponse.json(
+      await updateAppBranding(token.shopId, {
+        ...(data.logoUrl !== undefined ? { logoUrl: data.logoUrl } : {}),
+        ...(shopPhone !== undefined ? { shopPhone } : {}),
+      })
+    );
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.flatten() }, { status: 400 });

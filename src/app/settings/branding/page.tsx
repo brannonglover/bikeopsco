@@ -2,15 +2,18 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Upload, X } from "lucide-react";
+import { formatPhoneInputUS, phoneToInputValue } from "@/lib/phone";
 
 type AppBranding = {
   logoUrl: string | null;
   logoAlt: string;
+  shopPhone: string | null;
 };
 
 const DEFAULT_BRANDING: AppBranding = {
   logoUrl: null,
   logoAlt: "Bike Ops",
+  shopPhone: null,
 };
 
 export default function BrandingSettingsPage() {
@@ -19,6 +22,8 @@ export default function BrandingSettingsPage() {
   const [brandingSaving, setBrandingSaving] = useState(false);
   const [brandingError, setBrandingError] = useState<string | null>(null);
   const [brandingSaved, setBrandingSaved] = useState(false);
+  const [shopPhoneInput, setShopPhoneInput] = useState("");
+  const [shopPhoneDirty, setShopPhoneDirty] = useState(false);
 
   const fetchBranding = useCallback(async () => {
     setBrandingError(null);
@@ -27,7 +32,10 @@ export default function BrandingSettingsPage() {
       const res = await fetch("/api/settings/branding", { cache: "no-store" });
       if (!res.ok) throw new Error("Failed");
       const data = (await res.json()) as Partial<AppBranding>;
-      setBranding({ ...DEFAULT_BRANDING, ...data });
+      const next = { ...DEFAULT_BRANDING, ...data };
+      setBranding(next);
+      setShopPhoneInput(phoneToInputValue(next.shopPhone));
+      setShopPhoneDirty(false);
     } catch {
       setBrandingError("Failed to load branding.");
     } finally {
@@ -39,7 +47,10 @@ export default function BrandingSettingsPage() {
     void fetchBranding();
   }, [fetchBranding]);
 
-  const saveBranding = async (logoUrl: string | null) => {
+  const saveBranding = async (payload: {
+    logoUrl?: string | null;
+    shopPhone?: string | null;
+  }) => {
     setBrandingSaving(true);
     setBrandingSaved(false);
     setBrandingError(null);
@@ -47,14 +58,17 @@ export default function BrandingSettingsPage() {
       const res = await fetch("/api/settings/branding", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ logoUrl }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) {
         setBrandingError(typeof data?.error === "string" ? data.error : "Failed to save branding.");
         return;
       }
-      setBranding({ ...DEFAULT_BRANDING, ...(data as AppBranding) });
+      const next = { ...DEFAULT_BRANDING, ...(data as AppBranding) };
+      setBranding(next);
+      setShopPhoneInput(phoneToInputValue(next.shopPhone));
+      setShopPhoneDirty(false);
       setBrandingSaved(true);
       window.setTimeout(() => setBrandingSaved(false), 1500);
       window.dispatchEvent(new Event("bikeops:branding-updated"));
@@ -78,7 +92,7 @@ export default function BrandingSettingsPage() {
         setBrandingError(typeof uploadData?.error === "string" ? uploadData.error : "Upload failed.");
         return;
       }
-      await saveBranding(uploadData.url);
+      await saveBranding({ logoUrl: uploadData.url });
     } catch {
       setBrandingError("Upload failed.");
     } finally {
@@ -86,11 +100,17 @@ export default function BrandingSettingsPage() {
     }
   };
 
+  const saveShopPhone = () => {
+    void saveBranding({ shopPhone: shopPhoneInput.trim() || null });
+  };
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-foreground">Branding</h1>
-        <p className="mt-1 text-text-secondary">Upload your business logo for staff, customer pages, and emails.</p>
+        <p className="mt-1 text-text-secondary">
+          Upload your business logo and set the public phone number customers can call from the app.
+        </p>
       </div>
 
       <section className="rounded-xl border border-surface-border bg-surface p-4">
@@ -130,7 +150,7 @@ export default function BrandingSettingsPage() {
                 {branding.logoUrl && (
                   <button
                     type="button"
-                    onClick={() => void saveBranding(null)}
+                    onClick={() => void saveBranding({ logoUrl: null })}
                     disabled={brandingSaving}
                     className="inline-flex items-center gap-2 rounded-lg border border-surface-border bg-background px-3 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-subtle-bg disabled:cursor-not-allowed disabled:opacity-50"
                   >
@@ -138,6 +158,43 @@ export default function BrandingSettingsPage() {
                     Use Bike Ops logo
                   </button>
                 )}
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-surface-border bg-subtle-bg px-3 py-3">
+              <label className="block text-sm font-semibold text-foreground">Shop phone</label>
+              <p className="mt-0.5 text-sm text-text-secondary">
+                Shown on customer job status so they can call the shop. Leave blank to hide the call button.
+                This is separate from mechanic roster numbers.
+              </p>
+              <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+                <input
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  value={shopPhoneInput}
+                  disabled={brandingSaving}
+                  onChange={(e) => {
+                    setShopPhoneInput(formatPhoneInputUS(e.target.value));
+                    setShopPhoneDirty(true);
+                  }}
+                  placeholder="(555) 123-4567"
+                  className="w-full rounded-lg border border-surface-border bg-background px-3 py-2 text-sm text-foreground"
+                />
+                <div className="flex items-end justify-end">
+                  <button
+                    type="button"
+                    onClick={saveShopPhone}
+                    disabled={brandingSaving || !shopPhoneDirty}
+                    className={`h-10 rounded-lg px-3 text-sm font-semibold transition-colors ${
+                      brandingSaving || !shopPhoneDirty
+                        ? "cursor-not-allowed bg-surface-border text-text-muted"
+                        : "bg-amber-600 text-white hover:bg-amber-700"
+                    }`}
+                  >
+                    Save phone
+                  </button>
+                </div>
               </div>
             </div>
 

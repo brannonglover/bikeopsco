@@ -12,6 +12,10 @@ model Shop {
   id                         String   @id @default(cuid())
   name                       String
   subdomain                  String   @unique
+  /// Public street address for directory / nearby search.
+  address                    String?
+  latitude                   Float?
+  longitude                  Float?
   billingStatus              String   @default("trialing")
   trialEndsAt                DateTime?
   stripeCustomerId           String?  @unique
@@ -595,6 +599,8 @@ model AppSettings {
   timezone                 String   @default("America/New_York")
   /// Staff email for booking, payment, chat, and waitlist notifications.
   staffNotifyEmail         String?
+  /// Public shop phone shown to customers (e.g. call button on job status).
+  shopPhone                String?
   logoUrl                  String?
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt

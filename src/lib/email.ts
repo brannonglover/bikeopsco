@@ -14,6 +14,7 @@ import {
   getEmailSendingDisabledReason,
   getResendApiKey,
   getShopAppUrl,
+  getStaffChatOpenUrl,
   getStaffJobOpenUrl,
 } from "./env";
 import { phoneTelHref } from "./phone";
@@ -1356,6 +1357,76 @@ export async function sendWaitlistRequestNotification(entry: {
       from: getFromEmail(),
       to: notifyEmail,
       subject: `Waitlist request — ${process.env.SHOP_NAME || "Basement Bike Mechanic"}`,
+      html,
+      ...(attachments && { attachments }),
+    });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (e) {
+    const err = e instanceof Error ? e.message : "Unknown error";
+    return { ok: false, error: err };
+  }
+}
+
+/** Notify shop staff when a customer sends an in-app chat message. */
+export async function sendStaffNewChatMessageNotification(details: {
+  shopId: string;
+  conversationId: string;
+  messageId?: string;
+  customerName: string;
+  messagePreview: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const resend = getResend();
+  if (!resend) {
+    return { ok: false, error: "Email not configured" };
+  }
+
+  const notifyEmail = await getShopNotifyEmail(details.shopId);
+  if (!notifyEmail) {
+    console.warn(
+      "No staff notification email configured, skipping chat message notification"
+    );
+    return { ok: false, error: "No notification email configured" };
+  }
+
+  const { prisma } = await import("./db");
+  const shopRow = await prisma.shop
+    .findUnique({
+      where: { id: details.shopId },
+      select: { subdomain: true, name: true },
+    })
+    .catch(() => null);
+
+  const staffChatUrl = getStaffChatOpenUrl(
+    details.conversationId,
+    shopRow?.subdomain,
+    details.messageId
+  );
+  const preview =
+    details.messagePreview.trim().slice(0, 280) || "Sent a photo";
+  const shopLabel = shopRow?.name?.trim() || "your shop";
+
+  const innerHtml = `
+<p style="margin:0 0 16px">New chat message from <strong>${escapeHtml(details.customerName)}</strong>.</p>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom:16px;border:1px solid #e2e8f0;border-radius:8px">
+  <tr><td style="padding:12px 16px;font-size:14px;color:#0f172a;white-space:pre-wrap">${escapeHtml(preview)}</td></tr>
+</table>
+${staffChatUrl ? buildCustomerEmailCtaButton(staffChatUrl, "Open conversation") : ""}
+`.trim();
+
+  const branding = await getCustomerEmailBrandingAssets(details.shopId);
+  const html = buildCustomerEmailHtml({
+    innerHtml,
+    headerLogoSrc: branding.headerLogoSrc,
+    heading: "New chat message",
+  });
+  const attachments = customerEmailBrandingAttachments(branding);
+
+  try {
+    const { error } = await sendResendEmail(resend, {
+      from: getFromEmail(),
+      to: notifyEmail,
+      subject: `New message from ${details.customerName} — ${shopLabel}`,
       html,
       ...(attachments && { attachments }),
     });

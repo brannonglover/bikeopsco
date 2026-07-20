@@ -244,8 +244,21 @@ const DEFAULT_TEMPLATES = [
 async function main() {
   const defaultShop = await prisma.shop.upsert({
     where: { id: DEFAULT_SHOP_ID },
-    update: { name: DEFAULT_SHOP_NAME, subdomain: DEFAULT_SHOP_SUBDOMAIN },
-    create: { id: DEFAULT_SHOP_ID, name: DEFAULT_SHOP_NAME, subdomain: DEFAULT_SHOP_SUBDOMAIN },
+    update: {
+      name: DEFAULT_SHOP_NAME,
+      subdomain: DEFAULT_SHOP_SUBDOMAIN,
+      address: "2272 Melinda Dr NE, Atlanta, GA 30345",
+      latitude: 33.855,
+      longitude: -84.285,
+    },
+    create: {
+      id: DEFAULT_SHOP_ID,
+      name: DEFAULT_SHOP_NAME,
+      subdomain: DEFAULT_SHOP_SUBDOMAIN,
+      address: "2272 Melinda Dr NE, Atlanta, GA 30345",
+      latitude: 33.855,
+      longitude: -84.285,
+    },
   });
 
   // Create initial staff user if ADMIN_EMAIL is set

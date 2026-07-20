@@ -89,6 +89,12 @@ export async function sendPushToAllStaff(shopId: string, payload: PushPayload): 
   const records = await prisma.pushToken.findMany({
     where: { shopId, userId: { not: null } },
   });
+  if (records.length === 0) {
+    console.warn(
+      `[push] No staff push tokens for shop ${shopId} — open the staff app on a device and allow notifications`
+    );
+    return;
+  }
   await sendPushToTokens(
     records.map((r) => r.token),
     { title: payload.title, body: payload.body, data: payload.data }

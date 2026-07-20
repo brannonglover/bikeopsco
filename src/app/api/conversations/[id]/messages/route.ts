@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getConfiguredSmsProvider, sendChatStaffSms } from "@/lib/sms";
 import { sendPushToCustomer, sendPushToAllStaff } from "@/lib/push";
+import { sendStaffNewChatMessageNotification } from "@/lib/email";
 import { z } from "zod";
 import { getAppFeatures } from "@/lib/app-settings";
 import { loadStaffConversationMessages } from "@/lib/chat/staff-conversation-messages";
@@ -190,6 +191,14 @@ export async function POST(
         body: pushBody,
         data: { type: "new_message", conversationId, messageId: message.id },
       }).catch((err) => console.error("Push notify staff:", err));
+
+      void sendStaffNewChatMessageNotification({
+        shopId: shop.id,
+        conversationId,
+        messageId: message.id,
+        customerName: customerName || "Customer",
+        messagePreview: pushBody,
+      }).catch((err) => console.error("Email notify staff chat:", err));
     }
 
     return NextResponse.json(message);
