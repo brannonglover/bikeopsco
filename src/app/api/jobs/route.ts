@@ -167,8 +167,16 @@ export async function GET(request: NextRequest) {
           columnSortOrder: true,
           paymentStatus: true,
           workingOnJobBikeId: true,
+          mechanicId: true,
           createdAt: true,
           updatedAt: true,
+          mechanic: {
+            select: {
+              id: true,
+              fullName: true,
+              imageUrl: true,
+            },
+          },
           customer: {
             select: {
               id: true,
@@ -309,6 +317,7 @@ export async function GET(request: NextRequest) {
       where,
       include: {
         customer: { include: { bikes: true } },
+        mechanic: { select: { id: true, fullName: true, imageUrl: true } },
         jobBikes: { include: { bike: true }, orderBy: { sortOrder: "asc" } },
         jobServices: {
           include: { service: true },
@@ -490,6 +499,7 @@ export async function POST(request: NextRequest) {
         where: { id: newJob.id, shopId },
         include: {
           customer: true,
+          mechanic: { select: { id: true, fullName: true, imageUrl: true } },
           jobBikes: { include: { bike: true }, orderBy: { sortOrder: "asc" } },
           jobServices: { include: { service: true } },
           jobProducts: { include: { product: true } },

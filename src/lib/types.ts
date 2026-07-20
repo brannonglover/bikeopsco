@@ -191,6 +191,12 @@ export interface Job {
   collectionReturnWindowEnd: string | null;
   customerId: string | null;
   customer: Customer | null;
+  mechanicId?: string | null;
+  mechanic?: {
+    id: string;
+    fullName: string;
+    imageUrl: string | null;
+  } | null;
   notes: string | null;
   internalNotes: string | null;
   customerNotes: string | null;
