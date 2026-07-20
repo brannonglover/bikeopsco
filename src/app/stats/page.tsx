@@ -1,15 +1,31 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, type ReactNode } from "react";
 import { Price } from "@/components/ui/Price";
+import {
+  MonthlyRevenueChart,
+  RetentionChart,
+  TurnaroundChart,
+} from "@/components/stats/StatsCharts";
+import {
+  SortableStatsLayout,
+  type StatsSectionId,
+} from "@/components/stats/SortableStatsLayout";
+
+interface PeriodTotals {
+  day: number;
+  week: number;
+  month: number;
+  year: number;
+}
 
 interface Stats {
-  bikes: { day: number; week: number; month: number; year: number };
-  revenue: { day: number; week: number; month: number; year: number };
-  shopRevenue: { day: number; week: number; month: number; year: number };
-  stripeRevenue?: { day: number; week: number; month: number; year: number };
-  cashRevenue?: { day: number; week: number; month: number; year: number };
-  importedRevenue: { day: number; week: number; month: number; year: number };
+  bikes: PeriodTotals;
+  revenue: PeriodTotals;
+  shopRevenue: PeriodTotals;
+  stripeRevenue?: PeriodTotals;
+  cashRevenue?: PeriodTotals;
+  importedRevenue: PeriodTotals;
   lastYear?: {
     calendarYear: number;
     revenue: number;
@@ -19,6 +35,27 @@ interface Stats {
     importedRevenue: number;
   };
   topServices: { name: string; count: number; revenue: number }[];
+  monthlyRevenue: {
+    month: string;
+    label: string;
+    revenue: number;
+    previousRevenue: number;
+    changePercent: number | null;
+    changeDirection: "up" | "down" | "flat" | null;
+  }[];
+  turnaround: {
+    month: string;
+    label: string;
+    avgDays: number | null;
+    sampleSize: number;
+  }[];
+  retention: {
+    month: string;
+    label: string;
+    newCustomers: number;
+    returningCustomers: number;
+    retentionRate: number;
+  }[];
 }
 
 const PERIODS = [
@@ -28,6 +65,33 @@ const PERIODS = [
   { key: "year" as const, label: "This Year" },
 ] as const;
 
+function RevenueBreakdown({
+  stripe,
+  cash,
+  imported,
+}: {
+  stripe: number;
+  cash: number;
+  imported: number;
+}) {
+  const parts: { label: string; amount: number }[] = [];
+  if (stripe > 0) parts.push({ label: "Stripe", amount: stripe });
+  if (cash > 0) parts.push({ label: "Cash", amount: cash });
+  if (imported > 0) parts.push({ label: "imported", amount: imported });
+  if (parts.length === 0) return null;
+  return (
+    <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+      {parts.map((p, i) => (
+        <span key={p.label}>
+          {i > 0 ? " · " : null}
+          {p.label}{" "}
+          <Price amount={p.amount} variant="inline" className="text-xs" />
+        </span>
+      ))}
+    </p>
+  );
+}
+
 export default function StatsPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -35,17 +99,14 @@ export default function StatsPage() {
   const [importStatus, setImportStatus] = useState<string | null>(null);
   const [importBusy, setImportBusy] = useState(false);
 
-  const reloadStats = useCallback(
-    async () => {
-      const res = await fetch("/api/stats", { cache: "no-store" });
-      if (!res.ok) {
-        setStats(null);
-        throw new Error(`Failed to load stats (${res.status})`);
-      }
-      setStats((await res.json()) as Stats);
-    },
-    []
-  );
+  const reloadStats = useCallback(async () => {
+    const res = await fetch("/api/stats", { cache: "no-store" });
+    if (!res.ok) {
+      setStats(null);
+      throw new Error(`Failed to load stats (${res.status})`);
+    }
+    setStats((await res.json()) as Stats);
+  }, []);
 
   useEffect(() => {
     reloadStats().finally(() => setLoading(false));
@@ -63,49 +124,33 @@ export default function StatsPage() {
     );
   }
 
-  return (
-    <div className="max-w-5xl">
-      <h1 className="text-2xl font-bold text-slate-900 mb-2">Stats</h1>
-      <p className="text-slate-600 mb-8">
-        Completed bikes by when the job finished. Revenue uses recorded payments when available
-        (Stripe card charges and cash), so card totals match what hit Stripe; imported history
-        (e.g. Square) is separate.
-      </p>
+  const latestRetention = [...(stats.retention ?? [])]
+    .reverse()
+    .find((r) => r.newCustomers + r.returningCustomers > 0);
+  const latestTurnaround = [...(stats.turnaround ?? [])]
+    .reverse()
+    .find((t) => t.avgDays != null);
 
-	      {stats.lastYear && (
-	        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm mb-6 max-w-md">
-	          <p className="text-sm font-medium text-slate-500 uppercase tracking-wide mb-3">
-	            Last Year ({stats.lastYear.calendarYear})
-	          </p>
-	          <div>
-	            <Price amount={stats.lastYear.revenue} variant="total" className="text-2xl" />
-	            <p className="text-sm text-slate-600">revenue</p>
-	            {(() => {
-              const stripe = stats.lastYear.stripeRevenue;
-              const cash = stats.lastYear.cashRevenue;
-              const imp = stats.lastYear.importedRevenue;
-              const parts: { label: string; amount: number }[] = [];
-              if (stripe > 0) parts.push({ label: "Stripe", amount: stripe });
-              if (cash > 0) parts.push({ label: "Cash", amount: cash });
-              if (imp > 0) parts.push({ label: "imported", amount: imp });
-              if (parts.length === 0) return null;
-              return (
-                <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-                  {parts.map((p, i) => (
-                    <span key={p.label}>
-                      {i > 0 ? " · " : null}
-                      {p.label}{" "}
-                      <Price amount={p.amount} variant="inline" className="text-xs" />
-                    </span>
-                  ))}
-                </p>
-              );
-            })()}
-          </div>
+  const sections: Partial<Record<StatsSectionId, ReactNode>> = {
+    lastYear: stats.lastYear ? (
+      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm max-w-md">
+        <p className="text-sm font-medium text-slate-500 uppercase tracking-wide mb-3">
+          Last Year ({stats.lastYear.calendarYear})
+        </p>
+        <div>
+          <Price amount={stats.lastYear.revenue} variant="total" className="text-2xl" />
+          <p className="text-sm text-slate-600">revenue</p>
+          <RevenueBreakdown
+            stripe={stats.lastYear.stripeRevenue}
+            cash={stats.lastYear.cashRevenue}
+            imported={stats.lastYear.importedRevenue}
+          />
         </div>
-      )}
+      </div>
+    ) : null,
 
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 mb-10">
+    periods: (
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
         {PERIODS.map(({ key, label }) => (
           <div
             key={key}
@@ -119,44 +164,88 @@ export default function StatsPage() {
                 <p className="text-2xl font-bold text-slate-900 tabular-nums">
                   {stats.bikes[key]}
                 </p>
-                <p className="text-sm text-slate-600">bikes completed</p>
+                <p className="text-sm text-slate-600">bikes paid</p>
               </div>
               <div>
                 <Price amount={stats.revenue[key]} variant="total" className="text-xl" />
                 <p className="text-sm text-slate-600">revenue</p>
-                {(() => {
-                  const stripe = stats.stripeRevenue?.[key] ?? 0;
-                  const cash = stats.cashRevenue?.[key] ?? 0;
-                  const imp = stats.importedRevenue[key];
-                  const parts: { label: string; amount: number }[] = [];
-                  if (stripe > 0) parts.push({ label: "Stripe", amount: stripe });
-                  if (cash > 0) parts.push({ label: "Cash", amount: cash });
-                  if (imp > 0) parts.push({ label: "imported", amount: imp });
-                  if (parts.length === 0) return null;
-                  return (
-                    <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-                      {parts.map((p, i) => (
-                        <span key={p.label}>
-                          {i > 0 ? " · " : null}
-                          {p.label}{" "}
-                          <Price amount={p.amount} variant="inline" className="text-xs" />
-                        </span>
-                      ))}
-                    </p>
-                  );
-                })()}
+                <RevenueBreakdown
+                  stripe={stats.stripeRevenue?.[key] ?? 0}
+                  cash={stats.cashRevenue?.[key] ?? 0}
+                  imported={stats.importedRevenue[key]}
+                />
               </div>
             </div>
           </div>
         ))}
       </div>
+    ),
 
+    monthlyRevenue: (
+      <section>
+        <div className="flex flex-wrap items-baseline justify-between gap-2 mb-4">
+          <h2 className="text-lg font-semibold text-slate-900">Monthly revenue</h2>
+          <p className="text-sm text-slate-500">
+            Last 12 months · green = up vs prior month, red = down
+          </p>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <MonthlyRevenueChart data={stats.monthlyRevenue ?? []} />
+        </div>
+      </section>
+    ),
+
+    turnaround: (
+      <section>
+        <div className="flex flex-wrap items-baseline justify-between gap-2 mb-4">
+          <h2 className="text-lg font-semibold text-slate-900">Average turnaround</h2>
+          {latestTurnaround?.avgDays != null && (
+            <p className="text-sm text-slate-500">
+              Latest:{" "}
+              <span className="font-medium text-slate-800 tabular-nums">
+                {latestTurnaround.avgDays} days
+              </span>
+            </p>
+          )}
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <p className="text-sm text-slate-500 mb-3">
+            Days from received to completed (or paid), averaged by payment month.
+          </p>
+          <TurnaroundChart data={stats.turnaround ?? []} />
+        </div>
+      </section>
+    ),
+
+    retention: (
+      <section>
+        <div className="flex flex-wrap items-baseline justify-between gap-2 mb-4">
+          <h2 className="text-lg font-semibold text-slate-900">Customer retention</h2>
+          {latestRetention && (
+            <p className="text-sm text-slate-500">
+              Latest:{" "}
+              <span className="font-medium text-slate-800 tabular-nums">
+                {latestRetention.retentionRate}% returning
+              </span>
+            </p>
+          )}
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <p className="text-sm text-slate-500 mb-3">
+            Paying customers each month: returning vs first-time.
+          </p>
+          <RetentionChart data={stats.retention ?? []} />
+        </div>
+      </section>
+    ),
+
+    topServices: (
       <section>
         <h2 className="text-lg font-semibold text-slate-900 mb-4">
           Top 5 Services
         </h2>
         {stats.topServices.length === 0 ? (
-          <p className="text-slate-500 py-6">No completed services yet.</p>
+          <p className="text-slate-500 py-6">No paid services yet.</p>
         ) : (
           <div className="rounded-xl border border-slate-200 bg-white overflow-x-auto shadow-sm">
             <table className="min-w-full">
@@ -201,8 +290,10 @@ export default function StatsPage() {
           </div>
         )}
       </section>
+    ),
 
-      <section className="mt-12 pt-8 border-t border-slate-200">
+    import: (
+      <section className="pt-2 border-t border-slate-200">
         <h2 className="text-lg font-semibold text-slate-900 mb-2">
           Historical Square (or other) revenue
         </h2>
@@ -299,6 +390,18 @@ export default function StatsPage() {
           <p className="mt-3 text-sm text-slate-700 whitespace-pre-wrap">{importStatus}</p>
         )}
       </section>
+    ),
+  };
+
+  return (
+    <div className="max-w-5xl">
+      <h1 className="text-2xl font-bold text-slate-900 mb-2">Stats</h1>
+      <p className="text-slate-600 mb-6">
+        All totals use when the customer paid (Stripe or cash), not when the job was marked
+        finished. Imported history (e.g. Square) is included in revenue by transaction date.
+      </p>
+
+      <SortableStatsLayout sections={sections} />
     </div>
   );
 }

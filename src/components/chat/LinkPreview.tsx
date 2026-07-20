@@ -24,13 +24,45 @@ export function LinkPreview({ url }: LinkPreviewProps) {
     })
       .then((r) => r.json())
       .then((d: OgData) => {
-        if (d.imageUrl) setData(d);
+        if (d.imageUrl || d.title) setData(d);
       })
       .catch(() => {});
     return () => controller.abort();
   }, [url]);
 
-  if (!data || !data.imageUrl || imgError) return null;
+  if (!data) return null;
+
+  const hostname = (() => {
+    try {
+      return new URL(url).hostname.replace(/^www\./, "");
+    } catch {
+      return null;
+    }
+  })();
+
+  if (!data.imageUrl || imgError) {
+    if (!data.title) return null;
+
+    return (
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mt-1.5 block overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition-opacity hover:opacity-90"
+      >
+        <div className="px-3 py-2">
+          {hostname ? (
+            <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
+              {hostname}
+            </div>
+          ) : null}
+          <div className="truncate text-xs font-medium text-slate-700">
+            {data.title}
+          </div>
+        </div>
+      </a>
+    );
+  }
 
   return (
     <a

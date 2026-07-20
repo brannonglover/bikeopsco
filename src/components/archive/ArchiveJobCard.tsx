@@ -27,7 +27,7 @@ export function ArchiveJobCard({
     <button
       type="button"
       onClick={onClick}
-      className={`group flex w-full min-w-0 flex-col overflow-hidden rounded-xl border bg-white p-3 text-left shadow-sm transition-all hover:shadow-md ${
+      className={`group flex h-full w-full min-w-0 flex-col overflow-hidden rounded-xl border bg-white p-3 text-left shadow-sm transition-all hover:shadow-md ${
         isCancelled
           ? "border-red-100 hover:border-red-200"
           : "border-slate-200 hover:border-slate-300"
@@ -66,7 +66,7 @@ export function ArchiveJobCard({
       )}
 
       <div
-        className={`mt-2 flex min-w-0 items-center justify-between gap-2 border-t pt-2 ${
+        className={`mt-auto flex min-w-0 items-center justify-between gap-2 border-t pt-2 ${
           isCancelled ? "border-red-50" : "border-slate-100"
         }`}
       >

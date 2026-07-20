@@ -5,14 +5,9 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import type { ChatMessage, MessageSender } from "@/lib/types";
 import { formatChatTime } from "@/lib/format-chat-time";
+import { extractUrls } from "@/lib/link-preview-url";
 import { LinkifiedMessageBody } from "./LinkifiedMessageBody";
 import { LinkPreview } from "./LinkPreview";
-
-const URL_REGEX = /(https?:\/\/[^\s<]+)/g;
-
-function extractUrls(text: string): string[] {
-  return Array.from(new Set(text.match(URL_REGEX) ?? []));
-}
 
 export const REACTION_EMOJIS = ["\u{1F44D}", "\u{2764}\u{FE0F}", "\u{1F602}", "\u{1F62E}", "\u{1F622}", "\u{1F64F}"];
 

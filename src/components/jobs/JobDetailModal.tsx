@@ -28,6 +28,8 @@ import { toCalendarDateInTimezone } from "@/lib/timezone";
 import { mergeBoardJob } from "@/lib/board-stage-merge";
 import { JOBS_REFRESH_EVENT } from "@/lib/jobs-refresh";
 import { BikeSpecsTab } from "@/components/jobs/BikeSpecsTab";
+import { HistoryTab } from "@/components/jobs/HistoryTab";
+import { LinkifiedMessageBody } from "@/components/chat/LinkifiedMessageBody";
 import { BikeImageSearch } from "@/components/bikes/BikeImageSearch";
 import {
   applyJobProductLineUpdate,
@@ -1759,7 +1761,7 @@ interface JobDetailModalProps {
   onJobDeleted?: (jobId: string) => void;
 }
 
-type Tab = "details" | "invoice" | "bike_specs";
+type Tab = "details" | "invoice" | "bike_specs" | "history";
 
 function PaidStatusBlock({ job }: { job: Job }) {
   const [resending, setResending] = useState(false);
@@ -2772,11 +2774,23 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
           >
             Parts info
           </button>
+          <button
+            onClick={() => setActiveTab("history")}
+            className={`flex-1 sm:flex-none px-4 sm:px-6 py-3 text-sm font-medium transition-colors touch-manipulation ${
+              activeTab === "history"
+                ? "text-blue-600 border-b-2 border-blue-600"
+                : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            History
+          </button>
         </div>
 
         <div className="overflow-y-auto p-4 sm:p-6 flex-1 space-y-6">
           {activeTab === "bike_specs" ? (
             <BikeSpecsTab job={job} />
+          ) : activeTab === "history" ? (
+            <HistoryTab job={job} />
           ) : activeTab === "invoice" ? (
             <InvoiceTab
               job={job}
@@ -3069,13 +3083,21 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
                 {job.customerNotes && (
                   <div>
                     <p className="text-xs font-medium text-slate-500">Customer notes</p>
-                    <p className="text-sm text-slate-700 whitespace-pre-wrap">{job.customerNotes}</p>
+                    <LinkifiedMessageBody
+                      text={job.customerNotes}
+                      className="text-sm text-slate-700 whitespace-pre-wrap"
+                      linkClassName="text-blue-600 hover:text-blue-700"
+                    />
                   </div>
                 )}
                 {job.notes && (
                   <div>
                     <p className="text-xs font-medium text-slate-500">Job notes</p>
-                    <p className="text-sm text-slate-700 whitespace-pre-wrap">{job.notes}</p>
+                    <LinkifiedMessageBody
+                      text={job.notes}
+                      className="text-sm text-slate-700 whitespace-pre-wrap"
+                      linkClassName="text-blue-600 hover:text-blue-700"
+                    />
                   </div>
                 )}
               </div>

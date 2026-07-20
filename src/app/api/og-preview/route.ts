@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  isReiUrl,
+  resolveAttributionUrl,
+  titleFromReiUrl,
+} from "@/lib/link-preview-url";
 
 export async function GET(req: NextRequest) {
-  const url = req.nextUrl.searchParams.get("url");
+  const rawUrl = req.nextUrl.searchParams.get("url");
 
-  if (!url || !/^https?:\/\/.+/.test(url)) {
+  if (!rawUrl || !/^https?:\/\/.+/.test(rawUrl)) {
     return NextResponse.json({ error: "Invalid URL" }, { status: 400 });
   }
+
+  const url = resolveAttributionUrl(rawUrl);
 
   // Block private/internal addresses
   try {
@@ -92,7 +99,7 @@ export async function GET(req: NextRequest) {
       extractMetaContent(html, "og:title") ??
       extractMetaContent(html, "twitter:title") ??
       extractTitle(html) ??
-      null;
+      (isReiUrl(url) ? titleFromReiUrl(url) : null);
 
     return NextResponse.json({ imageUrl, title });
   } catch {

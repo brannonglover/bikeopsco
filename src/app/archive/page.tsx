@@ -6,7 +6,7 @@ import { ArchiveJobCard } from "@/components/archive/ArchiveJobCard";
 import { ArchivePagination } from "@/components/archive/ArchivePagination";
 import type { Job } from "@/lib/types";
 
-const ARCHIVE_PAGE_SIZE = 12;
+const ARCHIVE_PAGE_SIZE = 30;
 
 function formatArchivedDate(d: Date | string | null) {
   if (!d) return "—";
@@ -126,8 +126,8 @@ export default function ArchivePage() {
   }, [currentPage, totalPages]);
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
+      <div className="flex shrink-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground mb-1">Archive</h1>
           <p className="text-text-secondary">
@@ -167,7 +167,7 @@ export default function ArchivePage() {
         <div
           role="tablist"
           aria-label="Archive categories"
-          className="flex border-b border-slate-200"
+          className="flex shrink-0 border-b border-slate-200"
         >
           <button
             type="button"
@@ -206,7 +206,7 @@ export default function ArchivePage() {
         </div>
       )}
 
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex shrink-0 items-center justify-between gap-4">
         <p className="text-sm text-slate-500">
           {loading
             ? "Loading…"
@@ -220,69 +220,75 @@ export default function ArchivePage() {
         </p>
       </div>
 
-      {loading ? (
-        <div className="rounded-2xl border border-slate-200 bg-white p-8 text-sm text-slate-600 shadow-sm">
-          Loading archive…
-        </div>
-      ) : jobs.length === 0 ? (
-        <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center shadow-sm">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-500">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden>
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 8v13H3V8" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l9-6 9 6" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 21V12h6v9" />
-            </svg>
+      <div className="flex min-h-0 flex-1 flex-col">
+        {loading ? (
+          <div className="rounded-2xl border border-slate-200 bg-white p-8 text-sm text-slate-600 shadow-sm">
+            Loading archive…
           </div>
-          <h2 className="mt-4 text-lg font-semibold text-slate-900">No archived jobs yet</h2>
-          <p className="mt-1 text-sm text-slate-600">
-            Completed jobs appear here once archived from job details or the Job Board. Cancelled jobs appear here automatically.
-          </p>
-        </div>
-      ) : activeJobs.length === 0 ? (
-        <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center shadow-sm">
-          <p className="text-slate-700 font-semibold">
-            {query.trim() ? "No matches" : activeTab === "completed" ? "No completed jobs" : "No cancelled jobs"}
-          </p>
-          <p className="mt-1 text-sm text-slate-500">
-            {query.trim()
-              ? "Try a different search."
-              : activeTab === "completed"
-                ? "Archived completed jobs will appear here."
-                : "Cancelled jobs are added here automatically."}
-          </p>
-        </div>
-      ) : (
-        <div
-          role="tabpanel"
-          aria-labelledby={
-            activeTab === "completed" ? "archive-tab-completed" : "archive-tab-cancelled"
-          }
-          className="space-y-4"
-        >
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {paginatedJobs.map((job) => (
-              <ArchiveJobCard
-                key={job.id}
-                job={job}
-                variant={activeTab}
-                footerPrimary={
-                  activeTab === "completed"
-                    ? `Archived ${job.archivedAt ? formatArchivedDate(job.archivedAt) : "—"}`
-                    : cancelledFooterPrimary(job)
-                }
-                onClick={() => setSelectedJob(job)}
+        ) : jobs.length === 0 ? (
+          <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center shadow-sm">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-500">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 8v13H3V8" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l9-6 9 6" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 21V12h6v9" />
+              </svg>
+            </div>
+            <h2 className="mt-4 text-lg font-semibold text-slate-900">No archived jobs yet</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Completed jobs appear here once archived from job details or the Job Board. Cancelled jobs appear here automatically.
+            </p>
+          </div>
+        ) : activeJobs.length === 0 ? (
+          <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center shadow-sm">
+            <p className="text-slate-700 font-semibold">
+              {query.trim() ? "No matches" : activeTab === "completed" ? "No completed jobs" : "No cancelled jobs"}
+            </p>
+            <p className="mt-1 text-sm text-slate-500">
+              {query.trim()
+                ? "Try a different search."
+                : activeTab === "completed"
+                  ? "Archived completed jobs will appear here."
+                  : "Cancelled jobs are added here automatically."}
+            </p>
+          </div>
+        ) : (
+          <div
+            role="tabpanel"
+            aria-labelledby={
+              activeTab === "completed" ? "archive-tab-completed" : "archive-tab-cancelled"
+            }
+            className="flex min-h-0 flex-1 flex-col"
+          >
+            <div className="min-h-0 flex-1 overflow-y-auto pb-4">
+              <div className="grid min-h-full auto-rows-[minmax(min-content,1fr)] grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                {paginatedJobs.map((job) => (
+                  <ArchiveJobCard
+                    key={job.id}
+                    job={job}
+                    variant={activeTab}
+                    footerPrimary={
+                      activeTab === "completed"
+                        ? `Archived ${job.archivedAt ? formatArchivedDate(job.archivedAt) : "—"}`
+                        : cancelledFooterPrimary(job)
+                    }
+                    onClick={() => setSelectedJob(job)}
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="shrink-0 border-t border-slate-200 pt-3">
+              <ArchivePagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                totalItems={activeJobs.length}
+                pageSize={ARCHIVE_PAGE_SIZE}
+                onPageChange={setCurrentPage}
               />
-            ))}
+            </div>
           </div>
-          <ArchivePagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            totalItems={activeJobs.length}
-            pageSize={ARCHIVE_PAGE_SIZE}
-            onPageChange={setCurrentPage}
-          />
-        </div>
-      )}
+        )}
+      </div>
 
       <JobDetailModal
         job={selectedJob}

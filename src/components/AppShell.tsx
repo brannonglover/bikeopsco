@@ -310,13 +310,13 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
           </aside>
 
           {/* Main content - offset for mobile header; left margin on desktop for fixed sidebar */}
-          <main className="flex h-dvh flex-1 min-w-0 flex-col overflow-auto p-4 pt-[calc(5.5rem+env(safe-area-inset-top,0px))] sm:p-6 md:mb-3 md:ml-[calc(0.75rem+18rem+1rem)] md:pl-0 md:pt-4 md:pb-4">
+          <main className="flex h-dvh flex-1 min-w-0 flex-col overflow-hidden p-4 pt-[calc(5.5rem+env(safe-area-inset-top,0px))] sm:p-6 md:mb-3 md:ml-[calc(0.75rem+18rem+1rem)] md:pl-0 md:pt-3 md:pb-3">
             <BillingGuard />
             <div
               className={
                 isFullBleedStaffMain
                   ? "flex min-h-0 flex-1 flex-col"
-                  : "rounded-3xl bg-white p-5 shadow-float ring-1 ring-black/[0.04] dark:bg-surface dark:ring-white/[0.06] sm:p-6"
+                  : "flex min-h-0 flex-1 flex-col overflow-auto rounded-3xl bg-white p-5 shadow-float ring-1 ring-black/[0.04] dark:bg-surface dark:ring-white/[0.06] sm:p-6"
               }
             >
               {children}
