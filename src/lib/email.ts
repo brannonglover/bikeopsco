@@ -798,13 +798,18 @@ export async function sendBookingRequestNotification(
     return { ok: false, error: "Email not configured" };
   }
 
-  const notifyEmail = await getShopNotifyEmail(job.shopId ?? "shop_default");
+  const shopId = job.shopId ?? "shop_default";
+  const notifyEmail = await getShopNotifyEmail(shopId);
   if (!notifyEmail) {
     console.warn("No staff notification email configured, skipping booking notification");
     return { ok: false, error: "No notification email configured" };
   }
 
-  const staffJobUrl = getStaffJobOpenUrl(job.id);
+  const { prisma } = await import("./db");
+  const shopRow = await prisma.shop
+    .findUnique({ where: { id: shopId }, select: { subdomain: true } })
+    .catch(() => null);
+  const staffJobUrl = getStaffJobOpenUrl(job.id, shopRow?.subdomain);
   const customerName = job.customer
     ? job.customer.lastName
       ? `${job.customer.firstName} ${job.customer.lastName}`
@@ -969,10 +974,15 @@ export async function sendPaymentReceivedNotification(details: {
     return { ok: false, error: "No notification email configured" };
   }
 
+  const { prisma } = await import("./db");
+  const shopRow = await prisma.shop
+    .findUnique({ where: { id: details.shopId }, select: { subdomain: true } })
+    .catch(() => null);
+
   const currency = details.currency ?? "usd";
   const amountFormatted = formatMoney(details.amount, currency);
   const methodLabel = formatPaymentMethodLabel(details.paymentMethod);
-  const staffJobUrl = getStaffJobOpenUrl(details.jobId);
+  const staffJobUrl = getStaffJobOpenUrl(details.jobId, shopRow?.subdomain);
   const balanceLine =
     details.isPaidInFull === true
       ? "Paid in full"

@@ -1,4 +1,5 @@
-import { getAppUrl, getStaffJobDeepLink } from "@/lib/env";
+import { headers } from "next/headers";
+import { getOpenLinkWebBaseUrl, getStaffJobDeepLink } from "@/lib/env";
 import { OpenStaffJobPage } from "./OpenStaffJobPage";
 
 export default async function Page({
@@ -7,14 +8,14 @@ export default async function Page({
   params: { jobId: string };
 }) {
   const { jobId } = params;
-  const appUrl = getAppUrl();
-  const webUrl = appUrl
-    ? `${appUrl}/calendar?openJob=${encodeURIComponent(jobId)}`
+  const webBase = getOpenLinkWebBaseUrl(headers().get("host"));
+  const webUrl = webBase
+    ? `${webBase.replace(/\/$/, "")}/calendar?openJob=${encodeURIComponent(jobId)}`
     : `/calendar?openJob=${encodeURIComponent(jobId)}`;
 
   return (
     <OpenStaffJobPage
-      appUrl={appUrl}
+      appUrl={webBase}
       jobId={jobId}
       nativeUrl={getStaffJobDeepLink(jobId)}
       webUrl={webUrl}

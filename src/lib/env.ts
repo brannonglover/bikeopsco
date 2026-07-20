@@ -274,9 +274,15 @@ export function getStaffChatOpenUrl(
   return getStaffChatUrl(base, conversationId, messageId);
 }
 
-export function getStaffJobOpenUrl(jobId: string): string {
-  const appUrl = getAppUrl();
-  return appUrl ? `${appUrl}/open/staff/jobs/${encodeURIComponent(jobId)}` : "";
+/** HTTPS trampoline for a staff job (email / SMS). Prefer shop tenant host. */
+export function getStaffJobOpenUrl(
+  jobId: string,
+  shopSubdomain?: string | null
+): string {
+  const base = getShopAppUrl(shopSubdomain) || getCanonicalAppBaseUrl();
+  return base
+    ? `${base.replace(/\/$/, "")}/open/staff/jobs/${encodeURIComponent(jobId)}`
+    : "";
 }
 
 /** HTTPS trampoline for the staff calendar (email / SMS). Prefer shop tenant host. */
