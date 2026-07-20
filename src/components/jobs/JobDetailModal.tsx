@@ -304,6 +304,148 @@ function InternalNotesSection({
   );
 }
 
+function JobMechanicSection({
+  job,
+  onJobUpdated,
+}: {
+  job: Job;
+  onJobUpdated?: (job: Job) => void;
+}) {
+  const [mechanics, setMechanics] = useState<
+    { id: string; fullName: string; imageUrl: string | null }[]
+  >([]);
+  const [mechanicId, setMechanicId] = useState(job.mechanicId ?? "");
+  const [error, setError] = useState<string | null>(null);
+  const [loadingList, setLoadingList] = useState(Boolean(onJobUpdated));
+
+  const canEdit = Boolean(onJobUpdated);
+
+  useEffect(() => {
+    setMechanicId(job.mechanicId ?? "");
+    setError(null);
+  }, [job.id, job.mechanicId]);
+
+  useEffect(() => {
+    if (!canEdit) return;
+    let cancelled = false;
+    setLoadingList(true);
+    fetch("/api/mechanics")
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelled) return;
+        const list = Array.isArray(data)
+          ? data.map(
+              (m: { id: string; fullName: string; imageUrl: string | null }) => ({
+                id: m.id,
+                fullName: m.fullName,
+                imageUrl: m.imageUrl ?? null,
+              })
+            )
+          : [];
+        setMechanics(list);
+      })
+      .catch(() => {
+        if (!cancelled) setMechanics([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingList(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canEdit]);
+
+  const persistMechanic = (nextId: string) => {
+    if (!onJobUpdated) return;
+    const normalized = nextId || null;
+    if ((job.mechanicId ?? null) === normalized) return;
+    setError(null);
+    const snapshot = job;
+    const nextMechanic =
+      normalized == null
+        ? null
+        : mechanics.find((m) => m.id === normalized) ??
+          (job.mechanic?.id === normalized ? job.mechanic : null);
+    onJobUpdated({
+      ...job,
+      mechanicId: normalized,
+      mechanic: nextMechanic,
+    });
+    void (async () => {
+      try {
+        const res = await fetch(`/api/jobs/${job.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mechanicId: normalized }),
+        });
+        const data = (await res.json().catch(() => ({}))) as Job & {
+          error?: string;
+        };
+        if (!res.ok) {
+          setMechanicId(snapshot.mechanicId ?? "");
+          setError(data.error ?? "Failed to assign mechanic");
+          onJobUpdated(snapshot);
+          return;
+        }
+        onJobUpdated(data);
+      } catch {
+        setMechanicId(snapshot.mechanicId ?? "");
+        setError("Failed to assign mechanic");
+        onJobUpdated(snapshot);
+      }
+    })();
+  };
+
+  if (!canEdit) {
+    return (
+      <div>
+        <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">
+          Mechanic
+        </h3>
+        <p className="text-sm text-slate-900">
+          {job.mechanic?.fullName ?? "Unassigned"}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">
+        Mechanic
+      </h3>
+      <select
+        value={mechanicId}
+        disabled={loadingList}
+        onChange={(e) => {
+          const next = e.target.value;
+          setMechanicId(next);
+          persistMechanic(next);
+        }}
+        className="w-full max-w-xs px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none disabled:opacity-60"
+      >
+        <option value="">Unassigned</option>
+        {mechanics.map((m) => (
+          <option key={m.id} value={m.id}>
+            {m.fullName}
+          </option>
+        ))}
+        {job.mechanicId &&
+          job.mechanic &&
+          !mechanics.some((m) => m.id === job.mechanicId) && (
+            <option value={job.mechanic.id}>{job.mechanic.fullName}</option>
+          )}
+      </select>
+      {mechanics.length === 0 && !loadingList && (
+        <p className="mt-1.5 text-xs text-slate-500">
+          No mechanics on the roster yet. Add them under Mechanics.
+        </p>
+      )}
+      {error && <p className="mt-1.5 text-xs text-red-600">{error}</p>}
+    </div>
+  );
+}
+
 function JobDeliveryTypeSection({
   job,
   onJobUpdated,
@@ -2950,6 +3092,14 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
           )}
 
           <JobBikeSection
+            job={job}
+            onJobUpdated={(updated) => {
+              setJob(updated);
+              onJobUpdated?.(updated);
+            }}
+          />
+
+          <JobMechanicSection
             job={job}
             onJobUpdated={(updated) => {
               setJob(updated);

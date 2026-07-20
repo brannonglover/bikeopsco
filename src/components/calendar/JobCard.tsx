@@ -273,6 +273,11 @@ export function JobCardContent({
               {serviceSummary}
             </p>
           )}
+          {job.mechanic?.fullName && (
+            <p className="mt-0.5 line-clamp-1 text-xs text-slate-500 dark:text-slate-400">
+              Mechanic: {job.mechanic.fullName}
+            </p>
+          )}
       {(() => {
         if (job.stage === "COMPLETED" || job.stage === "CANCELLED") {
           return null;

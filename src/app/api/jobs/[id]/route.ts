@@ -53,6 +53,7 @@ const updateJobSchema = z.object({
   waitForPartsJobBikeId: z.string().optional(),
   unwaitForPartsJobBikeId: z.string().optional(),
   customerId: z.string().optional().nullable(),
+  mechanicId: z.string().optional().nullable(),
   deliveryType: z.enum(["DROP_OFF_AT_SHOP", "COLLECTION_SERVICE"]).optional(),
   dropOffDate: z.string().datetime().optional().nullable(),
   pickupDate: z.string().datetime().optional().nullable(),
@@ -82,6 +83,7 @@ export async function GET(
       where: { id, shopId: shop.id },
       include: {
         customer: { include: { bikes: true } },
+        mechanic: { select: { id: true, fullName: true, imageUrl: true } },
         jobBikes: { include: { bike: true }, orderBy: { sortOrder: "asc" } },
         jobServices: { include: { service: true, jobBike: { select: { id: true, make: true, model: true, nickname: true } } } },
         jobProducts: { include: { product: true, jobBike: { select: { id: true, make: true, model: true, nickname: true } } } },
@@ -180,6 +182,19 @@ export async function PATCH(
       return NextResponse.json({ error: "Job not found" }, { status: 404 });
     }
 
+    if (data.mechanicId) {
+      const mechanic = await prisma.mechanic.findFirst({
+        where: { id: data.mechanicId, shopId: shop.id },
+        select: { id: true },
+      });
+      if (!mechanic) {
+        return NextResponse.json(
+          { error: "Mechanic not found" },
+          { status: 400 }
+        );
+      }
+    }
+
     const stageChanged =
       data.stage !== undefined && data.stage !== existingJob.stage;
 
@@ -190,6 +205,7 @@ export async function PATCH(
     if (data.bikeMake !== undefined) updateData.bikeMake = data.bikeMake;
     if (data.bikeModel !== undefined) updateData.bikeModel = data.bikeModel ?? "";
     if (data.customerId !== undefined) updateData.customerId = data.customerId;
+    if (data.mechanicId !== undefined) updateData.mechanicId = data.mechanicId;
     if (data.deliveryType !== undefined) updateData.deliveryType = data.deliveryType;
     if (data.dropOffDate !== undefined) updateData.dropOffDate = data.dropOffDate ? new Date(data.dropOffDate) : null;
     if (data.pickupDate !== undefined) updateData.pickupDate = data.pickupDate ? new Date(data.pickupDate) : null;
@@ -529,6 +545,7 @@ export async function PATCH(
         where: { id, shopId: shop.id },
         include: {
           customer: { include: { bikes: true } },
+          mechanic: { select: { id: true, fullName: true, imageUrl: true } },
           jobBikes: { include: { bike: true }, orderBy: { sortOrder: "asc" } },
           jobServices: { include: { service: true, jobBike: { select: { id: true, make: true, model: true, nickname: true } } } },
           jobProducts: { include: { product: true, jobBike: { select: { id: true, make: true, model: true, nickname: true } } } },
