@@ -40,6 +40,7 @@ model Shop {
   jobSms           JobSms[]
   products         Product[]
   jobProducts      JobProduct[]
+  mechanics        Mechanic[]
   conversations    Conversation[]
   messages         Message[]
   messageReactions MessageReaction[]
@@ -326,6 +327,21 @@ model Product {
   jobProducts   JobProduct[]
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
+
+  @@index([shopId])
+}
+
+model Mechanic {
+  id        String    @id @default(cuid())
+  shopId    String
+  shop      Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  fullName  String
+  email     String?
+  phone     String?
+  birthdate DateTime? @db.Date
+  imageUrl  String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   @@index([shopId])
 }
