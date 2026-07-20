@@ -4,7 +4,7 @@ import { useEffect, useRef, useCallback } from "react";
 import { playNotificationSound } from "@/lib/notificationSound";
 import { useVisibilityAwarePolling } from "@/hooks/useVisibilityAwarePolling";
 
-const WAITLIST_POLL_MS = 5000;
+const WAITLIST_POLL_MS = 60_000;
 
 export type WaitlistNotificationEntry = {
   id: string;
@@ -48,7 +48,9 @@ export function useWaitlistNotifications(
     }
   }, [entries]);
 
-  useVisibilityAwarePolling(fetchEntries, WAITLIST_POLL_MS);
+  useVisibilityAwarePolling(fetchEntries, WAITLIST_POLL_MS, {
+    hiddenIntervalMs: WAITLIST_POLL_MS,
+  });
 
   useEffect(() => {
     if (suppressNotifications) return;

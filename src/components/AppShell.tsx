@@ -309,8 +309,9 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
             </div>
           </aside>
 
-          {/* Main content - offset for mobile header; left margin on desktop for fixed sidebar */}
-          <main className="flex h-dvh flex-1 min-w-0 flex-col overflow-hidden p-4 pt-[calc(5.5rem+env(safe-area-inset-top,0px))] sm:p-6 md:mb-3 md:ml-[calc(0.75rem+18rem+1rem)] md:pl-0 md:pt-3 md:pb-3">
+          {/* Main content - offset for mobile header; left margin on desktop for fixed sidebar.
+              Desktop insets match the sidebar (top-3 / bottom-3) so the content panel lines up. */}
+          <main className="flex h-dvh flex-1 min-w-0 flex-col overflow-hidden p-4 pt-[calc(5.5rem+env(safe-area-inset-top,0px))] sm:p-6 md:ml-[calc(0.75rem+18rem+1rem)] md:mr-3 md:mt-3 md:mb-3 md:h-[calc(100dvh-1.5rem)] md:p-0">
             <BillingGuard />
             <div
               className={

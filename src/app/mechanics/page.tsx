@@ -73,7 +73,7 @@ export default function MechanicsPage() {
     setUploading(false);
   };
 
-  const loadMechanics = () => {
+  useEffect(() => {
     setLoading(true);
     fetch("/api/mechanics")
       .then((res) => res.json())
@@ -81,10 +81,6 @@ export default function MechanicsPage() {
         setMechanics(Array.isArray(data) ? data : []);
       })
       .finally(() => setLoading(false));
-  };
-
-  useEffect(() => {
-    loadMechanics();
   }, []);
 
   const startAdd = () => {
@@ -121,14 +117,15 @@ export default function MechanicsPage() {
         method: "POST",
         body: formData,
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (gen !== uploadGeneration.current) return;
       if (!res.ok) {
-        alert(data.error || "Upload failed");
+        alert(typeof data.error === "string" ? data.error : "Upload failed");
         return;
       }
       setImageUrl(data.url ?? "");
-    } catch {
+    } catch (err) {
+      console.error("Mechanic image upload failed:", err);
       if (gen === uploadGeneration.current) {
         alert("Upload failed");
       }
@@ -212,7 +209,7 @@ export default function MechanicsPage() {
           <label className="inline-flex items-center px-3 py-2 text-sm font-medium text-slate-700 bg-slate-100 rounded-lg cursor-pointer hover:bg-slate-200">
             <input
               type="file"
-              accept="image/jpeg,image/png,image/gif,image/webp"
+              accept="image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif,.heic,.heif"
               disabled={uploading}
               className="sr-only"
               onChange={(e) => {
@@ -348,15 +345,8 @@ export default function MechanicsPage() {
         <div className="rounded-lg border border-dashed border-slate-300 bg-white/60 px-6 py-16 text-center">
           <p className="text-slate-700 font-medium">No mechanics yet</p>
           <p className="mt-1 text-slate-500 text-sm">
-            Add your first mechanic to start building the shop roster.
+            Use Add mechanic above to start building the shop roster.
           </p>
-          <button
-            type="button"
-            onClick={startAdd}
-            className="mt-4 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium"
-          >
-            + Add mechanic
-          </button>
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">

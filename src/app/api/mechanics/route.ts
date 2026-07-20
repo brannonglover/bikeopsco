@@ -106,9 +106,16 @@ export async function POST(request: NextRequest) {
       );
     }
     console.error("POST /api/mechanics error:", error);
-    return NextResponse.json(
-      { error: "Failed to create mechanic" },
-      { status: 500 }
-    );
+    const prismaCode =
+      error && typeof error === "object" && "code" in error
+        ? String((error as { code?: unknown }).code ?? "")
+        : "";
+    const message =
+      prismaCode === "P2021"
+        ? "Mechanics table is missing. Run `npm run db:migrate` and restart the app."
+        : error instanceof Error && process.env.NODE_ENV !== "production"
+          ? error.message
+          : "Failed to create mechanic";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
