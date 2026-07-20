@@ -16,6 +16,7 @@ import { normalizeJobCollectionWindowsForStorage } from "@/lib/normalize-job-col
 import { withPrismaRetry } from "@/lib/prisma-retry";
 import { optionalTrimmedString } from "@/lib/zod-helpers";
 import { getJobQueueInfo } from "@/lib/job-queue-position";
+import { sendPushToCustomer } from "@/lib/push";
 
 const bikeSchema = z.object({
   make: z.string().min(1),
@@ -94,7 +95,7 @@ export async function GET(
       return NextResponse.json({ error: "Job not found" }, { status: 404 });
     }
 
-    if (!(await hasJobReadAccess(request, shop.id, id))) {
+    if (!(await hasJobReadAccess(request, shop.id, id, job.customerId))) {
       return NextResponse.json(
         {
           error: "access_required",
@@ -691,6 +692,38 @@ export async function PATCH(
           console.error("[PATCH job] stage notification dedup/send failed:", e);
         }
       })();
+    }
+
+    // App push keeps My Repairs fresh even when email/SMS are skipped (e.g. cancelled).
+    if (
+      stageChanged &&
+      data.stage &&
+      job.customer?.id &&
+      features.notifyCustomerEnabled &&
+      data.notifyCustomer !== false
+    ) {
+      const stageLabels: Record<string, string> = {
+        PENDING_APPROVAL: "Pending approval",
+        BOOKED_IN: "Booked in",
+        RECEIVED: "Received",
+        WORKING_ON: "In progress",
+        WAITING_ON_CUSTOMER: "Waiting on you",
+        WAITING_ON_PARTS: "Waiting on parts",
+        BIKE_READY: "Ready for pickup",
+        COMPLETED: "Completed",
+        CANCELLED: "Cancelled",
+      };
+      const stageLabel = stageLabels[data.stage] ?? data.stage;
+      void sendPushToCustomer(job.shopId, job.customer.id, {
+        title: shop.name,
+        body: `Your repair status: ${stageLabel}`,
+        data: { type: "job_update", jobId: id },
+      }).catch((e) =>
+        console.error("[PATCH job] customer push failed:", {
+          jobId: id,
+          error: e instanceof Error ? e.message : String(e),
+        })
+      );
     }
 
     const subtotal = computeJobSubtotal({

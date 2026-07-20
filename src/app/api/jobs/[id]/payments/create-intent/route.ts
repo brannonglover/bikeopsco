@@ -31,10 +31,6 @@ export async function POST(
       return NextResponse.json({ error: "Shop not found" }, { status: 404 });
     }
 
-    if (mode === "online" && !(await hasJobReadAccess(request, shopAuth.shop.id, jobId))) {
-      return NextResponse.json({ error: "Job not found" }, { status: 404 });
-    }
-
     const job = await prisma.job.findFirst({
       where: { id: jobId, shopId: shopAuth.shop.id },
       include: {
@@ -55,6 +51,13 @@ export async function POST(
     });
 
     if (!job) {
+      return NextResponse.json({ error: "Job not found" }, { status: 404 });
+    }
+
+    if (
+      mode === "online" &&
+      !(await hasJobReadAccess(request, shopAuth.shop.id, jobId, job.customerId))
+    ) {
       return NextResponse.json({ error: "Job not found" }, { status: 404 });
     }
 

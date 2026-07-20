@@ -56,12 +56,12 @@ export async function GET(
     if (!shop) {
       return NextResponse.json({ error: "Shop not found" }, { status: 404 });
     }
-    if (!(await hasJobReadAccess(request, shop.id, params.id))) {
-      return NextResponse.json({ error: "Customer not found for this job" }, { status: 404 });
-    }
 
     const customer = await getCustomerForJob(params.id);
-    if (!customer) {
+    if (
+      !customer ||
+      !(await hasJobReadAccess(request, shop.id, params.id, customer.id))
+    ) {
       return NextResponse.json({ error: "Customer not found for this job" }, { status: 404 });
     }
 
@@ -88,14 +88,14 @@ export async function PATCH(
     if (!shop) {
       return NextResponse.json({ error: "Shop not found" }, { status: 404 });
     }
-    if (!(await hasJobReadAccess(request, shop.id, params.id))) {
-      return NextResponse.json({ error: "Customer not found for this job" }, { status: 404 });
-    }
 
     const body = await request.json();
     const data = updatePreferencesSchema.parse(body);
     const customer = await getCustomerForJob(params.id);
-    if (!customer) {
+    if (
+      !customer ||
+      !(await hasJobReadAccess(request, shop.id, params.id, customer.id))
+    ) {
       return NextResponse.json({ error: "Customer not found for this job" }, { status: 404 });
     }
     if (data.emailUpdatesConsent && !customer.email?.trim()) {

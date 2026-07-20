@@ -108,13 +108,25 @@ export async function hasStaffJobAccess(
   return Boolean(tokenShopId && tokenShopId === shopId);
 }
 
-/** Staff session or valid signed ?access= for this job. */
+/** Staff session, valid signed ?access= for this job, or logged-in customer who owns it. */
 export async function hasJobReadAccess(
   request: NextRequest,
   shopId: string,
-  jobId: string
+  jobId: string,
+  jobCustomerId?: string | null
 ): Promise<boolean> {
   if (await hasStaffJobAccess(request, shopId)) return true;
   const access = getJobCustomerAccessFromRequest(request);
-  return verifyJobCustomerAccessToken(shopId, jobId, access);
+  if (verifyJobCustomerAccessToken(shopId, jobId, access)) return true;
+
+  if (!jobCustomerId) return false;
+
+  // Lazy import avoids a circular dependency with chat-session.
+  const { getCustomerFromSession } = await import("@/lib/chat-session");
+  try {
+    const customerId = await getCustomerFromSession();
+    return Boolean(customerId && customerId === jobCustomerId);
+  } catch {
+    return false;
+  }
 }

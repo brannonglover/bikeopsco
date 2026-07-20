@@ -24,6 +24,7 @@ export async function GET() {
     orderBy: { createdAt: "desc" },
     include: {
       customer: { include: { bikes: true } },
+      mechanic: { select: { id: true, fullName: true, imageUrl: true } },
       jobBikes: { include: { bike: true }, orderBy: { sortOrder: "asc" } },
       jobServices: { include: { service: true } },
       jobProducts: { include: { product: true } },
