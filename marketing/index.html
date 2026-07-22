@@ -6,7 +6,7 @@
     <title>Bike Ops | Bike Repair Shop Software</title>
     <meta
       name="description"
-      content="Bike Ops is bike repair shop software for online bookings, repair boards, customer messaging, payments, reminders, and review follow-ups."
+      content="Bike Ops is bike repair shop software for online bookings, mechanic assignment, repair boards, customer messaging, payments, and review follow-ups."
     />
     <link rel="canonical" href="https://bikeops.co/" />
     <meta property="og:type" content="website" />
@@ -14,7 +14,7 @@
     <meta property="og:title" content="Bike Ops | Bike Repair Shop Software" />
     <meta
       property="og:description"
-      content="Run online bookings, repair workflows, customer updates, payments, reminders, and reviews from one bike shop workspace."
+      content="Run online bookings, mechanic rosters, repair workflows, customer updates, payments, and reviews from one bike shop workspace."
     />
     <meta property="og:url" content="https://bikeops.co/" />
     <meta property="og:image" content="https://bikeops.co/screenshots/ipad-job-board.png" />
@@ -55,7 +55,7 @@
             "applicationCategory": "BusinessApplication",
             "operatingSystem": "Web, iOS, iPadOS",
             "url": "https://bikeops.co/",
-            "description": "Bike repair shop software for online bookings, repair boards, customer messaging, payments, reminders, and review follow-ups.",
+            "description": "Bike repair shop software for online bookings, mechanic assignment, repair boards, customer messaging, payments, and review follow-ups.",
             "offers": {
               "@type": "Offer",
               "price": "39.99",
@@ -175,27 +175,26 @@
     </header>
 
     <main>
-      <section class="hero">
+      <section class="hero hero-visual">
+        <div class="hero-backdrop" aria-hidden="true">
+          <img
+            src="/screenshots/seo-hero/job-board.png"
+            alt=""
+            width="2221"
+            height="1392"
+            fetchpriority="high"
+            decoding="async"
+          />
+        </div>
         <div class="hero-inner">
-          <p class="eyebrow">Bike repair shop management</p>
           <img class="hero-logo-mark" src="/bike-ops-logo.png" alt="Bike Ops" />
-          <h1>Bike repair shop software that keeps repairs, customers, and payments moving.</h1>
+          <h1>Keep repairs, customers, and payments moving.</h1>
           <p class="hero-copy">
-            A focused operating system for bike shops: online booking, a live repair board,
-            customer updates, payment tracking, reminders, and review follow-ups.
+            Online booking, a live repair board, and customer updates — built for bike shops.
           </p>
           <div class="hero-actions">
-            <a class="button" href="https://app.bikeops.co/signup">Create your shop</a>
-            <a class="button button-secondary" href="https://app.bikeops.co/login">Sign in</a>
-          </div>
-          <div class="hero-highlights" aria-label="Bike Ops trial and pricing highlights">
-            <span>14-day free trial</span>
-            <span>$39.99/mo after trial</span>
-            <span>Stripe-powered payments</span>
-          </div>
-          <div class="tenant-preview" aria-label="Tenant subdomain example">
-            <span>Each shop gets its own workspace</span>
-            <strong>yourshop.bikeops.co</strong>
+            <a class="button" href="https://app.bikeops.co/signup">Start free trial</a>
+            <a class="button button-secondary" href="#preview">See the product</a>
           </div>
         </div>
       </section>
@@ -208,8 +207,8 @@
         </div>
         <div>
           <span class="stat">02</span>
-          <strong>Staff approve and schedule</strong>
-          <p>Turn requests into jobs, manage capacity, and keep the repair queue organized.</p>
+          <strong>Assign and schedule work</strong>
+          <p>Turn requests into jobs, assign a mechanic, manage capacity, and keep the repair queue organized.</p>
         </div>
         <div>
           <span class="stat">03</span>
@@ -233,49 +232,81 @@
             <img src="/bike-ops-logo-white.png" alt="" />
             <span class="active">Job Board</span>
             <span>Waitlist</span>
+            <span>Archive</span>
             <span>Chat</span>
             <span>Stats</span>
-            <span>Settings</span>
+            <span>Customers</span>
+            <span>Services</span>
+            <span>Products</span>
+            <span>Mechanics</span>
+            <span>Reviews</span>
+            <span>Billing</span>
           </aside>
 
           <div class="preview-board" aria-label="Sample web repair job board">
             <div class="preview-toolbar">
               <div>
-                <strong>Web workspace</strong>
-                <span>Repair queue, customers, chat, services, and payments in one place.</span>
+                <strong>Job Board</strong>
               </div>
-              <button type="button">New job</button>
+              <div class="preview-toolbar-actions">
+                <button type="button" class="button-quiet">Archive</button>
+                <button type="button" class="button-accent">New job</button>
+              </div>
             </div>
 
             <div class="kanban-sample">
               <article class="stage-booked">
-                <h3>Booked In</h3>
+                <h3><span class="stage-dot" aria-hidden="true"></span>Booked In <em>3</em></h3>
                 <div class="job-card">
-                  <strong>Joe Smith</strong>
-                  <span>Specialized</span>
-                  <small>Drop-off Apr 30 · Unpaid</small>
+                  <div class="job-card-top">
+                    <span class="job-ref">#WREA</span>
+                    <span class="job-avatar" aria-hidden="true">JD</span>
+                  </div>
+                  <strong>Schwinn Cruiser</strong>
+                  <span>Standard Tuneup</span>
+                  <span class="job-customer">Jane Doe</span>
+                  <small>Drop-off: 25 Jun · Mechanic: Sam R.</small>
                 </div>
                 <div class="job-card">
-                  <strong>Pending approval</strong>
-                  <span>Trek Domane</span>
-                  <small>Online booking request</small>
+                  <div class="job-card-top">
+                    <span class="job-ref">#H7PH</span>
+                    <span class="job-avatar" aria-hidden="true">JD</span>
+                  </div>
+                  <strong>Santa Cruz Hightower</strong>
+                  <span>Standard Tuneup</span>
+                  <span class="job-customer">Joe Dirt</span>
+                  <small>Drop-off: 25 Jun</small>
                 </div>
               </article>
               <article class="stage-working">
-                <h3>Working On</h3>
+                <h3><span class="stage-dot" aria-hidden="true"></span>Working On <em>1</em></h3>
                 <div class="job-card selected">
-                  <strong>Santa Cruz Hightower C</strong>
-                  <span>Need parts</span>
-                  <small>Drop-off Apr 28 · Staff note added</small>
+                  <div class="job-card-top">
+                    <span class="job-ref">#K2MN</span>
+                    <span class="job-avatar" aria-hidden="true">JS</span>
+                  </div>
+                  <strong>Specialized</strong>
+                  <span>Tube and/or tire replacement</span>
+                  <span class="job-customer">Joe Smith</span>
+                  <small>Mechanic: Alex M. · Drop-off: 25 Jun</small>
+                </div>
+              </article>
+              <article class="stage-parts">
+                <h3><span class="stage-dot" aria-hidden="true"></span>Waiting On Parts <em>1</em></h3>
+                <div class="job-card">
+                  <div class="job-card-top">
+                    <span class="job-ref">#AR91</span>
+                    <span class="job-avatar" aria-hidden="true">AR</span>
+                  </div>
+                  <strong>Ghost SLAMR 2.9</strong>
+                  <span>Waiting on parts</span>
+                  <span class="job-customer">Alex Rider</span>
+                  <small>Mechanic: Jordan P.</small>
                 </div>
               </article>
               <article class="stage-ready">
-                <h3>Ready</h3>
-                <div class="job-card">
-                  <strong>Ava K.</strong>
-                  <span>Liv Avail</span>
-                  <small>Payment link sent · $84.50 due</small>
-                </div>
+                <h3><span class="stage-dot" aria-hidden="true"></span>Bike Ready <em>0</em></h3>
+                <p class="kanban-empty">No jobs</p>
               </article>
             </div>
           </div>
@@ -311,11 +342,7 @@
         <div class="preview-grid">
           <article>
             <h3>Live repair board</h3>
-            <p>See booked work, active repairs, payment state, and drop-off dates in one focused view.</p>
-          </article>
-          <article>
-            <h3>Fast job details</h3>
-            <p>Update status, delivery type, bike notes, and internal staff-only context from the same screen.</p>
+            <p>See booked work, assigned mechanics, payment state, and drop-off dates in one focused view.</p>
           </article>
           <article>
             <h3>Payments on mobile</h3>
@@ -331,13 +358,29 @@
               alt="Bike Ops iPhone chat conversation with a customer update"
             />
           </article>
+          <article class="mechanics-preview-card">
+            <div class="mechanics-preview-copy">
+              <h3>Mechanic roster</h3>
+              <p>Keep your shop’s bike mechanics in one place with photos and contact details, then assign the right tech to each repair job.</p>
+            </div>
+            <div class="mechanics-preview-shots" aria-label="Mechanics page screenshots">
+              <img
+                src="/screenshots/seo-hero/mechanics.png"
+                alt="Bike Ops Mechanics page with a shop mechanic roster card including photo and contact details"
+              />
+              <img
+                src="/screenshots/seo-hero/mechanics-add.png"
+                alt="Bike Ops New mechanic form with photo upload, contact details, and birthdate"
+              />
+            </div>
+          </article>
         </div>
       </section>
 
       <section id="features" class="section">
         <div class="section-heading">
-          <p class="eyebrow">MVP feature set</p>
-          <h2>Everything a shop needs to start taking repair work online.</h2>
+          <p class="eyebrow">Built for the shop floor</p>
+          <h2>Everything a shop needs to take repair work online and assign it clearly.</h2>
         </div>
         <div class="feature-grid">
           <article>
@@ -345,12 +388,12 @@
             <p>See pending approvals, booked work, active repairs, parts waits, ready bikes, and completed jobs.</p>
           </article>
           <article>
-            <h3>Shop subdomains</h3>
-            <p>Every tenant has a branded workspace and booking form, isolated by shop data.</p>
+            <h3>Mechanic roster</h3>
+            <p>Build a roster of bike mechanics with photos and contact details, then assign them to repair jobs from the board.</p>
           </article>
           <article>
-            <h3>Multiple staff</h3>
-            <p>Create a shop workspace with an owner account now, with staff expansion wired into the SaaS model.</p>
+            <h3>Shop subdomains</h3>
+            <p>Every tenant has a branded workspace and booking form, isolated by shop data.</p>
           </article>
           <article>
             <h3>Customer messaging</h3>
@@ -369,7 +412,7 @@
 
       <section class="cta">
         <h2>Start with a fresh shop workspace.</h2>
-        <p>Create your shop, choose your workspace name, and start organizing repair work online.</p>
+        <p>14-day free trial, then $39.99/mo. Create your shop and start organizing repair work online.</p>
         <a class="button" href="https://app.bikeops.co/signup">Create your shop</a>
       </section>
     </main>

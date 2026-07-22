@@ -8,12 +8,18 @@ type AppBranding = {
   logoUrl: string | null;
   logoAlt: string;
   shopPhone: string | null;
+  address: string | null;
+  latitude: number | null;
+  longitude: number | null;
 };
 
 const DEFAULT_BRANDING: AppBranding = {
   logoUrl: null,
   logoAlt: "Bike Ops",
   shopPhone: null,
+  address: null,
+  latitude: null,
+  longitude: null,
 };
 
 export default function BrandingSettingsPage() {
@@ -24,6 +30,8 @@ export default function BrandingSettingsPage() {
   const [brandingSaved, setBrandingSaved] = useState(false);
   const [shopPhoneInput, setShopPhoneInput] = useState("");
   const [shopPhoneDirty, setShopPhoneDirty] = useState(false);
+  const [addressInput, setAddressInput] = useState("");
+  const [addressDirty, setAddressDirty] = useState(false);
 
   const fetchBranding = useCallback(async () => {
     setBrandingError(null);
@@ -36,6 +44,8 @@ export default function BrandingSettingsPage() {
       setBranding(next);
       setShopPhoneInput(phoneToInputValue(next.shopPhone));
       setShopPhoneDirty(false);
+      setAddressInput(next.address ?? "");
+      setAddressDirty(false);
     } catch {
       setBrandingError("Failed to load branding.");
     } finally {
@@ -50,6 +60,7 @@ export default function BrandingSettingsPage() {
   const saveBranding = async (payload: {
     logoUrl?: string | null;
     shopPhone?: string | null;
+    address?: string | null;
   }) => {
     setBrandingSaving(true);
     setBrandingSaved(false);
@@ -69,6 +80,8 @@ export default function BrandingSettingsPage() {
       setBranding(next);
       setShopPhoneInput(phoneToInputValue(next.shopPhone));
       setShopPhoneDirty(false);
+      setAddressInput(next.address ?? "");
+      setAddressDirty(false);
       setBrandingSaved(true);
       window.setTimeout(() => setBrandingSaved(false), 1500);
       window.dispatchEvent(new Event("bikeops:branding-updated"));
@@ -104,12 +117,17 @@ export default function BrandingSettingsPage() {
     void saveBranding({ shopPhone: shopPhoneInput.trim() || null });
   };
 
+  const saveAddress = () => {
+    void saveBranding({ address: addressInput.trim() || null });
+  };
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-foreground">Branding</h1>
         <p className="mt-1 text-text-secondary">
-          Upload your business logo and set the public phone number customers can call from the app.
+          Upload your business logo, set the public phone number, and add your shop
+          address so customers can find you in nearby search.
         </p>
       </div>
 
@@ -196,6 +214,51 @@ export default function BrandingSettingsPage() {
                   </button>
                 </div>
               </div>
+            </div>
+
+            <div className="rounded-lg border border-surface-border bg-subtle-bg px-3 py-3">
+              <label className="block text-sm font-semibold text-foreground">Shop address</label>
+              <p className="mt-0.5 text-sm text-text-secondary">
+                Used so customers can find your shop in nearby search in the mobile app.
+                We geocode this to a map location when you save.
+              </p>
+              <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+                <input
+                  type="text"
+                  autoComplete="street-address"
+                  value={addressInput}
+                  disabled={brandingSaving}
+                  onChange={(e) => {
+                    setAddressInput(e.target.value);
+                    setAddressDirty(true);
+                  }}
+                  placeholder="123 Main St, City, ST 12345"
+                  className="w-full rounded-lg border border-surface-border bg-background px-3 py-2 text-sm text-foreground"
+                />
+                <div className="flex items-end justify-end">
+                  <button
+                    type="button"
+                    onClick={saveAddress}
+                    disabled={brandingSaving || !addressDirty}
+                    className={`h-10 rounded-lg px-3 text-sm font-semibold transition-colors ${
+                      brandingSaving || !addressDirty
+                        ? "cursor-not-allowed bg-surface-border text-text-muted"
+                        : "bg-amber-600 text-white hover:bg-amber-700"
+                    }`}
+                  >
+                    Save address
+                  </button>
+                </div>
+              </div>
+              {branding.latitude != null && branding.longitude != null ? (
+                <p className="mt-2 text-xs text-text-muted">
+                  Mapped at {branding.latitude.toFixed(5)}, {branding.longitude.toFixed(5)}
+                </p>
+              ) : branding.address ? (
+                <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+                  Address saved, but not mapped yet. Re-save once geocoding is available.
+                </p>
+              ) : null}
             </div>
 
             {(brandingError || brandingSaved) && (
