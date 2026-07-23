@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useCallback, useEffect, useState, useRef } from "react";
+import { createPortal } from "react-dom";
 import type { Bike, DeliveryType, Job, JobBike, JobProduct, JobService, Stage } from "@/lib/types";
 import { Price } from "@/components/ui/Price";
 import { BikePlaceholderIcon } from "@/components/ui/BikePlaceholderIcon";
@@ -3354,6 +3355,34 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
   );
 }
 
+type AnchoredDropdownStyle = {
+  top?: number;
+  bottom?: number;
+  left: number;
+  width: number;
+  maxHeight: number;
+  openUp: boolean;
+};
+
+function getAnchoredDropdownStyle(trigger: HTMLElement): AnchoredDropdownStyle {
+  const rect = trigger.getBoundingClientRect();
+  const gap = 4;
+  const preferredMax = 240;
+  const spaceBelow = window.innerHeight - rect.bottom - gap - 8;
+  const spaceAbove = rect.top - gap - 8;
+  const openUp = spaceBelow < 160 && spaceAbove > spaceBelow;
+  const maxHeight = Math.max(120, Math.min(preferredMax, openUp ? spaceAbove : spaceBelow));
+  return {
+    ...(openUp
+      ? { bottom: window.innerHeight - rect.top + gap }
+      : { top: rect.bottom + gap }),
+    left: rect.left,
+    width: rect.width,
+    maxHeight,
+    openUp,
+  };
+}
+
 function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job) => void }) {
   const jobRef = useRef(job);
   jobRef.current = job;
@@ -3388,9 +3417,13 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
     return ids;
   });
   const servicesDropdownRef = useRef<HTMLDivElement>(null);
+  const servicesPanelRef = useRef<HTMLDivElement>(null);
   const productsDropdownRef = useRef<HTMLDivElement>(null);
+  const productsPanelRef = useRef<HTMLDivElement>(null);
   const serviceSearchRef = useRef<HTMLInputElement>(null);
   const productSearchRef = useRef<HTMLInputElement>(null);
+  const [servicesPanelStyle, setServicesPanelStyle] = useState<AnchoredDropdownStyle | null>(null);
+  const [productsPanelStyle, setProductsPanelStyle] = useState<AnchoredDropdownStyle | null>(null);
 
   const loadProducts = useCallback(async (query = "") => {
     setProductsLoading(true);
@@ -3579,18 +3612,87 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (servicesDropdownRef.current && !servicesDropdownRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      const inServicesTrigger = servicesDropdownRef.current?.contains(target);
+      const inServicesPanel = servicesPanelRef.current?.contains(target);
+      if (servicesDropdownOpen && !inServicesTrigger && !inServicesPanel) {
         setServicesDropdownOpen(false);
         setServiceSearch("");
       }
-      if (productsDropdownRef.current && !productsDropdownRef.current.contains(e.target as Node)) {
+      const inProductsTrigger = productsDropdownRef.current?.contains(target);
+      const inProductsPanel = productsPanelRef.current?.contains(target);
+      if (productsDropdownOpen && !inProductsTrigger && !inProductsPanel) {
         setProductsDropdownOpen(false);
         setProductSearch("");
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  }, [productsDropdownOpen, servicesDropdownOpen]);
+
+  useEffect(() => {
+    if (!servicesDropdownOpen) {
+      setServicesPanelStyle(null);
+      return;
+    }
+
+    const updatePosition = () => {
+      const trigger = servicesDropdownRef.current;
+      if (!trigger) return;
+      setServicesPanelStyle(getAnchoredDropdownStyle(trigger));
+    };
+
+    updatePosition();
+    const timer = window.setTimeout(() => serviceSearchRef.current?.focus(), 50);
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopImmediatePropagation();
+        setServicesDropdownOpen(false);
+        setServiceSearch("");
+      }
+    };
+    window.addEventListener("resize", updatePosition);
+    document.addEventListener("scroll", updatePosition, true);
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("resize", updatePosition);
+      document.removeEventListener("scroll", updatePosition, true);
+      document.removeEventListener("keydown", onKeyDown, true);
+    };
+  }, [servicesDropdownOpen]);
+
+  useEffect(() => {
+    if (!productsDropdownOpen) {
+      setProductsPanelStyle(null);
+      return;
+    }
+
+    const updatePosition = () => {
+      const trigger = productsDropdownRef.current;
+      if (!trigger) return;
+      setProductsPanelStyle(getAnchoredDropdownStyle(trigger));
+    };
+
+    updatePosition();
+    const timer = window.setTimeout(() => productSearchRef.current?.focus(), 50);
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopImmediatePropagation();
+        setProductsDropdownOpen(false);
+        setProductSearch("");
+      }
+    };
+    window.addEventListener("resize", updatePosition);
+    document.addEventListener("scroll", updatePosition, true);
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("resize", updatePosition);
+      document.removeEventListener("scroll", updatePosition, true);
+      document.removeEventListener("keydown", onKeyDown, true);
+    };
+  }, [productsDropdownOpen]);
 
   const handleAddService = (serviceId: string) => {
     setServicesDropdownOpen(false);
@@ -4345,9 +4447,24 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
             >
               + Add service
             </button>
-            {servicesDropdownOpen && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-[80] flex flex-col">
-                <div className="p-2 border-b border-slate-100">
+          </div>
+          {servicesDropdownOpen &&
+            servicesPanelStyle &&
+            createPortal(
+              <div
+                ref={servicesPanelRef}
+                className={`fixed z-[80] bg-white border border-slate-200 rounded-lg shadow-lg flex ${
+                  servicesPanelStyle.openUp ? "flex-col-reverse" : "flex-col"
+                }`}
+                style={{
+                  top: servicesPanelStyle.top,
+                  bottom: servicesPanelStyle.bottom,
+                  left: servicesPanelStyle.left,
+                  width: servicesPanelStyle.width,
+                  maxHeight: servicesPanelStyle.maxHeight,
+                }}
+              >
+                <div className={`p-2 flex-shrink-0 ${servicesPanelStyle.openUp ? "border-t" : "border-b"} border-slate-100`}>
                   <input
                     ref={serviceSearchRef}
                     type="text"
@@ -4364,42 +4481,41 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                     }}
                     placeholder="Search or type a custom service…"
                     className="w-full px-2 py-1.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                    autoFocus
                   />
                 </div>
-                <div className="max-h-48 overflow-y-auto">
+                <div className="overflow-y-auto min-h-0 flex-1">
                   {filteredServices.map((s) => {
                     const canAdd = canAddCatalogService(s.id);
                     const isAttached = attachedServiceIds.has(s.id);
                     return (
-                    <button
-                      key={s.id}
-                      type="button"
-                      onClick={() => {
-                        if (canAdd) handleAddService(s.id);
-                      }}
-                      disabled={!canAdd}
-                      className="w-full px-3 py-2 text-left text-sm last:rounded-b-lg flex flex-col items-start min-w-0 hover:bg-slate-50 disabled:hover:bg-white disabled:cursor-not-allowed"
-                    >
-                      <span className={`font-medium truncate w-full ${!canAdd ? "text-slate-400" : "text-slate-900"}`}>
-                        <ServiceName name={s.name} />
-                      </span>
-                      <span className="text-slate-500 text-xs">
-                        ${Number(s.price).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        {!canAdd
-                          ? " · Already added"
-                          : isAttached && isMultiBike
-                            ? " · Add to another bike"
-                            : ""}
-                      </span>
-                    </button>
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => {
+                          if (canAdd) handleAddService(s.id);
+                        }}
+                        disabled={!canAdd}
+                        className="w-full px-3 py-2 text-left text-sm flex flex-col items-start min-w-0 hover:bg-slate-50 disabled:hover:bg-white disabled:cursor-not-allowed"
+                      >
+                        <span className={`font-medium truncate w-full ${!canAdd ? "text-slate-400" : "text-slate-900"}`}>
+                          <ServiceName name={s.name} />
+                        </span>
+                        <span className="text-slate-500 text-xs">
+                          ${Number(s.price).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          {!canAdd
+                            ? " · Already added"
+                            : isAttached && isMultiBike
+                              ? " · Add to another bike"
+                              : ""}
+                        </span>
+                      </button>
                     );
                   })}
                   {serviceSearch.trim() && filteredServices.length === 0 && (
                     <button
                       type="button"
                       onClick={() => handleAddCustomService(serviceSearch)}
-                      className="w-full px-3 py-2 text-left text-sm last:rounded-b-lg flex items-center gap-2 min-w-0 hover:bg-violet-50 text-violet-700"
+                      className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 min-w-0 hover:bg-violet-50 text-violet-700"
                     >
                       <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -4413,9 +4529,9 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                     <p className="px-3 py-2 text-sm text-slate-400">No available services. Type a name to add a custom one.</p>
                   )}
                 </div>
-              </div>
+              </div>,
+              document.body
             )}
-          </div>
           <div ref={productsDropdownRef} className="relative flex-1 min-w-[140px] max-w-sm">
             <button
               type="button"
@@ -4432,9 +4548,24 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
             >
               + Add product
             </button>
-            {productsDropdownOpen && (
-              <div className="absolute bottom-full left-0 right-0 mb-1 bg-white border border-slate-200 rounded-lg shadow-lg z-30 flex flex-col">
-                <div className="p-2 border-b border-slate-100 order-last">
+          </div>
+          {productsDropdownOpen &&
+            productsPanelStyle &&
+            createPortal(
+              <div
+                ref={productsPanelRef}
+                className={`fixed z-[80] bg-white border border-slate-200 rounded-lg shadow-lg flex ${
+                  productsPanelStyle.openUp ? "flex-col-reverse" : "flex-col"
+                }`}
+                style={{
+                  top: productsPanelStyle.top,
+                  bottom: productsPanelStyle.bottom,
+                  left: productsPanelStyle.left,
+                  width: productsPanelStyle.width,
+                  maxHeight: productsPanelStyle.maxHeight,
+                }}
+              >
+                <div className={`p-2 flex-shrink-0 ${productsPanelStyle.openUp ? "border-t" : "border-b"} border-slate-100`}>
                   <input
                     ref={productSearchRef}
                     type="text"
@@ -4442,10 +4573,9 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                     onChange={(e) => setProductSearch(e.target.value)}
                     placeholder="Search products…"
                     className="w-full px-2 py-1.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                    autoFocus
                   />
                 </div>
-                <div className="max-h-48 overflow-y-auto">
+                <div className="overflow-y-auto min-h-0 flex-1">
                   {productsLoading && products.length === 0 ? (
                     <p className="px-3 py-2 text-sm text-slate-400">Loading products…</p>
                   ) : filteredProducts.length === 0 ? (
@@ -4462,7 +4592,7 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                             if (canAddProduct) handleAddProduct(p.id);
                           }}
                           disabled={!canAddProduct}
-                          className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50 disabled:hover:bg-white disabled:cursor-not-allowed last:rounded-b-lg flex flex-col items-start min-w-0"
+                          className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50 disabled:hover:bg-white disabled:cursor-not-allowed flex flex-col items-start min-w-0"
                         >
                           <span className={`font-medium truncate w-full ${!canAddProduct ? "text-slate-400" : "text-slate-900"}`}>
                             {p.name}
@@ -4476,9 +4606,9 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                     })
                   )}
                 </div>
-              </div>
+              </div>,
+              document.body
             )}
-          </div>
         </div>
       <div className="flex justify-between items-center pt-4 mt-4 border-t-2 border-slate-200">
         <span className="font-bold text-slate-900">Total</span>

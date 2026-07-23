@@ -65,6 +65,14 @@ function jobCardRef(job: Job): string {
   return `#${job.id.slice(-4).toUpperCase()}`;
 }
 
+/** Clicks on nested controls (links, buttons, inputs) must not open the job detail. */
+function isNestedInteractiveTarget(target: EventTarget | null): boolean {
+  return (
+    target instanceof Element &&
+    !!target.closest("a, button, input, select, textarea, label")
+  );
+}
+
 function JobDeliveryTypeControl({
   job,
   onJobUpdated,
@@ -320,12 +328,15 @@ export function JobCardContent({
       {hasPendingChat && job.customerId && (
         <Link
           href={`/chat?customer=${encodeURIComponent(job.customerId)}`}
-          onClick={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+          }}
           onPointerDown={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
           aria-label="Open chat — customer waiting for reply"
-          className="flex items-center gap-1 text-[11px] font-semibold text-emerald-700 mt-0.5 hover:text-emerald-800 hover:underline touch-manipulation pointer-events-auto w-fit"
+          className="relative z-10 flex items-center gap-1 text-[11px] font-semibold text-emerald-700 mt-0.5 hover:text-emerald-800 hover:underline touch-manipulation pointer-events-auto w-fit"
         >
-          <span className="relative flex h-2 w-2 flex-shrink-0">
+          <span className="relative flex h-2 w-2 flex-shrink-0" aria-hidden>
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75" />
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
           </span>
@@ -539,6 +550,9 @@ export function JobCard({
     disabled: dragDisabled,
   });
 
+  // Omit role/tabIndex — the card nests links and form controls.
+  const { role: _role, tabIndex: _tabIndex, ...sortableAttributes } = attributes;
+
   return (
     <div
       ref={setNodeRef}
@@ -550,24 +564,22 @@ export function JobCard({
               transition,
             }
       }
-      {...attributes}
+      {...sortableAttributes}
       {...(dragDisabled ? {} : listeners)}
-      onClick={() => onJobClick?.(job)}
-      role={onJobClick ? "button" : undefined}
-      tabIndex={onJobClick ? 0 : undefined}
-      onKeyDown={
-        onJobClick
-          ? (e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                onJobClick(job);
-              }
-            }
-          : undefined
-      }
+      onClick={(e) => {
+        // Card hosts nested links/controls; do not open job detail for those clicks.
+        if (isNestedInteractiveTarget(e.target)) return;
+        onJobClick?.(job);
+      }}
       className={`
         min-w-0 w-full
-        ${dragDisabled ? "cursor-default" : "cursor-grab active:cursor-grabbing"}
+        ${
+          dragDisabled
+            ? onJobClick
+              ? "cursor-pointer"
+              : "cursor-default"
+            : "cursor-grab active:cursor-grabbing"
+        }
         ${isDragging ? "opacity-40" : ""}
       `}
     >
