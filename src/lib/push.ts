@@ -73,6 +73,15 @@ export interface PushPayload {
   data?: Record<string, unknown>;
 }
 
+/** True when the customer has registered the mobile app for this shop (push token present). */
+export async function customerHasPushTokens(
+  shopId: string,
+  customerId: string
+): Promise<boolean> {
+  const count = await prisma.pushToken.count({ where: { shopId, customerId } });
+  return count > 0;
+}
+
 export async function sendPushToCustomer(
   shopId: string,
   customerId: string,

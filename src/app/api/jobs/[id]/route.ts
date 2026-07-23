@@ -16,7 +16,7 @@ import { normalizeJobCollectionWindowsForStorage } from "@/lib/normalize-job-col
 import { withPrismaRetry } from "@/lib/prisma-retry";
 import { optionalTrimmedString } from "@/lib/zod-helpers";
 import { getJobQueueInfo } from "@/lib/job-queue-position";
-import { sendPushToCustomer } from "@/lib/push";
+import { customerHasPushTokens, sendPushToCustomer } from "@/lib/push";
 
 const bikeSchema = z.object({
   make: z.string().min(1),
@@ -633,7 +633,12 @@ export async function PATCH(
             ? job.customer?.email
             : null;
           const customerPhone = job.customer?.phone;
-          const canSendSms = getEffectiveSmsConsent(job.customer);
+          // App users get push instead of SMS (token = installed + registered).
+          const preferAppPush =
+            Boolean(job.customer?.id) &&
+            (await customerHasPushTokens(job.shopId, job.customer!.id));
+          const canSendSms =
+            !preferAppPush && getEffectiveSmsConsent(job.customer);
 
           const emailPromise =
             customerEmail && templateSlug

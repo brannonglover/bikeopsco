@@ -78,6 +78,7 @@ model Customer {
   smsConsentUpdatedAt DateTime?
   address          String?
   notes            String?
+  imageUrl         String?
   bikes            Bike[]
   jobs             Job[]
   conversations    Conversation[]

@@ -1,8 +1,8 @@
-import { prisma } from "@/lib/db";
 import { customerHasSmsChatAccess, findActiveJobIdForCustomer } from "@/lib/chat-session";
 import { getCustomerChatUrl, getCustomerStatusUrl } from "@/lib/job-customer-access";
 import { getShopAppUrl } from "@/lib/env";
 import { formatPhoneDisplay } from "@/lib/phone";
+import { customerHasPushTokens } from "@/lib/push";
 import { getConfiguredSmsSender } from "@/lib/sms";
 
 export type ChatCustomerReminderDelivery = {
@@ -25,9 +25,7 @@ export async function getChatCustomerReminderDelivery(
   const smsReplyAvailable = await customerHasSmsChatAccess(shopId, customerId);
   const sender = getConfiguredSmsSender();
 
-  const pushCount = await prisma.pushToken.count({
-    where: { shopId, customerId },
-  });
+  const customerHasApp = await customerHasPushTokens(shopId, customerId);
 
   return {
     smsReplyAvailable,
@@ -36,6 +34,6 @@ export async function getChatCustomerReminderDelivery(
       ? getCustomerChatUrl(activeJobId, shopId, shopSubdomain)
       : `${shopBaseUrl}/chat/c`,
     statusUrl: activeJobId ? getCustomerStatusUrl(activeJobId, shopId, shopSubdomain) : null,
-    customerHasApp: pushCount > 0,
+    customerHasApp,
   };
 }

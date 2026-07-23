@@ -8,6 +8,7 @@ import { sendJobEmail, getWaitlistPromotedTemplateSlug } from "@/lib/email";
 import { getWaitlistPromotedSmsSlug, sendJobSms } from "@/lib/sms";
 import { mirrorJobStageToCustomerChat } from "@/lib/system-chat";
 import { getEffectiveEmailUpdatesConsent, getEffectiveSmsConsent } from "@/lib/sms-consent";
+import { customerHasPushTokens, sendPushToCustomer } from "@/lib/push";
 
 function safeServiceIds(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
@@ -190,8 +191,10 @@ export async function POST(
             ? jobForNotify.customer?.phone
             : null;
 
-          const needsShop = Boolean(customerPhone && smsTemplateSlug) ||
-            Boolean(features.chatEnabled && smsTemplateSlug && jobForNotify.customer?.id);
+          const needsShop =
+            Boolean(customerPhone && smsTemplateSlug) ||
+            Boolean(features.chatEnabled && smsTemplateSlug && jobForNotify.customer?.id) ||
+            Boolean(jobForNotify.customer?.id);
           const shop = needsShop
             ? await prisma.shop.findUnique({
                 where: { id: shopId },
@@ -205,13 +208,27 @@ export async function POST(
             );
           }
 
-          if (customerPhone && smsTemplateSlug) {
+          const preferAppPush =
+            Boolean(jobForNotify.customer?.id) &&
+            (await customerHasPushTokens(shopId, jobForNotify.customer!.id));
+
+          if (customerPhone && smsTemplateSlug && !preferAppPush) {
             sendJobSms(smsTemplateSlug, customerPhone, jobForNotify, shop ?? undefined)
               .then((result) => {
                 if (!result.ok)
                   console.error("[Waitlist promote] SMS failed:", result.error);
               })
               .catch((e) => console.error("[Waitlist promote] SMS threw:", e));
+          }
+
+          if (jobForNotify.customer?.id) {
+            void sendPushToCustomer(shopId, jobForNotify.customer.id, {
+              title: shop?.name ?? "Bike Ops",
+              body: "A spot opened up — you're booked in",
+              data: { type: "job_update", jobId: job.id },
+            }).catch((e) =>
+              console.error("[Waitlist promote] customer push failed:", e)
+            );
           }
 
           if (features.chatEnabled && jobForNotify.customer?.id && smsTemplateSlug) {

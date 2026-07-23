@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getConfiguredSmsProvider, sendChatStaffSms } from "@/lib/sms";
-import { sendPushToCustomer, sendPushToAllStaff } from "@/lib/push";
+import {
+  customerHasPushTokens,
+  sendPushToCustomer,
+  sendPushToAllStaff,
+} from "@/lib/push";
 import { sendStaffNewChatMessageNotification } from "@/lib/email";
 import { z } from "zod";
 import { getAppFeatures } from "@/lib/app-settings";
@@ -111,8 +115,14 @@ export async function POST(
     if (sender === "STAFF") {
       const hasText = Boolean(bodyText?.trim());
       const hasAtt = Boolean(attachmentIds?.length);
+      // App users get push instead of a parallel SMS for the same message.
+      const preferAppPush = await customerHasPushTokens(
+        shop.id,
+        conversation.customerId
+      );
 
       if (
+        !preferAppPush &&
         conversation.customer.phone &&
         getEffectiveSmsConsent(conversation.customer) &&
         (await customerHasActiveChatJob(shop.id, conversation.customerId))
