@@ -275,6 +275,11 @@ export async function GET(request: NextRequest) {
       await sendPushToAllStaff(DEFAULT_SHOP_ID, {
         title: "Upcoming customer drop-offs",
         body: parts.join(", "),
+        data: {
+          type: "staff_booking_digest",
+          todayJobIds: todayJobs.map((j) => j.id),
+          tomorrowJobIds: tomorrowJobs.map((j) => j.id),
+        },
       });
     }
 
