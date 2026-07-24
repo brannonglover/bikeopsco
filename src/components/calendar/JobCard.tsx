@@ -550,9 +550,6 @@ export function JobCard({
     disabled: dragDisabled,
   });
 
-  // Omit role/tabIndex — the card nests links and form controls.
-  const { role: _role, tabIndex: _tabIndex, ...sortableAttributes } = attributes;
-
   return (
     <div
       ref={setNodeRef}
@@ -564,7 +561,10 @@ export function JobCard({
               transition,
             }
       }
-      {...sortableAttributes}
+      {...attributes}
+      // Override dnd-kit a11y attrs — the card nests links and form controls.
+      role={undefined}
+      tabIndex={undefined}
       {...(dragDisabled ? {} : listeners)}
       onClick={(e) => {
         // Card hosts nested links/controls; do not open job detail for those clicks.
