@@ -3,6 +3,7 @@ import "server-only";
 import { cache } from "react";
 import { prisma } from "@/lib/db";
 import { requireCurrentShop } from "@/lib/shop";
+import { getShopOwnerEmail } from "@/lib/shop-notify-email";
 import { DEFAULT_SHOP_TIMEZONE, normalizeIANATimezone } from "@/lib/timezone";
 import { normalizePhone } from "@/lib/phone";
 
@@ -101,6 +102,8 @@ async function loadAppFeaturesForShop(shopId: string): Promise<AppFeatures> {
   try {
     const row = await prisma.appSettings.findUnique({ where: { shopId } });
     if (!row) return DEFAULT_FEATURES;
+    const staffNotifyEmail =
+      row.staffNotifyEmail?.trim() || (await getShopOwnerEmail(shopId)) || null;
     return {
       bookingsEnabled: row.bookingsEnabled,
       maxActiveBikes: row.maxActiveBikes,
@@ -114,7 +117,7 @@ async function loadAppFeaturesForShop(shopId: string): Promise<AppFeatures> {
       reviewsEnabled: row.reviewsEnabled,
       jobBoardFiltersEnabled: row.jobBoardFiltersEnabled,
       timezone: normalizeIANATimezone(row.timezone),
-      staffNotifyEmail: row.staffNotifyEmail?.trim() || null,
+      staffNotifyEmail,
     };
   } catch (e) {
     console.warn("[app-settings] Failed to load AppSettings; using defaults:", e);
@@ -146,6 +149,8 @@ export async function upsertAppFeatures(
     },
     update: normalizedNext,
   });
+  const staffNotifyEmail =
+    updated.staffNotifyEmail?.trim() || (await getShopOwnerEmail(shopId)) || null;
   return {
     bookingsEnabled: updated.bookingsEnabled,
     maxActiveBikes: updated.maxActiveBikes,
@@ -159,7 +164,7 @@ export async function upsertAppFeatures(
     reviewsEnabled: updated.reviewsEnabled,
     jobBoardFiltersEnabled: updated.jobBoardFiltersEnabled,
     timezone: normalizeIANATimezone(updated.timezone),
-    staffNotifyEmail: updated.staffNotifyEmail?.trim() || null,
+    staffNotifyEmail,
   };
 }
 

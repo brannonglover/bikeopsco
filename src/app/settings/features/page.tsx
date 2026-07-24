@@ -314,7 +314,6 @@ export default function FeatureSettingsPage() {
             <label className="block text-sm font-semibold text-foreground">Staff notification email</label>
             <p className="mt-0.5 text-sm text-text-secondary">
               Receives booking requests, payments, waitlist signups, chat reminders, and daily booking digests.
-              Leave blank to use the platform default from environment variables.
             </p>
             <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
               <input
