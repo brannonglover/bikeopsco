@@ -1070,7 +1070,7 @@ ${staffJobUrl ? buildCustomerEmailCtaButton(staffJobUrl, "View job") : ""}
   }
 }
 
-const DEFAULT_PLATFORM_SIGNUP_NOTIFY_EMAIL = "support@basementbikemechanic.com";
+const DEFAULT_PLATFORM_SIGNUP_NOTIFY_EMAIL = "support@bikeops.co";
 
 function getPlatformSignupNotifyEmail(): string {
   return (
