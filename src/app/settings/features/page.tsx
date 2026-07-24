@@ -63,21 +63,45 @@ function ToggleRow({
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <label className="flex cursor-pointer select-none items-start justify-between gap-4">
-      <span className="min-w-0">
-        <span className="block text-sm font-semibold text-foreground">{title}</span>
-        <span className="mt-0.5 block text-sm text-text-secondary">{description}</span>
-      </span>
-      <span className="flex flex-shrink-0 items-center gap-2">
-        <input
-          type="checkbox"
-          checked={checked}
-          disabled={disabled}
-          onChange={(e) => onChange(e.target.checked)}
-          className="h-5 w-5 rounded border-surface-border text-amber-600 focus:ring-amber-500"
-        />
-      </span>
-    </label>
+    <div className="flex items-start justify-between gap-4">
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-foreground">{title}</p>
+        <p className="mt-0.5 text-sm text-text-secondary">{description}</p>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={`${title}: ${checked ? "enabled" : "disabled"}`}
+        disabled={disabled}
+        onClick={() => onChange(!checked)}
+        className={`group flex flex-shrink-0 items-center gap-2.5 rounded-lg py-0.5 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-50 ${
+          disabled ? "" : "cursor-pointer"
+        }`}
+      >
+        <span
+          className={`min-w-[4.25rem] text-right text-xs font-semibold tabular-nums ${
+            checked
+              ? "text-emerald-700 dark:text-emerald-400"
+              : "text-text-muted"
+          }`}
+        >
+          {checked ? "Enabled" : "Disabled"}
+        </span>
+        <span
+          aria-hidden
+          className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
+            checked ? "bg-amber-600" : "bg-surface-border"
+          }`}
+        >
+          <span
+            className={`absolute left-0.5 top-0.5 h-6 w-6 rounded-full bg-white shadow-sm transition-transform ${
+              checked ? "translate-x-5" : "translate-x-0"
+            }`}
+          />
+        </span>
+      </button>
+    </div>
   );
 }
 
