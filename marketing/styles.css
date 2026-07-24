@@ -1750,6 +1750,38 @@ footer nav a:hover {
   margin-top: 16px;
 }
 
+.docs-main {
+  width: min(820px, 100%);
+}
+
+.docs-toc {
+  margin: 0;
+  padding-left: 1.25rem;
+  display: grid;
+  gap: 6px;
+}
+
+.docs-toc li {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.docs-toc a {
+  color: var(--green-dark);
+  text-decoration: none;
+}
+
+.docs-toc a:hover {
+  color: var(--green);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.docs-main .legal-content h2 {
+  scroll-margin-top: 88px;
+}
+
 .sticky-footer-page {
   min-height: 100vh;
   display: flex;

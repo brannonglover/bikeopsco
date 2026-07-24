@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Documentation | Bike Ops</title>
+    <meta
+      name="description"
+      content="Learn how to use Bike Ops—job board, online booking, customers, payments, chat, and shop settings for bike repair shops."
+    />
+    <link rel="canonical" href="https://bikeops.co/docs" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Bike Ops" />
+    <meta property="og:title" content="Documentation | Bike Ops" />
+    <meta
+      property="og:description"
+      content="A practical guide to running your bike shop on Bike Ops—from booking to bike ready."
+    />
+    <meta property="og:url" content="https://bikeops.co/docs" />
+    <link rel="icon" href="/favicon.ico" />
+    <link rel="icon" href="/favicon-32x32.png" sizes="32x32" type="image/png" />
+    <link rel="icon" href="/favicon-192x192.png" sizes="192x192" type="image/png" />
+    <link rel="icon" href="/favicon-512x512.png" sizes="512x512" type="image/png" />
+    <link rel="apple-touch-icon" href="/favicon-180x180.png" sizes="180x180" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="Bike Ops home">
+        <img src="/bike-ops-logo.png" alt="Bike Ops" />
+      </a>
+      <nav aria-label="Primary navigation">
+        <a href="/">Home</a>
+        <a href="/bike-repair-software">Bike repair software</a>
+        <a href="/blog">Blog</a>
+        <a href="/docs" aria-current="page">Documentation</a>
+        <a href="https://app.bikeops.co/login">Sign in</a>
+        <a class="button button-small" href="https://app.bikeops.co/signup">Start free</a>
+      </nav>
+    </header>
+
+    <main class="legal-main docs-main">
+      <div class="legal-hero">
+        <p class="eyebrow">Documentation</p>
+        <h1>How Bike Ops works</h1>
+        <p>
+          Bike Ops is repair shop software for independent bike mechanics and small shops. This guide
+          walks through the full workflow—from setting up your shop to booking, repairing, paying, and
+          updating customers.
+        </p>
+      </div>
+
+      <div class="legal-content">
+        <section aria-labelledby="toc-heading">
+          <h2 id="toc-heading">On this page</h2>
+          <ol class="docs-toc">
+            <li><a href="#getting-started">Getting started</a></li>
+            <li><a href="#workspace">Your shop workspace</a></li>
+            <li><a href="#job-board">Job board</a></li>
+            <li><a href="#jobs">Jobs, invoices, and payments</a></li>
+            <li><a href="#booking">Online booking and waitlist</a></li>
+            <li><a href="#customers">Customers and bikes</a></li>
+            <li><a href="#catalog">Services and products</a></li>
+            <li><a href="#mechanics">Mechanics</a></li>
+            <li><a href="#chat">Chat and customer updates</a></li>
+            <li><a href="#messages">Automated messages</a></li>
+            <li><a href="#reviews">Reviews</a></li>
+            <li><a href="#stats">Stats</a></li>
+            <li><a href="#settings">Settings and features</a></li>
+            <li><a href="#mobile">Mobile apps</a></li>
+            <li><a href="#billing">Trial and billing</a></li>
+            <li><a href="#help">Getting help</a></li>
+          </ol>
+        </section>
+
+        <section aria-labelledby="getting-started">
+          <h2 id="getting-started">Getting started</h2>
+          <p>
+            Create a shop at
+            <a href="https://app.bikeops.co/signup">app.bikeops.co/signup</a>. You’ll choose a shop
+            name and a workspace subdomain such as <code>yourshop.bikeops.co</code>. That URL is your
+            shop’s home base for staff and for online booking.
+          </p>
+          <ul>
+            <li>New shops get a <strong>14-day free trial</strong>, then $39.99/month.</li>
+            <li>
+              Sign in anytime at
+              <a href="https://app.bikeops.co/login">app.bikeops.co/login</a> or on your shop
+              subdomain.
+            </li>
+            <li>
+              After signup, add your shop address, phone, logo, services, and mechanics so bookings and
+              invoices look like your shop—not a blank template.
+            </li>
+          </ul>
+        </section>
+
+        <section aria-labelledby="workspace">
+          <h2 id="workspace">Your shop workspace</h2>
+          <p>
+            Each shop is its own isolated workspace. Customers, jobs, messages, and payments stay
+            inside your shop. Staff use the sidebar to move between the main areas of the app:
+          </p>
+          <ul>
+            <li><strong>Job board</strong> — live repair pipeline (kanban stages)</li>
+            <li><strong>Waitlist</strong> — requests waiting for capacity</li>
+            <li><strong>Chat</strong> — conversations with customers</li>
+            <li><strong>Customers</strong> — CRM and bike records</li>
+            <li><strong>Mechanics</strong> — who can be assigned to jobs</li>
+            <li><strong>Reviews</strong> — review links and follow-ups</li>
+            <li><strong>Stats</strong> — bikes, revenue, and turnaround</li>
+            <li><strong>Archive</strong> — completed work you’ve filed away</li>
+            <li><strong>Settings</strong> — branding, features, templates, billing</li>
+          </ul>
+        </section>
+
+        <section aria-labelledby="job-board">
+          <h2 id="job-board">Job board</h2>
+          <p>
+            The job board is the heart of Bike Ops. Every repair moves through stages so the whole
+            shop can see what’s booked, what’s on the stand, and what’s ready for pickup.
+          </p>
+          <h3>Stages</h3>
+          <ul>
+            <li><strong>Pending approval</strong> — online bookings waiting for staff to accept or decline</li>
+            <li><strong>Booked In</strong> — confirmed; drop-off or collection still ahead</li>
+            <li><strong>Received</strong> — bike is in the shop</li>
+            <li><strong>Working On</strong> — actively being repaired</li>
+            <li><strong>Waiting on Customer</strong> — paused until the customer replies or approves</li>
+            <li><strong>Waiting on Parts</strong> — blocked on parts</li>
+            <li><strong>Bike Ready</strong> — finished; ready for pickup or delivery</li>
+            <li><strong>Completed</strong> — closed out</li>
+            <li><strong>Cancelled</strong> — declined or cancelled (with a reason when needed)</li>
+          </ul>
+          <h3>Day-to-day use</h3>
+          <ul>
+            <li>Drag cards between columns to change stage, or open a job and update it there.</li>
+            <li>Assign a mechanic so the board shows who owns the work.</li>
+            <li>Filter columns when you want a quieter view of unpaid jobs, a mechanic, or a stage.</li>
+            <li>
+              Jobs can include multiple bikes. You can mark which bike you’re working on when that
+              matters for the floor.
+            </li>
+            <li>
+              Delivery type is either <strong>drop-off</strong> at the shop or
+              <strong>collection service</strong> (pickup and return within your radius).
+            </li>
+          </ul>
+        </section>
+
+        <section aria-labelledby="jobs">
+          <h2 id="jobs">Jobs, invoices, and payments</h2>
+          <p>
+            Open any job card for the full repair record. The job detail view is organized into tabs:
+          </p>
+          <ul>
+            <li>
+              <strong>Details</strong> — customer, bikes, delivery, dates, notes (customer-facing and
+              internal), services, and a shortcut into chat
+            </li>
+            <li>
+              <strong>Invoice</strong> — line items for services and products, totals, and payment
+              options
+            </li>
+            <li>
+              <strong>Bike specs</strong> — match bikes to catalog data (including 99 Spokes) so parts
+              and component info stay with the job
+            </li>
+            <li>
+              <strong>History</strong> — emails, SMS, and activity on that repair
+            </li>
+          </ul>
+          <h3>Payments</h3>
+          <p>
+            Card payments run through Stripe. Customers can pay from a payment link or status page;
+            staff can take payment in the shop.
+          </p>
+          <ul>
+            <li>Card, Apple Pay, Google Pay, and Link where available</li>
+            <li>Cash recorded on the invoice</li>
+            <li>Tap to Pay on supported iPhones via Stripe Terminal (set up in shop settings)</li>
+            <li>Unpaid jobs stay visible so bikes don’t leave before payment is settled</li>
+          </ul>
+        </section>
+
+        <section aria-labelledby="booking">
+          <h2 id="booking">Online booking and waitlist</h2>
+          <p>
+            Customers book on your shop’s booking page (for example
+            <code>yourshop.bikeops.co/book</code>) or through an embeddable booking widget on your
+            existing website.
+          </p>
+          <h3>What customers enter</h3>
+          <ul>
+            <li>Contact details and consent for email/SMS updates</li>
+            <li>One or more bikes (make/model, e-bike vs regular)</li>
+            <li>Services they need</li>
+            <li>Preferred dates and drop-off vs collection</li>
+          </ul>
+          <h3>How capacity works</h3>
+          <ul>
+            <li>
+              You control whether bookings are open, your timezone, closed dates, and a
+              <strong>max active bikes</strong> limit (bikes currently received or working on).
+            </li>
+            <li>
+              When you’re at capacity—or bookings are paused—new requests go to the
+              <strong>Waitlist</strong> instead of creating an active job.
+            </li>
+            <li>
+              Staff promote waitlist requests to the job board when there’s room. Attention badges help
+              you spot new waitlist activity.
+            </li>
+            <li>
+              Accepted online bookings typically land in <strong>Pending approval</strong> so you can
+              confirm before they move to Booked In.
+            </li>
+          </ul>
+        </section>
+
+        <section aria-labelledby="customers">
+          <h2 id="customers">Customers and bikes</h2>
+          <p>
+            The Customers area is your shop CRM. Each customer can have multiple bikes, contact info,
+            notes, and a photo. Consent for email and SMS is tracked so you stay aligned with how
+            people want to hear from you.
+          </p>
+          <ul>
+            <li>Store make/model, nickname, e-bike vs regular, and bike images.</li>
+            <li>Import customers from CSV or Excel with column mapping.</li>
+            <li>Merge duplicate customer records when the same person shows up twice.</li>
+          </ul>
+        </section>
+
+        <section aria-labelledby="catalog">
+          <h2 id="catalog">Services and products</h2>
+          <p>
+            Build a catalog of the services and products you sell on repairs. Attach them to jobs as
+            line items—per bike when needed, or as ad-hoc charges on the invoice.
+          </p>
+          <ul>
+            <li>Set prices in your catalog so booking and invoicing stay consistent.</li>
+            <li>Import services and products in bulk when you’re migrating from a spreadsheet.</li>
+            <li>
+              If you offer collection, system collection fees for regular bikes and e-bikes can be
+              applied based on delivery type and bike type.
+            </li>
+          </ul>
+        </section>
+
+        <section aria-labelledby="mechanics">
+          <h2 id="mechanics">Mechanics</h2>
+          <p>
+            Add your roster under Mechanics—names, photos, and contact details. Assign mechanics on
+            the job board so everyone can see who is responsible for each repair.
+          </p>
+        </section>
+
+        <section aria-labelledby="chat">
+          <h2 id="chat">Chat and customer updates</h2>
+          <p>
+            Bike Ops keeps repair conversation in one place instead of scattered texts and voicemails.
+          </p>
+          <ul>
+            <li>
+              Staff use <strong>Chat</strong> in the shop app. Customers open a magic-link chat (no
+              password) from messages your shop sends.
+            </li>
+            <li>
+              SMS (via Twilio) and email updates can include photos and deep links back to chat,
+              status, or pay pages.
+            </li>
+            <li>
+              Customers can check a <strong>status page</strong> for their job—including queue
+              position when relevant—and a <strong>pay page</strong> for the invoice.
+            </li>
+            <li>
+              Notification preferences let customers control how they hear about their repair.
+            </li>
+          </ul>
+        </section>
+
+        <section aria-labelledby="messages">
+          <h2 id="messages">Automated messages</h2>
+          <p>
+            Email (and related chat/SMS flows) can fire automatically as jobs move through the shop.
+            Templates are editable in settings so the tone matches your shop.
+          </p>
+          <p>Typical automations include:</p>
+          <ul>
+            <li>Booking confirmations and pending-approval follow-ups</li>
+            <li>Stage updates as the repair progresses</li>
+            <li>Waitlist promoted and booking declined notices</li>
+            <li>Drop-off / collection reminders for Booked In jobs</li>
+            <li>Pickup / delivery reminders when a bike is Ready</li>
+            <li>Multi-step review follow-ups after completion</li>
+          </ul>
+        </section>
+
+        <section aria-labelledby="reviews">
+          <h2 id="reviews">Reviews</h2>
+          <p>
+            After a repair, Bike Ops can send review follow-ups with links to Google, Yelp, or other
+            destinations you configure. Track clicks, pull place reviews where APIs are connected, and
+            optionally embed a reviews widget on your site.
+          </p>
+        </section>
+
+        <section aria-labelledby="stats">
+          <h2 id="stats">Stats</h2>
+          <p>
+            Stats summarizes shop performance without exporting to a spreadsheet first:
+          </p>
+          <ul>
+            <li>Bikes and revenue over day, week, month, or year ranges</li>
+            <li>Breakdown of Stripe vs cash vs imported payments</li>
+            <li>Top services, monthly revenue trends, turnaround, and retention views</li>
+          </ul>
+        </section>
+
+        <section aria-labelledby="settings">
+          <h2 id="settings">Settings and features</h2>
+          <p>
+            Settings control how your shop looks and which capabilities are on. Common options:
+          </p>
+          <ul>
+            <li>
+              <strong>Appearance and branding</strong> — logo, shop phone, public address (used for
+              nearby search and collection radius)
+            </li>
+            <li>
+              <strong>Bookings</strong> — on/off, max active bikes, closed dates, timezone
+            </li>
+            <li>
+              <strong>Collection service</strong> — enable pickup/return, radius in miles, and fees
+              for regular vs e-bike
+            </li>
+            <li>
+              <strong>Communications</strong> — customer notify, staff notify email, Twilio SMS,
+              email templates
+            </li>
+            <li>
+              <strong>Features</strong> — chat, reviews, job board filters, and related toggles
+            </li>
+            <li>
+              <strong>Payments</strong> — Stripe connection and Tap to Pay / Terminal setup
+            </li>
+          </ul>
+        </section>
+
+        <section aria-labelledby="mobile">
+          <h2 id="mobile">Mobile apps</h2>
+          <p>
+            Staff can run Bike Ops on iPhone and iPad for the job board, invoices, chat, and Tap to
+            Pay. Allow push notifications in iOS settings if you want job and chat alerts on the floor.
+          </p>
+          <p>
+            Customers use magic-link access for chat and status—Bike Ops does not issue customer
+            passwords. If a customer needs help with their repair, they should contact your shop, not
+            Bike Ops support.
+          </p>
+        </section>
+
+        <section aria-labelledby="billing">
+          <h2 id="billing">Trial and billing</h2>
+          <ul>
+            <li>Every new shop starts with a 14-day free trial.</li>
+            <li>After the trial, subscription is $39.99/month.</li>
+            <li>
+              Manage billing after signing in at
+              <a href="https://app.bikeops.co">app.bikeops.co</a> (Stripe customer portal where
+              enabled).
+            </li>
+            <li>
+              Questions about invoices or the trial?
+              <a href="/support">Contact support</a>.
+            </li>
+          </ul>
+        </section>
+
+        <section aria-labelledby="help">
+          <h2 id="help">Getting help</h2>
+          <p>
+            For shop onboarding, billing, or bugs, use the
+            <a href="/support">Support</a> page—email, phone, or the chat button on this site. Include
+            your shop name and workspace subdomain (for example <code>yourshop</code>) so we can find
+            you quickly.
+          </p>
+          <p>
+            Product updates are listed on
+            <a href="/releases">Release notes</a>. When the app shows an update available, you can
+            refresh on your schedule and read what’s new.
+          </p>
+          <div class="support-actions">
+            <a class="button button-small" href="https://app.bikeops.co/signup">Start free trial</a>
+            <a class="button button-small button-secondary" href="/support">Contact support</a>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <footer>
+      <span>Bike Ops</span>
+      <nav aria-label="Footer">
+        <a href="/">Home</a>
+        <a href="/blog">Blog</a>
+        <a href="/docs" aria-current="page">Documentation</a>
+        <a href="/support">Support</a>
+        <a href="tel:+14708761489">470-876-1489</a>
+        <a href="/terms">Terms</a>
+        <a href="/privacy">Privacy</a>
+        <a href="https://app.bikeops.co/login">Sign in</a>
+      </nav>
+    </footer>
+
+    <link rel="stylesheet" href="/site-chat.css" />
+    <script
+      src="/site-chat.js"
+      data-api-base="https://app.bikeops.co"
+      defer
+    ></script>
+  </body>
+</html>

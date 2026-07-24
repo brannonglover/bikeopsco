@@ -11,6 +11,7 @@ import { StaffWaitlistAttentionProvider } from "@/contexts/StaffWaitlistAttentio
 import { AppFeaturesProvider, useAppFeatures } from "@/contexts/AppFeaturesContext";
 import { initNotificationSound } from "@/lib/notificationSound";
 import { BrandLogo, BrandingProvider, type BrandingResponse } from "@/components/BrandLogo";
+import { VersionUpdateBanner } from "@/components/VersionUpdateBanner";
 
 type BillingStatus = {
   status: string;
@@ -287,6 +288,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
             </div>
             <SidebarNav onNavigate={() => setMobileMenuOpen(false)} />
             <div className="flex-1" />
+            <VersionUpdateBanner />
             <div className="p-2 border-t border-slate-600/50 flex items-center gap-1">
               <button
                 type="button"

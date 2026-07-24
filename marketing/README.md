@@ -15,6 +15,14 @@ Legal and support pages (for App Store Connect and compliance):
 
 - `https://bikeops.co/support` — shop and customer help, contact email, site chat
 - `https://bikeops.co/privacy` — privacy policy
+- `https://bikeops.co/releases` — product release notes (linked from the in-app update banner)
+
+### Publishing a release
+
+1. Copy `releases/_template/` to `releases/<slug>/` (e.g. `releases/2026-07-24/`).
+2. Fill in the title, summary, and bullets; link it from `releases/index.html`.
+3. In the app repo, map the production commit SHA in `src/lib/releases.ts` so the sidebar “What’s new” link opens that page.
+
 
 ## Site chat (Quo)
 
