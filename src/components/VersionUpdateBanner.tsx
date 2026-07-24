@@ -19,7 +19,8 @@ export function VersionUpdateBanner() {
     >
       <p className="text-sm font-semibold text-amber-950">Update available</p>
       <p className="mt-1 text-xs leading-snug text-amber-900/90">
-        A newer version of Bike Ops is ready. Refresh when you can to get the latest changes.
+        A newer version of Bike Ops is ready. Your current version stays until you update — refreshing
+        the page will not apply it.
       </p>
       <div className="mt-3 flex flex-col gap-2">
         <button

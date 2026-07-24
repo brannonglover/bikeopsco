@@ -23,6 +23,9 @@ Legal and support pages (for App Store Connect and compliance):
 2. Fill in the title, summary, and bullets; link it from `releases/index.html`.
 3. In the app repo, map the production commit SHA in `src/lib/releases.ts` so the sidebar “What’s new” link opens that page.
 
+Staff app soft updates (separate from this static site): production builds generate `bikeops-sw.js` so shops stay on their current UI until they click **Update now**. A normal refresh does not apply the new release.
+
+
 
 ## Site chat (Quo)
 

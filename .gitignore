@@ -13,6 +13,9 @@
 /.next/
 /out/
 
+# Generated at build (embed deploy SHA for soft updates)
+/public/bikeops-sw.js
+
 # production
 /build
 
