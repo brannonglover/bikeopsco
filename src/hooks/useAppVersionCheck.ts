@@ -5,10 +5,17 @@ import { useVisibilityAwarePolling } from "@/hooks/useVisibilityAwarePolling";
 
 const POLL_INTERVAL_MS = 60_000;
 const SW_URL = "/bikeops-sw.js";
+const STORAGE_CLIENT_VERSION = "bikeops_client_version";
+const STORAGE_PENDING_UPDATE = "bikeops_pending_update";
 
 type VersionResponse = {
   version?: string;
   releaseNotesUrl?: string;
+};
+
+type PendingUpdate = {
+  version: string;
+  releaseNotesUrl: string | null;
 };
 
 export type AppVersionCheck = {
@@ -26,29 +33,94 @@ function canUseServiceWorker(): boolean {
   );
 }
 
+function readClientVersion(): string | null {
+  try {
+    return localStorage.getItem(STORAGE_CLIENT_VERSION)?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+function writeClientVersion(version: string) {
+  try {
+    localStorage.setItem(STORAGE_CLIENT_VERSION, version);
+  } catch {
+    // Ignore quota / private-mode failures.
+  }
+}
+
+function readPendingUpdate(): PendingUpdate | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_PENDING_UPDATE);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<PendingUpdate>;
+    const version = typeof parsed.version === "string" ? parsed.version.trim() : "";
+    if (!version) return null;
+    return {
+      version,
+      releaseNotesUrl:
+        typeof parsed.releaseNotesUrl === "string" ? parsed.releaseNotesUrl : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writePendingUpdate(pending: PendingUpdate | null) {
+  try {
+    if (!pending) {
+      localStorage.removeItem(STORAGE_PENDING_UPDATE);
+      return;
+    }
+    localStorage.setItem(STORAGE_PENDING_UPDATE, JSON.stringify(pending));
+  } catch {
+    // Ignore quota / private-mode failures.
+  }
+}
+
 /**
  * Soft-update detection + opt-in apply.
  *
- * A service worker freezes the staff UI on the version that first controlled
- * the tab. Normal refresh keeps that version. Only "Update now" activates the
- * waiting worker (or reloads if no worker is present yet).
+ * The shop's adopted version is stored in localStorage until they click
+ * "Update now", so the sidebar banner survives refreshes. A service worker
+ * freezes UI assets the same way when available.
  */
 export function useAppVersionCheck(enabled = true): AppVersionCheck {
-  const baselineRef = useRef<string | null>(null);
   const refreshingRef = useRef(false);
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [releaseNotesUrl, setReleaseNotesUrl] = useState<string | null>(null);
 
-  const markUpdateAvailable = useCallback((notesUrl?: string | null) => {
+  const markUpdateAvailable = useCallback((version: string, notesUrl?: string | null) => {
+    const pending: PendingUpdate = {
+      version,
+      releaseNotesUrl: notesUrl?.trim() || null,
+    };
+    writePendingUpdate(pending);
     setUpdateAvailable(true);
-    if (notesUrl) setReleaseNotesUrl(notesUrl);
+    setReleaseNotesUrl(pending.releaseNotesUrl);
   }, []);
+
+  // Restore a previously shown update after refresh / remount.
+  useEffect(() => {
+    if (!enabled) return;
+    const pending = readPendingUpdate();
+    if (!pending) return;
+    setUpdateAvailable(true);
+    setReleaseNotesUrl(pending.releaseNotesUrl);
+  }, [enabled]);
 
   const syncWaitingWorker = useCallback(
     (registration: ServiceWorkerRegistration) => {
-      if (registration.waiting) {
-        markUpdateAvailable();
-      }
+      if (!registration.waiting) return;
+      void fetch("/api/version", { cache: "no-store" })
+        .then((response) => (response.ok ? response.json() : null))
+        .then((data: VersionResponse | null) => {
+          const version = data?.version?.trim() || `waiting-${Date.now()}`;
+          markUpdateAvailable(version, data?.releaseNotesUrl?.trim() || null);
+        })
+        .catch(() => {
+          markUpdateAvailable(`waiting-${Date.now()}`, null);
+        });
     },
     [markUpdateAvailable]
   );
@@ -70,7 +142,7 @@ export function useAppVersionCheck(enabled = true): AppVersionCheck {
       if (!installing) return;
       installing.addEventListener("statechange", () => {
         if (installing.state === "installed" && navigator.serviceWorker.controller) {
-          markUpdateAvailable();
+          if (registration) syncWaitingWorker(registration);
         }
       });
     };
@@ -94,7 +166,7 @@ export function useAppVersionCheck(enabled = true): AppVersionCheck {
       navigator.serviceWorker.removeEventListener("controllerchange", onControllerChange);
       registration?.removeEventListener("updatefound", onUpdateFound);
     };
-  }, [enabled, markUpdateAvailable, syncWaitingWorker]);
+  }, [enabled, syncWaitingWorker]);
 
   const check = useCallback(() => {
     if (typeof window === "undefined") return;
@@ -105,23 +177,45 @@ export function useAppVersionCheck(enabled = true): AppVersionCheck {
         const version = data?.version?.trim();
         if (!version) return;
 
-        if (baselineRef.current === null) {
-          baselineRef.current = version;
+        const clientVersion = readClientVersion();
+        if (!clientVersion) {
+          // First visit (or after a successful Update now cleared state incorrectly).
+          // Adopt current production unless a pending update was already stored.
+          const pending = readPendingUpdate();
+          if (pending && pending.version !== version) {
+            // Stale pending from an older deploy — refresh notes for the live version.
+            markUpdateAvailable(version, data?.releaseNotesUrl?.trim() || null);
+            return;
+          }
+          if (pending && pending.version === version) {
+            setUpdateAvailable(true);
+            setReleaseNotesUrl(
+              pending.releaseNotesUrl ?? data?.releaseNotesUrl?.trim() ?? null
+            );
+            return;
+          }
+          writeClientVersion(version);
           return;
         }
 
-        if (version !== baselineRef.current) {
-          markUpdateAvailable(data?.releaseNotesUrl?.trim() || null);
+        if (version !== clientVersion) {
+          markUpdateAvailable(version, data?.releaseNotesUrl?.trim() || null);
           if (canUseServiceWorker()) {
             try {
               const reg = await navigator.serviceWorker.getRegistration(SW_URL);
               await reg?.update();
               if (reg) syncWaitingWorker(reg);
             } catch {
-              // Ignore; banner still shows from the version mismatch.
+              // Banner still shows from the version mismatch.
             }
           }
+          return;
         }
+
+        // Already on the latest version — clear any stale banner.
+        writePendingUpdate(null);
+        setUpdateAvailable(false);
+        setReleaseNotesUrl(null);
       })
       .catch(() => {
         // Ignore transient network errors; the next poll retries.
@@ -136,7 +230,18 @@ export function useAppVersionCheck(enabled = true): AppVersionCheck {
 
   const applyUpdate = useCallback(() => {
     void (async () => {
+      try {
+        const response = await fetch("/api/version", { cache: "no-store" });
+        const data = (response.ok ? await response.json() : null) as VersionResponse | null;
+        const version = data?.version?.trim();
+        if (version) writeClientVersion(version);
+      } catch {
+        // Still clear the banner and reload; next load re-adopts from /api/version.
+      }
+      writePendingUpdate(null);
+
       if (!canUseServiceWorker()) {
+        refreshingRef.current = true;
         window.location.reload();
         return;
       }
@@ -147,7 +252,6 @@ export function useAppVersionCheck(enabled = true): AppVersionCheck {
 
         if (reg?.waiting) {
           reg.waiting.postMessage({ type: "SKIP_WAITING" });
-          // controllerchange handler reloads once the new worker activates.
           window.setTimeout(() => {
             if (!refreshingRef.current) {
               refreshingRef.current = true;
