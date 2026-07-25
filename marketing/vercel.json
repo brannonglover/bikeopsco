@@ -3,6 +3,16 @@
   "trailingSlash": false,
   "redirects": [
     {
+      "source": "/bike-repair-software",
+      "destination": "/",
+      "permanent": true
+    },
+    {
+      "source": "/bike-repair-software/",
+      "destination": "/",
+      "permanent": true
+    },
+    {
       "source": "/open/staff/chat/:conversationId*",
       "destination": "https://app.bikeops.co/open/staff/chat/:conversationId*",
       "permanent": false
