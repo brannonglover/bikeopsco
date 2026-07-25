@@ -1,0 +1,55 @@
+name: Release notes draft
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: release-notes-main
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  draft-release-notes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate draft release notes
+        id: notes
+        env:
+          PLATFORM_RELEASE_WEBHOOK_SECRET: ${{ secrets.PLATFORM_RELEASE_WEBHOOK_SECRET }}
+          PLATFORM_RELEASE_API_BASE: ${{ vars.PLATFORM_RELEASE_API_BASE }}
+          AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
+          RELEASE_GIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ -z "${PLATFORM_RELEASE_WEBHOOK_SECRET:-}" ]; then
+            echo "PLATFORM_RELEASE_WEBHOOK_SECRET secret is not set; skipping."
+            exit 0
+          fi
+          node scripts/generate-release-notes.mjs | tee /tmp/release-notes-out.txt
+          VERSION="$(grep -E '^RELEASE_VERSION=' /tmp/release-notes-out.txt | tail -n1 | cut -d= -f2 || true)"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Tag release range
+        if: steps.notes.outputs.version != ''
+        env:
+          VERSION: ${{ steps.notes.outputs.version }}
+        run: |
+          set -euo pipefail
+          TAG="release-${VERSION}"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Release notes draft ${VERSION}"
+          git push origin "$TAG"

@@ -77,6 +77,6 @@ export const config = {
     /*
      * Protect staff routes. Public: login, signup, admin, platform APIs, pay, status, chat/c, open, api/auth, webhooks, jobs, chat, cron
      */
-    "/((?!_next|favicon|bikeops-sw\\.js|login|signup|admin|api/platform|api/shops|pay|status|chat/c|open|book|widget|api/auth|api/signup|api/billing/apple|api/webhooks|api/jobs/|api/chat|api/cron|api/booking|api/widget|api/site-chat|api/og-preview|api/push-tokens|api/version|api/review-requests/.+/redirect).*)",
+    "/((?!_next|favicon|bikeops-sw\\.js|login|signup|admin|api/platform|api/shops|api/releases|pay|status|chat/c|open|book|widget|api/auth|api/signup|api/billing/apple|api/webhooks|api/jobs/|api/chat|api/cron|api/booking|api/widget|api/site-chat|api/og-preview|api/push-tokens|api/version|api/review-requests/.+/redirect).*)",
   ],
 };

@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
  * newer production deploy is live and the tab should offer a refresh.
  */
 export async function GET() {
-  const payload = getAppVersionPayload();
+  const payload = await getAppVersionPayload();
   return NextResponse.json(payload, {
     headers: {
       "Cache-Control": "no-store, max-age=0, must-revalidate",

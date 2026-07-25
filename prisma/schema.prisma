@@ -744,3 +744,28 @@ enum SiteChatMessageSource {
   WIDGET
   QUO
 }
+
+/// Production release notes (draft → admin approve → public changelog).
+model PlatformRelease {
+  id          String               @id @default(cuid())
+  /// Calendar version, e.g. 2026.07.25 or 2026.07.25.2
+  version     String               @unique
+  /// Production git commit SHA this release documents
+  gitSha      String
+  title       String?
+  /// Shop-facing bullet list
+  bullets     String[]
+  status      PlatformReleaseStatus @default(draft)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  publishedAt DateTime?
+
+  @@index([gitSha])
+  @@index([status, publishedAt])
+}
+
+enum PlatformReleaseStatus {
+  draft
+  published
+  discarded
+}

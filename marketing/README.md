@@ -15,15 +15,16 @@ Legal and support pages (for App Store Connect and compliance):
 
 - `https://bikeops.co/support` — shop and customer help, contact email, site chat
 - `https://bikeops.co/privacy` — privacy policy
-- `https://bikeops.co/releases` — product release notes (linked from the in-app update banner)
+- `https://bikeops.co/releases` — product release notes (loads published notes from `app.bikeops.co/api/releases`)
 
-### Publishing a release
+### Release notes (automated)
 
-1. Copy `releases/_template/` to `releases/<slug>/` (e.g. `releases/2026-07-24/`).
-2. Fill in the title, summary, and bullets; link it from `releases/index.html`.
-3. In the app repo, map the production commit SHA in `src/lib/releases.ts` so the sidebar “What’s new” link opens that page.
+1. Merge to `main` → GitHub Action `release-notes` creates a **draft** in the app DB.
+2. Review/edit/publish at `https://app.bikeops.co/admin/releases`.
+3. Published notes appear on this marketing page (latest first). The in-app **What’s new** link deep-links to the matching version.
 
-Staff app soft updates (separate from this static site): production builds generate `bikeops-sw.js` so shops stay on their current UI until they click **Update now**. A normal refresh does not apply the new release.
+Required secrets: `PLATFORM_RELEASE_WEBHOOK_SECRET` (Vercel app + GitHub Actions), optional `AI_GATEWAY_API_KEY`.
+
 
 
 

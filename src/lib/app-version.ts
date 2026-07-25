@@ -1,5 +1,8 @@
 import { DEFAULT_ROOT_DOMAIN } from "@/lib/tenant-domain";
-import { findPublishedRelease } from "@/lib/releases";
+import {
+  findPublishedReleaseByGitSha,
+  getReleaseNotesPublicUrl,
+} from "@/lib/platform-releases";
 
 /** Current deploy identity (git SHA on Vercel; stable local fallback). */
 export function getAppVersion(): string {
@@ -15,23 +18,19 @@ export function getMarketingSiteBaseUrl(): string {
   return `https://${DEFAULT_ROOT_DOMAIN}`;
 }
 
-/** Prefer a specific release page when published; otherwise the releases index. */
-export function getReleaseNotesUrl(version: string): string {
-  const base = getMarketingSiteBaseUrl();
-  const release = findPublishedRelease(version);
-  if (release) return `${base}/releases/${release.slug}`;
-  return `${base}/releases`;
-}
-
 export type AppVersionPayload = {
   version: string;
+  versionLabel: string | null;
   releaseNotesUrl: string;
 };
 
-export function getAppVersionPayload(): AppVersionPayload {
+export async function getAppVersionPayload(): Promise<AppVersionPayload> {
   const version = getAppVersion();
+  const published = await findPublishedReleaseByGitSha(version).catch(() => null);
+
   return {
     version,
-    releaseNotesUrl: getReleaseNotesUrl(version),
+    versionLabel: published?.version ?? null,
+    releaseNotesUrl: getReleaseNotesPublicUrl(published?.version ?? null),
   };
 }

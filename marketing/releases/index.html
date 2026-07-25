@@ -33,7 +33,6 @@
         <a href="/">Home</a>
         <a href="/bike-repair-software">Bike repair software</a>
         <a href="/blog">Blog</a>
-        <a href="/docs">Documentation</a>
         <a href="/releases" aria-current="page">Releases</a>
         <a href="https://app.bikeops.co/login">Sign in</a>
         <a class="button button-small" href="https://app.bikeops.co/signup">Start free</a>
@@ -46,45 +45,14 @@
         <h1>Release notes</h1>
         <p>
           Highlights from recent Bike Ops releases. When your shop sees an update available in the
-          app, you can refresh on your own schedule—and open the notes for that release here.
+          app, refresh on your own schedule—or open What’s new to land on that version below.
         </p>
       </div>
 
-      <div class="legal-content">
-        <section aria-labelledby="latest-heading">
-          <h2 id="latest-heading">Latest</h2>
-          <p>
-            Detailed release notes will appear here as we publish them. Until you click
-            <strong> Update now</strong> in the app, your shop stays on the version you already have
-            — a normal page refresh will not apply the new release.
-          </p>
-          <!--
-            When you publish notes, add a card like:
-            <div class="support-card">
-              <strong><a href="/releases/2026-07-24">July 24, 2026</a></strong>
-              <p>Short summary of the release.</p>
-            </div>
-          -->
-        </section>
-
-        <section aria-labelledby="how-heading">
-          <h2 id="how-heading">How updates work</h2>
-          <ul>
-            <li>
-              Bike Ops deploys without interrupting work mid-job or mid-chat.
-            </li>
-            <li>
-              When a new version is ready, staff see an <strong>Update available</strong> notice in
-              the sidebar above Sign out.
-            </li>
-            <li>
-              The new version applies only when someone clicks <strong>Update now</strong>. A normal
-              refresh keeps the current version until then.
-            </li>
-            <li>
-              Open <strong>What's new</strong> anytime to read the notes for that release.
-            </li>
-          </ul>
+      <div class="legal-content" id="releases-root" data-api-base="https://app.bikeops.co">
+        <section aria-labelledby="loading-heading">
+          <h2 id="loading-heading">Loading…</h2>
+          <p>Fetching the latest published updates.</p>
         </section>
       </div>
     </main>
@@ -94,7 +62,6 @@
       <nav aria-label="Footer">
         <a href="/">Home</a>
         <a href="/blog">Blog</a>
-        <a href="/docs">Documentation</a>
         <a href="/releases" aria-current="page">Releases</a>
         <a href="/support">Support</a>
         <a href="tel:+14708761489">470-876-1489</a>
@@ -104,6 +71,7 @@
       </nav>
     </footer>
 
+    <script src="/releases.js" defer></script>
     <link rel="stylesheet" href="/site-chat.css" />
     <script
       src="/site-chat.js"
