@@ -12,6 +12,7 @@ type VersionResponse = {
   version?: string;
   releaseNotesUrl?: string;
   updateReady?: boolean;
+  softUpdatesEnabled?: boolean;
 };
 
 type PendingUpdate = {
@@ -101,13 +102,14 @@ export function useAppVersionCheck(enabled = true): AppVersionCheck {
     setReleaseNotesUrl(pending.releaseNotesUrl);
   }, []);
 
-  // Restore a previously shown update after refresh / remount.
+  // Do not restore from localStorage until /api/version confirms soft updates
+  // are enabled (avoids a sticky banner on Preview/local after Production testing).
   useEffect(() => {
-    if (!enabled) return;
-    const pending = readPendingUpdate();
-    if (!pending) return;
-    setUpdateAvailable(true);
-    setReleaseNotesUrl(pending.releaseNotesUrl);
+    if (!enabled) {
+      writePendingUpdate(null);
+      setUpdateAvailable(false);
+      setReleaseNotesUrl(null);
+    }
   }, [enabled]);
 
   const syncWaitingWorker = useCallback(
@@ -116,6 +118,12 @@ export function useAppVersionCheck(enabled = true): AppVersionCheck {
       void fetch("/api/version", { cache: "no-store" })
         .then((response) => (response.ok ? response.json() : null))
         .then((data: VersionResponse | null) => {
+          if (data?.softUpdatesEnabled === false) {
+            writePendingUpdate(null);
+            setUpdateAvailable(false);
+            setReleaseNotesUrl(null);
+            return;
+          }
           const version = data?.version?.trim() || `waiting-${Date.now()}`;
           if (data?.updateReady === false) {
             writePendingUpdate(null);
@@ -183,6 +191,15 @@ export function useAppVersionCheck(enabled = true): AppVersionCheck {
       .then(async (data: VersionResponse | null) => {
         const version = data?.version?.trim();
         if (!version) return;
+
+        // Local + Preview/staging never show the soft-update banner.
+        if (data?.softUpdatesEnabled === false) {
+          writePendingUpdate(null);
+          setUpdateAvailable(false);
+          setReleaseNotesUrl(null);
+          writeClientVersion(version);
+          return;
+        }
 
         const notesReady = data?.updateReady !== false;
         const notesUrl = data?.releaseNotesUrl?.trim() || null;

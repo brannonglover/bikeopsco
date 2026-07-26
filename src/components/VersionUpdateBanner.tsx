@@ -9,9 +9,9 @@ import { useAppVersionCheck } from "@/hooks/useAppVersionCheck";
  * that globals.css remaps poorly under html.dark).
  */
 export function VersionUpdateBanner() {
-  const { updateAvailable, releaseNotesUrl, applyUpdate } = useAppVersionCheck(
-    process.env.NODE_ENV === "production"
-  );
+  // Soft updates are gated server-side (Production only via softUpdatesEnabled).
+  // Keep the hook enabled so Preview/local clear any sticky localStorage banner.
+  const { updateAvailable, releaseNotesUrl, applyUpdate } = useAppVersionCheck(true);
 
   if (!updateAvailable) return null;
 
