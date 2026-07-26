@@ -1,20 +1,62 @@
 #!/usr/bin/env node
 /**
- * Generate shop-facing release note drafts from git history and POST them
- * to the platform API (status: draft) for admin approval.
+ * Generate shop-facing release note drafts from the product diff and POST
+ * them to the platform API (status: draft) for admin approval.
+ *
+ * Prefer AI_GATEWAY_API_KEY so bullets describe what shop staff will notice.
+ * Without it, falls back to coarse area labels from changed paths.
  *
  * Env:
  *   PLATFORM_RELEASE_API_BASE   default https://app.bikeops.co
  *   PLATFORM_RELEASE_WEBHOOK_SECRET  required
- *   AI_GATEWAY_API_KEY          optional — enables AI bullets
+ *   AI_GATEWAY_API_KEY          recommended — enables customer-facing bullets
  *   RELEASE_GIT_SHA             optional override (default: HEAD)
  */
 import { execFileSync } from "node:child_process";
 import process from "node:process";
 
+const MAX_DIFF_CHARS = 90_000;
+const MAX_FILES_IN_DIFF = 80;
+
+const NOISE_PATH =
+  /(^|\/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb?)$/i;
+const BINARY_PATH = /\.(png|jpe?g|gif|webp|ico|pdf|zip|mp4|mov|woff2?)$/i;
+const SKIP_PREFIXES = [
+  "marketing/screenshots/",
+  "public/",
+  ".cursor/",
+  "node_modules/",
+];
+
+/** Map changed paths → shop-facing product areas for fallbacks + AI context. */
+const AREA_RULES = [
+  { re: /^src\/.*\/(jobs|board)/i, area: "Job board" },
+  { re: /^src\/.*job/i, area: "Jobs" },
+  { re: /^src\/.*chat/i, area: "Chat messaging" },
+  { re: /^src\/.*customer/i, area: "Customers" },
+  { re: /^src\/.*mechanic/i, area: "Mechanics roster" },
+  { re: /^src\/.*service/i, area: "Services menu" },
+  { re: /^src\/.*product/i, area: "Products" },
+  { re: /^src\/.*bill(ing)?/i, area: "Billing and payments" },
+  { re: /^src\/.*pay\//i, area: "Customer payments" },
+  { re: /^src\/.*book/i, area: "Online booking" },
+  { re: /^src\/.*calendar/i, area: "Shop calendar" },
+  { re: /^src\/.*review/i, area: "Reviews" },
+  { re: /^src\/.*status/i, area: "Job status page" },
+  { re: /^src\/.*preference/i, area: "Repair preferences" },
+  { re: /^src\/.*branding|appearance|settings/i, area: "Shop settings" },
+  { re: /^src\/.*email|twilio|sms/i, area: "Customer notifications" },
+  { re: /^src\/.*archive|stats/i, area: "Archive and stats" },
+  { re: /^src\/.*signup|login|auth|waitlist/i, area: "Sign-in and onboarding" },
+  { re: /^src\/app\/api\//i, area: "Backend reliability" },
+  { re: /^prisma\/|^src\/.*schema/i, area: "Data model" },
+  { re: /^marketing\//i, area: "Marketing site" },
+];
+
 function runGit(args) {
   return execFileSync("git", args, {
     encoding: "utf8",
+    maxBuffer: 20 * 1024 * 1024,
     stdio: ["ignore", "pipe", "pipe"],
   }).trim();
 }
@@ -27,40 +69,110 @@ function getPreviousReleaseTag() {
   }
 }
 
-function getCommitsSince(tagOrNull) {
-  const range = tagOrNull ? `${tagOrNull}..HEAD` : "HEAD";
-  const logArgs = [
-    "log",
-    range,
-    "--no-merges",
-    "--pretty=format:%H%x09%s%x09%b%x1e",
-  ];
-  if (!tagOrNull) {
-    logArgs.splice(1, 0, "-n", "40");
+function isSkippablePath(path) {
+  if (!path) return true;
+  if (NOISE_PATH.test(path) || BINARY_PATH.test(path)) return true;
+  return SKIP_PREFIXES.some((prefix) => path.startsWith(prefix));
+}
+
+function areaForPath(path) {
+  for (const rule of AREA_RULES) {
+    if (rule.re.test(path)) return rule.area;
   }
+  if (path.startsWith("src/")) return "Shop workspace";
+  return null;
+}
+
+function getChangedFiles(range) {
   let raw = "";
   try {
-    raw = runGit(logArgs);
+    raw = runGit(["diff", "--name-status", "--find-renames", range]);
   } catch {
     return [];
   }
   if (!raw) return [];
 
   return raw
-    .split("\x1e")
-    .map((chunk) => chunk.trim())
+    .split("\n")
+    .map((line) => line.trim())
     .filter(Boolean)
-    .map((chunk) => {
-      const [hash, subject, body = ""] = chunk.split("\t");
-      return {
-        hash: (hash || "").trim(),
-        subject: (subject || "").trim(),
-        body: (body || "").trim().replace(/\n+/g, " "),
-      };
+    .map((line) => {
+      const parts = line.split("\t");
+      const status = parts[0] || "";
+      const path = parts[parts.length - 1] || "";
+      return { status: status[0] || "M", path };
     })
-    .filter((c) => c.hash && c.subject)
-    .filter((c) => !/^release notes/i.test(c.subject))
-    .filter((c) => !/^chore(\(.+\))?:/i.test(c.subject) || /release/i.test(c.subject));
+    .filter((f) => !isSkippablePath(f.path));
+}
+
+function getDiffRange(previousTag) {
+  if (previousTag) return `${previousTag}..HEAD`;
+  // First release notes run: look at recent history rather than empty range.
+  try {
+    const base = runGit(["rev-list", "--max-count=1", "HEAD~40"]);
+    return `${base}..HEAD`;
+  } catch {
+    return "HEAD";
+  }
+}
+
+function hasProductFacingChanges(files) {
+  return files.some((f) => {
+    const p = f.path;
+    if (p.startsWith("prisma/")) return true;
+    if (p.startsWith("marketing/") && !p.startsWith("marketing/README")) return true;
+    if (!p.startsWith("src/")) return false;
+    // Release tooling / platform admin notes are not shop-facing product changes.
+    if (p.includes("/platform/releases") || p.includes("platform-releases")) return false;
+    return true;
+  });
+}
+
+function summarizeAreas(files) {
+  const counts = new Map();
+  for (const file of files) {
+    const area = areaForPath(file.path);
+    if (!area) continue;
+    counts.set(area, (counts.get(area) || 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([area, count]) => `${area} (${count} file${count === 1 ? "" : "s"})`);
+}
+
+function buildFileListBlock(files) {
+  return files
+    .slice(0, 120)
+    .map((f) => `${f.status}\t${f.path}`)
+    .join("\n");
+}
+
+function getUnifiedDiff(range, files) {
+  const paths = files
+    .map((f) => f.path)
+    .filter((p) => p.startsWith("src/") || p.startsWith("prisma/") || p.startsWith("marketing/"))
+    .slice(0, MAX_FILES_IN_DIFF);
+
+  if (paths.length === 0) return "";
+
+  let raw = "";
+  try {
+    raw = runGit([
+      "diff",
+      "--unified=2",
+      "--no-color",
+      "--ignore-space-at-eol",
+      range,
+      "--",
+      ...paths,
+    ]);
+  } catch {
+    return "";
+  }
+
+  if (!raw) return "";
+  if (raw.length <= MAX_DIFF_CHARS) return raw;
+  return `${raw.slice(0, MAX_DIFF_CHARS)}\n\n… [diff truncated for length]`;
 }
 
 function todayCalverBase() {
@@ -73,50 +185,53 @@ function todayCalverBase() {
   return formatter.format(new Date()).replace(/-/g, ".");
 }
 
-function fallbackBullets(commits) {
-  const seen = new Set();
-  const bullets = [];
-  for (const commit of commits) {
-    let text = commit.subject
-      .replace(/^(feat|fix|docs|style|refactor|perf|test|build|ci|chore)(\(.+\))?:\s*/i, "")
-      .replace(/\s+/g, " ")
-      .trim();
-    if (!text) continue;
-    text = text.charAt(0).toUpperCase() + text.slice(1);
-    if (text.length > 140) text = `${text.slice(0, 137)}…`;
-    const key = text.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    bullets.push(text);
-    if (bullets.length >= 8) break;
+function fallbackBullets(files) {
+  const areas = summarizeAreas(files).map((line) => line.replace(/\s*\(\d+ files?\)$/, ""));
+  const unique = [...new Set(areas)].slice(0, 6);
+  if (unique.length === 0) {
+    return ["Improvements and fixes for the Bike Ops shop workspace."];
   }
-  if (bullets.length === 0) {
-    bullets.push("Improvements and fixes for the Bike Ops shop workspace.");
-  }
-  return bullets;
+  return unique.map((area) => {
+    if (area === "Marketing site") {
+      return "Updates to the public Bike Ops website.";
+    }
+    if (area === "Backend reliability" || area === "Data model") {
+      return "Behind-the-scenes reliability improvements in the shop workspace.";
+    }
+    return `Updates to ${area.toLowerCase()}.`;
+  });
 }
 
-async function aiBullets(commits) {
+async function aiBullets({ areas, fileList, diff }) {
   const apiKey = process.env.AI_GATEWAY_API_KEY?.trim();
-  if (!apiKey) return null;
+  if (!apiKey) {
+    console.warn("AI_GATEWAY_API_KEY is not set; using path-based fallback bullets");
+    return null;
+  }
 
-  const commitBlock = commits
-    .slice(0, 30)
-    .map((c) => `- ${c.subject}${c.body ? ` (${c.body.slice(0, 120)})` : ""}`)
-    .join("\n");
+  const prompt = `You write "What's new" release notes for Bike Ops, bike repair shop software for shop owners and staff.
 
-  const prompt = `You write release notes for Bike Ops, bike repair shop software used by shop owners and staff.
+Read the changed files and code diff below. Infer what shop staff or customers will notice, then write 3-8 short bullet points in plain English.
 
-Given these git commits shipping to production, write 3-8 short bullet points in plain English for shop staff.
 Rules:
-- No file paths, ticket IDs, or developer jargon
-- Focus on what staff will notice (job board, chat, booking, billing, customers, etc.)
-- One idea per bullet
-- Do not mention "commit", "PR", "merge", or "deploy"
+- Base bullets on the DIFF and file changes, not on commit messages (there are none provided)
+- Write for a shop owner or mechanic, not a developer
+- No file paths, ticket IDs, function names, React/Next/DB jargon, or "API"/"deploy"/"PR"/"commit"
+- Focus on job board, jobs, chat, booking, billing, customers, mechanics, services, settings, notifications, payments, etc.
+- Skip pure infra, CI, lockfiles, screenshots, and internal refactors unless they clearly change shop-facing behavior
+- One concrete idea per bullet; start with a verb when natural (Added, Improved, Fixed, Made it easier to…)
+- Prefer specific outcomes ("Sort the Received column on the job board") over vague ones ("Job board updates")
+- If the diff is mostly marketing-site copy/layout, say so in customer terms (website), not "marketing HTML"
 - Return ONLY a JSON array of strings
 
-Commits:
-${commitBlock}`;
+Product areas touched:
+${areas.length ? areas.join("\n") : "(none labeled)"}
+
+Changed files (status + path):
+${fileList || "(none)"}
+
+Unified diff (may be truncated):
+${diff || "(no textual diff available)"}`;
 
   const response = await fetch("https://ai-gateway.vercel.sh/v1/chat/completions", {
     method: "POST",
@@ -126,11 +241,12 @@ ${commitBlock}`;
     },
     body: JSON.stringify({
       model: "openai/gpt-5.4",
-      temperature: 0.3,
+      temperature: 0.2,
       messages: [
         {
           role: "system",
-          content: "You return only valid JSON arrays of strings. No markdown.",
+          content:
+            "You return only valid JSON arrays of strings. No markdown fences. Bullets must be shop-customer friendly.",
         },
         { role: "user", content: prompt },
       ],
@@ -209,17 +325,29 @@ async function main() {
     runGit(["rev-parse", "HEAD"]);
 
   const previousTag = getPreviousReleaseTag();
-  console.log(previousTag ? `Diff since ${previousTag}` : "No prior release-* tag; using recent commits");
+  const range = getDiffRange(previousTag);
+  console.log(
+    previousTag
+      ? `Diff since ${previousTag} (${range})`
+      : `No prior release-* tag; using recent range (${range})`
+  );
 
-  const commits = getCommitsSince(previousTag);
-  if (commits.length === 0) {
-    console.log("No commits in range; skipping draft creation");
+  const files = getChangedFiles(range);
+  if (files.length === 0 || !hasProductFacingChanges(files)) {
+    console.log("No product-facing changes in range; skipping draft creation");
     process.exit(0);
   }
 
-  console.log(`Found ${commits.length} commit(s)`);
-  const ai = await aiBullets(commits);
-  const bullets = ai || fallbackBullets(commits);
+  const areas = summarizeAreas(files);
+  const fileList = buildFileListBlock(files);
+  const diff = getUnifiedDiff(range, files);
+
+  console.log(`Found ${files.length} changed file(s)`);
+  console.log(`Areas: ${areas.join("; ") || "(unlabeled)"}`);
+  console.log(`Diff payload: ${diff.length} chars`);
+
+  const ai = await aiBullets({ areas, fileList, diff });
+  const bullets = ai || fallbackBullets(files);
   const title = `Version ${todayCalverBase()}`;
 
   const { version, result } = await createDraftWithVersionBump({
@@ -238,6 +366,7 @@ async function main() {
         created: result.body?.created ?? true,
         bulletCount: bullets.length,
         usedAi: Boolean(ai),
+        bullets,
       },
       null,
       2

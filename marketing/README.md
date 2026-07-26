@@ -23,7 +23,7 @@ Legal and support pages (for App Store Connect and compliance):
 2. Review/edit/publish at `https://app.bikeops.co/admin/releases`.
 3. Published notes appear on this marketing page (latest first). The in-app **What’s new** link deep-links to the matching version.
 
-Required secrets: `PLATFORM_RELEASE_WEBHOOK_SECRET` (Vercel app + GitHub Actions), optional `AI_GATEWAY_API_KEY`.
+Required secrets: `PLATFORM_RELEASE_WEBHOOK_SECRET` (Vercel app + GitHub Actions). Set `AI_GATEWAY_API_KEY` in GitHub Actions so drafts are written from the product diff in shop-facing language (without it, bullets fall back to coarse area labels).
 
 
 
