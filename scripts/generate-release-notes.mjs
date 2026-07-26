@@ -9,8 +9,8 @@
  *   AI_GATEWAY_API_KEY          optional — enables AI bullets
  *   RELEASE_GIT_SHA             optional override (default: HEAD)
  */
-const { execFileSync } = require("child_process");
-const process = require("process");
+import { execFileSync } from "node:child_process";
+import process from "node:process";
 
 function runGit(args) {
   return execFileSync("git", args, {
