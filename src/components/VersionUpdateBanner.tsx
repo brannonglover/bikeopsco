@@ -9,7 +9,9 @@ import { useAppVersionCheck } from "@/hooks/useAppVersionCheck";
  * that globals.css remaps poorly under html.dark).
  */
 export function VersionUpdateBanner() {
-  const { updateAvailable, releaseNotesUrl, applyUpdate } = useAppVersionCheck();
+  const { updateAvailable, releaseNotesUrl, applyUpdate } = useAppVersionCheck(
+    process.env.NODE_ENV === "production"
+  );
 
   if (!updateAvailable) return null;
 
