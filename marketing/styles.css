@@ -1889,8 +1889,14 @@ footer nav a:hover {
 }
 
 .legal-content ul {
-  margin: 0 0 12px;
-  padding-left: 1.25rem;
+  margin: 12px 0 0;
+  padding-left: 1.35rem;
+  list-style: disc;
+}
+
+.legal-content li {
+  margin: 0 0 10px;
+  padding-left: 0.15rem;
 }
 
 .legal-content li:last-child,
@@ -1952,6 +1958,10 @@ footer nav a:hover {
 
 .docs-main {
   width: min(820px, 100%);
+}
+
+.releases-main {
+  width: min(960px, 100%);
 }
 
 .docs-toc {

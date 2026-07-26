@@ -109,7 +109,34 @@ export function AdminReleasesClient() {
         return;
       }
       if (data?.release) {
-        setReleases((prev) => prev.map((r) => (r.id === data.release!.id ? data.release! : r)));
+        setReleases((prev) => {
+          const next = prev.map((r) => (r.id === data.release!.id ? data.release! : r));
+          const statusRank: Record<ReleaseRow["status"], number> = {
+            draft: 0,
+            published: 1,
+            discarded: 2,
+          };
+          const parse = (value: string) => {
+            const parts = value.trim().split(".").map((part) => Number(part));
+            return {
+              y: parts[0] || 0,
+              m: parts[1] || 0,
+              d: parts[2] || 0,
+              n: parts.length > 3 && Number.isFinite(parts[3]) ? parts[3]! : 0,
+            };
+          };
+          return [...next].sort((a, b) => {
+            const rank = statusRank[a.status] - statusRank[b.status];
+            if (rank !== 0) return rank;
+            const left = parse(b.version);
+            const right = parse(a.version);
+            if (left.y !== right.y) return left.y - right.y;
+            if (left.m !== right.m) return left.m - right.m;
+            if (left.d !== right.d) return left.d - right.d;
+            if (left.n !== right.n) return left.n - right.n;
+            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+          });
+        });
       } else {
         await load();
       }
@@ -125,7 +152,7 @@ export function AdminReleasesClient() {
       <aside className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 px-4 py-3">
           <h2 className="text-sm font-semibold text-slate-900">Releases</h2>
-          <p className="mt-0.5 text-xs text-slate-500">Drafts first, then published</p>
+          <p className="mt-0.5 text-xs text-slate-500">Drafts first, newest version first</p>
         </div>
         {loading ? (
           <p className="px-4 py-6 text-sm text-slate-500">Loading…</p>
@@ -206,11 +233,33 @@ export function AdminReleasesClient() {
               <textarea
                 value={bulletsText}
                 onChange={(event) => setBulletsText(event.target.value)}
-                rows={10}
-                className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 font-sans text-sm leading-relaxed text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
-                placeholder="What shops will notice in this update"
+                rows={12}
+                className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-[13px] leading-6 text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                placeholder={"Added …\nImproved …\nFixed …"}
               />
             </label>
+
+            <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                Preview (how it will look when published)
+              </p>
+              {bulletsText
+                .split("\n")
+                .map((line) => line.trim())
+                .filter(Boolean).length === 0 ? (
+                <p className="mt-2 text-sm text-slate-500">Add one update per line above.</p>
+              ) : (
+                <ul className="mt-2 list-disc space-y-2 pl-5 text-sm leading-relaxed text-slate-800">
+                  {bulletsText
+                    .split("\n")
+                    .map((line) => line.trim())
+                    .filter(Boolean)
+                    .map((bullet, index) => (
+                      <li key={`${index}-${bullet.slice(0, 24)}`}>{bullet}</li>
+                    ))}
+                </ul>
+              )}
+            </div>
 
             <div className="mt-5 flex flex-wrap gap-2">
               <button

@@ -1,5 +1,7 @@
+import { isProductionDeployment } from "@/lib/env";
 import { DEFAULT_ROOT_DOMAIN } from "@/lib/tenant-domain";
 import {
+  findDraftReleaseByGitSha,
   findPublishedReleaseByGitSha,
   getReleaseNotesPublicUrl,
 } from "@/lib/platform-releases";
@@ -18,19 +20,50 @@ export function getMarketingSiteBaseUrl(): string {
   return `https://${DEFAULT_ROOT_DOMAIN}`;
 }
 
+/** Soft-update banner only on real Production — not local or Preview/staging. */
+export function areSoftUpdatesEnabled(): boolean {
+  const version = getAppVersion();
+  if (!version || version === "local-dev") return false;
+  return isProductionDeployment();
+}
+
 export type AppVersionPayload = {
   version: string;
   versionLabel: string | null;
+  /** False on local/Preview; shops only get soft-update prompts in Production. */
+  softUpdatesEnabled: boolean;
+  /** False while a draft exists for this deploy and notes are not published yet. */
+  updateReady: boolean;
   releaseNotesUrl: string;
 };
 
 export async function getAppVersionPayload(): Promise<AppVersionPayload> {
   const version = getAppVersion();
+  const softUpdatesEnabled = areSoftUpdatesEnabled();
+
+  if (!softUpdatesEnabled) {
+    return {
+      version,
+      versionLabel: null,
+      softUpdatesEnabled: false,
+      updateReady: false,
+      releaseNotesUrl: getReleaseNotesPublicUrl(null),
+    };
+  }
+
   const published = await findPublishedReleaseByGitSha(version).catch(() => null);
+  const draft = published
+    ? null
+    : await findDraftReleaseByGitSha(version).catch(() => null);
+
+  // Published → ready. Draft pending approval → not ready. No row (notes skipped) → ready.
+  const updateReady = published != null || draft == null;
 
   return {
     version,
     versionLabel: published?.version ?? null,
+    softUpdatesEnabled: true,
+    updateReady,
     releaseNotesUrl: getReleaseNotesPublicUrl(published?.version ?? null),
   };
 }

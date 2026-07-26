@@ -97,6 +97,52 @@ export async function findPublishedReleaseByGitSha(gitSha: string) {
   return null;
 }
 
+/** Draft release notes waiting on admin approval for this deploy SHA. */
+export async function findDraftReleaseByGitSha(gitSha: string) {
+  const trimmed = gitSha.trim();
+  if (!trimmed || trimmed === "local-dev") return null;
+
+  const exact = await prisma.platformRelease.findFirst({
+    where: { gitSha: trimmed, status: "draft" },
+    orderBy: { createdAt: "desc" },
+  });
+  if (exact) return exact;
+
+  if (trimmed.length >= 7) {
+    return prisma.platformRelease.findFirst({
+      where: {
+        status: "draft",
+        gitSha: { startsWith: trimmed.slice(0, 7) },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+  }
+
+  return null;
+}
+
+/**
+ * Compare calver release versions (YYYY.MM.DD or YYYY.MM.DD.N).
+ * Higher / newer sorts first when used with Array.sort((a,b) => compareCalverVersions(b, a)).
+ */
+export function compareCalverVersions(a: string, b: string): number {
+  const parse = (value: string) => {
+    const parts = value.trim().split(".").map((part) => Number(part));
+    return {
+      y: parts[0] || 0,
+      m: parts[1] || 0,
+      d: parts[2] || 0,
+      n: parts.length > 3 && Number.isFinite(parts[3]) ? parts[3] : 0,
+    };
+  };
+  const left = parse(a);
+  const right = parse(b);
+  if (left.y !== right.y) return left.y - right.y;
+  if (left.m !== right.m) return left.m - right.m;
+  if (left.d !== right.d) return left.d - right.d;
+  return left.n - right.n;
+}
+
 export async function createReleaseDraft(input: {
   version: string;
   gitSha: string;

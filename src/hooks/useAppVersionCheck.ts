@@ -11,6 +11,8 @@ const STORAGE_PENDING_UPDATE = "bikeops_pending_update";
 type VersionResponse = {
   version?: string;
   releaseNotesUrl?: string;
+  updateReady?: boolean;
+  softUpdatesEnabled?: boolean;
 };
 
 type PendingUpdate = {
@@ -100,13 +102,14 @@ export function useAppVersionCheck(enabled = true): AppVersionCheck {
     setReleaseNotesUrl(pending.releaseNotesUrl);
   }, []);
 
-  // Restore a previously shown update after refresh / remount.
+  // Do not restore from localStorage until /api/version confirms soft updates
+  // are enabled (avoids a sticky banner on Preview/local after Production testing).
   useEffect(() => {
-    if (!enabled) return;
-    const pending = readPendingUpdate();
-    if (!pending) return;
-    setUpdateAvailable(true);
-    setReleaseNotesUrl(pending.releaseNotesUrl);
+    if (!enabled) {
+      writePendingUpdate(null);
+      setUpdateAvailable(false);
+      setReleaseNotesUrl(null);
+    }
   }, [enabled]);
 
   const syncWaitingWorker = useCallback(
@@ -115,7 +118,19 @@ export function useAppVersionCheck(enabled = true): AppVersionCheck {
       void fetch("/api/version", { cache: "no-store" })
         .then((response) => (response.ok ? response.json() : null))
         .then((data: VersionResponse | null) => {
+          if (data?.softUpdatesEnabled === false) {
+            writePendingUpdate(null);
+            setUpdateAvailable(false);
+            setReleaseNotesUrl(null);
+            return;
+          }
           const version = data?.version?.trim() || `waiting-${Date.now()}`;
+          if (data?.updateReady === false) {
+            writePendingUpdate(null);
+            setUpdateAvailable(false);
+            setReleaseNotesUrl(null);
+            return;
+          }
           markUpdateAvailable(version, data?.releaseNotesUrl?.trim() || null);
         })
         .catch(() => {
@@ -177,21 +192,45 @@ export function useAppVersionCheck(enabled = true): AppVersionCheck {
         const version = data?.version?.trim();
         if (!version) return;
 
+        // Local + Preview/staging never show the soft-update banner.
+        if (data?.softUpdatesEnabled === false) {
+          writePendingUpdate(null);
+          setUpdateAvailable(false);
+          setReleaseNotesUrl(null);
+          writeClientVersion(version);
+          return;
+        }
+
+        const notesReady = data?.updateReady !== false;
+        const notesUrl = data?.releaseNotesUrl?.trim() || null;
+
+        const clearBanner = () => {
+          writePendingUpdate(null);
+          setUpdateAvailable(false);
+          setReleaseNotesUrl(null);
+        };
+
         const clientVersion = readClientVersion();
         if (!clientVersion) {
           // First visit (or after a successful Update now cleared state incorrectly).
           // Adopt current production unless a pending update was already stored.
           const pending = readPendingUpdate();
           if (pending && pending.version !== version) {
+            if (!notesReady) {
+              clearBanner();
+              return;
+            }
             // Stale pending from an older deploy — refresh notes for the live version.
-            markUpdateAvailable(version, data?.releaseNotesUrl?.trim() || null);
+            markUpdateAvailable(version, notesUrl);
             return;
           }
           if (pending && pending.version === version) {
+            if (!notesReady) {
+              clearBanner();
+              return;
+            }
             setUpdateAvailable(true);
-            setReleaseNotesUrl(
-              pending.releaseNotesUrl ?? data?.releaseNotesUrl?.trim() ?? null
-            );
+            setReleaseNotesUrl(pending.releaseNotesUrl ?? notesUrl);
             return;
           }
           writeClientVersion(version);
@@ -199,7 +238,12 @@ export function useAppVersionCheck(enabled = true): AppVersionCheck {
         }
 
         if (version !== clientVersion) {
-          markUpdateAvailable(version, data?.releaseNotesUrl?.trim() || null);
+          if (!notesReady) {
+            // Deploy is live but release notes are still a draft — wait to publish.
+            clearBanner();
+            return;
+          }
+          markUpdateAvailable(version, notesUrl);
           if (canUseServiceWorker()) {
             try {
               const reg = await navigator.serviceWorker.getRegistration(SW_URL);
@@ -213,9 +257,7 @@ export function useAppVersionCheck(enabled = true): AppVersionCheck {
         }
 
         // Already on the latest version — clear any stale banner.
-        writePendingUpdate(null);
-        setUpdateAvailable(false);
-        setReleaseNotesUrl(null);
+        clearBanner();
       })
       .catch(() => {
         // Ignore transient network errors; the next poll retries.
