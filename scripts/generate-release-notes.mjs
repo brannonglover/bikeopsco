@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 /**
- * Generate shop-facing release note drafts from the product diff and POST
- * them to the platform API (status: draft) for admin approval.
+ * Generate shop-facing release note drafts from customer-visible app changes
+ * and POST them to the platform API (status: draft) for admin approval.
  *
- * Prefer AI_GATEWAY_API_KEY so bullets describe what shop staff will notice.
- * Without it, falls back to coarse area labels from changed paths.
+ * Only features and bug fixes that shop staff / customers would notice.
+ * Ignores marketing, Prisma/schema, CI, tooling, and internal-only work.
+ *
+ * Prefer AI_GATEWAY_API_KEY so bullets describe what shops will notice.
  *
  * Env:
  *   PLATFORM_RELEASE_API_BASE   default https://app.bikeops.co
@@ -22,11 +24,18 @@ const NOISE_PATH =
   /(^|\/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb?)$/i;
 const BINARY_PATH = /\.(png|jpe?g|gif|webp|ico|pdf|zip|mp4|mov|woff2?)$/i;
 const SKIP_PREFIXES = [
-  "marketing/screenshots/",
+  "marketing/",
+  "prisma/",
   "public/",
   ".cursor/",
+  ".github/",
   "node_modules/",
+  "scripts/",
 ];
+
+/** Paths under src/ that are never customer-facing release-note material. */
+const INTERNAL_SRC =
+  /(^|\/)(platform-releases|platform\/releases|admin\/\(dashboard\)\/releases|generated\/|__tests__\/|.*\.(test|spec)\.(ts|tsx)$)/i;
 
 /** Map changed paths → shop-facing product areas for fallbacks + AI context. */
 const AREA_RULES = [
@@ -48,9 +57,6 @@ const AREA_RULES = [
   { re: /^src\/.*email|twilio|sms/i, area: "Customer notifications" },
   { re: /^src\/.*archive|stats/i, area: "Archive and stats" },
   { re: /^src\/.*signup|login|auth|waitlist/i, area: "Sign-in and onboarding" },
-  { re: /^src\/app\/api\//i, area: "Backend reliability" },
-  { re: /^prisma\/|^src\/.*schema/i, area: "Data model" },
-  { re: /^marketing\//i, area: "Marketing site" },
 ];
 
 function runGit(args) {
@@ -72,14 +78,17 @@ function getPreviousReleaseTag() {
 function isSkippablePath(path) {
   if (!path) return true;
   if (NOISE_PATH.test(path) || BINARY_PATH.test(path)) return true;
-  return SKIP_PREFIXES.some((prefix) => path.startsWith(prefix));
+  if (SKIP_PREFIXES.some((prefix) => path.startsWith(prefix))) return true;
+  if (!path.startsWith("src/")) return true;
+  if (INTERNAL_SRC.test(path)) return true;
+  return false;
 }
 
 function areaForPath(path) {
   for (const rule of AREA_RULES) {
     if (rule.re.test(path)) return rule.area;
   }
-  if (path.startsWith("src/")) return "Shop workspace";
+  // Unlabeled src files (generic lib/api) are not used for fallback bullets.
   return null;
 }
 
@@ -116,16 +125,23 @@ function getDiffRange(previousTag) {
   }
 }
 
-function hasProductFacingChanges(files) {
-  return files.some((f) => {
-    const p = f.path;
-    if (p.startsWith("prisma/")) return true;
-    if (p.startsWith("marketing/") && !p.startsWith("marketing/README")) return true;
-    if (!p.startsWith("src/")) return false;
-    // Release tooling / platform admin notes are not shop-facing product changes.
-    if (p.includes("/platform/releases") || p.includes("platform-releases")) return false;
+/** Prefer pages/components; still allow API routes that power shop features. */
+function isLikelyCustomerVisiblePath(path) {
+  if (!path.startsWith("src/")) return false;
+  if (INTERNAL_SRC.test(path)) return false;
+  if (
+    path.includes("/app/") ||
+    path.includes("/components/") ||
+    path.includes("/hooks/")
+  ) {
     return true;
-  });
+  }
+  // lib helpers only count when they map to a known product area.
+  return Boolean(areaForPath(path));
+}
+
+function hasCustomerFacingChanges(files) {
+  return files.some((f) => isLikelyCustomerVisiblePath(f.path));
 }
 
 function summarizeAreas(files) {
@@ -142,18 +158,28 @@ function summarizeAreas(files) {
 
 function buildFileListBlock(files) {
   return files
+    .filter((f) => isLikelyCustomerVisiblePath(f.path))
     .slice(0, 120)
     .map((f) => `${f.status}\t${f.path}`)
     .join("\n");
 }
 
 function getUnifiedDiff(range, files) {
-  const paths = files
+  const ranked = files
     .map((f) => f.path)
-    .filter((p) => p.startsWith("src/") || p.startsWith("prisma/") || p.startsWith("marketing/"))
+    .filter((p) => isLikelyCustomerVisiblePath(p))
+    .sort((a, b) => {
+      const score = (p) => {
+        if (p.includes("/components/") || /page\.tsx$/.test(p)) return 0;
+        if (p.includes("/app/")) return 1;
+        if (p.includes("/hooks/")) return 2;
+        return 3;
+      };
+      return score(a) - score(b);
+    })
     .slice(0, MAX_FILES_IN_DIFF);
 
-  if (paths.length === 0) return "";
+  if (ranked.length === 0) return "";
 
   let raw = "";
   try {
@@ -164,7 +190,7 @@ function getUnifiedDiff(range, files) {
       "--ignore-space-at-eol",
       range,
       "--",
-      ...paths,
+      ...ranked,
     ]);
   } catch {
     return "";
@@ -188,18 +214,9 @@ function todayCalverBase() {
 function fallbackBullets(files) {
   const areas = summarizeAreas(files).map((line) => line.replace(/\s*\(\d+ files?\)$/, ""));
   const unique = [...new Set(areas)].slice(0, 6);
-  if (unique.length === 0) {
-    return ["Improvements and fixes for the Bike Ops shop workspace."];
-  }
-  return unique.map((area) => {
-    if (area === "Marketing site") {
-      return "Updates to the public Bike Ops website.";
-    }
-    if (area === "Backend reliability" || area === "Data model") {
-      return "Behind-the-scenes reliability improvements in the shop workspace.";
-    }
-    return `Updates to ${area.toLowerCase()}.`;
-  });
+  // Vague/internal-only changes should not invent release notes.
+  if (unique.length === 0) return [];
+  return unique.map((area) => `Updates to ${area.toLowerCase()}.`);
 }
 
 async function aiBullets({ areas, fileList, diff }) {
@@ -209,19 +226,22 @@ async function aiBullets({ areas, fileList, diff }) {
     return null;
   }
 
-  const prompt = `You write "What's new" release notes for Bike Ops, bike repair shop software for shop owners and staff.
+  const prompt = `You write "What's new" release notes for Bike Ops, the bike repair shop software app (app.bikeops.co).
 
-Read the changed files and code diff below. Infer what shop staff or customers will notice, then write 3-8 short bullet points in plain English.
+Audience: shop owners, mechanics, and their customers using the product.
+
+Read the changed files and code diff. Write 3-8 short bullets ONLY for features and bug fixes those people would notice.
 
 Rules:
-- Base bullets on the DIFF and file changes, not on commit messages (there are none provided)
+- Base bullets on the DIFF and file changes, not on commit messages
+- ONLY customer-visible product changes (new capability, improved workflow, or fixed bug)
+- NEVER mention: marketing/website/blog/docs, Prisma, database, schema, migrations, APIs, refactors, reliability, infra, CI, admin tooling, or "behind the scenes"
 - Write for a shop owner or mechanic, not a developer
-- No file paths, ticket IDs, function names, React/Next/DB jargon, or "API"/"deploy"/"PR"/"commit"
+- No file paths, ticket IDs, function names, or framework jargon
 - Focus on job board, jobs, chat, booking, billing, customers, mechanics, services, settings, notifications, payments, etc.
-- Skip pure infra, CI, lockfiles, screenshots, and internal refactors unless they clearly change shop-facing behavior
 - One concrete idea per bullet; start with a verb when natural (Added, Improved, Fixed, Made it easier to…)
 - Prefer specific outcomes ("Sort the Received column on the job board") over vague ones ("Job board updates")
-- If the diff is mostly marketing-site copy/layout, say so in customer terms (website), not "marketing HTML"
+- If the diff has no customer-visible feature or bug fix, return an empty JSON array []
 - Return ONLY a JSON array of strings
 
 Product areas touched:
@@ -246,7 +266,7 @@ ${diff || "(no textual diff available)"}`;
         {
           role: "system",
           content:
-            "You return only valid JSON arrays of strings. No markdown fences. Bullets must be shop-customer friendly.",
+            "You return only valid JSON arrays of strings. No markdown fences. Bullets must be shop-customer facing features or bug fixes only.",
         },
         { role: "user", content: prompt },
       ],
@@ -273,7 +293,7 @@ ${diff || "(no textual diff available)"}`;
       .map((item) => String(item).trim())
       .filter(Boolean)
       .slice(0, 8);
-    return bullets.length ? bullets : null;
+    return bullets;
   } catch {
     console.warn("AI response was not valid JSON; using fallback bullets");
     return null;
@@ -336,8 +356,8 @@ async function main() {
   );
 
   const files = getChangedFiles(range);
-  if (files.length === 0 || !hasProductFacingChanges(files)) {
-    console.log("No product-facing changes in range; skipping draft creation");
+  if (files.length === 0 || !hasCustomerFacingChanges(files)) {
+    console.log("No customer-facing Bike Ops changes in range; skipping draft creation");
     process.exit(0);
   }
 
@@ -350,7 +370,12 @@ async function main() {
   console.log(`Diff payload: ${diff.length} chars`);
 
   const ai = await aiBullets({ areas, fileList, diff });
-  const bullets = ai || fallbackBullets(files);
+  const bullets = ai !== null ? ai : fallbackBullets(files);
+  if (bullets.length === 0) {
+    console.log("No customer-visible features or bug fixes to announce; skipping draft creation");
+    process.exit(0);
+  }
+
   const title = `Version ${todayCalverBase()}`;
 
   const { version, result } = await createDraftWithVersionBump({
@@ -368,7 +393,7 @@ async function main() {
         gitSha,
         created: result.body?.created ?? true,
         bulletCount: bullets.length,
-        usedAi: Boolean(ai),
+        usedAi: ai !== null,
         bullets,
       },
       null,

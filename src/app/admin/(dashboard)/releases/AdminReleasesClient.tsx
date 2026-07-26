@@ -206,11 +206,33 @@ export function AdminReleasesClient() {
               <textarea
                 value={bulletsText}
                 onChange={(event) => setBulletsText(event.target.value)}
-                rows={10}
-                className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 font-sans text-sm leading-relaxed text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
-                placeholder="What shops will notice in this update"
+                rows={12}
+                className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-[13px] leading-6 text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                placeholder={"Added …\nImproved …\nFixed …"}
               />
             </label>
+
+            <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                Preview (how it will look when published)
+              </p>
+              {bulletsText
+                .split("\n")
+                .map((line) => line.trim())
+                .filter(Boolean).length === 0 ? (
+                <p className="mt-2 text-sm text-slate-500">Add one update per line above.</p>
+              ) : (
+                <ul className="mt-2 list-disc space-y-2 pl-5 text-sm leading-relaxed text-slate-800">
+                  {bulletsText
+                    .split("\n")
+                    .map((line) => line.trim())
+                    .filter(Boolean)
+                    .map((bullet, index) => (
+                      <li key={`${index}-${bullet.slice(0, 24)}`}>{bullet}</li>
+                    ))}
+                </ul>
+              )}
+            </div>
 
             <div className="mt-5 flex flex-wrap gap-2">
               <button
