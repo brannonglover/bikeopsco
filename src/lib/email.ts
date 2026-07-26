@@ -2489,3 +2489,224 @@ export async function sendReviewRequestEmail({
     throw new Error(error.message);
   }
 }
+
+const BROADCAST_FOOTER_DISCLAIMER =
+  "You are receiving this because you opted in to email updates from our shop. If you no longer wish to receive these emails, contact the shop to update your notification preferences.";
+
+export type BroadcastRecipient = {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string | null;
+};
+
+/** Customers with a usable email who have not opted out of email updates. */
+export async function getBroadcastRecipients(shopId: string): Promise<BroadcastRecipient[]> {
+  const { prisma } = await import("./db");
+  const customers = await prisma.customer.findMany({
+    where: {
+      shopId,
+      email: { not: null },
+      emailUpdatesConsent: { not: false },
+    },
+    select: {
+      id: true,
+      email: true,
+      firstName: true,
+      lastName: true,
+      emailUpdatesConsent: true,
+    },
+    orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
+  });
+
+  return customers
+    .filter((c) => getEffectiveEmailUpdatesConsent(c))
+    .map((c) => ({
+      id: c.id,
+      email: c.email!.trim(),
+      firstName: c.firstName,
+      lastName: c.lastName,
+    }));
+}
+
+function broadcastCustomerDisplayName(customer: {
+  firstName: string;
+  lastName: string | null;
+}): string {
+  return [customer.firstName, customer.lastName].filter(Boolean).join(" ").trim() || "there";
+}
+
+async function resolveShopDisplayName(shopId: string): Promise<string> {
+  const { prisma } = await import("./db");
+  const shop = await prisma.shop.findUnique({
+    where: { id: shopId },
+    select: { name: true },
+  });
+  return shop?.name?.trim() || process.env.SHOP_NAME?.trim() || "our shop";
+}
+
+/**
+ * Staff test send for a news/update broadcast — uses sample merge data + Bike Ops shell.
+ */
+export async function sendCustomerBroadcastTestEmail(
+  shopId: string,
+  options: { subject: string; bodyHtml: string; to: string }
+): Promise<{ ok: boolean; error?: string }> {
+  const resend = getResend();
+  if (!resend) {
+    return { ok: false, error: "Email not configured (set RESEND_API_KEY)" };
+  }
+
+  const trimmedTo = options.to.trim();
+  if (!trimmedTo || !trimmedTo.includes("@")) {
+    return { ok: false, error: "Invalid email address" };
+  }
+
+  const shopName = await resolveShopDisplayName(shopId);
+  const vars = {
+    ...getEmailTemplatePreviewVars(),
+    shopName,
+  };
+  const subject = `${mergeTemplateVariables(options.subject.trim(), vars)} [test]`;
+  const mergedBody = mergeTemplateVariables(options.bodyHtml, vars);
+  const branding = await getCustomerEmailBrandingAssets(shopId);
+  const html = buildReadOnlyCustomerEmailHtml({
+    innerHtml: mergedBody,
+    headerLogoSrc: branding.headerLogoSrc,
+    footerDisclaimer: BROADCAST_FOOTER_DISCLAIMER,
+  });
+  const attachments = customerEmailBrandingAttachments(branding);
+
+  try {
+    const { error } = await sendResendEmail(resend, {
+      ...getCustomerEmailSendOptions(),
+      to: trimmedTo,
+      subject,
+      html,
+      ...(attachments && { attachments }),
+    });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Unknown error" };
+  }
+}
+
+/**
+ * Mass-send a news/update email to all consented customers, wrapped in the Bike Ops shell.
+ */
+export async function sendCustomerBroadcastEmails(
+  shopId: string,
+  options: { subject: string; bodyHtml: string }
+): Promise<{
+  ok: boolean;
+  sent: number;
+  failed: number;
+  skipped: number;
+  errors: { email: string; error: string }[];
+  error?: string;
+}> {
+  const blocked = skipIfCustomerNotificationsBlocked("sendCustomerBroadcastEmails");
+  if (blocked) {
+    return { ok: false, sent: 0, failed: 0, skipped: 0, errors: [], error: blocked.error };
+  }
+
+  const resend = getResend();
+  if (!resend) {
+    return {
+      ok: false,
+      sent: 0,
+      failed: 0,
+      skipped: 0,
+      errors: [],
+      error: "Email not configured (set RESEND_API_KEY)",
+    };
+  }
+
+  const subjectTemplate = options.subject.trim();
+  const bodyTemplate = options.bodyHtml.trim();
+  if (!subjectTemplate) {
+    return { ok: false, sent: 0, failed: 0, skipped: 0, errors: [], error: "Subject is required" };
+  }
+  if (!bodyTemplate) {
+    return { ok: false, sent: 0, failed: 0, skipped: 0, errors: [], error: "Message body is required" };
+  }
+
+  const recipients = await getBroadcastRecipients(shopId);
+  if (recipients.length === 0) {
+    return {
+      ok: false,
+      sent: 0,
+      failed: 0,
+      skipped: 0,
+      errors: [],
+      error: "No customers with email updates enabled",
+    };
+  }
+
+  const shopName = await resolveShopDisplayName(shopId);
+  const branding = await getCustomerEmailBrandingAssets(shopId);
+  const attachments = customerEmailBrandingAttachments(branding);
+  const sendOptions = getCustomerEmailSendOptions();
+
+  let sent = 0;
+  let failed = 0;
+  const errors: { email: string; error: string }[] = [];
+  const seenEmails = new Set<string>();
+
+  for (const recipient of recipients) {
+    const emailKey = recipient.email.toLowerCase();
+    if (seenEmails.has(emailKey)) continue;
+    seenEmails.add(emailKey);
+
+    const vars = {
+      customerName: broadcastCustomerDisplayName(recipient),
+      shopName,
+    };
+    const subject = mergeTemplateVariables(subjectTemplate, vars);
+    const mergedBody = mergeTemplateVariables(bodyTemplate, vars);
+    const html = buildReadOnlyCustomerEmailHtml({
+      innerHtml: mergedBody,
+      headerLogoSrc: branding.headerLogoSrc,
+      footerDisclaimer: BROADCAST_FOOTER_DISCLAIMER,
+    });
+
+    try {
+      const { error } = await sendResendEmail(resend, {
+        ...sendOptions,
+        to: recipient.email,
+        subject,
+        html,
+        ...(attachments && { attachments }),
+      });
+      if (error) {
+        failed += 1;
+        if (errors.length < 25) {
+          errors.push({ email: recipient.email, error: error.message });
+        }
+      } else {
+        sent += 1;
+      }
+    } catch (e) {
+      failed += 1;
+      if (errors.length < 25) {
+        errors.push({
+          email: recipient.email,
+          error: e instanceof Error ? e.message : "Unknown error",
+        });
+      }
+    }
+  }
+
+  const skipped = recipients.length - seenEmails.size;
+  return {
+    ok: failed === 0,
+    sent,
+    failed,
+    skipped,
+    errors,
+    ...(failed > 0 && sent === 0
+      ? { error: errors[0]?.error ?? "All sends failed" }
+      : {}),
+  };
+}

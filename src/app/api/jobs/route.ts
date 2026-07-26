@@ -10,8 +10,9 @@ import { syncCollectionJobService } from "@/lib/collection-fee";
 import { sendPushToAllStaff } from "@/lib/push";
 import { getAppFeatures } from "@/lib/app-settings";
 import { mirrorJobStageToCustomerChat } from "@/lib/system-chat";
+import { getBoardJobsForShop } from "@/lib/board-jobs";
 import { computeJobSubtotal, computeTotalPaid, getJobPaymentSummary } from "@/lib/job-payments";
-import { getEffectiveEmailUpdatesConsent, getEffectiveSmsConsent } from "@/lib/sms-consent";
+import { getEffectiveEmailUpdatesConsent } from "@/lib/sms-consent";
 import { normalizeJobCollectionWindowsForStorage } from "@/lib/normalize-job-collection-windows";
 import { optionalTrimmedString } from "@/lib/zod-helpers";
 
@@ -141,176 +142,13 @@ export async function GET(request: NextRequest) {
     }
 
     if (view === "board") {
-      const jobs = await withPrismaRetry(() =>
-        prisma.job.findMany({
-        where,
-        select: {
-          id: true,
-          bikeMake: true,
-          bikeModel: true,
-          stage: true,
-          deliveryType: true,
-          dropOffDate: true,
-          receivedAt: true,
-          pickupDate: true,
-          collectionAddress: true,
-          collectionWindowStart: true,
-          collectionWindowEnd: true,
-          collectionReturnWindowStart: true,
-          collectionReturnWindowEnd: true,
-          customerId: true,
-          customerNotes: true,
-          notes: true,
-          internalNotes: true,
-          cancellationReason: true,
-          completedAt: true,
-          archivedAt: true,
-          columnSortOrder: true,
-          paymentStatus: true,
-          workingOnJobBikeId: true,
-          mechanicId: true,
-          createdAt: true,
-          updatedAt: true,
-          mechanic: {
-            select: {
-              id: true,
-              fullName: true,
-              imageUrl: true,
-            },
-          },
-          customer: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              email: true,
-              phone: true,
-              emailUpdatesConsent: true,
-              emailUpdatesConsentSource: true,
-              emailUpdatesConsentUpdatedAt: true,
-              smsConsent: true,
-              smsConsentSource: true,
-              smsConsentUpdatedAt: true,
-              address: true,
-              notes: true,
-              createdAt: true,
-              updatedAt: true,
-              bikes: {
-                select: {
-                  id: true,
-                  make: true,
-                  model: true,
-                  bikeType: true,
-                  nickname: true,
-                  imageUrl: true,
-                },
-              },
-            },
-          },
-          jobBikes: {
-            orderBy: { sortOrder: "asc" },
-            select: {
-              id: true,
-              jobId: true,
-              make: true,
-              model: true,
-              bikeType: true,
-              nickname: true,
-              imageUrl: true,
-              bikeId: true,
-              sortOrder: true,
-              completedAt: true,
-              waitingOnPartsAt: true,
-              bike: {
-                select: {
-                  make: true,
-                  model: true,
-                  bikeType: true,
-                  nickname: true,
-                  imageUrl: true,
-                },
-              },
-            },
-          },
-          jobServices: {
-            select: {
-              id: true,
-              serviceId: true,
-              customServiceName: true,
-              quantity: true,
-              unitPrice: true,
-              notes: true,
-              jobBikeId: true,
-              service: { select: { name: true, price: true } },
-              jobBike: {
-                select: {
-                  id: true,
-                  make: true,
-                  model: true,
-                  nickname: true,
-                },
-              },
-            },
-          },
-          jobProducts: {
-            select: {
-              id: true,
-              productId: true,
-              quantity: true,
-              unitPrice: true,
-              notes: true,
-              jobBikeId: true,
-              product: { select: { name: true, price: true } },
-              jobBike: {
-                select: {
-                  id: true,
-                  make: true,
-                  model: true,
-                  nickname: true,
-                },
-              },
-            },
-          },
-          payments: {
-            select: {
-              amount: true,
-              status: true,
-              stripePaymentIntentId: true,
-              paymentMethod: true,
-            },
-          },
-        },
-        orderBy,
-        })
-      );
-      const jobsWithPaymentState = jobs.map((job) => {
-        const subtotal = computeJobSubtotal({
-          jobServices: job.jobServices,
-          jobProducts: job.jobProducts,
-        });
-        const totalPaid = computeTotalPaid(job.payments);
-        const paymentSummary = getJobPaymentSummary({
-          currentStatus: job.paymentStatus,
-          subtotal,
-          totalPaid,
-        });
-        return {
-          ...job,
-          customer: job.customer
-            ? {
-                ...job.customer,
-                emailUpdatesConsent: getEffectiveEmailUpdatesConsent(job.customer),
-                smsConsent: getEffectiveSmsConsent(job.customer),
-              }
-            : null,
-          paymentStatus: paymentSummary.paymentStatus,
-          totalPaid,
-          payments: undefined,
-        };
-      });
-      const res = NextResponse.json(jobsWithPaymentState);
-      res.headers.set("Cache-Control", "no-store");
-      return res;
+      // Week / customer filters still use the full include path below.
+      if (!weekStart && !weekEnd && !customerIdFilter) {
+        const jobs = await getBoardJobsForShop(shopId, { archived });
+        const res = NextResponse.json(jobs);
+        res.headers.set("Cache-Control", "no-store");
+        return res;
+      }
     }
 
     const jobs = await withPrismaRetry(() =>

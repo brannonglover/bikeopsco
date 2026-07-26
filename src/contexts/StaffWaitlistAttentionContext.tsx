@@ -13,6 +13,7 @@ import {
   useWaitlistNotifications,
   type WaitlistNotificationEntry,
 } from "@/hooks/useWaitlistNotifications";
+import { useDeferredSyncEnabled } from "@/hooks/useDeferredSyncEnabled";
 
 const StaffWaitlistAttentionContext = createContext(0);
 
@@ -24,30 +25,31 @@ export function StaffWaitlistAttentionProvider({
   /** When false (staff on /waitlist), stop syncing and hide the nav badge. */
   syncEnabled: boolean;
 }) {
+  const deferredSyncEnabled = useDeferredSyncEnabled(syncEnabled);
   const [entries, setEntries] = useState<WaitlistNotificationEntry[]>([]);
 
   const fetchEntries = useCallback(async () => {
-    if (!syncEnabled) return;
+    if (!deferredSyncEnabled) return;
     const res = await fetch("/api/waitlist", { cache: "no-store" });
     if (res.ok) {
       const data = await res.json();
       setEntries(Array.isArray(data) ? data : []);
     }
-  }, [syncEnabled]);
+  }, [deferredSyncEnabled]);
 
   useEffect(() => {
-    if (syncEnabled) {
+    if (deferredSyncEnabled) {
       fetchEntries();
     } else {
       setEntries([]);
     }
-  }, [syncEnabled, fetchEntries]);
+  }, [deferredSyncEnabled, fetchEntries]);
 
-  useWaitlistNotifications(entries, fetchEntries, !syncEnabled);
+  useWaitlistNotifications(entries, fetchEntries, !deferredSyncEnabled);
 
   const waitingCount = useMemo(
-    () => (syncEnabled ? entries.length : 0),
-    [entries.length, syncEnabled]
+    () => (deferredSyncEnabled ? entries.length : 0),
+    [entries.length, deferredSyncEnabled]
   );
 
   return (

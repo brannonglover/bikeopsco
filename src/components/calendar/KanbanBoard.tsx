@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, type SetStateAction } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { flushSync } from "react-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, RefreshCw, X } from "lucide-react";
 import {
   DndContext,
@@ -17,6 +18,7 @@ import { arrayMove } from "@dnd-kit/sortable";
 import { StageColumn } from "./StageColumn";
 import { MobileJobQueue } from "./MobileJobQueue";
 import { JobCardContent } from "./JobCard";
+import { BoardSkeleton } from "./BoardSkeleton";
 import { RejectBookingModal } from "./RejectBookingModal";
 import { NewJobModal } from "@/components/jobs/NewJobModal";
 import { JobDetailModal } from "@/components/jobs/JobDetailModal";
@@ -31,6 +33,11 @@ import {
 } from "@/lib/board-stage-merge";
 import { mergeJobPreservingInvoiceDetails } from "@/lib/job-invoice-merge";
 import { withOptimisticStageChange } from "@/lib/optimistic-job-patch";
+import {
+  BOARD_JOBS_QUERY_KEY,
+  EMPTY_BOARD_JOBS,
+  fetchBoardJobsClient,
+} from "@/lib/board-jobs";
 
 function formatShortDate(d: Date | string | null) {
   if (!d) return null;
@@ -100,10 +107,11 @@ function cloneJobForRevert(job: Job): Job {
   };
 }
 
-export function KanbanBoard() {
+export function KanbanBoard({ initialJobs }: { initialJobs?: Job[] }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const features = useAppFeatures();
+  const queryClient = useQueryClient();
   const paidJobId = searchParams.get("paid");
   const openJobId = searchParams.get("openJob");
   const [showPaidBanner, setShowPaidBanner] = useState(!!paidJobId);
@@ -111,8 +119,6 @@ export function KanbanBoard() {
   const [newJobModalOpen, setNewJobModalOpen] = useState(false);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [rejectingJob, setRejectingJob] = useState<Job | null>(null);
-  const [jobs, setJobs] = useState<Job[]>([]);
-  const [loading, setLoading] = useState(true);
   const [archiving, setArchiving] = useState(false);
   const [savedToast, setSavedToast] = useState<string | null>(null);
   const dismissDateToastJobIdRef = useRef<string | null>(null);
@@ -127,6 +133,10 @@ export function KanbanBoard() {
   >(() => new Set());
   const [boardFilter, setBoardFilter] = useState<BoardFilterKey>("all");
   const isMobileBoard = useIsMobileBoard();
+
+  const applyPendingBoardMovesRef = useRef<(incoming: Job[]) => Job[]>(
+    (incoming) => incoming
+  );
 
   const jobNotifyCustomer = useCallback(
     (jobId: string) => (features.notifyCustomerEnabled ? !jobsSkippingCustomerNotify.has(jobId) : false),
@@ -187,6 +197,42 @@ export function KanbanBoard() {
     return next;
   }, []);
 
+  applyPendingBoardMovesRef.current = applyPendingBoardMoves;
+
+  const setJobs = useCallback(
+    (updater: SetStateAction<Job[]>) => {
+      queryClient.setQueryData<Job[]>(BOARD_JOBS_QUERY_KEY, (prev) => {
+        const current = prev ?? EMPTY_BOARD_JOBS;
+        return typeof updater === "function" ? updater(current) : updater;
+      });
+    },
+    [queryClient]
+  );
+
+  const { data: jobs = EMPTY_BOARD_JOBS, isPending } = useQuery({
+    queryKey: BOARD_JOBS_QUERY_KEY,
+    queryFn: async () => {
+      const incoming = await fetchBoardJobsClient();
+      const prev =
+        queryClient.getQueryData<Job[]>(BOARD_JOBS_QUERY_KEY) ?? EMPTY_BOARD_JOBS;
+      const next = applyPendingBoardMovesRef.current(
+        mergeBoardJobsFromFetch(prev, incoming)
+      );
+      setSelectedJob((sel) => {
+        if (!sel) return sel;
+        const refreshed = next.find((j) => j.id === sel.id);
+        if (!refreshed) return sel;
+        return mergeJobPreservingInvoiceDetails(sel, refreshed);
+      });
+      return next;
+    },
+    initialData: initialJobs,
+    initialDataUpdatedAt: initialJobs ? Date.now() : undefined,
+    staleTime: 30_000,
+  });
+
+  const loading = isPending && jobs.length === 0;
+
   const handleJobUpdated = useCallback(
     (updated: Job) => {
       if (updated.archivedAt || updated.stage === "CANCELLED") {
@@ -212,34 +258,16 @@ export function KanbanBoard() {
         )
       );
     },
-    [applyPendingBoardMoves]
+    [applyPendingBoardMoves, setJobs]
   );
 
-  const fetchJobs = useCallback((opts?: { silent?: boolean }) => {
-    if (!opts?.silent) setLoading(true);
-    fetch("/api/jobs?view=board", { cache: "no-store" })
-      .then(async (res) => {
-        if (!res.ok) {
-          throw new Error(`Failed to load jobs (${res.status})`);
-        }
-        const data = await res.json();
-        const incoming = Array.isArray(data) ? (data as Job[]) : [];
-        setJobs((prev) => {
-          const next = applyPendingBoardMoves(
-            mergeBoardJobsFromFetch(prev, incoming)
-          );
-          setSelectedJob((sel) => {
-            if (!sel) return sel;
-            const refreshed = next.find((j) => j.id === sel.id);
-            if (!refreshed) return sel;
-            return mergeJobPreservingInvoiceDetails(sel, refreshed);
-          });
-          return next;
-        });
-      })
-      .catch(() => setJobs([]))
-      .finally(() => setLoading(false));
-  }, [applyPendingBoardMoves]);
+  const fetchJobs = useCallback(
+    (opts?: { silent?: boolean }) => {
+      void opts;
+      void queryClient.invalidateQueries({ queryKey: BOARD_JOBS_QUERY_KEY });
+    },
+    [queryClient]
+  );
 
   useJobNotifications(jobs, () => fetchJobs({ silent: true }));
 
@@ -254,7 +282,7 @@ export function KanbanBoard() {
       const without = prev.filter((j) => j.id !== job.id);
       return [job, ...without];
     });
-  }, []);
+  }, [setJobs]);
 
   const showSavedToast = useCallback((message: string) => {
     setSavedToast(message);
@@ -318,7 +346,7 @@ export function KanbanBoard() {
         }
       })();
     },
-    [features.notifyCustomerEnabled, jobsSkippingCustomerNotify]
+    [features.notifyCustomerEnabled, jobsSkippingCustomerNotify, setJobs]
   );
 
   const handleRejectClick = useCallback((job: Job) => {
@@ -348,7 +376,7 @@ export function KanbanBoard() {
         console.error("Failed to reject job", e);
       }
     },
-    [features.notifyCustomerEnabled, jobsSkippingCustomerNotify, selectedJob?.id]
+    [features.notifyCustomerEnabled, jobsSkippingCustomerNotify, selectedJob?.id, setJobs]
   );
 
   const handleArchiveCompleted = useCallback(async () => {
@@ -372,15 +400,11 @@ export function KanbanBoard() {
     } finally {
       setArchiving(false);
     }
-  }, [jobs, selectedJob, fetchJobs]);
-
-  useEffect(() => {
-    fetchJobs();
-  }, [fetchJobs]);
+  }, [jobs, selectedJob, fetchJobs, setJobs]);
 
   useEffect(() => {
     if (paidJobId) {
-      fetchJobs();
+      fetchJobs({ silent: true });
     }
   }, [paidJobId, fetchJobs]);
 
@@ -561,7 +585,7 @@ export function KanbanBoard() {
         }
       });
     },
-    [features.notifyCustomerEnabled, jobsSkippingCustomerNotify, reorderColumnJobs]
+    [features.notifyCustomerEnabled, jobsSkippingCustomerNotify, reorderColumnJobs, setJobs]
   );
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -704,13 +728,7 @@ export function KanbanBoard() {
     : DISPLAY_STAGES;
 
   if (loading) {
-    return (
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex min-h-0 flex-1 items-center justify-center rounded-3xl bg-job-board p-6 shadow-float ring-1 ring-black/[0.04] dark:!bg-transparent dark:!shadow-none dark:ring-0 text-slate-500 font-medium">
-          Loading jobs...
-        </div>
-      </div>
-    );
+    return <BoardSkeleton />;
   }
 
   return (

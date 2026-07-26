@@ -13,6 +13,7 @@ import type { Conversation } from "@/lib/types";
 import { hasUnreadCustomerMessage } from "@/lib/chat-unread";
 import { useChatNotifications, NOTIFICATION_POLL_MS } from "@/hooks/useChatNotifications";
 import { useChatEventSource } from "@/hooks/useChatEventSource";
+import { useDeferredSyncEnabled } from "@/hooks/useDeferredSyncEnabled";
 
 const StaffChatAttentionContext = createContext(0);
 const StaffChatUnreadCustomerIdsContext = createContext<ReadonlySet<string>>(new Set());
@@ -25,6 +26,7 @@ export function StaffChatAttentionProvider({
   /** When false (staff on /chat), stop syncing and hide the nav badge. */
   syncEnabled: boolean;
 }) {
+  const deferredSyncEnabled = useDeferredSyncEnabled(syncEnabled);
   const [conversations, setConversations] = useState<Conversation[]>([]);
 
   const applyConversations = useCallback((data: Conversation[]) => {
@@ -32,25 +34,25 @@ export function StaffChatAttentionProvider({
   }, []);
 
   const fetchConversations = useCallback(async () => {
-    if (!syncEnabled) return;
+    if (!deferredSyncEnabled) return;
     const res = await fetch("/api/conversations", { cache: "no-store" });
     if (res.ok) {
       const data = await res.json();
       applyConversations(data);
     }
-  }, [syncEnabled, applyConversations]);
+  }, [deferredSyncEnabled, applyConversations]);
 
   useEffect(() => {
-    if (syncEnabled) {
+    if (deferredSyncEnabled) {
       fetchConversations();
     } else {
       setConversations([]);
     }
-  }, [syncEnabled, fetchConversations]);
+  }, [deferredSyncEnabled, fetchConversations]);
 
   useChatEventSource<Conversation[]>({
-    url: syncEnabled ? "/api/conversations/stream" : null,
-    enabled: syncEnabled,
+    url: deferredSyncEnabled ? "/api/conversations/stream" : null,
+    enabled: deferredSyncEnabled,
     onUpdate: applyConversations,
     fallbackPoll: fetchConversations,
     fallbackIntervalMs: NOTIFICATION_POLL_MS,
@@ -59,18 +61,18 @@ export function StaffChatAttentionProvider({
   useChatNotifications(conversations, fetchConversations, null, false);
 
   const waitingCount = useMemo(
-    () => (syncEnabled ? conversations.filter(hasUnreadCustomerMessage).length : 0),
-    [conversations, syncEnabled]
+    () => (deferredSyncEnabled ? conversations.filter(hasUnreadCustomerMessage).length : 0),
+    [conversations, deferredSyncEnabled]
   );
 
   const unreadCustomerIds = useMemo(
     () =>
       new Set(
-        syncEnabled
+        deferredSyncEnabled
           ? conversations.filter(hasUnreadCustomerMessage).map((c) => c.customerId)
           : []
       ),
-    [conversations, syncEnabled]
+    [conversations, deferredSyncEnabled]
   );
 
   return (
