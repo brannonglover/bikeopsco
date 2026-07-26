@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requirePlatformAdmin } from "@/lib/platform-admin";
 import {
+  compareCalverVersions,
   createReleaseDraft,
   getPlatformReleaseWebhookSecret,
   listPlatformReleases,
@@ -46,9 +47,9 @@ export async function GET(request: NextRequest) {
   const sorted = [...releases].sort((a, b) => {
     const rank = (statusRank[a.status] ?? 9) - (statusRank[b.status] ?? 9);
     if (rank !== 0) return rank;
-    const aTime = (a.publishedAt ?? a.createdAt).getTime();
-    const bTime = (b.publishedAt ?? b.createdAt).getTime();
-    return bTime - aTime;
+    const versionCmp = compareCalverVersions(b.version, a.version);
+    if (versionCmp !== 0) return versionCmp;
+    return b.createdAt.getTime() - a.createdAt.getTime();
   });
 
   return NextResponse.json({

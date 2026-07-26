@@ -22,8 +22,14 @@ Legal and support pages (for App Store Connect and compliance):
 1. Merge to `main` → GitHub Action `release-notes` creates a **draft** in the app DB.
 2. Review/edit/publish at `https://app.bikeops.co/admin/releases`.
 3. Published notes appear on this marketing page (latest first). Notes cover customer-visible Bike Ops app features and bug fixes only—not marketing, Prisma/schema, or internal work. The in-app **What’s new** link deep-links to the matching version.
+4. The in-app **Update available** banner waits until notes for that deploy are published (or until no draft was created for that ship). Publishing is enough — no second deploy needed.
 
 Required secrets: `PLATFORM_RELEASE_WEBHOOK_SECRET` (Vercel app + GitHub Actions). Set `AI_GATEWAY_API_KEY` in GitHub Actions so drafts are written from the product diff in shop-facing language (without it, bullets fall back to coarse area labels).
+
+Later ideas (not built yet):
+
+- [#6 Delay production deploy until release notes are published](https://github.com/brannonglover/bikeopsco/issues/6)
+- [#7 Auto-publish release note drafts](https://github.com/brannonglover/bikeopsco/issues/7)
 
 
 
