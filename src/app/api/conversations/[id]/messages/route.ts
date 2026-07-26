@@ -10,6 +10,7 @@ import { sendStaffNewChatMessageNotification } from "@/lib/email";
 import { z } from "zod";
 import { getAppFeatures } from "@/lib/app-settings";
 import { loadStaffConversationMessages } from "@/lib/chat/staff-conversation-messages";
+import { parseMessagePageOptions } from "@/lib/chat/message-page";
 import {
   customerHasActiveChatJob,
   findActiveJobIdForCustomer,
@@ -38,7 +39,12 @@ export async function GET(
     }
     ({ id: conversationId } = await params);
 
-    const payload = await loadStaffConversationMessages(shop.id, conversationId);
+    const page = parseMessagePageOptions(request.nextUrl.searchParams);
+    const payload = await loadStaffConversationMessages(
+      shop.id,
+      conversationId,
+      page
+    );
     if (!payload) {
       return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
     }

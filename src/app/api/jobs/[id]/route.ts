@@ -272,10 +272,24 @@ export async function PATCH(
       }
     }
 
+    /** Single-bike jobs: marking Bike Ready also marks that bike Done. */
+    let autoCompleteJobBikeId: string | null = null;
+    if (
+      stageChanged &&
+      data.stage === "BIKE_READY" &&
+      !data.completeJobBikeId
+    ) {
+      const bikes = existingJob.jobBikes ?? [];
+      if (bikes.length === 1 && !bikes[0].completedAt) {
+        autoCompleteJobBikeId = bikes[0].id;
+      }
+    }
+
     const workingOnBikeIdToClearWaiting: string | null =
       data.workingOnJobBikeId !== undefined
         ? data.workingOnJobBikeId
         : autoWorkingOnJobBikeId;
+    const jobBikeIdToComplete = data.completeJobBikeId ?? autoCompleteJobBikeId;
 
     if (stageChanged) {
       updateData.completedAt = data.stage === "COMPLETED" ? new Date() : null;
@@ -447,12 +461,12 @@ export async function PATCH(
         });
       }
 
-      if (data.completeJobBikeId) {
+      if (jobBikeIdToComplete) {
         await tx.jobBike.update({
-          where: { id: data.completeJobBikeId, jobId: id },
+          where: { id: jobBikeIdToComplete, jobId: id },
           data: { completedAt: new Date(), waitingOnPartsAt: null },
         });
-        if (existingJob.workingOnJobBikeId === data.completeJobBikeId) {
+        if (existingJob.workingOnJobBikeId === jobBikeIdToComplete) {
           await tx.job.update({ where: { id }, data: { workingOnJobBikeId: null } });
         }
       }

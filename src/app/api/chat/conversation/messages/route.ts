@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCustomerFromSession } from "@/lib/chat-session";
 import { loadCustomerConversationMessages } from "@/lib/chat/customer-conversation-messages";
+import { parseMessagePageOptions } from "@/lib/chat/message-page";
 import { findOrCreateGeneralConversation } from "@/lib/conversation";
 import { sendPushToAllStaff } from "@/lib/push";
 import { sendStaffNewChatMessageNotification } from "@/lib/email";
@@ -18,8 +19,9 @@ const createSchema = z.object({
 
 /**
  * Customer-only: GET messages for their conversation.
+ * Optional query: limit, before (message id) for recent-page loads.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   let customerId: string | null = null;
   try {
     const shop = await requireCurrentShop();
@@ -32,7 +34,12 @@ export async function GET() {
       return NextResponse.json({ error: "Not signed in" }, { status: 401 });
     }
 
-    const payload = await loadCustomerConversationMessages(shop.id, customerId);
+    const page = parseMessagePageOptions(request.nextUrl.searchParams);
+    const payload = await loadCustomerConversationMessages(
+      shop.id,
+      customerId,
+      page
+    );
     return NextResponse.json(payload);
   } catch (error) {
     console.error("GET /api/chat/conversation/messages error:", {
