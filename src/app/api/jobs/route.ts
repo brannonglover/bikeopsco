@@ -151,6 +151,7 @@ export async function GET(request: NextRequest) {
           stage: true,
           deliveryType: true,
           dropOffDate: true,
+          receivedAt: true,
           pickupDate: true,
           collectionAddress: true,
           collectionWindowStart: true,

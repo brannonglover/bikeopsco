@@ -662,6 +662,12 @@ export function KanbanBoard() {
         const aOrder = a.columnSortOrder ?? Infinity;
         const bOrder = b.columnSortOrder ?? Infinity;
         if (aOrder !== bOrder) return aOrder - bOrder;
+        // Received: first-come, first-served by actual intake time.
+        if (stage === "RECEIVED") {
+          const aTime = new Date(a.receivedAt ?? a.createdAt).getTime();
+          const bTime = new Date(b.receivedAt ?? b.createdAt).getTime();
+          return aTime - bTime;
+        }
         if (!a.dropOffDate && !b.dropOffDate) return 0;
         if (!a.dropOffDate) return 1;
         if (!b.dropOffDate) return -1;

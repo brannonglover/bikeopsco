@@ -37,6 +37,19 @@ export function withOptimisticStageChange(job: Job, newStage: Stage): Job {
     next = { ...next, workingOnJobBikeId: null };
   }
 
+  // Single-bike jobs: Bike Ready also marks the bike Done.
+  if (newStage === "BIKE_READY" && bikes.length === 1 && !bikes[0].completedAt) {
+    const now = new Date().toISOString();
+    next = {
+      ...next,
+      jobBikes: next.jobBikes?.map((b) =>
+        b.id === bikes[0].id
+          ? { ...b, completedAt: now, waitingOnPartsAt: null }
+          : b
+      ),
+    };
+  }
+
   if (newStage === "COMPLETED") {
     next = { ...next, completedAt: new Date().toISOString() };
   } else {
