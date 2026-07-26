@@ -240,7 +240,7 @@ ${diff || "(no textual diff available)"}`;
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "openai/gpt-5.4",
+      model: "openai/gpt-4.1-mini",
       temperature: 0.2,
       messages: [
         {
@@ -254,7 +254,10 @@ ${diff || "(no textual diff available)"}`;
   });
 
   if (!response.ok) {
-    console.warn(`AI Gateway HTTP ${response.status}; using fallback bullets`);
+    const errText = await response.text().catch(() => "");
+    console.warn(
+      `AI Gateway HTTP ${response.status}; using fallback bullets. Body: ${errText.slice(0, 500)}`
+    );
     return null;
   }
 
