@@ -21,6 +21,7 @@ export const dynamic = "force-dynamic";
 const bikeSchema = z.object({
   make: z.string().min(1),
   model: optionalTrimmedString,
+  year: z.number().int().min(1980).max(2100).optional().nullable(),
   nickname: z.string().optional().nullable(),
   imageUrl: z.string().optional().nullable(),
   bikeId: z.string().optional().nullable(),
@@ -290,6 +291,7 @@ export async function POST(request: NextRequest) {
                 customerId,
                 make: b.make.trim(),
                 model: trimmedModel,
+                year: b.year ?? null,
                 bikeType: b.bikeType ?? null,
                 nickname: b.nickname ?? null,
                 imageUrl: b.imageUrl ?? null,
@@ -307,6 +309,7 @@ export async function POST(request: NextRequest) {
           jobId: newJob.id,
           make: b.make,
           model: b.model?.trim() || null,
+          year: b.year ?? null,
           nickname: b.nickname ?? null,
           imageUrl: b.imageUrl ?? null,
           bikeId: b.bikeId,

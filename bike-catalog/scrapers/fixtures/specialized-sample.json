@@ -1,0 +1,27 @@
+[
+  {
+    "model": "Turbo Levo Comp Alloy",
+    "family": "Levo",
+    "year": 2024,
+    "category": "E-MTB",
+    "sourceUrl": "https://www.specialized.com/us/en/turbo-levo-comp-alloy/p/221400",
+    "components": [
+      { "slot": "FRAME_MATERIAL", "value": "M5 Premium Aluminum" },
+      { "slot": "FORK", "value": "Fox Float 36 Rhythm, 160mm" },
+      { "slot": "REAR_SHOCK", "value": "Fox Float X Performance" },
+      { "slot": "FRONT_TRAVEL", "value": "160 mm" },
+      { "slot": "REAR_TRAVEL", "value": "150 mm" },
+      { "slot": "SHIFTERS", "value": "SRAM GX Eagle AXS" },
+      { "slot": "REAR_DERAILLEUR", "value": "SRAM GX Eagle AXS" },
+      { "slot": "CASSETTE", "value": "SRAM XG-1275, 10-52t" },
+      { "slot": "CRANKSET", "value": "Praxis Alloy, 34t" },
+      { "slot": "BOTTOM_BRACKET", "value": "Praxis", "standard": "BSA threaded" },
+      { "slot": "BRAKES", "value": "SRAM Code R" },
+      { "slot": "DISC_ROTORS", "value": "200mm" },
+      { "slot": "WHEEL_SIZE", "value": "29/27.5 mullet" },
+      { "slot": "TIRES", "value": "Specialized Butcher Grid Trail 2.3 / Eliminator 2.3" },
+      { "slot": "DERAILLEUR_HANGER", "value": "SRAM UDH", "standard": "UDH" },
+      { "slot": "AXLE", "value": "Boost 148mm" }
+    ]
+  }
+]

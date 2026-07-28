@@ -1,0 +1,150 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/client"
+}
+
+datasource db {
+  provider  = "postgresql"
+  // Prefer a dedicated catalog DB via CATALOG_DATABASE_URL.
+  // When falling back to DATABASE_URL, tables live in the isolated `bike_catalog`
+  // Postgres schema so `db push` cannot drop Bike Ops app tables in `public`.
+  url       = env("CATALOG_DATABASE_URL")
+  directUrl = env("CATALOG_DIRECT_URL")
+  schemas   = ["bike_catalog"]
+}
+
+model CatalogBrand {
+  id         String        @id @default(cuid())
+  name       String
+  slug       String        @unique
+  scraperKey String?       @unique
+  aliases    String[]      @default([])
+  bikes      CatalogBike[]
+  scrapeRuns ScrapeRun[]
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  @@schema("bike_catalog")
+}
+
+model CatalogBike {
+  id           String             @id @default(cuid())
+  brandId      String
+  brand        CatalogBrand       @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  model        String
+  family       String?
+  year         Int?
+  category     String?
+  subcategory  String?
+  sourceUrl    String?
+  thumbnailUrl String?
+  externalKey  String
+  confidence   Float              @default(1)
+  components   CatalogComponent[]
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@unique([brandId, externalKey])
+  @@index([brandId])
+  @@index([year])
+  @@index([model])
+  @@index([brandId, model, year])
+  @@schema("bike_catalog")
+}
+
+model CatalogComponent {
+  id          String                 @id @default(cuid())
+  bikeId      String
+  bike        CatalogBike            @relation(fields: [bikeId], references: [id], onDelete: Cascade)
+  slot        CatalogComponentSlot
+  label       String
+  value       String
+  maker       String?
+  model       String?
+  standard    String?
+  detail      String?
+  visibility  ComponentVisibility    @default(VISUAL)
+  sortOrder   Int                    @default(0)
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+
+  @@unique([bikeId, slot])
+  @@index([bikeId])
+  @@index([slot])
+  @@schema("bike_catalog")
+}
+
+model ScrapeRun {
+  id                 String          @id @default(cuid())
+  brandId            String?
+  brand              CatalogBrand?   @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  scraperKey         String
+  status             ScrapeRunStatus @default(RUNNING)
+  bikesUpserted      Int             @default(0)
+  componentsUpserted Int             @default(0)
+  errorCount         Int             @default(0)
+  message            String?
+  startedAt          DateTime        @default(now())
+  finishedAt         DateTime?
+
+  @@index([scraperKey])
+  @@index([startedAt])
+  @@schema("bike_catalog")
+}
+
+enum CatalogComponentSlot {
+  SHIFTING
+  GEARING_TYPE
+  CHAINRINGS_COGS
+  SHIFTERS
+  REAR_DERAILLEUR
+  FRONT_DERAILLEUR
+  CRANKSET
+  CASSETTE
+  CHAIN
+  BOTTOM_BRACKET
+  WHEEL_SIZE
+  RIMS
+  TIRES
+  FRONT_HUB
+  REAR_HUB
+  SPOKES
+  MAX_TIRE_WIDTH
+  BRAKES
+  BRAKE_LEVERS
+  DISC_ROTORS
+  FRAME_MATERIAL
+  DERAILLEUR_HANGER
+  FRAME
+  FORK
+  HEADSET
+  REAR_SHOCK
+  SUSPENSION
+  FRONT_TRAVEL
+  REAR_TRAVEL
+  STEM
+  HANDLEBAR
+  GRIPS
+  SADDLE
+  SEATPOST
+  AXLE
+
+  @@schema("bike_catalog")
+}
+
+enum ComponentVisibility {
+  VISUAL
+  INTERNAL
+  STANDARD
+
+  @@schema("bike_catalog")
+}
+
+enum ScrapeRunStatus {
+  RUNNING
+  SUCCESS
+  PARTIAL
+  FAILED
+
+  @@schema("bike_catalog")
+}
