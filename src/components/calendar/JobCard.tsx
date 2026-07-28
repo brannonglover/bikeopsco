@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useDraggable } from "@dnd-kit/core";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { DeliveryType, Job, Stage } from "@/lib/types";
@@ -519,6 +520,8 @@ interface JobCardProps {
   onReject?: (job: Job) => void;
   /** When true, card is not draggable (e.g. mobile — use in-card status instead). */
   dragDisabled?: boolean;
+  /** Drag out allowed, but not within-column reorder (e.g. Received FCFS queue). */
+  disableWithinColumnSort?: boolean;
   showMobileStageSelect?: boolean;
   onStageChange?: (stage: Stage) => void;
   notifyCustomer?: boolean;
@@ -532,23 +535,27 @@ export function JobCard({
   onAccept,
   onReject,
   dragDisabled,
+  disableWithinColumnSort,
   showMobileStageSelect,
   onStageChange,
   notifyCustomer,
   onNotifyCustomerChange,
   onJobUpdated,
 }: JobCardProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({
+  const dragOutOnly = Boolean(disableWithinColumnSort) && !dragDisabled;
+
+  const sortable = useSortable({
     id: job.id,
-    disabled: dragDisabled,
+    disabled: dragDisabled || dragOutOnly,
   });
+  const draggable = useDraggable({
+    id: job.id,
+    disabled: !dragOutOnly,
+  });
+
+  const { attributes, listeners, setNodeRef, transform, isDragging } =
+    dragOutOnly ? draggable : sortable;
+  const transition = dragOutOnly ? undefined : sortable.transition;
 
   return (
     <div

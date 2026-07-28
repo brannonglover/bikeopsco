@@ -606,12 +606,18 @@ export function KanbanBoard({ initialJobs }: { initialJobs?: Job[] }) {
       newStage = targetJob ? targetJob.stage : (over.id as Stage);
     }
 
-    // Within-column reorder: same stage and dropped on a card (not a column background)
+    // Within-column reorder: same stage and dropped on a card (not a column background).
+    // Received is a strict FCFS queue — ignore drag reorder there.
     if (
       activeJob &&
       newStage === activeJob.stage &&
       !STAGES.includes(over.id as Stage)
     ) {
+      if (newStage === "RECEIVED") {
+        setActiveJobId(null);
+        return;
+      }
+
       const columnJobs = jobsByStage[newStage] ?? [];
       const oldIndex = columnJobs.findIndex((j) => j.id === jobId);
       const newIndex = columnJobs.findIndex((j) => j.id === over.id);
@@ -645,8 +651,13 @@ export function KanbanBoard({ initialJobs }: { initialJobs?: Job[] }) {
       return;
     }
 
+    // Received: do not stamp insert-position columnSortOrder — arrival time wins.
     let sortUpdates: ColumnSortUpdate[] | undefined;
-    if (activeJob && newStage !== activeJob.stage) {
+    if (
+      activeJob &&
+      newStage !== activeJob.stage &&
+      newStage !== "RECEIVED"
+    ) {
       const destinationJobs = (jobsByStage[newStage] ?? []).filter(
         (j) => j.id !== jobId
       );
@@ -683,15 +694,16 @@ export function KanbanBoard({ initialJobs }: { initialJobs?: Job[] }) {
     const stageJobs = jobs
       .filter((j) => j.stage === stage)
       .sort((a, b) => {
-        const aOrder = a.columnSortOrder ?? Infinity;
-        const bOrder = b.columnSortOrder ?? Infinity;
-        if (aOrder !== bOrder) return aOrder - bOrder;
-        // Received: first-come, first-served by actual intake time.
+        // Received: strict FCFS by intake time — ignore manual columnSortOrder.
         if (stage === "RECEIVED") {
           const aTime = new Date(a.receivedAt ?? a.createdAt).getTime();
           const bTime = new Date(b.receivedAt ?? b.createdAt).getTime();
-          return aTime - bTime;
+          if (aTime !== bTime) return aTime - bTime;
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
         }
+        const aOrder = a.columnSortOrder ?? Infinity;
+        const bOrder = b.columnSortOrder ?? Infinity;
+        if (aOrder !== bOrder) return aOrder - bOrder;
         if (!a.dropOffDate && !b.dropOffDate) return 0;
         if (!a.dropOffDate) return 1;
         if (!b.dropOffDate) return -1;

@@ -62,6 +62,38 @@ export function StageColumn({
     id: stage,
   });
 
+  // Received is FCFS by arrival — cards can drag out, but not reorder within the column.
+  const disableWithinColumnSort = stage === "RECEIVED";
+
+  const cards = jobs.length > 0 ? (
+    jobs.map((job) => (
+      <JobCard
+        key={job.id}
+        job={job}
+        onJobClick={onJobClick}
+        onAccept={onAccept}
+        onReject={onReject}
+        dragDisabled={dragDisabled}
+        disableWithinColumnSort={disableWithinColumnSort}
+        showMobileStageSelect={showMobileStageSelect}
+        onStageChange={
+          onStageChange ? (s) => onStageChange(job.id, s) : undefined
+        }
+        notifyCustomer={
+          jobNotifyCustomer ? jobNotifyCustomer(job.id) : undefined
+        }
+        onNotifyCustomerChange={
+          onJobNotifyCustomerChange
+            ? (notify) => onJobNotifyCustomerChange(job.id, notify)
+            : undefined
+        }
+        onJobUpdated={onJobUpdated}
+      />
+    ))
+  ) : (
+    <p className="py-10 text-center text-sm font-medium text-text-muted">No jobs</p>
+  );
+
   return (
     <div
       ref={setNodeRef}
@@ -82,35 +114,13 @@ export function StageColumn({
         </span>
       </div>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-x-hidden overflow-y-auto px-0.5">
-        <SortableContext items={jobs.map((j) => j.id)} strategy={verticalListSortingStrategy}>
-          {jobs.length > 0 ? (
-            jobs.map((job) => (
-              <JobCard
-                key={job.id}
-                job={job}
-                onJobClick={onJobClick}
-                onAccept={onAccept}
-                onReject={onReject}
-                dragDisabled={dragDisabled}
-                showMobileStageSelect={showMobileStageSelect}
-                onStageChange={
-                  onStageChange ? (s) => onStageChange(job.id, s) : undefined
-                }
-                notifyCustomer={
-                  jobNotifyCustomer ? jobNotifyCustomer(job.id) : undefined
-                }
-                onNotifyCustomerChange={
-                  onJobNotifyCustomerChange
-                    ? (notify) => onJobNotifyCustomerChange(job.id, notify)
-                    : undefined
-                }
-                onJobUpdated={onJobUpdated}
-              />
-            ))
-          ) : (
-            <p className="py-10 text-center text-sm font-medium text-text-muted">No jobs</p>
-          )}
-        </SortableContext>
+        {disableWithinColumnSort ? (
+          cards
+        ) : (
+          <SortableContext items={jobs.map((j) => j.id)} strategy={verticalListSortingStrategy}>
+            {cards}
+          </SortableContext>
+        )}
       </div>
     </div>
   );

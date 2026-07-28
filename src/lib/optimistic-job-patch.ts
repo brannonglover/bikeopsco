@@ -56,6 +56,15 @@ export function withOptimisticStageChange(job: Job, newStage: Stage): Job {
     next = { ...next, completedAt: null };
   }
 
+  // Match PATCH: stamp intake time and clear manual order when entering Received.
+  if (newStage === "RECEIVED" && job.stage !== "RECEIVED") {
+    next = {
+      ...next,
+      receivedAt: new Date().toISOString(),
+      columnSortOrder: null,
+    };
+  }
+
   return next;
 }
 
