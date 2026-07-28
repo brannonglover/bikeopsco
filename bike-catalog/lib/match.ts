@@ -7,6 +7,8 @@ export type CatalogBikeWithRelations = CatalogBike & {
 };
 
 const MATCH_SCORE_THRESHOLD = 45;
+/** Auto-match only when catalog year is within this many years of the job bike year. */
+const MAX_YEAR_GAP_FOR_AUTO_MATCH = 1;
 
 function scoreBikeMatch(
   bike: CatalogBikeWithRelations,
@@ -49,12 +51,25 @@ function scoreBikeMatch(
   }
 
   if (year != null && bike.year != null) {
-    if (bike.year === year) score += 25;
-    else if (Math.abs(bike.year - year) === 1) score += 8;
-    else score -= 15;
+    const gap = Math.abs(bike.year - year);
+    if (gap === 0) score += 35;
+    else if (gap === 1) score += 8;
+    // Larger gaps are excluded from auto-match via isYearCompatible().
+  } else if (year != null && bike.year == null) {
+    // Prefer dated catalog rows when the job bike has a year.
+    score -= 10;
   }
 
   return score;
+}
+
+/** When both sides have a year, only allow auto-match within MAX_YEAR_GAP_FOR_AUTO_MATCH. */
+export function isYearCompatible(
+  jobYear: number | null | undefined,
+  catalogYear: number | null | undefined
+): boolean {
+  if (jobYear == null || catalogYear == null) return true;
+  return Math.abs(catalogYear - jobYear) <= MAX_YEAR_GAP_FOR_AUTO_MATCH;
 }
 
 export type MatchResult =
@@ -123,9 +138,31 @@ export async function matchCatalogBike(
     };
   }
 
-  const scored = pool
+  const yearCompatible = pool.filter((bike) => isYearCompatible(year, bike.year));
+  const scored = yearCompatible
     .map((bike) => ({ bike, score: scoreBikeMatch(bike, trimmedMake, model, year) }))
     .sort((a, b) => b.score - a.score);
+
+  if (scored.length === 0) {
+    const nearestYears = [
+      ...new Set(
+        pool
+          .map((b) => b.year)
+          .filter((y): y is number => y != null)
+          .sort((a, b) => Math.abs(a - (year ?? 0)) - Math.abs(b - (year ?? 0)))
+      ),
+    ].slice(0, 5);
+
+    const label = [year, trimmedMake, modelLower].filter(Boolean).join(" ");
+    return {
+      ok: false,
+      reason: "no_results",
+      message:
+        nearestYears.length > 0
+          ? `No catalog entry for ${label}. Closest years we have: ${nearestYears.join(", ")}. Parts change by year — we won’t show a mismatched year.`
+          : `No catalog entry for ${label}.`,
+    };
+  }
 
   const best = scored[0];
   if (!best || best.score < MATCH_SCORE_THRESHOLD) {

@@ -213,6 +213,13 @@ export async function POST(
   const result = await fetchSpecsForJobBike(jobBike.make, jobBike.model, jobBike.year, existingId);
 
   if (!result.ok) {
+    // Clear a previously sticky wrong-year match so Refresh keeps failing closed.
+    if (jobBike.catalogBikeId) {
+      await prisma.jobBike.update({
+        where: { id: jobBike.id },
+        data: { catalogBikeId: null, catalogMatchedAt: null },
+      });
+    }
     return NextResponse.json(
       {
         configured: true,

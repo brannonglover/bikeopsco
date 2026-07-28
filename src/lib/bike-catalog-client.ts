@@ -6,6 +6,7 @@ import { isCatalogConfigured } from "../../bike-catalog/lib/db";
 import {
   getCatalogBikeById,
   matchCatalogBike,
+  isYearCompatible,
   type MatchResult,
 } from "../../bike-catalog/lib/match";
 import {
@@ -25,7 +26,14 @@ export type {
   MatchResult,
 };
 
-export { isCatalogConfigured, getCatalogBikeById, matchCatalogBike, toMatchedCatalogBike, toSpecsPayload };
+export {
+  isCatalogConfigured,
+  getCatalogBikeById,
+  matchCatalogBike,
+  isYearCompatible,
+  toMatchedCatalogBike,
+  toSpecsPayload,
+};
 
 export async function fetchSpecsForJobBike(
   make: string,
@@ -52,7 +60,9 @@ export async function fetchSpecsForJobBike(
   try {
     if (existingCatalogBikeId) {
       const bike = await getCatalogBikeById(existingCatalogBikeId);
-      if (bike) {
+      // Only reuse a sticky match when the year still lines up — never serve a 2024
+      // catalog row for a 2005 job bike just because we matched earlier.
+      if (bike && isYearCompatible(year, bike.year)) {
         return { ok: true, catalogBikeId: bike.id, specs: toSpecsPayload(bike) };
       }
     }
