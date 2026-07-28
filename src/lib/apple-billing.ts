@@ -8,7 +8,7 @@ const APP_STORE_SANDBOX = "https://api.storekit-sandbox.itunes.apple.com";
 export function getAppleSubscriptionProductId(): string {
   return (
     process.env.APPLE_BIKEOPS_SUBSCRIPTION_PRODUCT_ID?.trim() ||
-    "com.brannonglover.bikeops.app.subscription.monthly"
+    "com.gloverlabs.bikeops_monthly"
   );
 }
 
