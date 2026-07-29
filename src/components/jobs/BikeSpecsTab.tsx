@@ -44,6 +44,40 @@ function bikeRowLabel(job: Job, jobBike: JobBike): string {
   return dp.nickname?.trim() || [dp.make, dp.model].filter(Boolean).join(" ") || "Bike";
 }
 
+function SpecsSkeleton() {
+  return (
+    <div className="space-y-4 animate-pulse" aria-busy="true" aria-label="Loading parts specs">
+      <div className="flex gap-3 items-start">
+        <div className="h-16 w-16 rounded-lg bg-slate-200 dark:bg-slate-700 flex-shrink-0" />
+        <div className="min-w-0 flex-1 space-y-2 pt-1">
+          <div className="h-4 w-2/3 max-w-xs rounded bg-slate-200 dark:bg-slate-700" />
+          <div className="h-3 w-1/2 max-w-[12rem] rounded bg-slate-100 dark:bg-slate-800" />
+          <div className="h-3 w-20 rounded bg-slate-100 dark:bg-slate-800" />
+        </div>
+      </div>
+      {[0, 1, 2].map((group) => (
+        <section
+          key={group}
+          className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 dark:border-slate-700 dark:bg-slate-800/40"
+        >
+          <div className="mb-3 h-3 w-24 rounded bg-slate-200 dark:bg-slate-700" />
+          <div className="space-y-3">
+            {[0, 1, 2, 3].map((row) => (
+              <div
+                key={row}
+                className="grid grid-cols-1 sm:grid-cols-[minmax(0,9rem)_1fr] gap-2 sm:gap-3"
+              >
+                <div className="h-3 w-20 rounded bg-slate-200 dark:bg-slate-700" />
+                <div className="h-3 w-full max-w-sm rounded bg-slate-100 dark:bg-slate-800" />
+              </div>
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
 function confirmationBadge(confirmation?: SpecItemView["confirmation"]) {
   if (confirmation === "MATCHES_CATALOG") {
     return (
@@ -175,7 +209,9 @@ export function BikeSpecsTab({ job }: { job: Job }) {
     [job.jobBikes]
   );
   const [selectedBikeId, setSelectedBikeId] = useState<string | null>(jobBikes[0]?.id ?? null);
-  const [status, setStatus] = useState<FetchStatus>("idle");
+  const [status, setStatus] = useState<FetchStatus>(() =>
+    (job.jobBikes?.length ?? 0) > 0 ? "loading" : "idle"
+  );
   const [specs, setSpecs] = useState<BikeSpecsResponse["specs"]>(null);
   const [error, setError] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<MatchedCatalogBike[]>([]);
@@ -334,15 +370,7 @@ export function BikeSpecsTab({ job }: { job: Job }) {
         </p>
       )}
 
-      {status === "loading" && (
-        <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 py-8 justify-center">
-          <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden>
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-          </svg>
-          Loading specs from catalog…
-        </div>
-      )}
+      {status === "loading" && <SpecsSkeleton />}
 
       {status === "not_configured" && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">

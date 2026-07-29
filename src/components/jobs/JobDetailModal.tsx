@@ -2783,7 +2783,9 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
       onClick={handleDismissClose}
     >
       <div
-        className="bg-white rounded-t-2xl sm:rounded-2xl shadow-soft-lg w-full max-w-lg sm:max-w-4xl max-h-[95vh] sm:max-h-[90vh] flex flex-col relative border border-slate-200/80 sm:border-t-0"
+        className={`bg-white rounded-t-2xl sm:rounded-2xl shadow-soft-lg w-full max-w-lg sm:max-w-4xl max-h-[95vh] sm:max-h-[90vh] flex flex-col relative border border-slate-200/80 sm:border-t-0 ${
+          activeTab === "bike_specs" ? "h-[95vh] sm:h-[90vh]" : ""
+        }`}
         onClick={(e) => e.stopPropagation()}
       >
         {showCancelReason && (
@@ -2929,7 +2931,11 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
           </button>
         </div>
 
-        <div className="overflow-y-auto p-4 sm:p-6 flex-1 space-y-6">
+        <div
+          className={`overflow-y-auto p-4 sm:p-6 flex-1 space-y-6 ${
+            activeTab === "bike_specs" ? "min-h-0" : ""
+          }`}
+        >
           {activeTab === "bike_specs" ? (
             <BikeSpecsTab job={job} />
           ) : activeTab === "history" ? (
