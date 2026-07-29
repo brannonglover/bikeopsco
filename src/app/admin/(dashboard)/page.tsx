@@ -1,8 +1,6 @@
 import Link from "next/link";
 import { listPlatformShops } from "@/lib/platform-shops";
 import { AdminDeleteShopButton } from "./AdminDeleteShopButton";
-import { AdminLogoutButton } from "./AdminLogoutButton";
-import { AdminNav } from "./AdminNav";
 
 export const dynamic = "force-dynamic";
 
@@ -111,89 +109,82 @@ export default async function PlatformAdminPage() {
   const shops = await listPlatformShops();
 
   return (
-    <div className="min-h-screen bg-mesh">
-      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-        <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <p className="text-sm font-medium uppercase tracking-wide text-slate-500">Bike Ops</p>
-            <h1 className="mt-1 text-2xl font-semibold text-slate-900">Trial signups</h1>
-            <p className="mt-2 max-w-2xl text-sm text-slate-600">
-              Shops that registered through{" "}
-              <Link href="https://app.bikeops.co/signup" className="font-medium text-slate-900 hover:underline">
-                app.bikeops.co/signup
-              </Link>
-              . Newest first.
-            </p>
-            <AdminNav current="/admin" />
-          </div>
-          <AdminLogoutButton />
-        </header>
+    <>
+      <header className="mb-6">
+        <h2 className="text-xl font-semibold text-slate-900">Trial signups</h2>
+        <p className="mt-2 max-w-2xl text-sm text-slate-600">
+          Shops that registered through{" "}
+          <Link href="https://app.bikeops.co/signup" className="font-medium text-slate-900 hover:underline">
+            app.bikeops.co/signup
+          </Link>
+          . Newest first.
+        </p>
+      </header>
 
-        <div className="mb-4 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm">
-          <span className="font-semibold text-slate-900">{shops.length}</span>{" "}
-          {shops.length === 1 ? "shop" : "shops"} registered
-        </div>
-
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-          {shops.length === 0 ? (
-            <p className="px-4 py-8 text-center text-sm text-slate-500">No shops have signed up yet.</p>
-          ) : (
-            <>
-              <div className="divide-y divide-slate-100 md:hidden">
-                {shops.map((shop) => (
-                  <ShopCard key={shop.id} shop={shop} />
-                ))}
-              </div>
-
-              <div className="hidden md:block">
-                <table className="w-full table-fixed divide-y divide-slate-200 text-sm">
-                  <colgroup>
-                    <col className="w-[36%]" />
-                    <col className="w-[28%]" />
-                    <col className="w-[24%]" />
-                    <col className="w-[12%]" />
-                  </colgroup>
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <th className="px-3 py-2.5 text-left font-medium text-slate-700">Shop</th>
-                      <th className="px-3 py-2.5 text-left font-medium text-slate-700">Owner</th>
-                      <th className="px-3 py-2.5 text-left font-medium text-slate-700">Status</th>
-                      <th className="sticky right-0 z-[1] bg-slate-50 px-3 py-2.5 text-left font-medium text-slate-700 shadow-[-4px_0_8px_-4px_rgba(15,23,42,0.08)]">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {shops.map((shop) => (
-                      <tr key={shop.id} className="group hover:bg-slate-50/80">
-                        <td className="min-w-0 px-3 py-2.5 align-top">
-                          <p className="font-medium text-slate-900">{shop.name}</p>
-                          <p className="mt-0.5">
-                            <ShopLink subdomain={shop.subdomain} />
-                          </p>
-                          <p className="mt-1 text-xs leading-snug text-slate-500">{usageSummary(shop)}</p>
-                        </td>
-                        <td className="min-w-0 px-3 py-2.5 align-top">
-                          <OwnerDetails shop={shop} />
-                        </td>
-                        <td className="px-3 py-2.5 align-top text-slate-700">
-                          <p>{formatDate(shop.createdAt)}</p>
-                          <p className="mt-1 text-xs leading-snug text-slate-600">
-                            {billingLabel(shop.billingStatus, shop.trialEndsAt)}
-                          </p>
-                        </td>
-                        <td className="sticky right-0 z-[1] bg-white px-3 py-2.5 align-top shadow-[-4px_0_8px_-4px_rgba(15,23,42,0.08)] group-hover:bg-slate-50/80">
-                          <AdminDeleteShopButton shopId={shop.id} shopName={shop.name} />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
-        </div>
+      <div className="mb-4 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm">
+        <span className="font-semibold text-slate-900">{shops.length}</span>{" "}
+        {shops.length === 1 ? "shop" : "shops"} registered
       </div>
-    </div>
+
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        {shops.length === 0 ? (
+          <p className="px-4 py-8 text-center text-sm text-slate-500">No shops have signed up yet.</p>
+        ) : (
+          <>
+            <div className="divide-y divide-slate-100 md:hidden">
+              {shops.map((shop) => (
+                <ShopCard key={shop.id} shop={shop} />
+              ))}
+            </div>
+
+            <div className="hidden md:block">
+              <table className="w-full table-fixed divide-y divide-slate-200 text-sm">
+                <colgroup>
+                  <col className="w-[36%]" />
+                  <col className="w-[28%]" />
+                  <col className="w-[24%]" />
+                  <col className="w-[12%]" />
+                </colgroup>
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="px-3 py-2.5 text-left font-medium text-slate-700">Shop</th>
+                    <th className="px-3 py-2.5 text-left font-medium text-slate-700">Owner</th>
+                    <th className="px-3 py-2.5 text-left font-medium text-slate-700">Status</th>
+                    <th className="sticky right-0 z-[1] bg-slate-50 px-3 py-2.5 text-left font-medium text-slate-700 shadow-[-4px_0_8px_-4px_rgba(15,23,42,0.08)]">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {shops.map((shop) => (
+                    <tr key={shop.id} className="group hover:bg-slate-50/80">
+                      <td className="min-w-0 px-3 py-2.5 align-top">
+                        <p className="font-medium text-slate-900">{shop.name}</p>
+                        <p className="mt-0.5">
+                          <ShopLink subdomain={shop.subdomain} />
+                        </p>
+                        <p className="mt-1 text-xs leading-snug text-slate-500">{usageSummary(shop)}</p>
+                      </td>
+                      <td className="min-w-0 px-3 py-2.5 align-top">
+                        <OwnerDetails shop={shop} />
+                      </td>
+                      <td className="px-3 py-2.5 align-top text-slate-700">
+                        <p>{formatDate(shop.createdAt)}</p>
+                        <p className="mt-1 text-xs leading-snug text-slate-600">
+                          {billingLabel(shop.billingStatus, shop.trialEndsAt)}
+                        </p>
+                      </td>
+                      <td className="sticky right-0 z-[1] bg-white px-3 py-2.5 align-top shadow-[-4px_0_8px_-4px_rgba(15,23,42,0.08)] group-hover:bg-slate-50/80">
+                        <AdminDeleteShopButton shopId={shop.id} shopName={shop.name} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </div>
+    </>
   );
 }

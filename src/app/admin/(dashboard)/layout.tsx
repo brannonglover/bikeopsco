@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getPlatformAdminSessionFromCookies } from "@/lib/platform-admin-session-server";
 import { isPlatformAdminConfigured } from "@/lib/platform-admin";
+import { AdminShell } from "./AdminShell";
 
 export default async function PlatformAdminDashboardLayout({
   children,
@@ -26,5 +27,5 @@ export default async function PlatformAdminDashboardLayout({
     redirect("/admin/login");
   }
 
-  return children;
+  return <AdminShell>{children}</AdminShell>;
 }
