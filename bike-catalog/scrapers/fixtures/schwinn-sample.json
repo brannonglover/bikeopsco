@@ -1,0 +1,21 @@
+[
+  {
+    "model": "Voyageur",
+    "family": "Voyageur",
+    "year": 2021,
+    "category": "Hybrid",
+    "sourceUrl": "https://www.schwinnbikes.com/",
+    "components": [
+      { "slot": "FRAME_MATERIAL", "value": "Aluminum" },
+      { "slot": "FORK", "value": "Steel" },
+      { "slot": "SHIFTERS", "value": "Shimano RevoShift" },
+      { "slot": "REAR_DERAILLEUR", "value": "Shimano Tourney" },
+      { "slot": "CASSETTE", "value": "7-speed freewheel" },
+      { "slot": "CRANKSET", "value": "Alloy triple" },
+      { "slot": "BOTTOM_BRACKET", "value": "Square taper cartridge", "standard": "BSA" },
+      { "slot": "BRAKES", "value": "Linear-pull / V-brake" },
+      { "slot": "WHEEL_SIZE", "value": "700c" },
+      { "slot": "TIRES", "value": "Schwinn city 700x38c" }
+    ]
+  }
+]

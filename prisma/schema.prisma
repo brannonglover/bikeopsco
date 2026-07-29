@@ -36,6 +36,7 @@ model Shop {
   bikes            Bike[]
   jobs             Job[]
   jobBikes         JobBike[]
+  jobBikeComponentOverrides JobBikeComponentOverride[]
   payments         Payment[]
   services         Service[]
   jobServices      JobService[]
@@ -99,10 +100,13 @@ model Bike {
   shop        Shop       @relation(fields: [shopId], references: [id], onDelete: Cascade)
   make        String
   model       String?
+  year        Int?
   /// null = infer regular vs e-bike from make/model when needed
   bikeType    BikeType?
   nickname    String?
   imageUrl    String?
+  /// Matched row in the separate bike-catalog database
+  catalogBikeId String?
   customerId  String
   customer    Customer   @relation(fields: [customerId], references: [id], onDelete: Cascade)
   jobBikes    JobBike[]
@@ -111,6 +115,7 @@ model Bike {
 
   @@index([customerId])
   @@index([shopId])
+  @@index([catalogBikeId])
 }
 
 model JobBike {
@@ -121,6 +126,7 @@ model JobBike {
   job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
   make      String
   model     String?
+  year      Int?
   /// null = use linked customer bike or infer from make/model
   bikeType  BikeType?
   nickname  String?
@@ -130,17 +136,45 @@ model JobBike {
   sortOrder        Int       @default(0)
   completedAt      DateTime?
   waitingOnPartsAt DateTime?
-  /// Cached 99 Spokes catalog match + component specs for parts lookup
-  ninetyNineSpokesId            String?
-  ninetyNineSpokesSpecs         Json?
-  ninetyNineSpokesSpecsFetchedAt  DateTime?
+  /// Matched row in the separate bike-catalog database
+  catalogBikeId    String?
+  catalogMatchedAt DateTime?
   createdAt        DateTime  @default(now())
   workingOnJob Job?     @relation("WorkingOnBike")
   jobServices  JobService[]
   jobProducts  JobProduct[]
+  componentOverrides JobBikeComponentOverride[]
 
   @@index([jobId])
   @@index([shopId])
+  @@index([catalogBikeId])
+}
+
+/// Per-job overrides / confirmations for catalog component slots (does not mutate global catalog).
+model JobBikeComponentOverride {
+  id           String                        @id @default(cuid())
+  shopId       String
+  shop         Shop                          @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  jobBikeId    String
+  jobBike      JobBike                       @relation(fields: [jobBikeId], references: [id], onDelete: Cascade)
+  /// Matches CatalogComponentSlot values in bike-catalog
+  slot         String
+  confirmation ComponentConfirmation         @default(UNREVIEWED)
+  /// When confirmation is CUSTOMIZED, the part actually on this bike
+  customValue  String?
+  notes        String?
+  createdAt    DateTime                      @default(now())
+  updatedAt    DateTime                      @updatedAt
+
+  @@unique([jobBikeId, slot])
+  @@index([shopId])
+  @@index([jobBikeId])
+}
+
+enum ComponentConfirmation {
+  UNREVIEWED
+  MATCHES_CATALOG
+  CUSTOMIZED
 }
 
 model Job {

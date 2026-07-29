@@ -4,33 +4,69 @@ import { requireStaffShop } from "@/lib/api-auth";
 import { z } from "zod";
 import {
   fetchSpecsForJobBike,
-  isNinetyNineSpokesConfigured,
-  type NinetyNineSpokesSpecsPayload,
-} from "@/lib/ninety-nine-spokes";
-import type { Prisma } from "@prisma/client";
+  isCatalogConfigured,
+  type BikeSpecsPayload,
+} from "@/lib/bike-catalog-client";
+import type { ComponentConfirmation } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
 const postSchema = z.object({
   jobBikeId: z.string().min(1),
   refresh: z.boolean().optional(),
-  spokesId: z.string().optional(),
+  catalogBikeId: z.string().optional(),
 });
 
-function serializeCached(
-  jobBikeId: string,
-  spokesId: string | null,
-  specs: unknown,
-  fetchedAt: Date | null
-) {
+const overrideSchema = z.object({
+  jobBikeId: z.string().min(1),
+  slot: z.string().min(1),
+  confirmation: z.enum(["UNREVIEWED", "MATCHES_CATALOG", "CUSTOMIZED"]),
+  customValue: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+});
+
+type OverrideRow = {
+  slot: string;
+  confirmation: ComponentConfirmation;
+  customValue: string | null;
+  notes: string | null;
+};
+
+function applyOverridesToSpecs(specs: BikeSpecsPayload, overrides: OverrideRow[]): BikeSpecsPayload {
+  const bySlot = new Map(overrides.map((o) => [o.slot, o]));
   return {
-    configured: isNinetyNineSpokesConfigured(),
-    jobBikeId,
-    status: specs ? ("cached" as const) : ("not_fetched" as const),
-    spokesId,
-    specs: specs as NinetyNineSpokesSpecsPayload | null,
-    fetchedAt: fetchedAt?.toISOString() ?? null,
+    ...specs,
+    groups: specs.groups.map((group) => ({
+      ...group,
+      items: group.items.map((item) => {
+        const override = bySlot.get(item.slot);
+        if (!override) {
+          return { ...item, confirmation: "UNREVIEWED" as const };
+        }
+        if (override.confirmation === "CUSTOMIZED" && override.customValue?.trim()) {
+          return {
+            ...item,
+            value: override.customValue.trim(),
+            detail: override.notes ?? item.detail,
+            confirmation: "CUSTOMIZED" as const,
+            catalogValue: item.value,
+          };
+        }
+        return {
+          ...item,
+          confirmation: override.confirmation,
+          catalogValue: item.value,
+        };
+      }),
+    })),
   };
+}
+
+async function loadOverrides(jobBikeId: string, shopId: string) {
+  return prisma.jobBikeComponentOverride.findMany({
+    where: { jobBikeId, shopId },
+    select: { slot: true, confirmation: true, customValue: true, notes: true },
+  });
 }
 
 export async function GET(
@@ -49,23 +85,60 @@ export async function GET(
     where: { id: jobBikeId, jobId: params.id, shopId: auth.shopId },
     select: {
       id: true,
-      ninetyNineSpokesId: true,
-      ninetyNineSpokesSpecs: true,
-      ninetyNineSpokesSpecsFetchedAt: true,
+      make: true,
+      model: true,
+      year: true,
+      catalogBikeId: true,
+      catalogMatchedAt: true,
     },
   });
   if (!jobBike) {
     return NextResponse.json({ error: "Job bike not found" }, { status: 404 });
   }
 
-  return NextResponse.json(
-    serializeCached(
-      jobBike.id,
-      jobBike.ninetyNineSpokesId,
-      jobBike.ninetyNineSpokesSpecs,
-      jobBike.ninetyNineSpokesSpecsFetchedAt
-    )
+  if (!jobBike.catalogBikeId) {
+    return NextResponse.json({
+      configured: isCatalogConfigured(),
+      jobBikeId: jobBike.id,
+      status: "not_fetched" as const,
+      catalogBikeId: null,
+      specs: null,
+      fetchedAt: null,
+      overrides: [],
+    });
+  }
+
+  const result = await fetchSpecsForJobBike(
+    jobBike.make,
+    jobBike.model,
+    jobBike.year,
+    jobBike.catalogBikeId
   );
+
+  if (!result.ok) {
+    return NextResponse.json({
+      configured: isCatalogConfigured(),
+      jobBikeId: jobBike.id,
+      status: result.reason,
+      catalogBikeId: jobBike.catalogBikeId,
+      specs: null,
+      fetchedAt: jobBike.catalogMatchedAt?.toISOString() ?? null,
+      error: result.message,
+      candidates: result.candidates ?? [],
+      overrides: [],
+    });
+  }
+
+  const overrides = await loadOverrides(jobBike.id, auth.shopId);
+  return NextResponse.json({
+    configured: true,
+    jobBikeId: jobBike.id,
+    status: "cached" as const,
+    catalogBikeId: result.catalogBikeId,
+    specs: applyOverridesToSpecs(result.specs, overrides),
+    fetchedAt: jobBike.catalogMatchedAt?.toISOString() ?? null,
+    overrides,
+  });
 }
 
 export async function POST(
@@ -88,22 +161,22 @@ export async function POST(
       id: true,
       make: true,
       model: true,
-      ninetyNineSpokesId: true,
-      ninetyNineSpokesSpecs: true,
-      ninetyNineSpokesSpecsFetchedAt: true,
+      year: true,
+      catalogBikeId: true,
+      catalogMatchedAt: true,
     },
   });
   if (!jobBike) {
     return NextResponse.json({ error: "Job bike not found" }, { status: 404 });
   }
 
-  if (!isNinetyNineSpokesConfigured()) {
+  if (!isCatalogConfigured()) {
     return NextResponse.json(
       {
         configured: false,
         jobBikeId: jobBike.id,
         status: "not_configured" as const,
-        error: "99 Spokes API key is not configured",
+        error: "Bike catalog database is not configured",
       },
       { status: 503 }
     );
@@ -111,25 +184,42 @@ export async function POST(
 
   const useCached =
     !body.refresh &&
-    !body.spokesId &&
-    jobBike.ninetyNineSpokesSpecs &&
-    jobBike.ninetyNineSpokesSpecsFetchedAt;
+    !body.catalogBikeId &&
+    jobBike.catalogBikeId &&
+    jobBike.catalogMatchedAt;
+
   if (useCached) {
-    return NextResponse.json({
-      ...serializeCached(
-        jobBike.id,
-        jobBike.ninetyNineSpokesId,
-        jobBike.ninetyNineSpokesSpecs,
-        jobBike.ninetyNineSpokesSpecsFetchedAt
-      ),
-      status: "cached" as const,
-    });
+    const result = await fetchSpecsForJobBike(
+      jobBike.make,
+      jobBike.model,
+      jobBike.year,
+      jobBike.catalogBikeId
+    );
+    if (result.ok) {
+      const overrides = await loadOverrides(jobBike.id, auth.shopId);
+      return NextResponse.json({
+        configured: true,
+        jobBikeId: jobBike.id,
+        status: "cached" as const,
+        catalogBikeId: result.catalogBikeId,
+        specs: applyOverridesToSpecs(result.specs, overrides),
+        fetchedAt: jobBike.catalogMatchedAt?.toISOString() ?? null,
+        overrides,
+      });
+    }
   }
 
-  const existingId = body.spokesId ?? (body.refresh ? null : jobBike.ninetyNineSpokesId);
-  const result = await fetchSpecsForJobBike(jobBike.make, jobBike.model, existingId);
+  const existingId = body.catalogBikeId ?? (body.refresh ? null : jobBike.catalogBikeId);
+  const result = await fetchSpecsForJobBike(jobBike.make, jobBike.model, jobBike.year, existingId);
 
   if (!result.ok) {
+    // Clear a previously sticky wrong-year match so Refresh keeps failing closed.
+    if (jobBike.catalogBikeId) {
+      await prisma.jobBike.update({
+        where: { id: jobBike.id },
+        data: { catalogBikeId: null, catalogMatchedAt: null },
+      });
+    }
     return NextResponse.json(
       {
         configured: true,
@@ -146,18 +236,74 @@ export async function POST(
   await prisma.jobBike.update({
     where: { id: jobBike.id },
     data: {
-      ninetyNineSpokesId: result.spokesId,
-      ninetyNineSpokesSpecs: result.specs as Prisma.InputJsonValue,
-      ninetyNineSpokesSpecsFetchedAt: now,
+      catalogBikeId: result.catalogBikeId,
+      catalogMatchedAt: now,
     },
   });
 
+  const overrides = await loadOverrides(jobBike.id, auth.shopId);
   return NextResponse.json({
     configured: true,
     jobBikeId: jobBike.id,
     status: "fetched" as const,
-    spokesId: result.spokesId,
-    specs: result.specs,
+    catalogBikeId: result.catalogBikeId,
+    specs: applyOverridesToSpecs(result.specs, overrides),
     fetchedAt: now.toISOString(),
+    overrides,
   });
+}
+
+/** Upsert a per-slot confirmation / customization for this job bike. */
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const auth = await requireStaffShop(request);
+  if (!auth.ok) return auth.response;
+
+  let body: z.infer<typeof overrideSchema>;
+  try {
+    body = overrideSchema.parse(await request.json());
+  } catch {
+    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+  }
+
+  const jobBike = await prisma.jobBike.findFirst({
+    where: { id: body.jobBikeId, jobId: params.id, shopId: auth.shopId },
+    select: { id: true },
+  });
+  if (!jobBike) {
+    return NextResponse.json({ error: "Job bike not found" }, { status: 404 });
+  }
+
+  const customValue =
+    body.confirmation === "CUSTOMIZED" ? body.customValue?.trim() || null : null;
+
+  if (body.confirmation === "CUSTOMIZED" && !customValue) {
+    return NextResponse.json(
+      { error: "customValue is required when marking a part as customized" },
+      { status: 400 }
+    );
+  }
+
+  const override = await prisma.jobBikeComponentOverride.upsert({
+    where: {
+      jobBikeId_slot: { jobBikeId: jobBike.id, slot: body.slot },
+    },
+    create: {
+      shopId: auth.shopId,
+      jobBikeId: jobBike.id,
+      slot: body.slot,
+      confirmation: body.confirmation,
+      customValue,
+      notes: body.notes ?? null,
+    },
+    update: {
+      confirmation: body.confirmation,
+      customValue,
+      notes: body.notes ?? null,
+    },
+  });
+
+  return NextResponse.json({ override });
 }

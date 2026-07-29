@@ -18,11 +18,19 @@ interface JobFormProps {
 const bikeSchema = z.object({
   make: z.string(),
   model: z.string().optional().nullable(),
+  year: z.string().optional().nullable(),
   nickname: z.string().optional(),
   bikeId: z.string().optional(),
   imageUrl: z.string().optional().nullable(),
   bikeType: z.enum(["AUTO", "REGULAR", "E_BIKE"]),
 });
+
+function parseOptionalYear(value: string | null | undefined): number | null {
+  if (value == null || String(value).trim() === "") return null;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 1980 || n > 2100) return null;
+  return Math.trunc(n);
+}
 
 const schema = z.object({
   bikes: z.array(bikeSchema).min(1, "At least one bike is required"),
@@ -129,7 +137,7 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
   } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
-      bikes: [{ make: "", model: "", bikeType: "AUTO" }],
+      bikes: [{ make: "", model: "", year: "", bikeType: "AUTO" }],
       deliveryType: "DROP_OFF_AT_SHOP",
       dropOffDate: getDefaultDropOffDateTime(),
     },
@@ -490,6 +498,7 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
         bikes: validBikes.map((b) => ({
           make: b.make,
           model: b.model?.trim() || null,
+          year: parseOptionalYear(b.year),
           nickname: b.nickname || null,
           imageUrl: b.imageUrl || null,
           bikeId: b.bikeId || null,
@@ -729,6 +738,10 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
                       const payload: BikeFormRow = {
                         make: bike.make,
                         model: bike.model,
+                        year:
+                          "year" in bike && (bike as { year?: number | null }).year != null
+                            ? String((bike as { year?: number | null }).year)
+                            : "",
                         nickname: bike.nickname ?? undefined,
                         bikeId: bike.id,
                         imageUrl: bike.imageUrl ?? undefined,
@@ -756,7 +769,7 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
               )}
               <button
                 type="button"
-                onClick={() => append({ make: "", model: "", bikeType: "AUTO" })}
+                onClick={() => append({ make: "", model: "", year: "", bikeType: "AUTO" })}
                 className="text-sm px-3 py-1.5 border border-slate-200 rounded-lg bg-white hover:bg-slate-50 font-medium"
               >
                 + Add bike
@@ -803,6 +816,17 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
                     {errors.bikes?.[i]?.model && (
                       <p className="text-red-600 text-xs mt-1">{errors.bikes[i]?.model?.message}</p>
                     )}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Year (optional)</label>
+                    <input
+                      type="number"
+                      min={1980}
+                      max={2100}
+                      {...register(`bikes.${i}.year`)}
+                      placeholder="e.g. 2024"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                    />
                   </div>
                 </div>
                 <div>

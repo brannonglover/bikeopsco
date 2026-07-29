@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { AdminLogoutButton } from "../AdminLogoutButton";
+import { AdminNav } from "../AdminNav";
 import { AdminReleasesClient } from "./AdminReleasesClient";
 
 export const dynamic = "force-dynamic";
@@ -25,14 +25,7 @@ export default function PlatformAdminReleasesPage() {
               </a>
               .
             </p>
-            <nav className="mt-3 flex flex-wrap gap-3 text-sm">
-              <Link href="/admin" className="font-medium text-slate-700 hover:underline">
-                Trial signups
-              </Link>
-              <span className="text-slate-400" aria-current="page">
-                Releases
-              </span>
-            </nav>
+            <AdminNav current="/admin/releases" />
           </div>
           <AdminLogoutButton />
         </header>

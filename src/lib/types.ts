@@ -156,6 +156,7 @@ export interface JobBike {
   jobId: string;
   make: string;
   model: string | null;
+  year?: number | null;
   bikeType: BikeType | null;
   nickname: string | null;
   imageUrl: string | null;
@@ -163,13 +164,14 @@ export interface JobBike {
   sortOrder: number;
   completedAt: string | null;
   waitingOnPartsAt: string | null;
-  ninetyNineSpokesId?: string | null;
-  ninetyNineSpokesSpecsFetchedAt?: string | null;
+  catalogBikeId?: string | null;
+  catalogMatchedAt?: string | null;
   bike?: {
     imageUrl: string | null;
     bikeType: BikeType | null;
     make: string;
     model: string | null;
+    year?: number | null;
     nickname?: string | null;
   } | null;
 }

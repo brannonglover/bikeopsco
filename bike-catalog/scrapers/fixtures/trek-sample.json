@@ -1,0 +1,23 @@
+[
+  {
+    "model": "Marlin 5",
+    "family": "Marlin",
+    "year": 2022,
+    "category": "Mountain",
+    "sourceUrl": "https://www.trekbikes.com/",
+    "components": [
+      { "slot": "FRAME_MATERIAL", "value": "Alpha Silver Aluminum" },
+      { "slot": "FORK", "value": "SR Suntour XCM, 100mm" },
+      { "slot": "FRONT_TRAVEL", "value": "100 mm" },
+      { "slot": "SHIFTERS", "value": "Shimano Altus M2010, 9-speed" },
+      { "slot": "REAR_DERAILLEUR", "value": "Shimano Altus M2000" },
+      { "slot": "CASSETTE", "value": "Shimano HG200, 11-36, 9-speed" },
+      { "slot": "CRANKSET", "value": "Shimano MT210, 30t" },
+      { "slot": "BOTTOM_BRACKET", "value": "Sealed cartridge", "standard": "BSA threaded" },
+      { "slot": "BRAKES", "value": "Tektro HD-M275 hydraulic disc" },
+      { "slot": "WHEEL_SIZE", "value": "29\"" },
+      { "slot": "TIRES", "value": "Bontrager XR2 Comp 29x2.20" },
+      { "slot": "AXLE", "value": "QR / Boost options by size" }
+    ]
+  }
+]
