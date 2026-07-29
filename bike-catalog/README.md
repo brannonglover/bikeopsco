@@ -24,12 +24,21 @@ npm run catalog:seed
 | `npm run catalog:generate` | Generate Prisma client into `bike-catalog/generated/client` |
 | `npm run catalog:push` | Push schema to the `bike_catalog` Postgres schema |
 | `npm run catalog:seed` | Seed a handful of hand-entered bikes |
-| `npm run catalog:scrape -- specialized` | Run the Specialized brand scraper |
+| `npm run catalog:scrape -- specialized` | Specialized scraper (fixtures + optional URLs) |
+| `npm run catalog:scrape -- trek` | Trek fixture scraper |
+| `npm run catalog:scrape -- schwinn` | Schwinn fixture scraper |
+
+## Admin UI
+
+Platform admins can manage catalog rows at **`/admin/catalog`** (on the platform admin host): search, create, edit identity + component slots, delete. Changes apply to the owned catalog used by Parts info on jobs.
+
 
 ## Provenance & scraping
 
-- Prefer OEM / brand marketing pages as sources. Record `sourceUrl` on every bike.
-- Respect robots.txt, rate limits, and brand ToS. Do not scrape paid third-party bike databases.
+- Prefer OEM / brand marketing pages and shop/mechanic-confirmed rows. Record `sourceUrl` on every bike when available.
+- Respect robots.txt, rate limits, and brand ToS.
+- **Do not** use 99 Spokes, BikeBook, or other sources that redistribute 99 Spokes data.
+- Do not scrape paid third-party bike databases.
 - New brand parsers should be reviewed before trusting data in production jobs.
 - Job-level confirmations/customizations live in the Bike Ops app DB and do not rewrite this catalog by default.
 

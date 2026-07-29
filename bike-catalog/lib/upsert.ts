@@ -128,3 +128,103 @@ export async function upsertCatalogBike(input: UpsertBikeInput) {
 
   return { bike, brand, componentsUpserted };
 }
+
+export async function deleteCatalogBike(id: string) {
+  return catalogPrisma.catalogBike.delete({ where: { id } });
+}
+
+export async function updateCatalogBikeMeta(
+  id: string,
+  data: {
+    model?: string;
+    family?: string | null;
+    year?: number | null;
+    category?: string | null;
+    subcategory?: string | null;
+    sourceUrl?: string | null;
+    thumbnailUrl?: string | null;
+    confidence?: number;
+    brandName?: string;
+  }
+) {
+  const existing = await catalogPrisma.catalogBike.findUnique({
+    where: { id },
+    include: { brand: true },
+  });
+  if (!existing) return null;
+
+  let brandId = existing.brandId;
+  if (data.brandName?.trim() && data.brandName.trim() !== existing.brand.name) {
+    const brand = await ensureBrand({ name: data.brandName.trim() });
+    brandId = brand.id;
+  }
+
+  return catalogPrisma.catalogBike.update({
+    where: { id },
+    data: {
+      brandId,
+      ...(data.model != null ? { model: data.model } : {}),
+      ...(data.family !== undefined ? { family: data.family } : {}),
+      ...(data.year !== undefined ? { year: data.year } : {}),
+      ...(data.category !== undefined ? { category: data.category } : {}),
+      ...(data.subcategory !== undefined ? { subcategory: data.subcategory } : {}),
+      ...(data.sourceUrl !== undefined ? { sourceUrl: data.sourceUrl } : {}),
+      ...(data.thumbnailUrl !== undefined ? { thumbnailUrl: data.thumbnailUrl } : {}),
+      ...(data.confidence !== undefined ? { confidence: data.confidence } : {}),
+    },
+    include: {
+      brand: true,
+      components: { orderBy: { sortOrder: "asc" } },
+    },
+  });
+}
+
+export async function replaceCatalogComponents(
+  bikeId: string,
+  components: UpsertComponentInput[]
+) {
+  const keepSlots = new Set(
+    components.filter((c) => c.value?.trim()).map((c) => c.slot)
+  );
+
+  await catalogPrisma.catalogComponent.deleteMany({
+    where: {
+      bikeId,
+      ...(keepSlots.size > 0 ? { slot: { notIn: [...keepSlots] } } : {}),
+    },
+  });
+
+  let componentsUpserted = 0;
+  for (const component of components) {
+    if (!component.value?.trim()) continue;
+    const meta = SLOT_META[component.slot];
+    await catalogPrisma.catalogComponent.upsert({
+      where: { bikeId_slot: { bikeId, slot: component.slot } },
+      create: {
+        bikeId,
+        slot: component.slot,
+        label: component.label ?? meta.label,
+        value: component.value.trim(),
+        maker: component.maker ?? null,
+        model: component.model ?? null,
+        standard: component.standard ?? null,
+        detail: component.detail ?? null,
+        visibility: component.visibility ?? meta.visibility,
+        sortOrder: meta.sortOrder,
+      },
+      update: {
+        label: component.label ?? meta.label,
+        value: component.value.trim(),
+        maker: component.maker ?? null,
+        model: component.model ?? null,
+        standard: component.standard ?? null,
+        detail: component.detail ?? null,
+        visibility: component.visibility ?? meta.visibility,
+        sortOrder: meta.sortOrder,
+      },
+    });
+    componentsUpserted += 1;
+  }
+
+  return componentsUpserted;
+}

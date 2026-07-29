@@ -2,6 +2,7 @@ import Link from "next/link";
 import { listPlatformShops } from "@/lib/platform-shops";
 import { AdminDeleteShopButton } from "./AdminDeleteShopButton";
 import { AdminLogoutButton } from "./AdminLogoutButton";
+import { AdminNav } from "./AdminNav";
 
 export const dynamic = "force-dynamic";
 
@@ -123,14 +124,7 @@ export default async function PlatformAdminPage() {
               </Link>
               . Newest first.
             </p>
-            <nav className="mt-3 flex flex-wrap gap-3 text-sm">
-              <span className="text-slate-400" aria-current="page">
-                Trial signups
-              </span>
-              <Link href="/admin/releases" className="font-medium text-slate-700 hover:underline">
-                Releases
-              </Link>
-            </nav>
+            <AdminNav current="/admin" />
           </div>
           <AdminLogoutButton />
         </header>

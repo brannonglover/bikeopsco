@@ -6,6 +6,7 @@ import Image from "next/image";
 export function BikeImageSearch({
   make,
   model,
+  year,
   onSelect,
   disabled,
   onBusyChange,
@@ -14,6 +15,8 @@ export function BikeImageSearch({
 }: {
   make: string;
   model: string;
+  /** Optional model year — included in search queries for better matches */
+  year?: number | string | null;
   onSelect: (url: string) => void;
   disabled?: boolean;
   onBusyChange?: (busy: boolean) => void;
@@ -33,21 +36,25 @@ export function BikeImageSearch({
   const containerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const hasFields = make.trim() || model.trim();
+  const yearLabel = year != null && String(year).trim() !== "" ? String(year).trim() : "";
+  const defaultQuery = [yearLabel, make.trim(), model.trim(), "bicycle"]
+    .filter(Boolean)
+    .join(" ");
 
   useEffect(() => {
     if (!showResults) {
-      setSearchQuery([make.trim(), model.trim()].filter(Boolean).join(" "));
+      setSearchQuery([yearLabel, make.trim(), model.trim()].filter(Boolean).join(" "));
     }
-  }, [make, model, showResults]);
+  }, [make, model, yearLabel, showResults]);
 
   useEffect(() => {
     if (!autoSearch || !make.trim() || !model.trim() || showResults) return;
     const timer = setTimeout(() => {
-      runSearch([make.trim(), model.trim()].filter(Boolean).join(" "));
+      runSearch(defaultQuery);
     }, 800);
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [make, model]);
+  }, [make, model, yearLabel]);
 
   useEffect(() => {
     if (!showResults) return;
@@ -129,7 +136,7 @@ export function BikeImageSearch({
           if (showResults) {
             setShowResults(false);
           } else {
-            runSearch(searchQuery || [make.trim(), model.trim()].filter(Boolean).join(" "));
+            runSearch(searchQuery || defaultQuery);
           }
         }}
         disabled={disabled || !hasFields || searching}
