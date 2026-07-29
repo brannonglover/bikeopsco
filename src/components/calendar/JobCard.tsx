@@ -1,8 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import Link from "next/link";
-import { useDraggable } from "@dnd-kit/core";
+import {
+  useDraggable,
+  type DraggableAttributes,
+  type DraggableSyntheticListeners,
+} from "@dnd-kit/core";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { DeliveryType, Job, Stage } from "@/lib/types";
@@ -529,37 +533,35 @@ interface JobCardProps {
   onJobUpdated?: (job: Job) => void;
 }
 
-export function JobCard({
+/**
+ * Use one dnd-kit hook per card id. Calling both useSortable and useDraggable
+ * with the same id breaks DragOverlay tracking (card vanishes, empty placeholder).
+ */
+export function JobCard(props: JobCardProps) {
+  const dragOutOnly = Boolean(props.disableWithinColumnSort) && !props.dragDisabled;
+  return dragOutOnly ? <DraggableJobCard {...props} /> : <SortableJobCard {...props} />;
+}
+
+function SortableJobCard({
   job,
   onJobClick,
   onAccept,
   onReject,
   dragDisabled,
-  disableWithinColumnSort,
   showMobileStageSelect,
   onStageChange,
   notifyCustomer,
   onNotifyCustomerChange,
   onJobUpdated,
 }: JobCardProps) {
-  const dragOutOnly = Boolean(disableWithinColumnSort) && !dragDisabled;
-
-  const sortable = useSortable({
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: job.id,
-    disabled: dragDisabled || dragOutOnly,
+    disabled: dragDisabled,
   });
-  const draggable = useDraggable({
-    id: job.id,
-    disabled: !dragOutOnly,
-  });
-
-  const { attributes, listeners, setNodeRef, transform, isDragging } =
-    dragOutOnly ? draggable : sortable;
-  const transition = dragOutOnly ? undefined : sortable.transition;
 
   return (
-    <div
-      ref={setNodeRef}
+    <JobCardDragShell
+      setNodeRef={setNodeRef}
       style={
         isDragging
           ? undefined
@@ -568,11 +570,98 @@ export function JobCard({
               transition,
             }
       }
+      attributes={attributes}
+      listeners={dragDisabled ? undefined : listeners}
+      isDragging={isDragging}
+      dragDisabled={dragDisabled}
+      job={job}
+      onJobClick={onJobClick}
+      onAccept={onAccept}
+      onReject={onReject}
+      showMobileStageSelect={showMobileStageSelect}
+      onStageChange={onStageChange}
+      notifyCustomer={notifyCustomer}
+      onNotifyCustomerChange={onNotifyCustomerChange}
+      onJobUpdated={onJobUpdated}
+    />
+  );
+}
+
+function DraggableJobCard({
+  job,
+  onJobClick,
+  onAccept,
+  onReject,
+  showMobileStageSelect,
+  onStageChange,
+  notifyCustomer,
+  onNotifyCustomerChange,
+  onJobUpdated,
+}: JobCardProps) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: job.id,
+  });
+
+  return (
+    <JobCardDragShell
+      setNodeRef={setNodeRef}
+      style={
+        isDragging
+          ? undefined
+          : {
+              transform: CSS.Transform.toString(transform),
+            }
+      }
+      attributes={attributes}
+      listeners={listeners}
+      isDragging={isDragging}
+      job={job}
+      onJobClick={onJobClick}
+      onAccept={onAccept}
+      onReject={onReject}
+      showMobileStageSelect={showMobileStageSelect}
+      onStageChange={onStageChange}
+      notifyCustomer={notifyCustomer}
+      onNotifyCustomerChange={onNotifyCustomerChange}
+      onJobUpdated={onJobUpdated}
+    />
+  );
+}
+
+type JobCardDragShellProps = Omit<JobCardProps, "disableWithinColumnSort"> & {
+  setNodeRef: (node: HTMLElement | null) => void;
+  style: CSSProperties | undefined;
+  attributes: DraggableAttributes;
+  listeners: DraggableSyntheticListeners;
+  isDragging: boolean;
+};
+
+function JobCardDragShell({
+  setNodeRef,
+  style,
+  attributes,
+  listeners,
+  isDragging,
+  dragDisabled,
+  job,
+  onJobClick,
+  onAccept,
+  onReject,
+  showMobileStageSelect,
+  onStageChange,
+  notifyCustomer,
+  onNotifyCustomerChange,
+  onJobUpdated,
+}: JobCardDragShellProps) {
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
       {...attributes}
       // Override dnd-kit a11y attrs — the card nests links and form controls.
       role={undefined}
       tabIndex={undefined}
-      {...(dragDisabled ? {} : listeners)}
+      {...(listeners ?? {})}
       onClick={(e) => {
         // Card hosts nested links/controls; do not open job detail for those clicks.
         if (isNestedInteractiveTarget(e.target)) return;
