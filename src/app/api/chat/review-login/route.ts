@@ -7,6 +7,11 @@ import {
   getSessionCookieMaxAgeSeconds,
   getSessionCookieName,
 } from "@/lib/chat-session";
+import {
+  computeJobSubtotal,
+  computeTotalPaid,
+  getJobPaymentSummary,
+} from "@/lib/job-payments";
 import { getShopForHost } from "@/lib/shop";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +19,8 @@ export const dynamic = "force-dynamic";
 /** Temporary App Store Review customer login. Remove after approval. */
 const DEFAULT_REVIEW_EMAIL = "appreview@bikeops.co";
 const DEFAULT_REVIEW_SHOP = "bbm";
+const DEMO_JOB_MARKER = "App Review Demo";
+const DEMO_JOB_AMOUNT = 1;
 
 const schema = z.object({
   email: z.string().email(),
@@ -45,6 +52,81 @@ function reviewConfig(): {
       process.env.APPLE_REVIEW_SHOP_SUBDOMAIN?.trim() || DEFAULT_REVIEW_SHOP
     ).toLowerCase(),
   };
+}
+
+/** Ensure a $1 unpaid BIKE_READY job so reviewers can open Stripe + Apple Pay. */
+async function ensureAppleReviewDemoJob(shopId: string, customerId: string) {
+  const candidates = await prisma.job.findMany({
+    where: {
+      shopId,
+      customerId,
+      archivedAt: null,
+      bikeModel: DEMO_JOB_MARKER,
+    },
+    include: {
+      jobServices: { select: { unitPrice: true, quantity: true } },
+      jobProducts: { select: { unitPrice: true, quantity: true } },
+      payments: {
+        select: {
+          amount: true,
+          status: true,
+          paymentMethod: true,
+          stripePaymentIntentId: true,
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 5,
+  });
+
+  const hasPayable = candidates.some((job) => {
+    const subtotal = computeJobSubtotal({
+      jobServices: job.jobServices,
+      jobProducts: job.jobProducts,
+    });
+    const totalPaid = computeTotalPaid(job.payments);
+    const summary = getJobPaymentSummary({
+      currentStatus: job.paymentStatus,
+      subtotal,
+      totalPaid,
+    });
+    return (
+      !summary.isPaidInFull &&
+      summary.remaining > 0 &&
+      [
+        "RECEIVED",
+        "WORKING_ON",
+        "WAITING_ON_CUSTOMER",
+        "WAITING_ON_PARTS",
+        "BIKE_READY",
+        "COMPLETED",
+      ].includes(job.stage)
+    );
+  });
+
+  if (hasPayable) return;
+
+  await prisma.job.create({
+    data: {
+      shopId,
+      customerId,
+      bikeMake: "Demo",
+      bikeModel: DEMO_JOB_MARKER,
+      stage: "BIKE_READY",
+      deliveryType: "DROP_OFF_AT_SHOP",
+      paymentStatus: "UNPAID",
+      notes: "Temporary App Store Review demo job for Apple Pay verification",
+      receivedAt: new Date(),
+      jobServices: {
+        create: {
+          shopId,
+          customServiceName: "App Review demo service",
+          quantity: 1,
+          unitPrice: DEMO_JOB_AMOUNT,
+        },
+      },
+    },
+  });
 }
 
 export async function POST(request: NextRequest) {
@@ -101,6 +183,8 @@ export async function POST(request: NextRequest) {
       select: { id: true },
     });
   }
+
+  await ensureAppleReviewDemoJob(shop.id, customer.id);
 
   const sessionToken = await createSession(customer.id);
   const response = NextResponse.json({
