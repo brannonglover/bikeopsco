@@ -94,36 +94,41 @@ export async function upsertCatalogBike(input: UpsertBikeInput) {
   });
 
   let componentsUpserted = 0;
-  for (const component of input.components) {
-    if (!component.value?.trim()) continue;
-    const meta = SLOT_META[component.slot];
-    const data: Prisma.CatalogComponentUncheckedCreateInput = {
-      bikeId: bike.id,
-      slot: component.slot,
-      label: component.label ?? meta.label,
-      value: component.value.trim(),
-      maker: component.maker ?? null,
-      model: component.model ?? null,
-      standard: component.standard ?? null,
-      detail: component.detail ?? null,
-      visibility: component.visibility ?? meta.visibility,
-      sortOrder: meta.sortOrder,
-    };
-    await catalogPrisma.catalogComponent.upsert({
-      where: { bikeId_slot: { bikeId: bike.id, slot: component.slot } },
-      create: data,
-      update: {
-        label: data.label,
-        value: data.value,
-        maker: data.maker,
-        model: data.model,
-        standard: data.standard,
-        detail: data.detail,
-        visibility: data.visibility,
-        sortOrder: data.sortOrder,
-      },
+  const componentOps = input.components
+    .filter((component) => Boolean(component.value?.trim()))
+    .map((component) => {
+      const meta = SLOT_META[component.slot];
+      const data: Prisma.CatalogComponentUncheckedCreateInput = {
+        bikeId: bike.id,
+        slot: component.slot,
+        label: component.label ?? meta.label,
+        value: component.value.trim(),
+        maker: component.maker ?? null,
+        model: component.model ?? null,
+        standard: component.standard ?? null,
+        detail: component.detail ?? null,
+        visibility: component.visibility ?? meta.visibility,
+        sortOrder: meta.sortOrder,
+      };
+      return catalogPrisma.catalogComponent.upsert({
+        where: { bikeId_slot: { bikeId: bike.id, slot: component.slot } },
+        create: data,
+        update: {
+          label: data.label,
+          value: data.value,
+          maker: data.maker,
+          model: data.model,
+          standard: data.standard,
+          detail: data.detail,
+          visibility: data.visibility,
+          sortOrder: data.sortOrder,
+        },
+      });
     });
-    componentsUpserted += 1;
+
+  if (componentOps.length > 0) {
+    await catalogPrisma.$transaction(componentOps);
+    componentsUpserted = componentOps.length;
   }
 
   return { bike, brand, componentsUpserted };
