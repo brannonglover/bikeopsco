@@ -13,12 +13,14 @@ import {
   getJobPaymentSummary,
 } from "@/lib/job-payments";
 import { getShopForHost } from "@/lib/shop";
+import {
+  ensureAppleReviewShop,
+  getAppleReviewConfig,
+} from "@/lib/apple-review-shop";
 
 export const dynamic = "force-dynamic";
 
 /** Temporary App Store Review customer login. Remove after approval. */
-const DEFAULT_REVIEW_EMAIL = "appreview@bikeops.co";
-const DEFAULT_REVIEW_SHOP = "bbm";
 const DEMO_JOB_MARKER = "App Review Demo";
 const DEMO_JOB_AMOUNT = 1;
 
@@ -33,25 +35,6 @@ function digest(value: string): Buffer {
 
 function passwordsMatch(provided: string, expected: string): boolean {
   return timingSafeEqual(digest(provided), digest(expected));
-}
-
-function reviewConfig(): {
-  email: string;
-  password: string;
-  shopSubdomain: string;
-} | null {
-  const password = process.env.APPLE_REVIEW_PASSWORD?.trim();
-  if (!password) return null;
-
-  return {
-    email: (
-      process.env.APPLE_REVIEW_EMAIL?.trim() || DEFAULT_REVIEW_EMAIL
-    ).toLowerCase(),
-    password,
-    shopSubdomain: (
-      process.env.APPLE_REVIEW_SHOP_SUBDOMAIN?.trim() || DEFAULT_REVIEW_SHOP
-    ).toLowerCase(),
-  };
 }
 
 /** Ensure a $1 unpaid BIKE_READY job so reviewers can open Stripe + Apple Pay. */
@@ -130,7 +113,7 @@ async function ensureAppleReviewDemoJob(shopId: string, customerId: string) {
 }
 
 export async function POST(request: NextRequest) {
-  const config = reviewConfig();
+  const config = getAppleReviewConfig();
   if (!config) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
@@ -151,6 +134,8 @@ export async function POST(request: NextRequest) {
   if (email !== config.email || !passwordsMatch(parsed.data.password, config.password)) {
     return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
   }
+
+  await ensureAppleReviewShop();
 
   const shop = await getShopForHost(request.headers.get("host"));
   if (!shop) {
