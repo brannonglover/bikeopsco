@@ -17,6 +17,7 @@ import {
 } from "@/lib/chat-session";
 import { getEffectiveSmsConsent } from "@/lib/sms-consent";
 import { requireCurrentShop } from "@/lib/shop";
+import { attachmentNotificationLabel } from "@/lib/chat-media";
 
 export const dynamic = "force-dynamic";
 
@@ -185,7 +186,7 @@ export async function POST(
       const pushBody = hasText
         ? bodyText!.trim()
         : hasAtt
-          ? "Sent a photo"
+          ? attachmentNotificationLabel(message.attachments)
           : "New message";
       await sendPushToCustomer(shop.id, conversation.customerId, {
         title: shopName,
@@ -201,7 +202,8 @@ export async function POST(
       ]
         .filter(Boolean)
         .join(" ");
-      const pushBody = bodyText?.trim() || "Sent a photo";
+      const pushBody =
+        bodyText?.trim() || attachmentNotificationLabel(message.attachments);
       await sendPushToAllStaff(shop.id, {
         title: `New message from ${customerName}`,
         body: pushBody,

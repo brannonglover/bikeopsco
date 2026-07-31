@@ -300,9 +300,16 @@ export async function sendChatStaffSms(
     ? resolveOutboundMmsMediaUrls(opts.attachments, opts.shopSubdomain)
     : [];
 
+  const hasVideoAttachment = (opts?.attachments ?? []).some((a) =>
+    a.mimeType.startsWith("video/")
+  );
+  const attachmentOnlyLabel = hasVideoAttachment
+    ? "We sent you a video in chat."
+    : "We sent you a photo in chat.";
+
   const buildTextOnlyBody = (): string | null => {
     if (opts?.attachmentOnly) {
-      return `${shopName}\n\nWe sent you a photo in chat.${chatUrlLine}\n\nReply to this text to message us.\n\nReply STOP to opt out.`;
+      return `${shopName}\n\n${attachmentOnlyLabel}${chatUrlLine}\n\nReply to this text to message us.\n\nReply STOP to opt out.`;
     }
     const trimmed = messageText.trim();
     if (!trimmed) {

@@ -86,7 +86,10 @@ export function ChatMessageBubble({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(msg.body ?? "");
   const [busy, setBusy] = useState(false);
-  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [lightbox, setLightbox] = useState<{
+    url: string;
+    kind: "image" | "video";
+  } | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const autoResize = useCallback(() => {
@@ -145,7 +148,7 @@ export function ChatMessageBubble({
 
   const handleRemoveAttachment = async (attachmentId: string) => {
     if (!onRemoveAttachment) return;
-    if (!confirm("Remove this image from the message?")) return;
+    if (!confirm("Remove this attachment from the message?")) return;
     setBusy(true);
     try {
       await onRemoveAttachment(msg.id, attachmentId);
@@ -177,36 +180,60 @@ export function ChatMessageBubble({
   /** Image(s) above, caption or editor in the colored bubble below */
   const splitImageAndTextBubble = hasAttachments && (!!msg.body || editing);
 
-  const attachmentImageBlocks = attachments.map((att) => (
-    <div key={att.id} className="relative group/att">
-      <button
-        type="button"
-        onClick={() => setLightboxUrl(att.url)}
-        className="block w-full cursor-zoom-in"
-      >
-        <Image
-          src={att.url}
-          alt={att.filename}
-          width={1600}
-          height={1200}
-          sizes="(max-width: 768px) 85vw, 42vw"
-          style={{ width: "100%", height: "auto" }}
-          className={`max-h-[min(70vh,560px)] object-contain ${align === "end" ? "object-right" : "object-left"}`}
-        />
-      </button>
-      {isOwn && onRemoveAttachment && !editing && !isSending && (
-        <button
-          type="button"
-          onClick={() => handleRemoveAttachment(att.id)}
-          className="absolute top-1.5 right-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-sm text-white opacity-70 transition-opacity hover:bg-red-600 md:opacity-0 md:group-hover/att:opacity-100"
-          aria-label="Remove image"
-          disabled={busy}
-        >
-          ×
-        </button>
-      )}
-    </div>
-  ));
+  const attachmentImageBlocks = attachments.map((att) => {
+    const isVideo = att.mimeType?.startsWith("video/");
+    return (
+      <div key={att.id} className="relative group/att">
+        {isVideo ? (
+          <button
+            type="button"
+            onClick={() => setLightbox({ url: att.url, kind: "video" })}
+            className="block w-full overflow-hidden bg-black"
+          >
+            <video
+              src={att.url}
+              className="max-h-[min(70vh,560px)] w-full object-contain"
+              preload="metadata"
+              playsInline
+              muted
+            />
+            <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/55 text-white">
+                ▶
+              </span>
+            </span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setLightbox({ url: att.url, kind: "image" })}
+            className="block w-full cursor-zoom-in"
+          >
+            <Image
+              src={att.url}
+              alt={att.filename}
+              width={1600}
+              height={1200}
+              sizes="(max-width: 768px) 85vw, 42vw"
+              style={{ width: "100%", height: "auto" }}
+              className={`max-h-[min(70vh,560px)] object-contain ${align === "end" ? "object-right" : "object-left"}`}
+            />
+          </button>
+        )}
+        {isOwn && onRemoveAttachment && !editing && !isSending && (
+          <button
+            type="button"
+            onClick={() => handleRemoveAttachment(att.id)}
+            className="absolute top-1.5 right-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-sm text-white opacity-70 transition-opacity hover:bg-red-600 md:opacity-0 md:group-hover/att:opacity-100"
+            aria-label="Remove attachment"
+            disabled={busy}
+          >
+            ×
+          </button>
+        )}
+      </div>
+    );
+  });
 
   const reactions = msg.reactions ?? [];
   const aggregated = reactions.reduce<Record<string, number>>((acc, r) => {
@@ -554,29 +581,40 @@ export function ChatMessageBubble({
       ) : null}
     </div>
 
-    {lightboxUrl &&
+    {lightbox &&
       createPortal(
         <div
           role="dialog"
           aria-modal="true"
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
-          onClick={() => setLightboxUrl(null)}
+          onClick={() => setLightbox(null)}
         >
           <button
             type="button"
-            onClick={() => setLightboxUrl(null)}
+            onClick={() => setLightbox(null)}
             className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/20 text-white text-xl hover:bg-white/40 transition-colors"
             aria-label="Close"
           >
             ×
           </button>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={lightboxUrl}
-            alt="Full size"
-            className="max-h-full max-w-full rounded-lg object-contain shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          />
+          {lightbox.kind === "video" ? (
+            <video
+              src={lightbox.url}
+              className="max-h-full max-w-full rounded-lg shadow-2xl"
+              controls
+              autoPlay
+              playsInline
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={lightbox.url}
+              alt="Full size"
+              className="max-h-full max-w-full rounded-lg object-contain shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            />
+          )}
         </div>,
         document.body
       )}

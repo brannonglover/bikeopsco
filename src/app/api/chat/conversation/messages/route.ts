@@ -9,6 +9,7 @@ import { z } from "zod";
 import { getAppFeatures } from "@/lib/app-settings";
 import { prisma } from "@/lib/db";
 import { requireCurrentShop } from "@/lib/shop";
+import { attachmentNotificationLabel } from "@/lib/chat-media";
 
 export const dynamic = "force-dynamic";
 
@@ -110,7 +111,8 @@ export async function POST(request: NextRequest) {
   const customerName = customer
     ? [customer.firstName, customer.lastName].filter(Boolean).join(" ")
     : "Customer";
-  const pushBody = bodyText?.trim() || "Sent a photo";
+  const pushBody =
+    bodyText?.trim() || attachmentNotificationLabel(message.attachments);
   await sendPushToAllStaff(shop.id, {
     title: `New message from ${customerName}`,
     body: pushBody,
