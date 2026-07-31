@@ -1,6 +1,6 @@
 import type { Job, Stage } from "@/lib/types";
 
-/** Main board column order — used to keep a drag-ahead stage when a slow fetch returns an older stage. */
+/** Main board column order — used for display / docs; ranking uses {@link boardStageRank}. */
 export const BOARD_STAGE_FLOW: Stage[] = [
   "BOOKED_IN",
   "RECEIVED",
@@ -11,20 +11,60 @@ export const BOARD_STAGE_FLOW: Stage[] = [
   "COMPLETED",
 ];
 
-function boardStageIndex(stage: Stage): number {
-  return BOARD_STAGE_FLOW.indexOf(stage);
+/** Working / waiting columns toggle sideways — not a strict forward progression. */
+const IN_PROGRESS_STAGES = new Set<Stage>([
+  "WORKING_ON",
+  "WAITING_ON_CUSTOMER",
+  "WAITING_ON_PARTS",
+]);
+
+function boardStageRank(stage: Stage): number {
+  if (stage === "BOOKED_IN") return 0;
+  if (stage === "RECEIVED") return 1;
+  if (IN_PROGRESS_STAGES.has(stage)) return 2;
+  if (stage === "BIKE_READY") return 3;
+  if (stage === "COMPLETED") return 4;
+  return -1;
 }
 
 /**
  * When the board already shows a later column than an incoming payload (optimistic drag
  * or a GET that started before the PATCH), keep the forward stage on the board job.
+ *
+ * Waiting on parts/customer are peers of Working on — moving Waiting → Working must not
+ * be treated as a regression (that blocked app→web sync and snapped local resumes back).
  */
 export function keepForwardBoardStage(live: Job, incoming: Job): Job {
   if (live.stage === incoming.stage) return incoming;
 
-  const liveIdx = boardStageIndex(live.stage);
-  const incomingIdx = boardStageIndex(incoming.stage);
-  if (liveIdx === -1 || incomingIdx === -1 || liveIdx <= incomingIdx) {
+  const liveRank = boardStageRank(live.stage);
+  const incomingRank = boardStageRank(incoming.stage);
+
+  if (
+    liveRank !== -1 &&
+    incomingRank !== -1 &&
+    liveRank === incomingRank &&
+    IN_PROGRESS_STAGES.has(live.stage) &&
+    IN_PROGRESS_STAGES.has(incoming.stage)
+  ) {
+    // Protect optimistic Working against a stale Waiting poll (equal updatedAt).
+    if (
+      live.stage === "WORKING_ON" &&
+      (incoming.stage === "WAITING_ON_PARTS" ||
+        incoming.stage === "WAITING_ON_CUSTOMER")
+    ) {
+      return {
+        ...incoming,
+        stage: live.stage,
+        completedAt: live.completedAt ?? incoming.completedAt,
+        workingOnJobBikeId:
+          live.workingOnJobBikeId ?? incoming.workingOnJobBikeId,
+      };
+    }
+    return incoming;
+  }
+
+  if (liveRank === -1 || incomingRank === -1 || liveRank <= incomingRank) {
     return incoming;
   }
 
@@ -45,6 +85,9 @@ function parseJobUpdatedAtMs(job: Job): number | null {
  * Merge a polled/refetched board row into what the client already shows. Stale responses
  * (older updatedAt than a successful PATCH) must not revert stage; equal timestamps still
  * use forward-stage protection for in-flight drags before updatedAt bumps.
+ *
+ * Newer updatedAt always wins for stage — local in-flight board drags are re-applied via
+ * pendingBoardMoves after merge, so we must not block Waiting→Working from other clients.
  */
 export function mergeBoardJob(live: Job, incoming: Job): Job {
   const liveMs = parseJobUpdatedAtMs(live);
@@ -52,11 +95,7 @@ export function mergeBoardJob(live: Job, incoming: Job): Job {
 
   if (liveMs !== null && incomingMs !== null) {
     if (incomingMs > liveMs) {
-      // Invoice lines and other non-stage PATCHes bump updatedAt without changing stage.
-      // A poll that started before a stage PATCH can therefore look "newer" but still carry
-      // an older column — keep a forward stage the board already shows.
-      const forward = keepForwardBoardStage(live, incoming);
-      return forward.stage !== incoming.stage ? forward : incoming;
+      return incoming;
     }
     if (incomingMs < liveMs) {
       return {
