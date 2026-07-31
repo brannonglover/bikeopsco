@@ -16,6 +16,7 @@ import {
   getShopAppUrl,
   getStaffChatOpenUrl,
   getStaffJobOpenUrl,
+  getStaffWaitlistOpenUrl,
 } from "./env";
 import { phoneTelHref } from "./phone";
 
@@ -1321,17 +1322,23 @@ export async function sendWaitlistRequestNotification(entry: {
     return { ok: false, error: "Email not configured" };
   }
 
-  const notifyEmail = await getShopNotifyEmail(entry.shopId ?? "shop_default");
+  const shopId = entry.shopId ?? "shop_default";
+  const notifyEmail = await getShopNotifyEmail(shopId);
   if (!notifyEmail) {
     console.warn("No staff notification email configured, skipping waitlist notification");
     return { ok: false, error: "No notification email configured" };
   }
 
-  const baseUrl = getAppUrl();
-  const waitlistUrl = baseUrl ? `${baseUrl}/waitlist` : "";
+  const { prisma } = await import("./db");
+  const shopRow = await prisma.shop
+    .findUnique({ where: { id: shopId }, select: { subdomain: true, name: true } })
+    .catch(() => null);
+  const waitlistUrl = getStaffWaitlistOpenUrl(shopRow?.subdomain);
   const waitlistLinkHtml = waitlistUrl
     ? `<p style="margin:16px 0 0 0">${buildCustomerEmailCtaButton(waitlistUrl, "Open waitlist")}</p>`
     : "";
+  const shopLabel =
+    shopRow?.name?.trim() || process.env.SHOP_NAME || "Basement Bike Mechanic";
 
   const innerHtml = `
     <h2 style="margin:0 0 12px 0; font-size:18px;">New waitlist request</h2>
@@ -1356,7 +1363,7 @@ export async function sendWaitlistRequestNotification(entry: {
     const { error } = await sendResendEmail(resend, {
       from: getFromEmail(),
       to: notifyEmail,
-      subject: `Waitlist request — ${process.env.SHOP_NAME || "Basement Bike Mechanic"}`,
+      subject: `Waitlist request — ${shopLabel}`,
       html,
       ...(attachments && { attachments }),
     });

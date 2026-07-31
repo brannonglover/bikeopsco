@@ -290,3 +290,9 @@ export function getStaffCalendarOpenUrl(shopSubdomain?: string | null): string {
   const base = getShopAppUrl(shopSubdomain) || getCanonicalAppBaseUrl();
   return base ? `${base.replace(/\/$/, "")}/open/staff/calendar` : "";
 }
+
+/** Staff waitlist page URL (email / SMS). Prefer shop tenant host — not app.*. */
+export function getStaffWaitlistOpenUrl(shopSubdomain?: string | null): string {
+  const base = getShopAppUrl(shopSubdomain) || getCanonicalAppBaseUrl();
+  return base ? `${base.replace(/\/$/, "")}/waitlist` : "";
+}
