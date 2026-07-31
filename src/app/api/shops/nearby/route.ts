@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { haversineMiles } from "@/lib/collection-radius";
+import {
+  ensureAppleReviewShop,
+  isNearCupertinoForAppReview,
+} from "@/lib/apple-review-shop";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +13,17 @@ function parseCoord(raw: string | null): number | null {
   const n = Number(raw);
   return Number.isFinite(n) ? n : null;
 }
+
+type NearbyShopPayload = {
+  id: string;
+  name: string;
+  subdomain: string;
+  address: string | null;
+  distanceMiles: number;
+  distanceKm: number;
+  lat: number;
+  lng: number;
+};
 
 /**
  * Public platform directory: shops near a lat/lng.
@@ -43,6 +58,17 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  const origin = { lat, lng };
+
+  // Temporary: ensure Cupertino App Review demo shop exists when searching nearby.
+  if (isNearCupertinoForAppReview(origin)) {
+    try {
+      await ensureAppleReviewShop();
+    } catch {
+      // Directory should still work if upsert fails.
+    }
+  }
+
   const shops = await prisma.shop.findMany({
     where: {
       latitude: { not: null },
@@ -58,8 +84,7 @@ export async function GET(request: NextRequest) {
     },
   });
 
-  const origin = { lat, lng };
-  const nearby = shops
+  const nearby: NearbyShopPayload[] = shops
     .map((shop) => {
       const shopLat = shop.latitude;
       const shopLng = shop.longitude;
@@ -81,7 +106,7 @@ export async function GET(request: NextRequest) {
         lng: shopLng,
       };
     })
-    .filter((s): s is NonNullable<typeof s> => s != null)
+    .filter((s): s is NearbyShopPayload => s != null)
     .sort((a, b) => a.distanceMiles - b.distanceMiles);
 
   return NextResponse.json({ shops: nearby });
