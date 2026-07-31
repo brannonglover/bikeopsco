@@ -11,6 +11,7 @@ import { useChatEventSource } from "@/hooks/useChatEventSource";
 import type { CustomerConversationMessagesPayload } from "@/lib/chat/customer-conversation-messages";
 import { ChatMessageBubble } from "@/components/chat/ChatMessageBubble";
 import { jobAccessApiSuffix, readJobAccessParam, withJobAccessQuery } from "@/lib/job-access-url";
+import { isChatVideoFile, uploadChatVideoFile } from "@/lib/chat-video-upload";
 
 const POLL_INTERVAL_MS = 3000;
 
@@ -57,7 +58,7 @@ export default function CustomerChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [staffLastReadAt, setStaffLastReadAt] = useState<string | null>(null);
   const [inputText, setInputText] = useState("");
-  const [pendingImages, setPendingImages] = useState<{ id: string; url: string; filename: string }[]>([]);
+  const [pendingImages, setPendingImages] = useState<{ id: string; url: string; filename: string; mimeType?: string }[]>([]);
   const [sending, setSending] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const composerTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -368,16 +369,45 @@ export default function CustomerChatPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = "";
-    const formData = new FormData();
-    formData.append("file", file);
     try {
-      const res = await fetch("/api/chat/upload", { method: "POST", body: formData, credentials: "include" });
+      if (isChatVideoFile(file)) {
+        const att = await uploadChatVideoFile(file, { credentials: "include" });
+        setPendingImages((prev) => [
+          ...prev,
+          {
+            id: att.id,
+            url: att.url,
+            filename: att.filename,
+            mimeType: att.mimeType,
+          },
+        ]);
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/chat/upload", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
       if (res.ok) {
         const att = await res.json();
-        setPendingImages((prev) => [...prev, { id: att.id, url: att.url, filename: att.filename }]);
+        setPendingImages((prev) => [
+          ...prev,
+          {
+            id: att.id,
+            url: att.url,
+            filename: att.filename,
+            mimeType: att.mimeType,
+          },
+        ]);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(typeof data.error === "string" ? data.error : "Failed to upload");
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to upload media");
     }
   };
 
@@ -528,7 +558,7 @@ export default function CustomerChatPage() {
         id: img.id,
         url: img.url,
         filename: img.filename,
-        mimeType: "",
+        mimeType: img.mimeType ?? "",
         createdAt: new Date().toISOString(),
       })),
       reactions: [],
@@ -806,13 +836,27 @@ export default function CustomerChatPage() {
             <div className="flex gap-2 mb-2 flex-wrap">
               {pendingImages.map((p) => (
                 <div key={p.id} className="relative group">
-                  <Image
-                    src={p.url}
-                    alt={p.filename}
-                    width={80}
-                    height={80}
-                    className="h-20 w-20 object-cover rounded-lg border border-slate-200"
-                  />
+                  {p.mimeType?.startsWith("video/") ? (
+                    <div className="relative h-20 w-20 overflow-hidden rounded-lg border border-slate-200 bg-black">
+                      <video
+                        src={p.url}
+                        className="h-full w-full object-cover"
+                        muted
+                        preload="metadata"
+                      />
+                      <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-white text-xs font-medium">
+                        ▶
+                      </span>
+                    </div>
+                  ) : (
+                    <Image
+                      src={p.url}
+                      alt={p.filename}
+                      width={80}
+                      height={80}
+                      className="h-20 w-20 object-cover rounded-lg border border-slate-200"
+                    />
+                  )}
                   <button
                     type="button"
                     onClick={() => setPendingImages((prev) => prev.filter((x) => x.id !== p.id))}
@@ -829,7 +873,7 @@ export default function CustomerChatPage() {
             <input
               type="file"
               ref={fileInputRef}
-              accept="image/jpeg,image/png,image/gif,image/webp"
+              accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/quicktime"
               className="hidden"
               onChange={handleFileChange}
             />

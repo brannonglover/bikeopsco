@@ -13,6 +13,7 @@ import { ChatMessageBubble } from "@/components/chat/ChatMessageBubble";
 import { ConversationListRow } from "@/components/chat/ConversationListRow";
 import { mergeChatMessagesWithServer } from "@/lib/chat-messages";
 import { isCustomerTypingRecently } from "@/lib/chat-typing";
+import { isChatVideoFile, uploadChatVideoFile } from "@/lib/chat-video-upload";
 
 const POLL_INTERVAL_MS = 3000;
 
@@ -92,7 +93,7 @@ const CHAT_DRAFT_STORAGE_PREFIX = "bikeops:chat-draft:";
 
 type ChatComposerDraft = {
   text: string;
-  pendingImages: { id: string; url: string; filename: string }[];
+  pendingImages: { id: string; url: string; filename: string; mimeType?: string }[];
 };
 
 function chatDraftKey(convId: string) {
@@ -272,7 +273,7 @@ function ChatPageContent() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [inputText, setInputText] = useState("");
-  const [pendingImages, setPendingImages] = useState<{ id: string; url: string; filename: string }[]>([]);
+  const [pendingImages, setPendingImages] = useState<{ id: string; url: string; filename: string; mimeType?: string }[]>([]);
   const [showNewConvModal, setShowNewConvModal] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customerSearch, setCustomerSearch] = useState("");
@@ -763,33 +764,58 @@ function ChatPageContent() {
     if (!file) return;
     e.target.value = "";
 
-    const isHeicFile = /^image\/(heic|heif)$/i.test(file.type) || /\.(heic|heif)$/i.test(file.name);
-    let uploadFile: File;
     try {
-      uploadFile = await compressImage(file);
-    } catch (err) {
-      console.error("compressImage failed:", err);
-      if (isHeicFile) {
-        alert("Failed to process image. Please convert it to JPEG first and try again.");
+      if (isChatVideoFile(file)) {
+        const att = await uploadChatVideoFile(file);
+        setPendingImages((prev) => [
+          ...prev,
+          {
+            id: att.id,
+            url: att.url,
+            filename: att.filename,
+            mimeType: att.mimeType,
+          },
+        ]);
         return;
       }
-      // For non-HEIC files, fall back to uploading the original
-      uploadFile = file;
-    }
 
-    const formData = new FormData();
-    formData.append("file", uploadFile);
-    try {
+      const isHeicFile =
+        /^image\/(heic|heif)$/i.test(file.type) ||
+        /\.(heic|heif)$/i.test(file.name);
+      let uploadFile: File;
+      try {
+        uploadFile = await compressImage(file);
+      } catch (err) {
+        console.error("compressImage failed:", err);
+        if (isHeicFile) {
+          alert(
+            "Failed to process image. Please convert it to JPEG first and try again."
+          );
+          return;
+        }
+        uploadFile = file;
+      }
+
+      const formData = new FormData();
+      formData.append("file", uploadFile);
       const res = await fetch("/api/chat/upload", { method: "POST", body: formData });
       if (res.ok) {
         const att = await res.json();
-        setPendingImages((prev) => [...prev, { id: att.id, url: att.url, filename: att.filename }]);
+        setPendingImages((prev) => [
+          ...prev,
+          {
+            id: att.id,
+            url: att.url,
+            filename: att.filename,
+            mimeType: att.mimeType,
+          },
+        ]);
       } else {
         const data = await res.json();
         alert(data.error ?? "Failed to upload");
       }
-    } catch {
-      alert("Failed to upload image");
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to upload media");
     }
   };
 
@@ -953,7 +979,7 @@ function ChatPageContent() {
         id: img.id,
         url: img.url,
         filename: img.filename,
-        mimeType: "",
+        mimeType: img.mimeType ?? "",
         createdAt: new Date().toISOString(),
       })),
       reactions: [],
@@ -1249,13 +1275,27 @@ function ChatPageContent() {
                   <div className="flex gap-2 mb-2 flex-wrap">
                     {pendingImages.map((p) => (
                       <div key={p.id} className="relative group">
-                        <Image
-                          src={p.url}
-                          alt={p.filename}
-                          width={80}
-                          height={80}
-                          className="h-20 w-20 object-cover rounded-lg border border-slate-200"
-                        />
+                        {p.mimeType?.startsWith("video/") ? (
+                          <div className="relative h-20 w-20 overflow-hidden rounded-lg border border-slate-200 bg-black">
+                            <video
+                              src={p.url}
+                              className="h-full w-full object-cover"
+                              muted
+                              preload="metadata"
+                            />
+                            <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-white text-xs font-medium">
+                              ▶
+                            </span>
+                          </div>
+                        ) : (
+                          <Image
+                            src={p.url}
+                            alt={p.filename}
+                            width={80}
+                            height={80}
+                            className="h-20 w-20 object-cover rounded-lg border border-slate-200"
+                          />
+                        )}
                         <button
                           type="button"
                           onClick={() => removePendingImage(p.id)}
@@ -1272,7 +1312,7 @@ function ChatPageContent() {
                   <input
                     type="file"
                     ref={fileInputRef}
-                    accept="image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif"
+                    accept="image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif,video/mp4,video/quicktime"
                     className="hidden"
                     onChange={handleFileChange}
                   />

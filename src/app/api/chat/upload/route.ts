@@ -2,14 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { put } from "@vercel/blob";
 import { BLOB_ACCESS, blobDisplayUrl } from "@/lib/blob";
+import {
+  CHAT_ALLOWED_IMAGE_TYPES,
+  CHAT_MAX_IMAGE_UPLOAD_MB,
+  extensionForChatMedia,
+} from "@/lib/chat-media";
 import { prisma } from "@/lib/db";
 import { getAppFeatures } from "@/lib/app-settings";
 import { getShopForHost } from "@/lib/shop";
 
 export const dynamic = "force-dynamic";
 
-const MAX_SIZE_MB = 5;
-const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp", "image/heic", "image/heif"];
+const ALLOWED_TYPES = CHAT_ALLOWED_IMAGE_TYPES as readonly string[];
 
 export async function POST(request: NextRequest) {
   const shop = await getShopForHost(request.headers.get("host"));
@@ -44,19 +48,22 @@ export async function POST(request: NextRequest) {
 
     if (!ALLOWED_TYPES.includes(file.type)) {
       return NextResponse.json(
-        { error: "Invalid file type. Use JPEG, PNG, GIF, or WebP." },
+        {
+          error:
+            "Invalid file type for this upload. Use JPEG, PNG, GIF, or WebP. For video, use the video upload flow.",
+        },
         { status: 400 }
       );
     }
 
-    if (file.size > MAX_SIZE_MB * 1024 * 1024) {
+    if (file.size > CHAT_MAX_IMAGE_UPLOAD_MB * 1024 * 1024) {
       return NextResponse.json(
-        { error: `File too large. Max size is ${MAX_SIZE_MB} MB.` },
+        { error: `File too large. Max size is ${CHAT_MAX_IMAGE_UPLOAD_MB} MB.` },
         { status: 400 }
       );
     }
 
-    const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+    const ext = extensionForChatMedia(file.name, file.type);
     const path = `chat/${randomUUID()}.${ext}`;
 
     const blob = await put(path, file, { access: BLOB_ACCESS, addRandomSuffix: false });
