@@ -28,10 +28,8 @@ function PaymentForm({
   const [stripeReady, setStripeReady] = useState(false);
   const [stripeError, setStripeError] = useState(false);
 
-  // If PaymentElement never fires onReady, surface an error after 30 seconds.
-  // Stripe Link's session lookup (consumers/sessions/lookup) can cause delays
-  // on some accounts — allow_redirects:never on the intent mitigates this, but
-  // keep a generous timeout as a fallback.
+  // If PaymentElement never fires onReady (key mismatch, network block, etc.),
+  // surface an error after 30 seconds instead of hanging forever.
   useEffect(() => {
     if (stripeReady) return;
     const timeout = setTimeout(() => setStripeError(true), 30_000);
