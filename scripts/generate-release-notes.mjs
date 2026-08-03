@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 /**
- * Generate shop-facing release note drafts from customer-visible app changes
+ * Generate shop-facing release note drafts from Bike Ops app changes
  * and POST them to the platform API (status: draft) for admin approval.
  *
- * Only features and bug fixes that shop staff / customers would notice.
+ * Audience is bike shops (owners and staff)—not their end customers.
+ * Include features and bug fixes that help shops run the shop day to day.
  * Ignores marketing, Prisma/schema, CI, tooling, and internal-only work.
  *
  * Prefer AI_GATEWAY_API_KEY so bullets describe what shops will notice.
@@ -11,7 +12,7 @@
  * Env:
  *   PLATFORM_RELEASE_API_BASE   default https://app.bikeops.co
  *   PLATFORM_RELEASE_WEBHOOK_SECRET  required
- *   AI_GATEWAY_API_KEY          recommended — enables customer-facing bullets
+ *   AI_GATEWAY_API_KEY          recommended — enables shop-facing bullets
  *   RELEASE_GIT_SHA             optional override (default: HEAD)
  */
 import { execFileSync } from "node:child_process";
@@ -33,7 +34,7 @@ const SKIP_PREFIXES = [
   "scripts/",
 ];
 
-/** Paths under src/ that are never customer-facing release-note material. */
+/** Paths under src/ that are never shop-facing release-note material. */
 const INTERNAL_SRC =
   /(^|\/)(platform-releases|platform\/releases|admin\/\(dashboard\)\/releases|generated\/|__tests__\/|.*\.(test|spec)\.(ts|tsx)$)/i;
 
@@ -126,7 +127,7 @@ function getDiffRange(previousTag) {
 }
 
 /** Prefer pages/components; still allow API routes that power shop features. */
-function isLikelyCustomerVisiblePath(path) {
+function isLikelyShopFacingPath(path) {
   if (!path.startsWith("src/")) return false;
   if (INTERNAL_SRC.test(path)) return false;
   if (
@@ -140,8 +141,8 @@ function isLikelyCustomerVisiblePath(path) {
   return Boolean(areaForPath(path));
 }
 
-function hasCustomerFacingChanges(files) {
-  return files.some((f) => isLikelyCustomerVisiblePath(f.path));
+function hasShopFacingChanges(files) {
+  return files.some((f) => isLikelyShopFacingPath(f.path));
 }
 
 function summarizeAreas(files) {
@@ -158,7 +159,7 @@ function summarizeAreas(files) {
 
 function buildFileListBlock(files) {
   return files
-    .filter((f) => isLikelyCustomerVisiblePath(f.path))
+    .filter((f) => isLikelyShopFacingPath(f.path))
     .slice(0, 120)
     .map((f) => `${f.status}\t${f.path}`)
     .join("\n");
@@ -167,7 +168,7 @@ function buildFileListBlock(files) {
 function getUnifiedDiff(range, files) {
   const ranked = files
     .map((f) => f.path)
-    .filter((p) => isLikelyCustomerVisiblePath(p))
+    .filter((p) => isLikelyShopFacingPath(p))
     .sort((a, b) => {
       const score = (p) => {
         if (p.includes("/components/") || /page\.tsx$/.test(p)) return 0;
@@ -228,20 +229,21 @@ async function aiBullets({ areas, fileList, diff }) {
 
   const prompt = `You write "What's new" release notes for Bike Ops, the bike repair shop software app (app.bikeops.co).
 
-Audience: shop owners, mechanics, and their customers using the product.
+Audience: bike shop owners and staff (mechanics). Their retail customers do not read these notes.
 
-Read the changed files and code diff. Write 3-8 short bullets ONLY for features and bug fixes those people would notice.
+Read the changed files and code diff. Write 3-8 short bullets ONLY for features and bug fixes that help shops run the shop—things staff would notice or benefit from in daily work.
 
 Rules:
 - Base bullets on the DIFF and file changes, not on commit messages
-- ONLY customer-visible product changes (new capability, improved workflow, or fixed bug)
-- NEVER mention: marketing/website/blog/docs, Prisma, database, schema, migrations, APIs, refactors, reliability, infra, CI, admin tooling, or "behind the scenes"
+- ONLY shop-helpful product changes (new capability, improved workflow, or fixed bug for shop staff)
+- Include payment, booking, and status-page fixes when they help the shop get paid or keep customers informed—even if the shop's customer is the one tapping the button
+- NEVER mention: marketing/website/blog/docs, Prisma, database, schema, migrations, APIs, refactors, reliability, infra, CI, admin tooling, seed data, or "behind the scenes"
 - Write for a shop owner or mechanic, not a developer
 - No file paths, ticket IDs, function names, or framework jargon
 - Focus on job board, jobs, chat, booking, billing, customers, mechanics, services, settings, notifications, payments, etc.
 - One concrete idea per bullet; start with a verb when natural (Added, Improved, Fixed, Made it easier to…)
 - Prefer specific outcomes ("Sort the Received column on the job board") over vague ones ("Job board updates")
-- If the diff has no customer-visible feature or bug fix, return an empty JSON array []
+- If the diff has no shop-helpful feature or bug fix, return an empty JSON array []
 - Return ONLY a JSON array of strings
 
 Product areas touched:
@@ -266,7 +268,7 @@ ${diff || "(no textual diff available)"}`;
         {
           role: "system",
           content:
-            "You return only valid JSON arrays of strings. No markdown fences. Bullets must be shop-customer facing features or bug fixes only.",
+            "You return only valid JSON arrays of strings. No markdown fences. Bullets must be bike-shop-facing features or bug fixes only.",
         },
         { role: "user", content: prompt },
       ],
@@ -356,8 +358,8 @@ async function main() {
   );
 
   const files = getChangedFiles(range);
-  if (files.length === 0 || !hasCustomerFacingChanges(files)) {
-    console.log("No customer-facing Bike Ops changes in range; skipping draft creation");
+  if (files.length === 0 || !hasShopFacingChanges(files)) {
+    console.log("No shop-facing Bike Ops changes in range; skipping draft creation");
     process.exit(0);
   }
 
@@ -372,7 +374,7 @@ async function main() {
   const ai = await aiBullets({ areas, fileList, diff });
   const bullets = ai !== null ? ai : fallbackBullets(files);
   if (bullets.length === 0) {
-    console.log("No customer-visible features or bug fixes to announce; skipping draft creation");
+    console.log("No shop-helpful features or bug fixes to announce; skipping draft creation");
     process.exit(0);
   }
 
