@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { withPrismaRetry } from "@/lib/prisma-retry";
 import { computeJobSubtotal, computeTotalPaid, getJobPaymentSummary } from "@/lib/job-payments";
 import { getEffectiveEmailUpdatesConsent, getEffectiveSmsConsent } from "@/lib/sms-consent";
+import { enrichJobsWithCatalogThumbnails } from "@/lib/bike-catalog-client";
 import type { Job } from "@/lib/types";
 
 export const BOARD_JOBS_QUERY_KEY = ["jobs", "board"] as const;
@@ -62,6 +63,7 @@ export const boardJobSelect = {
       jobId: true,
       make: true,
       model: true,
+      year: true,
       bikeType: true,
       nickname: true,
       imageUrl: true,
@@ -69,10 +71,13 @@ export const boardJobSelect = {
       sortOrder: true,
       completedAt: true,
       waitingOnPartsAt: true,
+      catalogBikeId: true,
+      catalogMatchedAt: true,
       bike: {
         select: {
           make: true,
           model: true,
+          year: true,
           bikeType: true,
           nickname: true,
           imageUrl: true,
@@ -226,7 +231,8 @@ export async function getBoardJobsForShop(
   );
 
   // Match NextResponse.json date serialization for client props / React Query cache.
-  return JSON.parse(JSON.stringify(mapBoardJobs(jobs))) as Job[];
+  const serialized = JSON.parse(JSON.stringify(mapBoardJobs(jobs))) as Job[];
+  return enrichJobsWithCatalogThumbnails(serialized);
 }
 
 export async function fetchBoardJobsClient(): Promise<Job[]> {

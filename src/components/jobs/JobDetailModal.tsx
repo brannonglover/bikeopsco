@@ -167,7 +167,7 @@ function CustomerChatSection({ customerId }: { customerId: string }) {
 }
 
 function resolveBikeImageUrl(b: JobBike, customerBikes?: { make: string; model: string | null; imageUrl: string | null }[]): string | null {
-  const url = b.bike?.imageUrl ?? b.imageUrl ?? null;
+  const url = b.bike?.imageUrl ?? b.imageUrl ?? b.catalogThumbnailUrl ?? null;
   if (url) return url;
   if (!customerBikes?.length) return null;
   const makeNorm = (b.make ?? "").trim().toLowerCase();
@@ -885,6 +885,30 @@ function JobBikeSection({
     })();
   };
 
+  const handleRemoveBike = (bikeId: string) => {
+    if (!onJobUpdated || bikeId === "legacy") return;
+    if (!confirm("Remove this bike from the job?")) return;
+    const remaining = (job.jobBikes ?? []).filter((b) => b.id !== bikeId);
+    let bikeMake = "—";
+    let bikeModel = "";
+    if (remaining.length === 1) {
+      bikeMake = remaining[0].make;
+      bikeModel = remaining[0].model ?? "";
+    } else if (remaining.length > 1) {
+      bikeMake = "Multiple";
+      bikeModel = `${remaining.length} bikes`;
+    }
+    const optimistic: Job = {
+      ...job,
+      jobBikes: remaining,
+      bikeMake,
+      bikeModel,
+      workingOnJobBikeId:
+        job.workingOnJobBikeId === bikeId ? null : job.workingOnJobBikeId,
+    };
+    patchJobInBackground(optimistic, { removeJobBikeId: bikeId });
+  };
+
   useEffect(() => {
     setEditingBikeIndex(null);
   }, [job.id]);
@@ -1153,15 +1177,28 @@ function JobBikeSection({
                       <span className="text-slate-400">Type:</span>{" "}
                       {formatBikeTypeDisplayLineForJob(job, b)}
                     </p>
-                    <button
-                      type="button"
-                      onClick={() => setEditingBikeIndex(i)}
-                      className="flex-shrink-0 p-1 -mr-1 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-slate-50 transition-colors"
-                      aria-label="Edit bike type"
-                      title="Edit bike type"
-                    >
-                      <PencilIcon />
-                    </button>
+                    <div className="flex items-center flex-shrink-0 -mr-1">
+                      <button
+                        type="button"
+                        onClick={() => setEditingBikeIndex(i)}
+                        className="p-1 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-slate-50 transition-colors"
+                        aria-label="Edit bike type"
+                        title="Edit bike type"
+                      >
+                        <PencilIcon />
+                      </button>
+                      {canInteract && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveBike(b.id)}
+                          className="text-xs text-slate-400 hover:text-red-600 px-1.5 py-1 rounded-md hover:bg-red-50 transition-colors"
+                          aria-label="Remove bike from job"
+                          title="Remove bike from job"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -3408,6 +3445,8 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
   const [servicesDropdownOpen, setServicesDropdownOpen] = useState(false);
   const [productsDropdownOpen, setProductsDropdownOpen] = useState(false);
   const [serviceSearch, setServiceSearch] = useState("");
+  const [miscServiceMode, setMiscServiceMode] = useState(false);
+  const [miscServiceDescription, setMiscServiceDescription] = useState("");
   const [productSearch, setProductSearch] = useState("");
   const [expandedServiceIds, setExpandedServiceIds] = useState<Set<string>>(new Set());
   const [expandedProductIds, setExpandedProductIds] = useState<Set<string>>(new Set());
@@ -3427,6 +3466,7 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
   const productsDropdownRef = useRef<HTMLDivElement>(null);
   const productsPanelRef = useRef<HTMLDivElement>(null);
   const serviceSearchRef = useRef<HTMLInputElement>(null);
+  const miscServiceRef = useRef<HTMLTextAreaElement>(null);
   const productSearchRef = useRef<HTMLInputElement>(null);
   const [servicesPanelStyle, setServicesPanelStyle] = useState<AnchoredDropdownStyle | null>(null);
   const [productsPanelStyle, setProductsPanelStyle] = useState<AnchoredDropdownStyle | null>(null);
@@ -3624,6 +3664,8 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
       if (servicesDropdownOpen && !inServicesTrigger && !inServicesPanel) {
         setServicesDropdownOpen(false);
         setServiceSearch("");
+        setMiscServiceMode(false);
+        setMiscServiceDescription("");
       }
       const inProductsTrigger = productsDropdownRef.current?.contains(target);
       const inProductsPanel = productsPanelRef.current?.contains(target);
@@ -3639,6 +3681,8 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
   useEffect(() => {
     if (!servicesDropdownOpen) {
       setServicesPanelStyle(null);
+      setMiscServiceMode(false);
+      setMiscServiceDescription("");
       return;
     }
 
@@ -3649,10 +3693,18 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
     };
 
     updatePosition();
-    const timer = window.setTimeout(() => serviceSearchRef.current?.focus(), 50);
+    const timer = window.setTimeout(() => {
+      if (miscServiceMode) miscServiceRef.current?.focus();
+      else serviceSearchRef.current?.focus();
+    }, 50);
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.stopImmediatePropagation();
+        if (miscServiceMode) {
+          setMiscServiceMode(false);
+          setMiscServiceDescription("");
+          return;
+        }
         setServicesDropdownOpen(false);
         setServiceSearch("");
       }
@@ -3666,7 +3718,7 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
       document.removeEventListener("scroll", updatePosition, true);
       document.removeEventListener("keydown", onKeyDown, true);
     };
-  }, [servicesDropdownOpen]);
+  }, [servicesDropdownOpen, miscServiceMode]);
 
   useEffect(() => {
     if (!productsDropdownOpen) {
@@ -3750,6 +3802,8 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
     if (!trimmed) return;
     setServicesDropdownOpen(false);
     setServiceSearch("");
+    setMiscServiceMode(false);
+    setMiscServiceDescription("");
     const placeholderId = `temp-svc-${Date.now()}`;
     const optimisticLine: JobService = {
       id: placeholderId,
@@ -4445,7 +4499,11 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                 setProductsDropdownOpen(false);
                 setProductSearch("");
                 setServicesDropdownOpen((o) => {
-                  if (o) setServiceSearch("");
+                  if (o) {
+                    setServiceSearch("");
+                    setMiscServiceMode(false);
+                    setMiscServiceDescription("");
+                  }
                   return !o;
                 });
               }}
@@ -4470,71 +4528,135 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                   maxHeight: servicesPanelStyle.maxHeight,
                 }}
               >
-                <div className={`p-2 flex-shrink-0 ${servicesPanelStyle.openUp ? "border-t" : "border-b"} border-slate-100`}>
-                  <input
-                    ref={serviceSearchRef}
-                    type="text"
-                    value={serviceSearch}
-                    onChange={(e) => setServiceSearch(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Tab" || e.key === "Enter") {
-                        const trimmed = serviceSearch.trim();
-                        if (trimmed && filteredServices.length === 0) {
-                          e.preventDefault();
-                          void handleAddCustomService(trimmed);
-                        }
-                      }
-                    }}
-                    placeholder="Search or type a custom service…"
-                    className="w-full px-2 py-1.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-                <div className="overflow-y-auto min-h-0 flex-1">
-                  {filteredServices.map((s) => {
-                    const canAdd = canAddCatalogService(s.id);
-                    const isAttached = attachedServiceIds.has(s.id);
-                    return (
+                {miscServiceMode ? (
+                  <div className="p-3 flex flex-col gap-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-medium text-slate-900">Misc service</p>
                       <button
-                        key={s.id}
                         type="button"
                         onClick={() => {
-                          if (canAdd) handleAddService(s.id);
+                          setMiscServiceMode(false);
+                          setMiscServiceDescription("");
                         }}
-                        disabled={!canAdd}
-                        className="w-full px-3 py-2 text-left text-sm flex flex-col items-start min-w-0 hover:bg-slate-50 disabled:hover:bg-white disabled:cursor-not-allowed"
+                        className="text-xs font-medium text-slate-500 hover:text-slate-700"
                       >
-                        <span className={`font-medium truncate w-full ${!canAdd ? "text-slate-400" : "text-slate-900"}`}>
-                          <ServiceName name={s.name} />
-                        </span>
-                        <span className="text-slate-500 text-xs">
-                          ${Number(s.price).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          {!canAdd
-                            ? " · Already added"
-                            : isAttached && isMultiBike
-                              ? " · Add to another bike"
-                              : ""}
-                        </span>
+                        Back
                       </button>
-                    );
-                  })}
-                  {serviceSearch.trim() && filteredServices.length === 0 && (
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      Describe what you did on this job only. This is not added to your Services list.
+                    </p>
+                    <textarea
+                      ref={miscServiceRef}
+                      value={miscServiceDescription}
+                      onChange={(e) => setMiscServiceDescription(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          void handleAddCustomService(miscServiceDescription);
+                        }
+                      }}
+                      rows={3}
+                      placeholder="e.g. Adjusted derailleur + replaced cable"
+                      className="w-full px-2 py-1.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 resize-y min-h-[72px]"
+                    />
                     <button
                       type="button"
-                      onClick={() => handleAddCustomService(serviceSearch)}
-                      className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 min-w-0 hover:bg-violet-50 text-violet-700"
+                      disabled={!miscServiceDescription.trim()}
+                      onClick={() => handleAddCustomService(miscServiceDescription)}
+                      className="w-full px-3 py-2 text-sm font-medium rounded-lg bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
-                      <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                      </svg>
-                      <span className="truncate">
-                        Add &ldquo;<ServiceName name={serviceSearch.trim()} />&rdquo; as custom service
-                      </span>
+                      Add to job
                     </button>
-                  )}
-                  {!serviceSearch.trim() && filteredServices.length === 0 && (
-                    <p className="px-3 py-2 text-sm text-slate-400">No available services. Type a name to add a custom one.</p>
-                  )}
-                </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className={`p-2 flex-shrink-0 ${servicesPanelStyle.openUp ? "border-t" : "border-b"} border-slate-100`}>
+                      <input
+                        ref={serviceSearchRef}
+                        type="text"
+                        value={serviceSearch}
+                        onChange={(e) => setServiceSearch(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Tab" || e.key === "Enter") {
+                            const trimmed = serviceSearch.trim();
+                            if (trimmed && filteredServices.length === 0) {
+                              e.preventDefault();
+                              void handleAddCustomService(trimmed);
+                            }
+                          }
+                        }}
+                        placeholder="Search services…"
+                        className="w-full px-2 py-1.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                    <div className="overflow-y-auto min-h-0 flex-1">
+                      {filteredServices.map((s) => {
+                        const canAdd = canAddCatalogService(s.id);
+                        const isAttached = attachedServiceIds.has(s.id);
+                        return (
+                          <button
+                            key={s.id}
+                            type="button"
+                            onClick={() => {
+                              if (canAdd) handleAddService(s.id);
+                            }}
+                            disabled={!canAdd}
+                            className="w-full px-3 py-2 text-left text-sm flex flex-col items-start min-w-0 hover:bg-slate-50 disabled:hover:bg-white disabled:cursor-not-allowed"
+                          >
+                            <span className={`font-medium truncate w-full ${!canAdd ? "text-slate-400" : "text-slate-900"}`}>
+                              <ServiceName name={s.name} />
+                            </span>
+                            <span className="text-slate-500 text-xs">
+                              ${Number(s.price).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              {!canAdd
+                                ? " · Already added"
+                                : isAttached && isMultiBike
+                                  ? " · Add to another bike"
+                                  : ""}
+                            </span>
+                          </button>
+                        );
+                      })}
+                      {serviceSearch.trim() && filteredServices.length === 0 && (
+                        <p className="px-3 py-2 text-sm text-slate-400">No matching catalog services.</p>
+                      )}
+                      {!serviceSearch.trim() && filteredServices.length === 0 && (
+                        <p className="px-3 py-2 text-sm text-slate-400">No catalog services yet.</p>
+                      )}
+                    </div>
+                    <div className={`flex-shrink-0 ${servicesPanelStyle.openUp ? "border-b" : "border-t"} border-slate-100`}>
+                      {serviceSearch.trim() ? (
+                        <button
+                          type="button"
+                          onClick={() => handleAddCustomService(serviceSearch)}
+                          className="w-full px-3 py-2.5 text-left text-sm flex items-center gap-2 min-w-0 hover:bg-violet-50 text-violet-700"
+                        >
+                          <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                          </svg>
+                          <span className="truncate">
+                            Add Misc: &ldquo;<ServiceName name={serviceSearch.trim()} />&rdquo;
+                          </span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMiscServiceMode(true);
+                            setMiscServiceDescription("");
+                          }}
+                          className="w-full px-3 py-2.5 text-left text-sm flex flex-col items-start gap-0.5 hover:bg-violet-50"
+                        >
+                          <span className="font-medium text-violet-700">Misc…</span>
+                          <span className="text-xs text-slate-500">
+                            Free-text for this job only — not saved to Services
+                          </span>
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>,
               document.body
             )}

@@ -166,6 +166,8 @@ export interface JobBike {
   waitingOnPartsAt: string | null;
   catalogBikeId?: string | null;
   catalogMatchedAt?: string | null;
+  /** Display-only: catalog thumbnail when no uploaded job/customer bike photo. */
+  catalogThumbnailUrl?: string | null;
   bike?: {
     imageUrl: string | null;
     bikeType: BikeType | null;

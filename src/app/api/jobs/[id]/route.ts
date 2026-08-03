@@ -17,6 +17,10 @@ import { withPrismaRetry } from "@/lib/prisma-retry";
 import { optionalTrimmedString } from "@/lib/zod-helpers";
 import { getJobQueueInfo } from "@/lib/job-queue-position";
 import { customerHasPushTokens, sendPushToCustomer } from "@/lib/push";
+import {
+  enrichJobBikesWithCatalogThumbnails,
+  matchCatalogFieldsForJobBike,
+} from "@/lib/bike-catalog-client";
 
 const bikeSchema = z.object({
   make: z.string().min(1),
@@ -42,6 +46,8 @@ const updateJobSchema = z.object({
   bikes: z.array(bikeSchema).optional(),
   /** Append a single bike to the job without touching existing JobBike workflow state. */
   addBike: bikeSchema.optional(),
+  /** Remove one JobBike from the job without replacing the full bikes list. */
+  removeJobBikeId: z.string().min(1).optional(),
   /** Update image on one JobBike row without replacing the full bikes list. */
   updateJobBikeImageUrl: z
     .object({
@@ -127,8 +133,10 @@ export async function GET(
         : null;
     const jobWithoutPayments = { ...job, payments: undefined };
     const queueInfo = await getJobQueueInfo(prisma, shop.id, job);
+    const enrichedJobBikes = await enrichJobBikesWithCatalogThumbnails(job.jobBikes ?? []);
     const res = NextResponse.json({
       ...jobWithoutPayments,
+      jobBikes: enrichedJobBikes,
       customer,
       paymentStatus: paymentSummary.paymentStatus,
       totalPaid,
@@ -177,11 +185,18 @@ export async function PATCH(
       where: { id, shopId: shop.id },
       include: {
         customer: true,
-        jobBikes: { select: { id: true, completedAt: true } },
+        jobBikes: { select: { id: true, completedAt: true, make: true, model: true } },
       },
     });
     if (!existingJob) {
       return NextResponse.json({ error: "Job not found" }, { status: 404 });
+    }
+
+    if (data.removeJobBikeId !== undefined) {
+      const target = (existingJob.jobBikes ?? []).find((b) => b.id === data.removeJobBikeId);
+      if (!target) {
+        return NextResponse.json({ error: "Bike not found on this job" }, { status: 400 });
+      }
     }
 
     if (data.mechanicId) {
@@ -336,6 +351,22 @@ export async function PATCH(
       }
     }
 
+    if (data.removeJobBikeId !== undefined) {
+      const remaining = (existingJob.jobBikes ?? []).filter(
+        (b) => b.id !== data.removeJobBikeId
+      );
+      if (remaining.length === 0) {
+        updateData.bikeMake = "—";
+        updateData.bikeModel = "";
+      } else if (remaining.length === 1) {
+        updateData.bikeMake = remaining[0].make;
+        updateData.bikeModel = remaining[0].model ?? "";
+      } else {
+        updateData.bikeMake = "Multiple";
+        updateData.bikeModel = `${remaining.length} bikes`;
+      }
+    }
+
     // Stage-only PATCHs must not write null to non-nullable Job.bikeModel.
     if ("bikeModel" in updateData && updateData.bikeModel == null) {
       updateData.bikeModel = "";
@@ -401,6 +432,16 @@ export async function PATCH(
           resolvedBikes.push({ ...b, bikeId });
         }
 
+        const catalogMatches = await Promise.all(
+          resolvedBikes.map((b) =>
+            matchCatalogFieldsForJobBike(
+              b.make,
+              b.model,
+              ("year" in b ? b.year : null) ?? null
+            )
+          )
+        );
+
         await tx.jobBike.createMany({
           data: resolvedBikes.map((b, i) => ({
             shopId: shop.id,
@@ -413,6 +454,8 @@ export async function PATCH(
             bikeId: b.bikeId,
             bikeType: b.bikeType ?? null,
             sortOrder: i,
+            catalogBikeId: catalogMatches[i]?.catalogBikeId ?? null,
+            catalogMatchedAt: catalogMatches[i]?.catalogMatchedAt ?? null,
           })),
         });
       }
@@ -449,6 +492,7 @@ export async function PATCH(
             bikeId = created.id;
           }
         }
+        const catalogMatch = await matchCatalogFieldsForJobBike(b.make, b.model, b.year ?? null);
         const nextSortOrder = (existingJob.jobBikes?.length ?? 0);
         await tx.jobBike.create({
           data: {
@@ -462,7 +506,15 @@ export async function PATCH(
             bikeId,
             bikeType: b.bikeType ?? null,
             sortOrder: nextSortOrder,
+            catalogBikeId: catalogMatch?.catalogBikeId ?? null,
+            catalogMatchedAt: catalogMatch?.catalogMatchedAt ?? null,
           },
+        });
+      }
+
+      if (data.removeJobBikeId !== undefined) {
+        await tx.jobBike.deleteMany({
+          where: { id: data.removeJobBikeId, jobId: id, shopId: shop.id },
         });
       }
 
@@ -770,8 +822,10 @@ export async function PATCH(
         : null;
     const jobWithoutPayments = { ...job, payments: undefined };
     const queueInfo = await getJobQueueInfo(prisma, shop.id, job);
+    const enrichedJobBikes = await enrichJobBikesWithCatalogThumbnails(job.jobBikes ?? []);
     const res = NextResponse.json({
       ...jobWithoutPayments,
+      jobBikes: enrichedJobBikes,
       customer,
       paymentStatus: paymentSummary.paymentStatus,
       totalPaid,

@@ -19,7 +19,7 @@ function resolveJobBikeImageUrl(
   profileBike?: { imageUrl: string | null } | null
 ): string | null {
   const linked = profileBike ?? jb.bike;
-  return linked?.imageUrl ?? jb.imageUrl ?? null;
+  return linked?.imageUrl ?? jb.imageUrl ?? jb.catalogThumbnailUrl ?? null;
 }
 
 /** Resolved make/model/nickname/image for one job bike row (detail modal, invoice section). */

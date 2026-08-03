@@ -15,6 +15,11 @@ import { computeJobSubtotal, computeTotalPaid, getJobPaymentSummary } from "@/li
 import { getEffectiveEmailUpdatesConsent } from "@/lib/sms-consent";
 import { normalizeJobCollectionWindowsForStorage } from "@/lib/normalize-job-collection-windows";
 import { optionalTrimmedString } from "@/lib/zod-helpers";
+import {
+  enrichJobsWithCatalogThumbnails,
+  enrichJobBikesWithCatalogThumbnails,
+  matchCatalogFieldsForJobBike,
+} from "@/lib/bike-catalog-client";
 
 export const dynamic = "force-dynamic";
 
@@ -194,7 +199,8 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    const res = NextResponse.json(jobsWithPaymentState);
+    const enrichedJobs = await enrichJobsWithCatalogThumbnails(jobsWithPaymentState);
+    const res = NextResponse.json(enrichedJobs);
     res.headers.set("Cache-Control", "no-store");
     return res;
   } catch (error) {
@@ -303,6 +309,10 @@ export async function POST(request: NextRequest) {
         resolvedBikes.push({ ...b, bikeId });
       }
 
+      const catalogMatches = await Promise.all(
+        resolvedBikes.map((b) => matchCatalogFieldsForJobBike(b.make, b.model, b.year ?? null))
+      );
+
       await tx.jobBike.createMany({
         data: resolvedBikes.map((b, i) => ({
           shopId,
@@ -315,6 +325,8 @@ export async function POST(request: NextRequest) {
           bikeId: b.bikeId,
           bikeType: b.bikeType ?? null,
           sortOrder: i,
+          catalogBikeId: catalogMatches[i]?.catalogBikeId ?? null,
+          catalogMatchedAt: catalogMatches[i]?.catalogMatchedAt ?? null,
         })),
       });
 
@@ -400,7 +412,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json(job);
+    return NextResponse.json(
+      job.jobBikes
+        ? {
+            ...job,
+            jobBikes: await enrichJobBikesWithCatalogThumbnails(job.jobBikes),
+          }
+        : job
+    );
   } catch (error) {
     if (error instanceof z.ZodError) {
       const flattened = error.flatten();
