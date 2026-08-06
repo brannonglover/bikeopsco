@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import {
   getBroadcastRecipients,
+  listEmailBroadcastHistory,
   sendCustomerBroadcastEmails,
   sendCustomerBroadcastTestEmail,
 } from "@/lib/email";
@@ -26,12 +27,15 @@ const postSchema = z.discriminatedUnion("mode", [
 ]);
 
 /**
- * GET — count customers eligible for news/update broadcasts (email + consent).
+ * GET — eligible recipient count + recent broadcast history.
  */
 export async function GET() {
   try {
     const shop = await requireCurrentShop();
-    const recipients = await getBroadcastRecipients(shop.id);
+    const [recipients, history] = await Promise.all([
+      getBroadcastRecipients(shop.id),
+      listEmailBroadcastHistory(shop.id),
+    ]);
     return NextResponse.json({
       recipientCount: recipients.length,
       sample: recipients.slice(0, 8).map((r) => ({
@@ -39,6 +43,7 @@ export async function GET() {
         email: r.email,
         name: [r.firstName, r.lastName].filter(Boolean).join(" ").trim(),
       })),
+      history,
     });
   } catch (e) {
     console.error("GET /api/email/broadcast", e);
@@ -92,6 +97,8 @@ export async function POST(request: NextRequest) {
       failed: result.failed,
       skipped: result.skipped,
       errors: result.errors,
+      broadcastId: result.broadcastId,
+      historyId: result.historyId,
     });
   } catch (e) {
     if (e instanceof z.ZodError) {

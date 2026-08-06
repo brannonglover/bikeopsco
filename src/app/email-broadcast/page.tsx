@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { SkeletonPulse } from "@/components/ui/Skeleton";
 
 const PREVIEW_IFRAME_CLASS =
@@ -18,13 +18,37 @@ function isLikelyEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t);
 }
 
+function formatSentAt(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 type RecipientSample = { id: string; email: string; name: string };
+
+type BroadcastHistoryItem = {
+  id: string;
+  subject: string;
+  bodyHtml: string;
+  recipientCount: number;
+  failedCount: number;
+  skippedCount: number;
+  resendBroadcastId: string | null;
+  sentAt: string;
+};
 
 export default function EmailBroadcastPage() {
   const [subject, setSubject] = useState("News from {{shopName}}");
   const [bodyHtml, setBodyHtml] = useState(DEFAULT_BODY);
   const [recipientCount, setRecipientCount] = useState<number | null>(null);
   const [sample, setSample] = useState<RecipientSample[]>([]);
+  const [history, setHistory] = useState<BroadcastHistoryItem[]>([]);
   const [recipientsLoading, setRecipientsLoading] = useState(true);
   const [livePreviewHtml, setLivePreviewHtml] = useState("");
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -32,10 +56,30 @@ export default function EmailBroadcastPage() {
   const [sendingTest, setSendingTest] = useState(false);
   const [sending, setSending] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
   const [banner, setBanner] = useState<{
     variant: "ok" | "error";
     text: string;
   } | null>(null);
+
+  const loadBroadcastMeta = useCallback(async () => {
+    setRecipientsLoading(true);
+    try {
+      const res = await fetch("/api/email/broadcast");
+      const data = await res.json();
+      setRecipientCount(
+        typeof data.recipientCount === "number" ? data.recipientCount : 0
+      );
+      setSample(Array.isArray(data.sample) ? data.sample : []);
+      setHistory(Array.isArray(data.history) ? data.history : []);
+    } catch {
+      setRecipientCount(0);
+      setSample([]);
+      setHistory([]);
+    } finally {
+      setRecipientsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     try {
@@ -47,20 +91,8 @@ export default function EmailBroadcastPage() {
   }, []);
 
   useEffect(() => {
-    fetch("/api/email/broadcast")
-      .then((res) => res.json())
-      .then((data) => {
-        setRecipientCount(
-          typeof data.recipientCount === "number" ? data.recipientCount : 0
-        );
-        setSample(Array.isArray(data.sample) ? data.sample : []);
-      })
-      .catch(() => {
-        setRecipientCount(0);
-        setSample([]);
-      })
-      .finally(() => setRecipientsLoading(false));
-  }, []);
+    void loadBroadcastMeta();
+  }, [loadBroadcastMeta]);
 
   useEffect(() => {
     setPreviewLoading(true);
@@ -93,6 +125,16 @@ export default function EmailBroadcastPage() {
     } catch {
       // ignore
     }
+  };
+
+  const loadIntoComposer = (item: BroadcastHistoryItem) => {
+    setSubject(item.subject);
+    setBodyHtml(item.bodyHtml);
+    setBanner({
+      variant: "ok",
+      text: "Loaded into composer. Edit and send again if you want.",
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const sendTestEmail = async () => {
@@ -168,6 +210,7 @@ export default function EmailBroadcastPage() {
         sent?: number;
         failed?: number;
         skipped?: number;
+        broadcastId?: string;
       };
       if (!res.ok) {
         setBanner({
@@ -186,18 +229,19 @@ export default function EmailBroadcastPage() {
       if (failed > 0) {
         setBanner({
           variant: "error",
-          text: `Sent ${sent} email${sent === 1 ? "" : "s"}${
+          text: `Marketing broadcast queued for ${sent} contact${sent === 1 ? "" : "s"}${
             skipped ? ` (${skipped} duplicate address${skipped === 1 ? "" : "es"} skipped)` : ""
-          }, but ${failed} failed.`,
+          }, but ${failed} contact sync failed.`,
         });
       } else {
         setBanner({
           variant: "ok",
-          text: `Sent to ${sent} customer${sent === 1 ? "" : "s"}${
+          text: `Marketing broadcast queued for ${sent} customer${sent === 1 ? "" : "s"}${
             skipped ? ` (${skipped} duplicate address${skipped === 1 ? "" : "es"} skipped)` : ""
-          }.`,
+          }. Delivery is handled by Resend.`,
         });
       }
+      await loadBroadcastMeta();
     } finally {
       setSending(false);
       setConfirmOpen(false);
@@ -212,10 +256,15 @@ export default function EmailBroadcastPage() {
         the same <strong>Bike Ops</strong> layout as transactional emails — write the inner content
         only; the shell is added automatically.
       </p>
+      <p className="text-slate-600 mb-2 break-words text-sm">
+        Mass sends use your Resend <strong>Marketing</strong> plan (Broadcasts), so they do not count
+        against the transactional daily limit. Test emails still use transactional sending.
+      </p>
       <p className="text-slate-600 mb-6 break-words text-sm">
         Merge fields:{" "}
         <code className="bg-slate-100 px-1 rounded">{`{{customerName}}`}</code>,{" "}
         <code className="bg-slate-100 px-1 rounded">{`{{shopName}}`}</code>.
+        Recipients get a Resend unsubscribe link in the footer.
       </p>
 
       {banner && (
@@ -357,6 +406,68 @@ export default function EmailBroadcastPage() {
         </div>
       </section>
 
+      <section className="mt-8 border border-slate-200 rounded-xl bg-white shadow-sm overflow-hidden">
+        <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/80">
+          <h2 className="font-semibold text-slate-900">Sent history</h2>
+          <p className="mt-0.5 text-sm text-slate-600">
+            Past mass sends for this shop. Open one to review, or load it back into the composer.
+          </p>
+        </div>
+        {recipientsLoading ? (
+          <div className="p-4 space-y-3" aria-busy="true" aria-label="Loading history">
+            <SkeletonPulse className="h-12 w-full" />
+            <SkeletonPulse className="h-12 w-full" />
+          </div>
+        ) : history.length === 0 ? (
+          <p className="p-4 text-sm text-slate-600">No broadcasts sent yet.</p>
+        ) : (
+          <ul className="divide-y divide-slate-100">
+            {history.map((item) => {
+              const expanded = expandedHistoryId === item.id;
+              return (
+                <li key={item.id} className="px-4 py-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-slate-900 break-words">
+                        {item.subject}
+                      </p>
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        {formatSentAt(item.sentAt)} · {item.recipientCount} recipient
+                        {item.recipientCount === 1 ? "" : "s"}
+                        {item.failedCount > 0 ? ` · ${item.failedCount} sync failed` : ""}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpandedHistoryId(expanded ? null : item.id)
+                        }
+                        className="text-sm px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-800 hover:bg-slate-50"
+                      >
+                        {expanded ? "Hide" : "View"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => loadIntoComposer(item)}
+                        className="text-sm px-3 py-1.5 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-900 hover:bg-indigo-100"
+                      >
+                        Reuse
+                      </button>
+                    </div>
+                  </div>
+                  {expanded && (
+                    <pre className="mt-3 max-h-64 overflow-auto rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 whitespace-pre-wrap break-words font-mono">
+                      {item.bodyHtml}
+                    </pre>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
       {confirmOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"
@@ -372,7 +483,7 @@ export default function EmailBroadcastPage() {
               Send to all customers?
             </h2>
             <p className="mt-2 text-sm text-slate-600">
-              This will email{" "}
+              This will send a Resend Marketing Broadcast to{" "}
               <strong>
                 {recipientCount} customer{recipientCount === 1 ? "" : "s"}
               </strong>{" "}
