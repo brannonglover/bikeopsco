@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CreditCard, ExternalLink, RefreshCw } from "lucide-react";
+import { CreditCard, ExternalLink } from "lucide-react";
+import { BillingSkeleton } from "@/components/ui/Skeleton";
 
 type BillingStatus = {
   status: string;
@@ -92,7 +93,7 @@ export default function BillingPage() {
   }, []);
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
+    <div className="flex w-full min-w-0 flex-col gap-6">
       <div>
         <h1 className="text-3xl font-semibold text-slate-950">Billing</h1>
         <p className="mt-2 text-sm leading-6 text-slate-600">
@@ -104,10 +105,7 @@ export default function BillingPage() {
 
       <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
         {loading ? (
-          <div className="flex items-center gap-2 text-sm text-slate-500">
-            <RefreshCw className="h-4 w-4 animate-spin" aria-hidden />
-            Loading billing...
-          </div>
+          <BillingSkeleton />
         ) : billing ? (
           <div className="grid gap-6 md:grid-cols-[1fr_16rem]">
             <div>

@@ -18,6 +18,7 @@ export type AppFeatures = {
   notifyCustomerEnabled: boolean;
   chatEnabled: boolean;
   reviewsEnabled: boolean;
+  rentalsEnabled: boolean;
   jobBoardFiltersEnabled: boolean;
   timezone: string;
   staffNotifyEmail: string | null;
@@ -52,6 +53,7 @@ const DEFAULT_FEATURES: AppFeatures = {
   notifyCustomerEnabled: true,
   chatEnabled: true,
   reviewsEnabled: true,
+  rentalsEnabled: true,
   jobBoardFiltersEnabled: false,
   timezone: DEFAULT_SHOP_TIMEZONE,
   staffNotifyEmail: null,
@@ -115,6 +117,7 @@ async function loadAppFeaturesForShop(shopId: string): Promise<AppFeatures> {
       notifyCustomerEnabled: row.notifyCustomerEnabled,
       chatEnabled: row.chatEnabled,
       reviewsEnabled: row.reviewsEnabled,
+      rentalsEnabled: row.rentalsEnabled,
       jobBoardFiltersEnabled: row.jobBoardFiltersEnabled,
       timezone: normalizeIANATimezone(row.timezone),
       staffNotifyEmail,
@@ -162,6 +165,7 @@ export async function upsertAppFeatures(
     notifyCustomerEnabled: updated.notifyCustomerEnabled,
     chatEnabled: updated.chatEnabled,
     reviewsEnabled: updated.reviewsEnabled,
+    rentalsEnabled: updated.rentalsEnabled,
     jobBoardFiltersEnabled: updated.jobBoardFiltersEnabled,
     timezone: normalizeIANATimezone(updated.timezone),
     staffNotifyEmail,

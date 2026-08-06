@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BikeImageSearch } from "@/components/bikes/BikeImageSearch";
+import { FormSectionSkeleton } from "@/components/ui/Skeleton";
 
 type SlotOption = {
   slot: string;
@@ -212,7 +213,7 @@ export function AdminCatalogEditClient({ bikeId }: { bikeId: string }) {
   }
 
   if (loading) {
-    return <p className="text-sm text-slate-500">Loading catalog bike…</p>;
+    return <FormSectionSkeleton rows={8} />;
   }
 
   return (

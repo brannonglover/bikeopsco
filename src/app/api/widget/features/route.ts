@@ -38,6 +38,7 @@ export async function GET(request: NextRequest) {
       timezone: features.timezone,
       chatEnabled: features.chatEnabled,
       reviewsEnabled: features.reviewsEnabled,
+      rentalsEnabled: features.rentalsEnabled,
     });
     return addWidgetCorsHeaders(res, origin, {
       methods: "GET, OPTIONS",

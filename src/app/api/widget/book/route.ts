@@ -18,6 +18,7 @@ import { buildSmsConsentOptInUpdate } from "@/lib/sms-consent";
 import { getShopForHost } from "@/lib/shop";
 import { getCustomerStatusUrl } from "@/lib/job-customer-access";
 import { normalizeJobCollectionWindowsForStorage } from "@/lib/normalize-job-collection-windows";
+import { getRequestClientIp, verifyTurnstileToken } from "@/lib/turnstile";
 
 export const dynamic = "force-dynamic";
 
@@ -95,6 +96,7 @@ const bookSchema = z
     collectionWindowEnd: z.string().optional().nullable(),
     customerNotes: z.string().optional().nullable(),
     serviceIds: z.array(z.string()).optional().default([]),
+    turnstileToken: z.string().min(1, "Verification is required"),
   })
   .superRefine((data, ctx) => {
     const hasBikesArray = data.bikes && data.bikes.length > 0;
@@ -147,6 +149,19 @@ export async function POST(request: NextRequest) {
     }
 
     const data = bookSchema.parse(body);
+
+    const turnstile = await verifyTurnstileToken(
+      data.turnstileToken,
+      getRequestClientIp(request)
+    );
+    if (!turnstile.ok) {
+      const res = NextResponse.json({ error: turnstile.error }, { status: 403 });
+      return addWidgetCorsHeaders(res, origin, {
+        methods: "POST, OPTIONS",
+        allowHeaders: "Content-Type, Authorization",
+      });
+    }
+
     const features = await getAppFeatures(shop.id);
     const dropOffDate = data.dropOffDate ? new Date(data.dropOffDate) : null;
     const pickupDate = data.pickupDate ? new Date(data.pickupDate) : null;

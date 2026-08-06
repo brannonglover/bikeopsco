@@ -11,6 +11,7 @@ import {
   SortableStatsLayout,
   type StatsSectionId,
 } from "@/components/stats/SortableStatsLayout";
+import { StatsPageSkeleton } from "@/components/ui/Skeleton";
 
 interface PeriodTotals {
   day: number;
@@ -113,9 +114,7 @@ export default function StatsPage() {
   }, [reloadStats]);
 
   if (loading) {
-    return (
-      <div className="py-12 text-center text-slate-500">Loading stats...</div>
-    );
+    return <StatsPageSkeleton />;
   }
 
   if (!stats) {
@@ -133,7 +132,7 @@ export default function StatsPage() {
 
   const sections: Partial<Record<StatsSectionId, ReactNode>> = {
     lastYear: stats.lastYear ? (
-      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm max-w-md">
+      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <p className="text-sm font-medium text-slate-500 uppercase tracking-wide mb-3">
           Last Year ({stats.lastYear.calendarYear})
         </p>
@@ -394,7 +393,7 @@ export default function StatsPage() {
   };
 
   return (
-    <div className="max-w-5xl">
+    <div className="w-full min-w-0">
       <h1 className="text-2xl font-bold text-slate-900 mb-2">Stats</h1>
       <p className="text-slate-600 mb-6">
         All totals use when the customer paid (Stripe or cash), not when the job was marked

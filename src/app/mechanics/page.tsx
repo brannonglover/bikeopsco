@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { CatalogPageSkeleton } from "@/components/ui/Skeleton";
 
 interface Mechanic {
   id: string;
@@ -199,7 +200,7 @@ export default function MechanicsPage() {
   };
 
   const formFields = (
-    <div className="p-4 border border-slate-200 rounded-lg bg-white shadow-sm space-y-3 w-full max-w-xl">
+    <div className="w-full space-y-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <h3 className="font-semibold text-slate-900">
         {editing ? "Edit mechanic" : "New mechanic"}
       </h3>
@@ -314,13 +315,11 @@ export default function MechanicsPage() {
   );
 
   if (loading) {
-    return (
-      <div className="py-12 text-center text-slate-500">Loading mechanics...</div>
-    );
+    return <CatalogPageSkeleton titleWidth="w-40" variant="list" label="Loading mechanics" />;
   }
 
   return (
-    <div className="max-w-5xl">
+    <div className="w-full min-w-0">
       <h1 className="text-2xl font-bold text-blue-900 mb-2">Mechanics</h1>
       <p className="text-slate-600 mb-6">
         Keep a roster of bike mechanics for your shop — photo, contact details,

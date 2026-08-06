@@ -16,6 +16,7 @@ const NAV_LINKS = [
   { href: "/services", label: "Services" },
   { href: "/products", label: "Products" },
   { href: "/mechanics", label: "Mechanics" },
+  { href: "/rentals", label: "Rentals" },
   { href: "/email-templates", label: "Email Templates" },
   { href: "/email-broadcast", label: "Email Broadcast" },
   { href: "/reviews", label: "Reviews" },
@@ -35,6 +36,7 @@ export function SidebarNav({ onNavigate }: SidebarNavProps) {
   const visibleLinks = NAV_LINKS.filter((l) => {
     if (l.href === "/chat" && !features.chatEnabled) return false;
     if (l.href === "/reviews" && !features.reviewsEnabled) return false;
+    if (l.href === "/rentals" && !features.rentalsEnabled) return false;
     return true;
   });
 

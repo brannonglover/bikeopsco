@@ -9,6 +9,7 @@ import {
   phoneTelHref,
 } from "@/lib/phone";
 import { CustomerDetailModal } from "@/components/customers/CustomerDetailModal";
+import { CatalogPageSkeleton } from "@/components/ui/Skeleton";
 
 interface Customer {
   id: string;
@@ -306,13 +307,11 @@ function CustomersPageContent() {
   };
 
   if (loading) {
-    return (
-      <div className="py-12 text-center text-slate-500">Loading customers...</div>
-    );
+    return <CatalogPageSkeleton titleWidth="w-44" variant="list" label="Loading customers" />;
   }
 
   return (
-    <div className="max-w-4xl">
+    <div className="w-full min-w-0">
       <h1 className="text-2xl font-bold text-slate-900 mb-2">
         Customers
         <span className="ml-2 font-medium text-slate-500 text-lg">
@@ -971,7 +970,7 @@ export default function CustomersPage() {
   return (
     <Suspense
       fallback={
-        <div className="py-12 text-center text-slate-500">Loading customers...</div>
+        <CatalogPageSkeleton titleWidth="w-44" variant="list" label="Loading customers" />
       }
     >
       <CustomersPageContent />

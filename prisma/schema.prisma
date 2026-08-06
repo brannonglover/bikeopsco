@@ -61,6 +61,11 @@ model Shop {
   waitlistBikes    WaitlistBike[]
   reviewRequests   ReviewRequest[]
   importedRevenue  ImportedRevenue[]
+  rentalBikes      RentalBike[]
+  rentalRates      RentalRate[]
+  rentalAddons     RentalAddon[]
+  rentalReservations RentalReservation[]
+  rentalActivities RentalActivity[]
 }
 
 model Customer {
@@ -88,6 +93,7 @@ model Customer {
   chatSessions     ChatSession[]
   pushTokens       PushToken[]
   reviewRequests   ReviewRequest[]
+  rentalReservations RentalReservation[]
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
 
@@ -628,6 +634,8 @@ model AppSettings {
   notifyCustomerEnabled    Boolean  @default(true)
   chatEnabled              Boolean  @default(true)
   reviewsEnabled           Boolean  @default(true)
+  /// When false: hide Rentals nav and block rental APIs.
+  rentalsEnabled           Boolean  @default(true)
   /// When true, show status filter pills on the job board to narrow visible columns.
   jobBoardFiltersEnabled   Boolean  @default(false)
   /// IANA timezone for shop scheduling (e.g. America/New_York).
@@ -802,4 +810,116 @@ enum PlatformReleaseStatus {
   draft
   published
   discarded
+}
+
+enum RentalCategory {
+  MOUNTAIN
+  HYBRID
+  ROAD
+  ELECTRIC
+  OTHER
+}
+
+enum RentalReservationStatus {
+  REQUESTED
+  SCHEDULED
+  CONFIRMED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+/// Shop-owned bike available for customer rental (not a customer-owned Bike).
+model RentalBike {
+  id           String         @id @default(cuid())
+  shopId       String
+  shop         Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  make         String
+  model        String
+  category     RentalCategory @default(MOUNTAIN)
+  size         String?
+  description  String?
+  imageUrl     String?
+  /// How many units of this bike are in the rental fleet
+  quantity     Int            @default(1)
+  isActive     Boolean        @default(true)
+  reservations RentalReservation[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([shopId])
+  @@index([shopId, category])
+}
+
+/// Duration-based rental pricing (e.g. 1 day = $45, 3 days = $120).
+model RentalRate {
+  id        String          @id @default(cuid())
+  shopId    String
+  shop      Shop            @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  name      String
+  days      Int
+  price     Decimal         @db.Decimal(10, 2)
+  /// null = rate applies to all categories
+  category  RentalCategory?
+  isActive  Boolean         @default(true)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@index([shopId])
+}
+
+model RentalAddon {
+  id            String   @id @default(cuid())
+  shopId        String
+  shop          Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  name          String
+  description   String?
+  price         Decimal  @db.Decimal(10, 2)
+  stockQuantity Int      @default(0)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([shopId])
+}
+
+model RentalReservation {
+  id            String                   @id @default(cuid())
+  shopId        String
+  shop          Shop                     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  customerId    String?
+  customer      Customer?                @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  customerName  String
+  customerEmail String?
+  customerPhone String?
+  rentalBikeId  String
+  rentalBike    RentalBike               @relation(fields: [rentalBikeId], references: [id], onDelete: Restrict)
+  startDate     DateTime                 @db.Date
+  endDate       DateTime                 @db.Date
+  days          Int
+  unitPrice     Decimal                  @db.Decimal(10, 2)
+  totalPrice    Decimal                  @db.Decimal(10, 2)
+  status        RentalReservationStatus  @default(REQUESTED)
+  pickupTime    String?
+  notes         String?
+  checkedOutAt  DateTime?
+  checkedInAt   DateTime?
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
+
+  @@index([shopId])
+  @@index([rentalBikeId])
+  @@index([customerId])
+  @@index([shopId, startDate, endDate])
+  @@index([shopId, status])
+}
+
+model RentalActivity {
+  id        String   @id @default(cuid())
+  shopId    String
+  shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  message   String
+  createdAt DateTime @default(now())
+
+  @@index([shopId, createdAt])
 }

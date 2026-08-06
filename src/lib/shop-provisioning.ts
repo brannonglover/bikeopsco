@@ -40,6 +40,7 @@ export async function provisionShopDefaults(
       notifyCustomerEnabled: defaultSettings?.notifyCustomerEnabled ?? true,
       chatEnabled: defaultSettings?.chatEnabled ?? true,
       reviewsEnabled: defaultSettings?.reviewsEnabled ?? true,
+      rentalsEnabled: defaultSettings?.rentalsEnabled ?? true,
       staffNotifyEmail: ownerEmail?.trim() || null,
     },
   });

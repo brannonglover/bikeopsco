@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { YelpBurstIcon } from "@/components/icons/YelpBurstIcon";
+import { ListSkeleton } from "@/components/ui/Skeleton";
 
 interface FeaturedReview {
   id: string;
@@ -341,7 +342,7 @@ export default function ReviewsSettingsPage() {
   const apiUrl = widgetOrigin ? `${widgetOrigin}/api/widget/reviews` : "";
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="w-full min-w-0">
       <h1 className="text-2xl font-bold text-foreground mb-1">Reviews</h1>
       <p className="text-text-secondary mb-8">
         Configure your review links and embed a live social proof widget on your marketing site.
@@ -680,7 +681,7 @@ export default function ReviewsSettingsPage() {
         <p className="text-sm text-text-secondary mb-4">History of review request emails sent to customers.</p>
 
         {loadingRequests ? (
-          <div className="rounded-xl border border-surface-border bg-surface p-8 text-center text-sm text-text-secondary">Loading…</div>
+          <ListSkeleton rows={5} withAvatar={false} label="Loading review requests" />
         ) : consolidatedRequests.length === 0 ? (
           <div className="rounded-xl border border-surface-border bg-surface p-8 text-center text-sm text-text-secondary">
             No review requests sent yet. Send one from a job using the &quot;Send Review Request&quot; button.

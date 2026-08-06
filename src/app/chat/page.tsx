@@ -14,6 +14,7 @@ import { ConversationListRow } from "@/components/chat/ConversationListRow";
 import { mergeChatMessagesWithServer } from "@/lib/chat-messages";
 import { isCustomerTypingRecently } from "@/lib/chat-typing";
 import { isChatVideoFile, uploadChatVideoFile } from "@/lib/chat-video-upload";
+import { ChatPageSkeleton, SkeletonPulse } from "@/components/ui/Skeleton";
 
 const POLL_INTERVAL_MS = 3000;
 
@@ -1039,11 +1040,7 @@ function ChatPageContent() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[40vh]">
-        <p className="text-slate-500">Loading…</p>
-      </div>
-    );
+    return <ChatPageSkeleton />;
   }
 
   return (
@@ -1200,12 +1197,11 @@ function ChatPageContent() {
                 >
                   <div className="p-4 space-y-3">
                     {messagesLoading && messages.length === 0 ? (
-                      <div className="flex items-center gap-2 text-sm text-slate-500" aria-live="polite">
-                        <span
-                          className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-emerald-600"
-                          aria-hidden
-                        />
-                        Loading messages…
+                      <div className="space-y-3 py-2" aria-busy="true" aria-label="Loading messages">
+                        <SkeletonPulse className="ml-auto h-12 w-2/3 max-w-sm rounded-2xl" />
+                        <SkeletonPulse className="h-12 w-1/2 max-w-xs rounded-2xl" />
+                        <SkeletonPulse className="ml-auto h-16 w-3/5 max-w-md rounded-2xl" />
+                        <SkeletonPulse className="h-12 w-2/5 max-w-xs rounded-2xl" />
                       </div>
                     ) : null}
                     {messages.map((msg) => {
@@ -1463,13 +1459,7 @@ function ChatPageContent() {
 
 export default function ChatPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="flex min-h-[50vh] flex-col items-center justify-center bg-slate-50 text-slate-500">
-          Loading…
-        </div>
-      }
-    >
+    <Suspense fallback={<ChatPageSkeleton />}>
       <ChatPageContent />
     </Suspense>
   );

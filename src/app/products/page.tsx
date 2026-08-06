@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Price } from "@/components/ui/Price";
+import { CatalogPageSkeleton } from "@/components/ui/Skeleton";
 
 const SUPPLIER_OPTIONS = ["Amazon", "Performance Bike", "Other"];
 
@@ -356,13 +357,11 @@ export default function ProductsPage() {
   };
 
   if (loading) {
-    return (
-      <div className="py-12 text-center text-slate-500">Loading products...</div>
-    );
+    return <CatalogPageSkeleton titleWidth="w-36" variant="cards" label="Loading products" />;
   }
 
   return (
-    <div className="max-w-4xl">
+    <div className="w-full min-w-0">
       <h1 className="text-2xl font-bold text-blue-900 mb-2">Product Inventory</h1>
       <p className="text-slate-600 mb-6">
         Track products you purchase for bike installations—parts, accessories,

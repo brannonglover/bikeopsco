@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { ListSkeleton } from "@/components/ui/Skeleton";
 
 type WaitlistBike = {
   id: string;
@@ -109,7 +110,7 @@ export default function WaitlistPage() {
   };
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="w-full min-w-0 space-y-6">
       <div className="flex items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground mb-1">Waitlist</h1>
@@ -136,9 +137,7 @@ export default function WaitlistPage() {
         </div>
       )}
 
-      {status === "loading" && (
-        <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">Loading…</div>
-      )}
+      {status === "loading" && <ListSkeleton rows={5} label="Loading waitlist" />}
       {status === "error" && (
         <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
           Failed to load waitlist.

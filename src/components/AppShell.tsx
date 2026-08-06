@@ -35,7 +35,10 @@ function FeatureRedirector() {
     if (!features.reviewsEnabled && (pathname === "/reviews" || pathname.startsWith("/reviews/"))) {
       router.replace("/settings/appearance");
     }
-  }, [features.chatEnabled, features.reviewsEnabled, pathname, router]);
+    if (!features.rentalsEnabled && (pathname === "/rentals" || pathname.startsWith("/rentals/"))) {
+      router.replace("/calendar");
+    }
+  }, [features.chatEnabled, features.reviewsEnabled, features.rentalsEnabled, pathname, router]);
 
   return null;
 }

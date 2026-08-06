@@ -22,7 +22,18 @@ export default async function LoginPage() {
   }
 
   return (
-    <Suspense fallback={<div className="fixed inset-0 flex items-center justify-center bg-mesh">Loading…</div>}>
+    <Suspense
+      fallback={
+        <div className="fixed inset-0 flex items-center justify-center bg-mesh">
+          <div className="w-full max-w-sm space-y-4 rounded-xl border border-slate-200 bg-white p-8 shadow-lg">
+            <div className="mx-auto h-16 w-40 animate-pulse rounded bg-slate-200" />
+            <div className="h-10 w-full animate-pulse rounded-lg bg-slate-200" />
+            <div className="h-10 w-full animate-pulse rounded-lg bg-slate-200" />
+            <div className="h-10 w-full animate-pulse rounded-lg bg-slate-200" />
+          </div>
+        </div>
+      }
+    >
       <LoginForm />
     </Suspense>
   );
