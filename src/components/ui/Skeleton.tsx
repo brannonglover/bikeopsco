@@ -327,10 +327,16 @@ export function EmailPageSkeleton() {
 }
 
 /** Compact card used on customer-facing status / pay / chat login. */
-export function CustomerCardSkeleton({ label = "Loading" }: { label?: string }) {
+export function CustomerCardSkeleton({
+  label = "Loading",
+  className = "max-w-md",
+}: {
+  label?: string;
+  className?: string;
+}) {
   return (
     <div
-      className="w-full max-w-md space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
+      className={`w-full space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm ${className}`}
       aria-busy="true"
       aria-label={label}
     >
