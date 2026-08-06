@@ -66,6 +66,9 @@ model Shop {
   rentalAddons     RentalAddon[]
   rentalReservations RentalReservation[]
   rentalActivities RentalActivity[]
+  emailBroadcasts  EmailBroadcast[]
+  /// Resend Marketing segment for consented email-update customers (Broadcasts).
+  resendEmailUpdatesSegmentId String?
 }
 
 model Customer {
@@ -334,6 +337,25 @@ model EmailTemplate {
 
   @@unique([shopId, slug])
   @@index([shopId])
+}
+
+/// Staff-composed news/update emails sent via Resend Marketing Broadcasts.
+model EmailBroadcast {
+  id                String   @id @default(cuid())
+  shopId            String
+  shop              Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  /// Subject as composed (may include {{merge}} fields).
+  subject           String
+  /// Inner HTML as composed (may include {{merge}} fields).
+  bodyHtml          String
+  recipientCount    Int
+  failedCount       Int      @default(0)
+  skippedCount      Int      @default(0)
+  resendBroadcastId String?
+  sentAt            DateTime @default(now())
+  createdAt         DateTime @default(now())
+
+  @@index([shopId, sentAt])
 }
 
 model JobEmail {

@@ -2498,7 +2498,9 @@ export async function sendReviewRequestEmail({
 }
 
 const BROADCAST_FOOTER_DISCLAIMER =
-  "You are receiving this because you opted in to email updates from our shop. If you no longer wish to receive these emails, contact the shop to update your notification preferences.";
+  "You are receiving this because you opted in to email updates from our shop.";
+
+const BROADCAST_MARKETING_UNSUBSCRIBE_HTML = `<p class="email-muted" style="margin:16px 0 0;font-size:12px;line-height:1.6;color:#64748b"><a href="{{{RESEND_UNSUBSCRIBE_URL}}}" style="color:#4f46e5;text-decoration:underline">Unsubscribe</a> from shop update emails.</p>`;
 
 export type BroadcastRecipient = {
   id: string;
@@ -2506,6 +2508,51 @@ export type BroadcastRecipient = {
   firstName: string;
   lastName: string | null;
 };
+
+export type EmailBroadcastHistoryItem = {
+  id: string;
+  subject: string;
+  bodyHtml: string;
+  recipientCount: number;
+  failedCount: number;
+  skippedCount: number;
+  resendBroadcastId: string | null;
+  sentAt: string;
+};
+
+/** Recent mass-send broadcasts for this shop (newest first). */
+export async function listEmailBroadcastHistory(
+  shopId: string,
+  limit = 50
+): Promise<EmailBroadcastHistoryItem[]> {
+  const { prisma } = await import("./db");
+  const rows = await prisma.emailBroadcast.findMany({
+    where: { shopId },
+    orderBy: { sentAt: "desc" },
+    take: Math.min(Math.max(limit, 1), 100),
+    select: {
+      id: true,
+      subject: true,
+      bodyHtml: true,
+      recipientCount: true,
+      failedCount: true,
+      skippedCount: true,
+      resendBroadcastId: true,
+      sentAt: true,
+    },
+  });
+
+  return rows.map((row) => ({
+    id: row.id,
+    subject: row.subject,
+    bodyHtml: row.bodyHtml,
+    recipientCount: row.recipientCount,
+    failedCount: row.failedCount,
+    skippedCount: row.skippedCount,
+    resendBroadcastId: row.resendBroadcastId,
+    sentAt: row.sentAt.toISOString(),
+  }));
+}
 
 /** Customers with a usable email who have not opted out of email updates. */
 export async function getBroadcastRecipients(shopId: string): Promise<BroadcastRecipient[]> {
@@ -2554,6 +2601,7 @@ async function resolveShopDisplayName(shopId: string): Promise<string> {
 
 /**
  * Staff test send for a news/update broadcast — uses sample merge data + Bike Ops shell.
+ * Uses transactional send (single email) so previews don't require Marketing segment sync.
  */
 export async function sendCustomerBroadcastTestEmail(
   shopId: string,
@@ -2600,7 +2648,8 @@ export async function sendCustomerBroadcastTestEmail(
 }
 
 /**
- * Mass-send a news/update email to all consented customers, wrapped in the Bike Ops shell.
+ * Mass-send a news/update email via Resend Marketing Broadcasts (not transactional quota).
+ * Syncs consented customers into a shop segment, then sends one Broadcast.
  */
 export async function sendCustomerBroadcastEmails(
   shopId: string,
@@ -2612,10 +2661,38 @@ export async function sendCustomerBroadcastEmails(
   skipped: number;
   errors: { email: string; error: string }[];
   error?: string;
+  broadcastId?: string;
+  historyId?: string;
 }> {
+  const {
+    RESEND_MARKETING_FREE_CONTACT_CAP,
+    ensureShopEmailUpdatesSegment,
+    marketingBroadcastLogoSrc,
+    syncEmailUpdatesSegment,
+    toResendBroadcastMergeFields,
+  } = await import("./resend-marketing-broadcast");
+
   const blocked = skipIfCustomerNotificationsBlocked("sendCustomerBroadcastEmails");
   if (blocked) {
     return { ok: false, sent: 0, failed: 0, skipped: 0, errors: [], error: blocked.error };
+  }
+
+  const disableReason = getEmailSendingDisabledReason();
+  if (disableReason) {
+    return { ok: false, sent: 0, failed: 0, skipped: 0, errors: [], error: disableReason };
+  }
+
+  const redirectTo = getEmailRedirectTo();
+  if (redirectTo) {
+    return {
+      ok: false,
+      sent: 0,
+      failed: 0,
+      skipped: 0,
+      errors: [],
+      error:
+        "Marketing broadcasts cannot use EMAIL_REDIRECT_TO. Send a test email instead, or run this from production.",
+    };
   }
 
   const resend = getResend();
@@ -2639,6 +2716,20 @@ export async function sendCustomerBroadcastEmails(
     return { ok: false, sent: 0, failed: 0, skipped: 0, errors: [], error: "Message body is required" };
   }
 
+  const { prisma } = await import("./db");
+  const shop = await prisma.shop.findUnique({
+    where: { id: shopId },
+    select: {
+      id: true,
+      name: true,
+      subdomain: true,
+      resendEmailUpdatesSegmentId: true,
+    },
+  });
+  if (!shop) {
+    return { ok: false, sent: 0, failed: 0, skipped: 0, errors: [], error: "Shop not found" };
+  }
+
   const recipients = await getBroadcastRecipients(shopId);
   if (recipients.length === 0) {
     return {
@@ -2651,69 +2742,136 @@ export async function sendCustomerBroadcastEmails(
     };
   }
 
-  const shopName = await resolveShopDisplayName(shopId);
-  const branding = await getCustomerEmailBrandingAssets(shopId);
-  const attachments = customerEmailBrandingAttachments(branding);
-  const sendOptions = getCustomerEmailSendOptions();
-
-  let sent = 0;
-  let failed = 0;
-  const errors: { email: string; error: string }[] = [];
   const seenEmails = new Set<string>();
+  const uniqueRecipients = recipients.filter((r) => {
+    const key = r.email.toLowerCase();
+    if (seenEmails.has(key)) return false;
+    seenEmails.add(key);
+    return true;
+  });
+  const skipped = recipients.length - uniqueRecipients.length;
 
-  for (const recipient of recipients) {
-    const emailKey = recipient.email.toLowerCase();
-    if (seenEmails.has(emailKey)) continue;
-    seenEmails.add(emailKey);
-
-    const vars = {
-      customerName: broadcastCustomerDisplayName(recipient),
-      shopName,
+  if (uniqueRecipients.length > RESEND_MARKETING_FREE_CONTACT_CAP) {
+    return {
+      ok: false,
+      sent: 0,
+      failed: 0,
+      skipped,
+      errors: [],
+      error: `This list has ${uniqueRecipients.length} contacts. Resend's free Marketing plan covers ${RESEND_MARKETING_FREE_CONTACT_CAP}. Upgrade Marketing or shrink the list.`,
     };
-    const subject = mergeTemplateVariables(subjectTemplate, vars);
-    const mergedBody = mergeTemplateVariables(bodyTemplate, vars);
-    const html = buildReadOnlyCustomerEmailHtml({
-      innerHtml: mergedBody,
-      headerLogoSrc: branding.headerLogoSrc,
-      footerDisclaimer: BROADCAST_FOOTER_DISCLAIMER,
-    });
-
-    try {
-      const { error } = await sendResendEmail(resend, {
-        ...sendOptions,
-        to: recipient.email,
-        subject,
-        html,
-        ...(attachments && { attachments }),
-      });
-      if (error) {
-        failed += 1;
-        if (errors.length < 25) {
-          errors.push({ email: recipient.email, error: error.message });
-        }
-      } else {
-        sent += 1;
-      }
-    } catch (e) {
-      failed += 1;
-      if (errors.length < 25) {
-        errors.push({
-          email: recipient.email,
-          error: e instanceof Error ? e.message : "Unknown error",
-        });
-      }
-    }
   }
 
-  const skipped = recipients.length - seenEmails.size;
-  return {
-    ok: failed === 0,
-    sent,
-    failed,
-    skipped,
-    errors,
-    ...(failed > 0 && sent === 0
-      ? { error: errors[0]?.error ?? "All sends failed" }
-      : {}),
-  };
+  const segmentResult = await ensureShopEmailUpdatesSegment(resend, shop);
+  if (!segmentResult.segmentId) {
+    return {
+      ok: false,
+      sent: 0,
+      failed: 0,
+      skipped,
+      errors: [],
+      error: segmentResult.error ?? "Could not prepare Marketing segment",
+    };
+  }
+
+  const sync = await syncEmailUpdatesSegment(
+    resend,
+    segmentResult.segmentId,
+    uniqueRecipients.map((r) => ({
+      email: r.email,
+      displayName: broadcastCustomerDisplayName(r),
+    }))
+  );
+
+  if (sync.synced === 0) {
+    return {
+      ok: false,
+      sent: 0,
+      failed: sync.failed,
+      skipped,
+      errors: sync.errors.map((e) => ({ email: "", error: e })),
+      error: sync.errors[0] ?? "Could not sync contacts to Resend Marketing",
+    };
+  }
+
+  const shopName = shop.name?.trim() || process.env.SHOP_NAME?.trim() || "our shop";
+  const branding = await getCustomerEmailBrandingAssets(shopId);
+  const logoSrc = marketingBroadcastLogoSrc(
+    branding.headerLogoSrc,
+    getShopAppUrl(shop.subdomain) || getAppUrl()
+  );
+  const sendOptions = getCustomerEmailSendOptions();
+
+  const subject = toResendBroadcastMergeFields(subjectTemplate, shopName);
+  const mergedBody = toResendBroadcastMergeFields(bodyTemplate, shopName);
+  const html = buildReadOnlyCustomerEmailHtml({
+    innerHtml: `${mergedBody}${BROADCAST_MARKETING_UNSUBSCRIBE_HTML}`,
+    headerLogoSrc: logoSrc,
+    footerDisclaimer: BROADCAST_FOOTER_DISCLAIMER,
+  });
+
+  try {
+    const { data, error } = await resend.broadcasts.create({
+      segmentId: segmentResult.segmentId,
+      from: sendOptions.from,
+      replyTo: sendOptions.replyTo,
+      subject,
+      html,
+      name: `${shopName} · ${new Date().toISOString().slice(0, 16)}`,
+      send: true,
+    });
+
+    if (error || !data?.id) {
+      return {
+        ok: false,
+        sent: 0,
+        failed: uniqueRecipients.length,
+        skipped,
+        errors: [{ email: "", error: error?.message ?? "Broadcast create failed" }],
+        error: error?.message ?? "Broadcast create failed",
+      };
+    }
+
+    const history = await prisma.emailBroadcast.create({
+      data: {
+        shopId,
+        subject: subjectTemplate,
+        bodyHtml: bodyTemplate,
+        recipientCount: sync.synced,
+        failedCount: sync.failed,
+        skippedCount: skipped,
+        resendBroadcastId: data.id,
+      },
+      select: { id: true },
+    });
+
+    return {
+      ok: sync.failed === 0,
+      sent: sync.synced,
+      failed: sync.failed,
+      skipped,
+      errors: sync.errors.map((e) => ({ email: "", error: e })),
+      broadcastId: data.id,
+      historyId: history.id,
+      ...(sync.failed > 0
+        ? {
+            error: `Broadcast queued for ${sync.synced} contact${sync.synced === 1 ? "" : "s"}, but ${sync.failed} contact sync failed.`,
+          }
+        : {}),
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      sent: 0,
+      failed: uniqueRecipients.length,
+      skipped,
+      errors: [
+        {
+          email: "",
+          error: e instanceof Error ? e.message : "Unknown error",
+        },
+      ],
+      error: e instanceof Error ? e.message : "Unknown error",
+    };
+  }
 }
