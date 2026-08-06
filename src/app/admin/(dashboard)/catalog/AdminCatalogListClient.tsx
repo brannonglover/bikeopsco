@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { TableSkeleton } from "@/components/ui/Skeleton";
 
 type SlotOption = {
   slot: string;
@@ -210,63 +211,67 @@ export function AdminCatalogListClient() {
         </div>
       )}
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-slate-600">
-            <tr>
-              <th className="px-4 py-2.5 font-medium">Bike</th>
-              <th className="px-4 py-2.5 font-medium">Year</th>
-              <th className="px-4 py-2.5 font-medium">Parts</th>
-              <th className="px-4 py-2.5 font-medium">Updated</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {bikes.map((bike) => (
-              <tr key={bike.id} className="hover:bg-slate-50/80">
-                <td className="px-4 py-2.5">
-                  <div className="flex items-center gap-3">
-                    {bike.thumbnailUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={bike.thumbnailUrl}
-                        alt=""
-                        className="h-10 w-10 rounded-lg object-cover border border-slate-200"
-                      />
-                    ) : (
-                      <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 text-[10px] text-slate-400">
-                        No img
-                      </div>
-                    )}
-                    <div className="min-w-0">
-                      <Link
-                        href={`/admin/catalog/${bike.id}`}
-                        className="font-medium text-slate-900 hover:underline"
-                      >
-                        {bike.brandName} {bike.model}
-                      </Link>
-                      {bike.family && (
-                        <p className="text-xs text-slate-500">{bike.family}</p>
-                      )}
-                    </div>
-                  </div>
-                </td>
-                <td className="px-4 py-2.5 text-slate-700">{bike.year ?? "—"}</td>
-                <td className="px-4 py-2.5 text-slate-700">{bike.componentCount}</td>
-                <td className="px-4 py-2.5 text-slate-500">
-                  {new Date(bike.updatedAt).toLocaleDateString()}
-                </td>
-              </tr>
-            ))}
-            {!loading && bikes.length === 0 && (
+      {loading ? (
+        <TableSkeleton rows={8} cols={4} label="Loading catalog" />
+      ) : (
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-left text-slate-600">
               <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-slate-500">
-                  No catalog bikes match these filters.
-                </td>
+                <th className="px-4 py-2.5 font-medium">Bike</th>
+                <th className="px-4 py-2.5 font-medium">Year</th>
+                <th className="px-4 py-2.5 font-medium">Parts</th>
+                <th className="px-4 py-2.5 font-medium">Updated</th>
               </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {bikes.map((bike) => (
+                <tr key={bike.id} className="hover:bg-slate-50/80">
+                  <td className="px-4 py-2.5">
+                    <div className="flex items-center gap-3">
+                      {bike.thumbnailUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={bike.thumbnailUrl}
+                          alt=""
+                          className="h-10 w-10 rounded-lg object-cover border border-slate-200"
+                        />
+                      ) : (
+                        <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 text-[10px] text-slate-400">
+                          No img
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <Link
+                          href={`/admin/catalog/${bike.id}`}
+                          className="font-medium text-slate-900 hover:underline"
+                        >
+                          {bike.brandName} {bike.model}
+                        </Link>
+                        {bike.family && (
+                          <p className="text-xs text-slate-500">{bike.family}</p>
+                        )}
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-2.5 text-slate-700">{bike.year ?? "—"}</td>
+                  <td className="px-4 py-2.5 text-slate-700">{bike.componentCount}</td>
+                  <td className="px-4 py-2.5 text-slate-500">
+                    {new Date(bike.updatedAt).toLocaleDateString()}
+                  </td>
+                </tr>
+              ))}
+              {bikes.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="px-4 py-8 text-center text-slate-500">
+                    No catalog bikes match these filters.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

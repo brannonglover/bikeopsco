@@ -4,7 +4,7 @@ import { AdminNav } from "./AdminNav";
 export function AdminShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-mesh">
-      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+      <div className="w-full min-w-0 px-4 py-8 sm:px-6">
         <header className="mb-6 flex items-start justify-between gap-4">
           <div>
             <p className="text-sm font-medium uppercase tracking-wide text-slate-500">Bike Ops</p>

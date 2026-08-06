@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { BikeLoader } from "@/components/ui/BikeLoader";
 import { Price } from "@/components/ui/Price";
+import { TurnstileWidget } from "@/components/TurnstileWidget";
 import { formatPhoneInputUS } from "@/lib/phone";
 import type { CollectionEligibility } from "@/lib/collection-radius";
 
@@ -29,6 +30,9 @@ const BASE = typeof window !== "undefined" ? "" : process.env.NEXT_PUBLIC_APP_UR
 
 const SHOP_DISPLAY_NAME =
   process.env.NEXT_PUBLIC_SHOP_NAME ?? "Basement Bike Mechanic";
+
+const TURNSTILE_SITE_KEY =
+  process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim() || "";
 
 function getDefaultDropOffDateTime(): string {
   const d = new Date();
@@ -78,6 +82,8 @@ function BookForm() {
   const [error, setError] = useState<string | null>(null);
   const [collectionEligibility, setCollectionEligibility] = useState<CollectionEligibility | null>(null);
   const [checkingCollection, setCheckingCollection] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [turnstileResetSignal, setTurnstileResetSignal] = useState(0);
 
   const [serviceSearch, setServiceSearch] = useState("");
   const [bikes, setBikes] = useState<BikeEntry[]>([{ make: "", model: "", bikeType: "AUTO" }]);
@@ -247,6 +253,14 @@ function BookForm() {
       setError(`Collection is only available within ${collectionEligibility.radiusMiles} miles of the shop. Please switch to drop-off.`);
       return;
     }
+    if (!TURNSTILE_SITE_KEY) {
+      setError("Booking verification is not configured. Please try again later.");
+      return;
+    }
+    if (!turnstileToken) {
+      setError("Please complete the security check before booking.");
+      return;
+    }
     setSubmitting(true);
 
     try {
@@ -276,6 +290,7 @@ function BookForm() {
             form.deliveryType === "COLLECTION_SERVICE" ? form.collectionWindowEnd || null : null,
           customerNotes: form.customerNotes.trim() || null,
           serviceIds: form.serviceIds,
+          turnstileToken,
         }),
       });
 
@@ -283,6 +298,8 @@ function BookForm() {
 
       if (!res.ok) {
         setError(data.error || "Something went wrong. Please try again.");
+        setTurnstileToken(null);
+        setTurnstileResetSignal((n) => n + 1);
         return;
       }
 
@@ -305,6 +322,8 @@ function BookForm() {
       });
     } catch {
       setError("Could not submit. Please check your connection and try again.");
+      setTurnstileToken(null);
+      setTurnstileResetSignal((n) => n + 1);
     } finally {
       setSubmitting(false);
     }
@@ -686,10 +705,23 @@ function BookForm() {
           </div>
         )}
 
+        {TURNSTILE_SITE_KEY ? (
+          <TurnstileWidget
+            siteKey={TURNSTILE_SITE_KEY}
+            onToken={setTurnstileToken}
+            resetSignal={turnstileResetSignal}
+          />
+        ) : (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+            Booking verification is not configured.
+          </div>
+        )}
+
         <button
           type="submit"
           disabled={
             submitting ||
+            !turnstileToken ||
             Boolean(closedDateMessage) ||
             (collectionServiceEnabled &&
               form.deliveryType === "COLLECTION_SERVICE" &&

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Upload, X } from "lucide-react";
 import { formatPhoneInputUS, phoneToInputValue } from "@/lib/phone";
+import { FormSectionSkeleton } from "@/components/ui/Skeleton";
 
 type AppBranding = {
   logoUrl: string | null;
@@ -133,7 +134,7 @@ export default function BrandingSettingsPage() {
 
       <section className="rounded-xl border border-surface-border bg-surface p-4">
         {brandingLoading ? (
-          <div className="text-sm text-text-secondary">Loading...</div>
+          <FormSectionSkeleton rows={4} />
         ) : (
           <div className="space-y-4">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

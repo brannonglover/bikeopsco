@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { EmailPageSkeleton } from "@/components/ui/Skeleton";
 
 interface EmailTemplate {
   id: string;
@@ -166,13 +167,11 @@ export default function EmailTemplatesPage() {
   };
 
   if (loading) {
-    return (
-      <div className="py-12 text-center text-slate-500">Loading templates...</div>
-    );
+    return <EmailPageSkeleton />;
   }
 
   return (
-    <div className="w-full max-w-6xl min-w-0 overflow-x-hidden">
+    <div className="w-full min-w-0 overflow-x-hidden">
       <h1 className="text-2xl font-bold text-indigo-950 mb-2">Email Templates</h1>
       <p className="text-slate-600 mb-2 break-words">
         Each card shows a <strong>live simulation</strong> of what customers receive (Bike Ops layout +

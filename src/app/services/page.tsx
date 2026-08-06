@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Price } from "@/components/ui/Price";
 import { ServiceName } from "@/components/ui/ServiceName";
+import { CatalogPageSkeleton } from "@/components/ui/Skeleton";
 
 interface Service {
   id: string;
@@ -267,13 +268,11 @@ export default function ServicesPage() {
   };
 
   if (loading) {
-    return (
-      <div className="py-12 text-center text-slate-500">Loading services...</div>
-    );
+    return <CatalogPageSkeleton titleWidth="w-32" variant="list" label="Loading services" />;
   }
 
   return (
-    <div className="max-w-4xl">
+    <div className="w-full min-w-0">
       <h1 className="text-2xl font-bold text-blue-900 mb-2">Services</h1>
       <p className="text-slate-600 mb-6">
         Add and manage services you offer. These can be attached to jobs when creating or editing them.{" "}

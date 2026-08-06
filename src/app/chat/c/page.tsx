@@ -12,6 +12,7 @@ import type { CustomerConversationMessagesPayload } from "@/lib/chat/customer-co
 import { ChatMessageBubble } from "@/components/chat/ChatMessageBubble";
 import { jobAccessApiSuffix, readJobAccessParam, withJobAccessQuery } from "@/lib/job-access-url";
 import { isChatVideoFile, uploadChatVideoFile } from "@/lib/chat-video-upload";
+import { CustomerCardSkeleton } from "@/components/ui/Skeleton";
 
 const POLL_INTERVAL_MS = 3000;
 
@@ -616,8 +617,8 @@ export default function CustomerChatPage() {
 
   if (status === "loading") {
     return (
-      <div className="flex-1 flex items-center justify-center p-8">
-        <p className="text-slate-500">Loading…</p>
+      <div className="flex flex-1 items-center justify-center p-8">
+        <CustomerCardSkeleton label="Loading chat" />
       </div>
     );
   }

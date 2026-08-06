@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { ListSkeleton } from "@/components/ui/Skeleton";
 
 type ReleaseRow = {
   id: string;
@@ -155,7 +156,9 @@ export function AdminReleasesClient() {
           <p className="mt-0.5 text-xs text-slate-500">Drafts first, newest version first</p>
         </div>
         {loading ? (
-          <p className="px-4 py-6 text-sm text-slate-500">Loading…</p>
+          <div className="p-2">
+            <ListSkeleton rows={6} withAvatar={false} label="Loading releases" />
+          </div>
         ) : releases.length === 0 ? (
           <p className="px-4 py-6 text-sm text-slate-500">
             No drafts yet. Merge to <code className="text-xs">main</code> to generate one.

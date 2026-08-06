@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { SkeletonPulse } from "@/components/ui/Skeleton";
 
 const PREVIEW_IFRAME_CLASS =
   "w-full min-h-[min(70vh,720px)] h-[min(70vh,720px)] bg-white block border-0";
@@ -204,7 +205,7 @@ export default function EmailBroadcastPage() {
   };
 
   return (
-    <div className="w-full max-w-6xl min-w-0 overflow-x-hidden">
+    <div className="w-full min-w-0 overflow-x-hidden">
       <h1 className="text-2xl font-bold text-indigo-950 mb-2">Email Broadcast</h1>
       <p className="text-slate-600 mb-2 break-words">
         Compose a news or updates email for customers who have email updates enabled. Messages use
@@ -231,21 +232,28 @@ export default function EmailBroadcastPage() {
       )}
 
       <div className="mb-6 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-        <p className="text-sm font-medium text-slate-900">
-          {recipientsLoading
-            ? "Loading recipients…"
-            : `${recipientCount ?? 0} customer${
+        {recipientsLoading ? (
+          <div className="space-y-2" aria-busy="true" aria-label="Loading recipients">
+            <SkeletonPulse className="h-4 w-64" />
+            <SkeletonPulse className="h-3 w-80 max-w-full" />
+          </div>
+        ) : (
+          <>
+            <p className="text-sm font-medium text-slate-900">
+              {`${recipientCount ?? 0} customer${
                 recipientCount === 1 ? "" : "s"
               } with email updates enabled`}
-        </p>
-        {!recipientsLoading && sample.length > 0 && (
-          <p className="mt-1 text-sm text-slate-600 break-words">
-            Including{" "}
-            {sample
-              .map((r) => (r.name ? `${r.name} <${r.email}>` : r.email))
-              .join(", ")}
-            {(recipientCount ?? 0) > sample.length ? "…" : ""}
-          </p>
+            </p>
+            {sample.length > 0 && (
+              <p className="mt-1 text-sm text-slate-600 break-words">
+                Including{" "}
+                {sample
+                  .map((r) => (r.name ? `${r.name} <${r.email}>` : r.email))
+                  .join(", ")}
+                {(recipientCount ?? 0) > sample.length ? "…" : ""}
+              </p>
+            )}
+          </>
         )}
       </div>
 

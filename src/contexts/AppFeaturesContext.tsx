@@ -13,6 +13,7 @@ export type AppFeatures = {
   notifyCustomerEnabled: boolean;
   chatEnabled: boolean;
   reviewsEnabled: boolean;
+  rentalsEnabled: boolean;
   jobBoardFiltersEnabled: boolean;
   timezone: string;
 };
@@ -30,6 +31,7 @@ const DEFAULTS: AppFeatures = {
   notifyCustomerEnabled: true,
   chatEnabled: true,
   reviewsEnabled: true,
+  rentalsEnabled: true,
   jobBoardFiltersEnabled: false,
   timezone: "America/New_York",
 };

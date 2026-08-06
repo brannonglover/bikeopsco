@@ -7,6 +7,7 @@ import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { Price } from "@/components/ui/Price";
 import { computeJobSubtotal, getJobPaymentSummary } from "@/lib/job-payments";
+import { CustomerCardSkeleton } from "@/components/ui/Skeleton";
 
 const PAYABLE_STAGES = ["RECEIVED", "WORKING_ON", "WAITING_ON_CUSTOMER", "WAITING_ON_PARTS", "BIKE_READY", "COMPLETED"] as const;
 
@@ -227,12 +228,7 @@ export default function PayPage() {
   }, [jobId, jobAccess]);
 
   if (loading) {
-    return (
-      <div className="flex flex-col items-center gap-4">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-emerald-600" />
-        <p className="text-slate-500">Loading payment…</p>
-      </div>
-    );
+    return <CustomerCardSkeleton label="Loading payment" />;
   }
 
   if (error || !job) {

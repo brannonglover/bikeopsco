@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { broadcastAppFeaturesUpdated } from "@/contexts/AppFeaturesContext";
 import { US_SHOP_TIMEZONES } from "@/lib/timezone";
+import { FormSectionSkeleton } from "@/components/ui/Skeleton";
 
 type AppFeatures = {
   bookingsEnabled: boolean;
@@ -15,6 +16,7 @@ type AppFeatures = {
   notifyCustomerEnabled: boolean;
   chatEnabled: boolean;
   reviewsEnabled: boolean;
+  rentalsEnabled: boolean;
   jobBoardFiltersEnabled: boolean;
   timezone: string;
   staffNotifyEmail: string | null;
@@ -31,6 +33,7 @@ type FeatureFlagKey =
   | "notifyCustomerEnabled"
   | "chatEnabled"
   | "reviewsEnabled"
+  | "rentalsEnabled"
   | "jobBoardFiltersEnabled";
 
 const DEFAULT_FEATURES: AppFeatures = {
@@ -44,6 +47,7 @@ const DEFAULT_FEATURES: AppFeatures = {
   notifyCustomerEnabled: true,
   chatEnabled: true,
   reviewsEnabled: true,
+  rentalsEnabled: true,
   jobBoardFiltersEnabled: false,
   timezone: "America/New_York",
   staffNotifyEmail: null,
@@ -308,7 +312,7 @@ export default function FeatureSettingsPage() {
       </div>
 
       {featuresLoading ? (
-        <div className="rounded-xl border border-surface-border bg-surface p-4 text-sm text-text-secondary">Loading...</div>
+        <FormSectionSkeleton rows={8} />
       ) : (
         <section className="space-y-4 rounded-xl border border-surface-border bg-surface p-4">
           <div>
@@ -584,6 +588,13 @@ export default function FeatureSettingsPage() {
             checked={features.reviewsEnabled}
             disabled={featuresSaving}
             onChange={(v) => setFeatureFlag("reviewsEnabled", v)}
+          />
+          <ToggleRow
+            title="Rentals"
+            description="Enable the Rentals page for fleet, rates, and reservations. Turn off if your shop does not rent bikes."
+            checked={features.rentalsEnabled}
+            disabled={featuresSaving}
+            onChange={(v) => setFeatureFlag("rentalsEnabled", v)}
           />
           <ToggleRow
             title="Job board filters"

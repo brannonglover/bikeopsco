@@ -8,6 +8,7 @@ import Image from "next/image";
 import { Price } from "@/components/ui/Price";
 import { BikePlaceholderIcon } from "@/components/ui/BikePlaceholderIcon";
 import { computeJobSubtotal, getJobPaymentSummary } from "@/lib/job-payments";
+import { CustomerCardSkeleton } from "@/components/ui/Skeleton";
 
 const STAGE_LABELS: Record<string, string> = {
   PENDING_APPROVAL: "Awaiting confirmation",
@@ -285,12 +286,7 @@ export default function StatusPage() {
   }, [jobId, jobAccess]);
 
   if (loading) {
-    return (
-      <div className="flex flex-col items-center gap-4">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-amber-500" />
-        <p className="text-slate-500">Loading status…</p>
-      </div>
-    );
+    return <CustomerCardSkeleton label="Loading status" />;
   }
 
   if (error || !job) {

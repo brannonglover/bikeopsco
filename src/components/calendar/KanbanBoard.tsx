@@ -816,7 +816,7 @@ export function KanbanBoard({ initialJobs }: { initialJobs?: Job[] }) {
             Job Board
           </h1>
           {pendingApprovals.length > 0 ? (
-            <div className="hidden md:block mt-2 w-full max-w-4xl">
+            <div className="mt-2 hidden w-full min-w-0 md:block">
               <section className="rounded-xl border border-surface-border bg-surface shadow-sm dark:shadow-none overflow-hidden">
                 <div className="flex items-center justify-between gap-3 border-b border-surface-border-subtle px-3 py-2">
                   <div className="flex items-center gap-2.5 min-w-0">

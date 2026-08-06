@@ -5,6 +5,7 @@ import { JobDetailModal } from "@/components/jobs/JobDetailModal";
 import { ArchiveJobCard } from "@/components/archive/ArchiveJobCard";
 import { ArchivePagination } from "@/components/archive/ArchivePagination";
 import type { Job } from "@/lib/types";
+import { ListSkeleton } from "@/components/ui/Skeleton";
 
 const ARCHIVE_PAGE_SIZE = 30;
 
@@ -222,9 +223,7 @@ export default function ArchivePage() {
 
       <div className="flex min-h-0 flex-1 flex-col">
         {loading ? (
-          <div className="rounded-2xl border border-slate-200 bg-white p-8 text-sm text-slate-600 shadow-sm">
-            Loading archive…
-          </div>
+          <ListSkeleton rows={8} label="Loading archive" />
         ) : jobs.length === 0 ? (
           <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center shadow-sm">
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-500">
