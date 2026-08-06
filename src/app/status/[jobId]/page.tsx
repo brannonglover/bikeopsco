@@ -35,15 +35,72 @@ const STAGE_DESCRIPTIONS: Record<string, string> = {
 };
 
 function QueuePositionBanner({ queueInfo }: { queueInfo: JobQueueInfo }) {
+  const { position, queueSize, label } = queueInfo;
+  const showTrack = queueSize > 1 && queueSize <= 12;
+
   return (
-    <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5">
-      <p className="text-xs font-semibold uppercase tracking-wide text-blue-800">
-        Service queue
-      </p>
-      <p className="mt-1 text-sm font-medium text-blue-900">
-        #{queueInfo.position} of {queueInfo.queueSize}
-      </p>
-      <p className="mt-0.5 text-sm text-blue-800">{queueInfo.label}</p>
+    <div className="mt-3 border-t border-amber-200/70 pt-3">
+      <div className="flex items-start gap-3">
+        <div
+          className="flex h-11 w-11 flex-shrink-0 flex-col items-center justify-center rounded-lg bg-amber-100 border border-amber-200"
+          aria-hidden
+        >
+          <span className="text-base font-bold leading-none tabular-nums text-amber-900">
+            {position}
+          </span>
+          <span className="mt-0.5 text-[10px] font-medium leading-none text-amber-700">
+            of {queueSize}
+          </span>
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">
+            Service queue
+          </p>
+          <p className="mt-0.5 text-sm leading-snug text-amber-900">{label}</p>
+        </div>
+      </div>
+      {showTrack && (
+        <div
+          className="mt-3"
+          role="img"
+          aria-label={`Position ${position} of ${queueSize} in the service queue`}
+        >
+          <div className="flex gap-1">
+            {Array.from({ length: queueSize }, (_, i) => {
+              const slot = i + 1;
+              const isYou = slot === position;
+              const isAhead = slot < position;
+              return (
+                <div
+                  key={slot}
+                  className="flex min-w-0 flex-1 flex-col items-center gap-1.5"
+                >
+                  <span
+                    className={`h-1.5 w-full rounded-full ${
+                      isYou
+                        ? "bg-amber-600"
+                        : isAhead
+                          ? "bg-amber-400/80"
+                          : "bg-amber-200/70"
+                    }`}
+                  />
+                  <span
+                    className={`text-[10px] font-semibold leading-none ${
+                      isYou
+                        ? "text-amber-800"
+                        : slot === 1
+                          ? "text-amber-700"
+                          : "text-transparent"
+                    }`}
+                  >
+                    {isYou ? "You" : slot === 1 ? "Next" : "·"}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -283,12 +340,12 @@ export default function StatusPage() {
   }, [jobId, jobAccess]);
 
   if (loading) {
-    return <CustomerCardSkeleton label="Loading status" />;
+    return <CustomerCardSkeleton label="Loading status" className="max-w-[35rem]" />;
   }
 
   if (error || !job) {
     return (
-      <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-8 shadow-sm text-center">
+      <div className="w-full max-w-[35rem] rounded-xl border border-slate-200 bg-white p-8 shadow-sm text-center">
         <p className="text-red-600 font-medium">{error ?? "Job not found"}</p>
         {errorDetail && (
           <p className="mt-2 text-sm text-slate-600">{errorDetail}</p>
@@ -337,7 +394,7 @@ export default function StatusPage() {
   const hasMultipleBikes = bikes.length > 1;
 
   return (
-    <div className="w-full max-w-md space-y-6">
+    <div className="w-full max-w-[35rem] space-y-6">
       <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <h1 className="text-lg font-bold text-slate-900">
           {job.bikeMake} {job.bikeModel}
