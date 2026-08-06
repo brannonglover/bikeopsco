@@ -1,6 +1,6 @@
 import type { PrismaClient, Stage } from "@prisma/client";
 
-export type JobQueueStage = "BOOKED_IN" | "RECEIVED";
+export type JobQueueStage = "RECEIVED";
 
 export type JobQueueInfo = {
   stage: JobQueueStage;
@@ -10,7 +10,7 @@ export type JobQueueInfo = {
   label: string;
 };
 
-const QUEUE_STAGES = new Set<Stage>(["BOOKED_IN", "RECEIVED"]);
+const QUEUE_STAGES = new Set<Stage>(["RECEIVED"]);
 
 function ordinal(n: number): string {
   const mod100 = n % 100;
@@ -27,46 +27,28 @@ function ordinal(n: number): string {
   }
 }
 
-export function formatJobQueueLabel(
-  stage: JobQueueStage,
-  position: number,
-  queueSize: number
-): string {
+export function formatJobQueueLabel(position: number, queueSize: number): string {
   if (queueSize <= 1) {
-    return stage === "BOOKED_IN"
-      ? "You're the only booking in the queue."
-      : "You're the only bike waiting for service.";
+    return "You're the only bike waiting for service.";
   }
 
   if (position === 1) {
-    return stage === "BOOKED_IN"
-      ? `You're next in the booking queue (${queueSize} bookings total).`
-      : `You're next in the service queue (${queueSize} bikes total).`;
+    return `You're next in the service queue (${queueSize} bikes total).`;
   }
 
   const ahead = position - 1;
   const aheadWord = ahead === 1 ? "bike" : "bikes";
-  const bookingWord = ahead === 1 ? "booking" : "bookings";
-
-  if (stage === "BOOKED_IN") {
-    return `You're ${ordinal(position)} in the booking queue — ${ahead} ${bookingWord} ahead of you.`;
-  }
 
   return `You're ${ordinal(position)} in the service queue — ${ahead} ${aheadWord} ahead of you.`;
 }
 
 type QueueJobRow = {
   id: string;
-  stage: Stage;
   createdAt: Date;
   receivedAt: Date | null;
 };
 
-function compareQueueJobs(a: QueueJobRow, b: QueueJobRow, stage: JobQueueStage): number {
-  if (stage === "BOOKED_IN") {
-    return a.createdAt.getTime() - b.createdAt.getTime();
-  }
-
+function compareQueueJobs(a: QueueJobRow, b: QueueJobRow): number {
   const aReceived = a.receivedAt?.getTime() ?? a.createdAt.getTime();
   const bReceived = b.receivedAt?.getTime() ?? b.createdAt.getTime();
   if (aReceived !== bReceived) return aReceived - bReceived;
@@ -80,33 +62,30 @@ export async function getJobQueueInfo(
 ): Promise<JobQueueInfo | null> {
   if (!QUEUE_STAGES.has(job.stage)) return null;
 
-  const stage = job.stage as JobQueueStage;
-
   const peers = await prisma.job.findMany({
     where: {
       shopId,
-      stage,
+      stage: "RECEIVED",
       archivedAt: null,
     },
     select: {
       id: true,
-      stage: true,
       createdAt: true,
       receivedAt: true,
     },
   });
 
-  const sorted = [...peers].sort((a, b) => compareQueueJobs(a, b, stage));
+  const sorted = [...peers].sort(compareQueueJobs);
   const position = sorted.findIndex((peer) => peer.id === job.id) + 1;
   if (position <= 0) return null;
 
   const queueSize = sorted.length;
 
   return {
-    stage,
+    stage: "RECEIVED",
     position,
     queueSize,
     aheadCount: Math.max(0, position - 1),
-    label: formatJobQueueLabel(stage, position, queueSize),
+    label: formatJobQueueLabel(position, queueSize),
   };
 }

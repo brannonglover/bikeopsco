@@ -35,13 +35,10 @@ const STAGE_DESCRIPTIONS: Record<string, string> = {
 };
 
 function QueuePositionBanner({ queueInfo }: { queueInfo: JobQueueInfo }) {
-  const title =
-    queueInfo.stage === "BOOKED_IN" ? "Booking queue" : "Service queue";
-
   return (
     <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5">
       <p className="text-xs font-semibold uppercase tracking-wide text-blue-800">
-        {title}
+        Service queue
       </p>
       <p className="mt-1 text-sm font-medium text-blue-900">
         #{queueInfo.position} of {queueInfo.queueSize}
@@ -91,7 +88,7 @@ type StatusJobService = {
 };
 
 type JobQueueInfo = {
-  stage: "BOOKED_IN" | "RECEIVED";
+  stage: "RECEIVED";
   position: number;
   queueSize: number;
   aheadCount: number;
