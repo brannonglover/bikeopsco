@@ -22,6 +22,16 @@ function boardSummaryFingerprint(rows: BoardSummaryRow[]): string {
     .join("|");
 }
 
+function localJobsFingerprint(jobs: Job[]): string {
+  return boardSummaryFingerprint(
+    jobs.map((job) => ({
+      id: job.id,
+      stage: job.stage,
+      updatedAt: job.updatedAt,
+    }))
+  );
+}
+
 function requestPermission(): void {
   if (typeof window === "undefined" || !("Notification" in window)) return;
   if (Notification.permission === "granted" || Notification.permission === "denied") return;
@@ -33,6 +43,8 @@ export function useJobNotifications(jobs: Job[], fetchJobs: () => void): void {
   const hasInitialized = useRef(false);
   const summaryBaseline = useRef<string | null>(null);
   const lastFullRefreshAt = useRef(0);
+  const jobsRef = useRef(jobs);
+  jobsRef.current = jobs;
 
   const requestPermissionCb = useCallback(requestPermission, []);
 
@@ -61,6 +73,13 @@ export function useJobNotifications(jobs: Job[], fetchJobs: () => void): void {
       if (summaryBaseline.current === null) {
         summaryBaseline.current = fingerprint;
         lastFullRefreshAt.current = Date.now();
+        // First poll used to only snapshot the server. If the React Query cache
+        // is stale (e.g. waitlist promote while the board was prefetched), the
+        // new job is already in this fingerprint and would not refresh until
+        // the 60s full poll.
+        if (fingerprint !== localJobsFingerprint(jobsRef.current)) {
+          fetchJobs();
+        }
         return;
       }
 

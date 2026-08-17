@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { ListSkeleton } from "@/components/ui/Skeleton";
+import { BOARD_JOBS_QUERY_KEY } from "@/lib/board-jobs";
+import { broadcastJobsRefresh } from "@/lib/jobs-refresh";
 
 type WaitlistBike = {
   id: string;
@@ -36,6 +39,7 @@ function formatWhen(iso: string): string {
 }
 
 export default function WaitlistPage() {
+  const queryClient = useQueryClient();
   const [entries, setEntries] = useState<WaitlistEntry[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
@@ -80,7 +84,14 @@ export default function WaitlistPage() {
         if (!res.ok) {
           setEntries(snapshot);
           setError(typeof data?.error === "string" ? data.error : "Failed to promote.");
+          return;
         }
+        await queryClient.cancelQueries({ queryKey: BOARD_JOBS_QUERY_KEY });
+        await queryClient.invalidateQueries({
+          queryKey: BOARD_JOBS_QUERY_KEY,
+          refetchType: "all",
+        });
+        broadcastJobsRefresh({ reason: "waitlist-promoted" });
       } catch {
         setEntries(snapshot);
         setError("Failed to promote.");
