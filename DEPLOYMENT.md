@@ -194,7 +194,7 @@ In **bikeopsco** → Settings → Environment Variables, set **Preview** values 
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | Turnstile site key | Public booking CAPTCHA (Managed widget). |
 | `TURNSTILE_SECRET_KEY` | Turnstile secret key | Server-side Siteverify; required or bookings return 403. |
 
-**Do not copy Production Twilio/Quo/Resend keys to Preview** unless using sandbox/test accounts. Customer notifications are blocked on Preview by default (`ALLOW_CUSTOMER_NOTIFICATIONS=true` to override on an isolated DB).
+**Do not copy Production Twilio/Resend keys to Preview** unless using sandbox/test accounts. Customer notifications are blocked on Preview by default (`ALLOW_CUSTOMER_NOTIFICATIONS=true` to override on an isolated DB).
 
 **Recommended for parity:** `BLOB_READ_WRITE_TOKEN`, Stripe **test** keys, separate `STRIPE_WEBHOOK_SECRET` for `https://dev.bikeops.co/api/webhooks/stripe`.
 

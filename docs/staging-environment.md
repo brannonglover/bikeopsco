@@ -22,11 +22,10 @@ The host hint must **not** match production (`aws-0-us-west-2.pooler.supabase.co
 |---------|----------------|------|
 | **Postgres** | Same as Production | Reads/writes live customer data |
 | **Twilio** | Same account + auth token; different `TWILIO_PHONE_NUMBER` | Stage changes / chat could SMS real customers |
-| **Quo** | `QUO_API_KEY` shared; `QUO_PHONE_NUMBER` Production-only | API key present; sends blocked without phone |
 | **Resend** | Not set on Preview | Customer emails mostly skipped already |
 | **Stripe** | Not set on Preview | Payments fail without keys (good) |
 
-**Code guard (develop branch):** Customer-facing email, SMS, and Quo sends are blocked when `VERCEL_ENV=preview` or `NEXT_PUBLIC_APP_URL` contains `dev.bikeops.co`. Set `ALLOW_CUSTOMER_NOTIFICATIONS=true` on Preview only when using an **isolated staging DB** and test recipients. Chat magic-link emails are still allowed (for sign-in testing).
+**Code guard (develop branch):** Customer-facing email and SMS are blocked when `VERCEL_ENV=preview` or `NEXT_PUBLIC_APP_URL` contains `dev.bikeops.co`. Set `ALLOW_CUSTOMER_NOTIFICATIONS=true` on Preview only when using an **isolated staging DB** and test recipients. Chat magic-link emails are still allowed (for sign-in testing).
 
 **You still need a separate staging database** — the guard prevents accidental notifications but Preview must not read/write production data.
 
@@ -199,7 +198,6 @@ Set values for **Preview** (optionally scoped to Git branch `develop` only):
 |----------|---------------|
 | `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` | Omit on Preview, or use a Twilio **test** subaccount |
 | `TWILIO_PHONE_NUMBER` | Omit on Preview (code guard blocks sends anyway) |
-| `QUO_API_KEY` / `QUO_WEBHOOK_SECRET` | Omit on Preview unless testing Quo with a sandbox line |
 | `RESEND_API_KEY` | Omit unless testing email; add Preview-only key for magic-link tests |
 | `STRIPE_SECRET_KEY` / `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Stripe **test** keys only, Preview-scoped |
 | `STRIPE_WEBHOOK_SECRET` | Separate webhook for `https://dev.bikeops.co/api/webhooks/stripe` |
