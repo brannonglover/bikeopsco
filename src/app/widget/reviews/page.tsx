@@ -1,8 +1,9 @@
 import { prisma } from "@/lib/db";
 import {
-  fetchGooglePlaceData,
+  fetchGoogleReviewsForShop,
   fetchYelpBusinessData,
   extractYelpAlias,
+  selectDisplayReviews,
   type ReviewEntry,
 } from "@/lib/reviews";
 import { getGooglePlacesApiKey, getYelpApiKey } from "@/lib/env";
@@ -99,12 +100,6 @@ function GoogleIcon({ size = 18 }: { size?: number }) {
   );
 }
 
-function reviewTimestamp(review: ReviewEntry): number {
-  if (!review.createdAt) return 0;
-  const t = Date.parse(review.createdAt);
-  return Number.isFinite(t) ? t : 0;
-}
-
 function safeBackgroundColor(value: string | string[] | undefined): string {
   const raw = Array.isArray(value) ? value[0] : value;
   const color = raw?.trim() ?? "";
@@ -134,9 +129,11 @@ export default async function ReviewWidget({
     : null;
 
   const [googleData, yelpData] = await Promise.all([
-    settings?.googlePlaceId && googleApiKey
-      ? fetchGooglePlaceData(settings.googlePlaceId, googleApiKey)
-      : null,
+    fetchGoogleReviewsForShop({
+      shopSubdomain: shop.subdomain,
+      placeId: settings?.googlePlaceId,
+      placesApiKey: googleApiKey,
+    }),
     yelpAlias && yelpApiKey
       ? fetchYelpBusinessData(yelpAlias, yelpApiKey)
       : null,
@@ -146,31 +143,11 @@ export default async function ReviewWidget({
     Array.isArray(settings?.featuredReviews) ? settings.featuredReviews : []
   ) as unknown as ReviewEntry[];
 
-  // Merge live reviews and show the latest 15 (by timestamp when available).
   const mergedLive: ReviewEntry[] = [
     ...(googleData?.reviews ?? []),
     ...(yelpData?.reviews ?? []),
   ];
-  const liveReviews = mergedLive
-    .slice()
-    .sort((a, b) => reviewTimestamp(b) - reviewTimestamp(a))
-    .slice(0, 15);
-
-  const displayReviews = (() => {
-    if (liveReviews.length === 0) return featuredReviews.slice(0, 15);
-    if (liveReviews.length >= 15) return liveReviews.slice(0, 15);
-
-    const seen = new Set(
-      liveReviews.map((r) => `${r.platform}|${r.author}|${r.rating}|${r.text}`.trim())
-    );
-    const filler = featuredReviews.filter((r) => {
-      const k = `${r.platform}|${r.author}|${r.rating}|${r.text}`.trim();
-      if (seen.has(k)) return false;
-      seen.add(k);
-      return true;
-    });
-    return [...liveReviews, ...filler].slice(0, 15);
-  })();
+  const displayReviews = selectDisplayReviews(mergedLive, featuredReviews);
 
   const hasGoogle = !!(googleData || settings?.googleReviewUrl);
   const hasYelp = !!(yelpData || settings?.yelpReviewUrl);
@@ -331,6 +308,13 @@ export default async function ReviewWidget({
           margin: 0;
         }
 
+        .w-carousel-count {
+          color: var(--w-text-muted);
+          font-size: 11px;
+          font-weight: 650;
+          margin: 4px 0 0;
+        }
+
         .w-carousel-controls {
           display: inline-flex;
           align-items: center;
@@ -359,7 +343,7 @@ export default async function ReviewWidget({
 
         .w-tiles {
           display: grid;
-          grid-template-columns: 1.2fr 1fr 1fr;
+          grid-template-columns: repeat(6, minmax(0, 1fr));
           gap: 10px;
           align-items: stretch;
         }
@@ -380,6 +364,7 @@ export default async function ReviewWidget({
           gap: 12px;
           overflow: hidden;
           box-shadow: 0 8px 20px var(--w-card-shadow);
+          grid-column: span 2;
         }
 
         .w-tile::before {
@@ -388,10 +373,6 @@ export default async function ReviewWidget({
           inset: 0 auto 0 0;
           width: 4px;
           background: var(--w-accent);
-        }
-
-        .w-tile:first-child {
-          min-height: 194px;
         }
 
         .w-quote-mark {
@@ -526,8 +507,7 @@ export default async function ReviewWidget({
 
         @media (max-width: 680px) {
           .w-tiles { grid-template-columns: 1fr; }
-          .w-tile,
-          .w-tile:first-child { min-height: 0; }
+          .w-tile { min-height: 0; grid-column: auto; }
           .w-review-copy { -webkit-line-clamp: 4; }
           .w-stars-wrap { display: none; }
         }
