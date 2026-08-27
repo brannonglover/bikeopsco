@@ -2,6 +2,7 @@ import { randomBytes } from "crypto";
 import { cookies, headers } from "next/headers";
 import { prisma } from "@/lib/db";
 import { verifyJobCustomerAccessToken } from "@/lib/job-customer-access";
+import { customerHasPushTokens } from "@/lib/push";
 import { requireCurrentShop } from "@/lib/shop";
 import { getEffectiveSmsConsent } from "@/lib/sms-consent";
 
@@ -74,6 +75,22 @@ export async function getCustomerIdForActiveJobAccess(
   return job?.customerId ?? null;
 }
 
+export async function customerHasOpenChatConversation(
+  shopId: string,
+  customerId: string
+): Promise<boolean> {
+  const conversation = await prisma.conversation.findFirst({
+    where: {
+      shopId,
+      customerId,
+      archived: false,
+      messages: { some: {} },
+    },
+    select: { id: true },
+  });
+  return conversation !== null;
+}
+
 export async function customerHasSmsChatAccess(
   shopId: string,
   customerId: string
@@ -88,7 +105,17 @@ export async function customerHasSmsChatAccess(
   });
 
   if (!getEffectiveSmsConsent(customer)) return false;
-  return customerHasActiveChatJob(shopId, customerId);
+  if (await customerHasActiveChatJob(shopId, customerId)) return true;
+  return customerHasOpenChatConversation(shopId, customerId);
+}
+
+async function customerHasExtendedChatSessionAccess(
+  shopId: string,
+  customerId: string
+): Promise<boolean> {
+  if (await customerHasSmsChatAccess(shopId, customerId)) return true;
+  if (await customerHasPushTokens(shopId, customerId)) return true;
+  return customerHasOpenChatConversation(shopId, customerId);
 }
 
 async function getChatSessionToken(): Promise<string | null> {
@@ -121,7 +148,7 @@ export async function getCustomerFromSession(): Promise<string | null> {
 
   if (
     session.expiresAt < new Date() &&
-    !(await customerHasSmsChatAccess(shop.id, session.customerId))
+    !(await customerHasExtendedChatSessionAccess(shop.id, session.customerId))
   ) {
     return null;
   }

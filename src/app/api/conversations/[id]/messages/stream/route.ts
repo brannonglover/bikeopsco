@@ -4,6 +4,7 @@ import {
   getStaffConversationMessagesFingerprint,
   loadStaffConversationMessages,
 } from "@/lib/chat/staff-conversation-messages";
+import { resolveStaffConversation } from "@/lib/conversation";
 import { createPollingSseResponse } from "@/lib/sse";
 import { requireCurrentShop } from "@/lib/shop";
 
@@ -24,12 +25,19 @@ export async function GET(
 
     ({ id: conversationId } = await params);
 
+    const resolved = await resolveStaffConversation(shop.id, conversationId!);
+    if (!resolved) {
+      return new Response("Conversation not found", { status: 404 });
+    }
+
+    const resolvedId = resolved.id;
+
     return createPollingSseResponse({
       signal: request.signal,
       getFingerprint: () =>
-        getStaffConversationMessagesFingerprint(shop.id, conversationId!),
+        getStaffConversationMessagesFingerprint(shop.id, resolvedId),
       getPayload: async () => {
-        const payload = await loadStaffConversationMessages(shop.id, conversationId!);
+        const payload = await loadStaffConversationMessages(shop.id, resolvedId);
         if (!payload) {
           throw new Error("Conversation not found");
         }
