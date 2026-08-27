@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { getAppFeatures } from "@/lib/app-settings";
+import { resolveStaffConversation } from "@/lib/conversation";
+import { requireCurrentShop } from "@/lib/shop";
 
 export const dynamic = "force-dynamic";
 
@@ -54,10 +56,19 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const shop = await requireCurrentShop();
     const { id } = await params;
 
+    const resolved = await resolveStaffConversation(shop.id, id);
+    if (!resolved) {
+      return NextResponse.json(
+        { error: "Conversation not found" },
+        { status: 404 }
+      );
+    }
+
     const conversation = await prisma.conversation.findUnique({
-      where: { id },
+      where: { id: resolved.id },
       include: {
         customer: true,
         job: true,
