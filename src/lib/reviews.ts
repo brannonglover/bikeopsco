@@ -1,7 +1,12 @@
 /**
- * Server-side helpers for fetching live review data from Google Places API
- * and Yelp Fusion API. Results are cached by Next.js fetch for 1 hour.
+ * Server-side helpers for fetching live review data from Google Places API,
+ * Google Business Profile (all reviews), and Yelp Fusion API.
  */
+
+import {
+  getGoogleBusinessProfileConfig,
+  isGoogleBusinessProfileEnabledForShop,
+} from "@/lib/env";
 
 export interface ReviewEntry {
   author: string;
@@ -17,6 +22,7 @@ export interface GooglePlaceData {
   rating: number;
   reviewCount: number;
   reviews: ReviewEntry[];
+  source: "places" | "business-profile";
 }
 
 export interface YelpBusinessData {
@@ -109,11 +115,201 @@ export async function fetchGooglePlaceData(
       rating: data.rating ?? 0,
       reviewCount: data.userRatingCount ?? 0,
       reviews,
+      source: "places",
     };
   } catch (err) {
     console.error("fetchGooglePlaceData error:", err);
     return null;
   }
+}
+
+// ─── Google Business Profile (all reviews) ───────────────────────────────────
+
+const GBP_STAR_MAP: Record<string, number> = {
+  ONE: 1,
+  TWO: 2,
+  THREE: 3,
+  FOUR: 4,
+  FIVE: 5,
+};
+
+type GbpTokenCache = { accessToken: string; expiresAt: number };
+let gbpTokenCache: GbpTokenCache | null = null;
+
+type GbpReviewCache = { data: GooglePlaceData; expiresAt: number };
+let gbpReviewCache: GbpReviewCache | null = null;
+
+function relativeTimeFromIso(iso: string | undefined): string {
+  if (!iso) return "";
+  const then = Date.parse(iso);
+  if (!Number.isFinite(then)) return "";
+  const days = Math.max(0, Math.round((Date.now() - then) / 86_400_000));
+  if (days < 1) return "today";
+  if (days === 1) return "1 day ago";
+  if (days < 30) return `${days} days ago`;
+  const months = Math.round(days / 30);
+  if (months === 1) return "a month ago";
+  if (months < 12) return `${months} months ago`;
+  const years = Math.round(months / 12);
+  return years === 1 ? "a year ago" : `${years} years ago`;
+}
+
+async function getGbpAccessToken(config: {
+  clientId: string;
+  clientSecret: string;
+  refreshToken: string;
+}): Promise<string | null> {
+  if (gbpTokenCache && gbpTokenCache.expiresAt > Date.now() + 30_000) {
+    return gbpTokenCache.accessToken;
+  }
+  const body = new URLSearchParams({
+    refresh_token: config.refreshToken,
+    client_id: config.clientId,
+    client_secret: config.clientSecret,
+    grant_type: "refresh_token",
+  });
+  const res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body,
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    console.error(`GBP token refresh ${res.status}:`, await res.text());
+    gbpTokenCache = null;
+    return null;
+  }
+  const data = (await res.json()) as { access_token?: string; expires_in?: number };
+  if (!data.access_token) return null;
+  const expiresInMs = Math.max(60, Number(data.expires_in) || 3600) * 1000;
+  gbpTokenCache = {
+    accessToken: data.access_token,
+    expiresAt: Date.now() + expiresInMs,
+  };
+  return data.access_token;
+}
+
+type GbpReview = {
+  reviewer?: { displayName?: string };
+  starRating?: string;
+  comment?: string;
+  createTime?: string;
+  updateTime?: string;
+};
+
+type GbpListResponse = {
+  reviews?: GbpReview[];
+  averageRating?: number;
+  totalReviewCount?: number;
+  nextPageToken?: string;
+};
+
+/**
+ * Fetch every Google review for the connected Business Profile location.
+ * Places API only returns 5 "most relevant" reviews; this uses the owner API.
+ */
+export async function fetchGoogleBusinessProfileReviews(): Promise<GooglePlaceData | null> {
+  const config = getGoogleBusinessProfileConfig();
+  if (!config) return null;
+
+  if (gbpReviewCache && gbpReviewCache.expiresAt > Date.now()) {
+    return gbpReviewCache.data;
+  }
+
+  try {
+    const accessToken = await getGbpAccessToken(config);
+    if (!accessToken) return null;
+
+    const reviews: ReviewEntry[] = [];
+    let pageToken = "";
+    let averageRating = 0;
+    let totalReviewCount = 0;
+
+    for (let page = 0; page < 20; page++) {
+      const url = new URL(
+        `https://mybusiness.googleapis.com/v4/accounts/${encodeURIComponent(config.accountId)}/locations/${encodeURIComponent(config.locationId)}/reviews`
+      );
+      url.searchParams.set("pageSize", "50");
+      url.searchParams.set("orderBy", "updateTime desc");
+      if (pageToken) url.searchParams.set("pageToken", pageToken);
+
+      const res = await fetch(url.toString(), {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        console.error(`GBP reviews.list ${res.status}:`, await res.text());
+        return gbpReviewCache?.data ?? null;
+      }
+      const data = (await res.json()) as GbpListResponse;
+      averageRating = data.averageRating ?? averageRating;
+      totalReviewCount = data.totalReviewCount ?? totalReviewCount;
+      for (const review of data.reviews ?? []) {
+        reviews.push({
+          platform: "google",
+          author: review.reviewer?.displayName ?? "Anonymous",
+          rating: GBP_STAR_MAP[review.starRating ?? ""] ?? 5,
+          text: review.comment ?? "",
+          relativeTime: relativeTimeFromIso(review.updateTime || review.createTime),
+          createdAt: review.updateTime || review.createTime || null,
+        });
+      }
+      if (!data.nextPageToken) break;
+      pageToken = data.nextPageToken;
+    }
+
+    const result: GooglePlaceData = {
+      rating: averageRating || 0,
+      reviewCount: totalReviewCount || reviews.length,
+      reviews,
+      source: "business-profile",
+    };
+    gbpReviewCache = { data: result, expiresAt: Date.now() + 60 * 60 * 1000 };
+    return result;
+  } catch (err) {
+    console.error("fetchGoogleBusinessProfileReviews error:", err);
+    return gbpReviewCache?.data ?? null;
+  }
+}
+
+export async function fetchGoogleReviewsForShop(options: {
+  shopSubdomain: string;
+  placeId?: string | null;
+  placesApiKey?: string | null;
+}): Promise<GooglePlaceData | null> {
+  if (isGoogleBusinessProfileEnabledForShop(options.shopSubdomain)) {
+    const gbp = await fetchGoogleBusinessProfileReviews();
+    if (gbp && gbp.reviews.length > 0) return gbp;
+  }
+  if (options.placeId && options.placesApiKey) {
+    return fetchGooglePlaceData(options.placeId, options.placesApiKey);
+  }
+  return null;
+}
+
+export function reviewTimestamp(review: ReviewEntry): number {
+  if (!review.createdAt) return 0;
+  const t = Date.parse(review.createdAt);
+  return Number.isFinite(t) ? t : 0;
+}
+
+/** Sort live reviews newest-first, fill with featured if needed, and keep the latest 5. */
+export function selectDisplayReviews(
+  live: ReviewEntry[],
+  featured: ReviewEntry[] = []
+): ReviewEntry[] {
+  const latest = live.slice().sort((a, b) => reviewTimestamp(b) - reviewTimestamp(a));
+  if (latest.length === 0) return featured.slice(0, 5);
+  const seen = new Set(
+    latest.map((r) => `${r.platform}|${r.author}|${r.rating}|${r.text}`.trim())
+  );
+  const filler = featured.filter((r) => {
+    const k = `${r.platform}|${r.author}|${r.rating}|${r.text}`.trim();
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+  return [...latest, ...filler].slice(0, 5);
 }
 
 // ─── Yelp ────────────────────────────────────────────────────────────────────

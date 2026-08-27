@@ -77,7 +77,7 @@ function accentFor(name: string) {
   return ACCENTS[Math.abs(hash) % ACCENTS.length];
 }
 
-const TILES_PER_PAGE = 3;
+const TILES_PER_PAGE = 5;
 const MAX_CHARS = 180;
 
 const REVIEW_MOODS = [
@@ -110,8 +110,11 @@ export function ReviewCarousel({ reviews }: { reviews: ReviewEntry[] }) {
     <div className="w-carousel-shell">
       <div className="w-carousel-header">
         <div>
-          <p className="w-carousel-title">Stories from the stand</p>
+          <p className="w-carousel-title">
+            {reviews.length === 1 ? "Latest review" : "Latest reviews"}
+          </p>
         </div>
+        {totalPages > 1 ? (
         <div className="w-carousel-controls">
           <button
             className="w-carousel-button"
@@ -136,6 +139,7 @@ export function ReviewCarousel({ reviews }: { reviews: ReviewEntry[] }) {
             </svg>
           </button>
         </div>
+        ) : null}
       </div>
 
       <div className="w-tiles">
@@ -189,7 +193,7 @@ export function ReviewCarousel({ reviews }: { reviews: ReviewEntry[] }) {
       </div>
 
       {/* Dot indicators */}
-      {totalPages > 1 && (
+      {totalPages > 1 && totalPages <= 8 && (
         <div className="w-carousel-dots">
           {Array.from({ length: totalPages }).map((_, i) => (
             <button

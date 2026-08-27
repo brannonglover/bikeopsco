@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { getGooglePlacesApiKey, getYelpApiKey } from "@/lib/env";
+import {
+  getGooglePlacesApiKey,
+  getYelpApiKey,
+  getGoogleBusinessProfileConfig,
+} from "@/lib/env";
 import { getAppFeatures } from "@/lib/app-settings";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +15,7 @@ export async function GET() {
   }
   return NextResponse.json({
     googlePlacesApiConfigured: !!getGooglePlacesApiKey(),
+    googleBusinessProfileConfigured: !!getGoogleBusinessProfileConfig(),
     yelpApiConfigured: !!getYelpApiKey(),
   });
 }

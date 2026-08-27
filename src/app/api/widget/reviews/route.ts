@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import {
-  fetchGooglePlaceData,
+  fetchGoogleReviewsForShop,
   fetchYelpBusinessData,
   extractYelpAlias,
+  selectDisplayReviews,
   type ReviewEntry,
 } from "@/lib/reviews";
 import { getGooglePlacesApiKey, getYelpApiKey } from "@/lib/env";
@@ -55,9 +56,11 @@ export async function GET(request: NextRequest) {
     const yelpApiKey = getYelpApiKey();
 
     const [googleData, yelpData] = await Promise.all([
-      settings?.googlePlaceId && googleApiKey
-        ? fetchGooglePlaceData(settings.googlePlaceId, googleApiKey)
-        : null,
+      fetchGoogleReviewsForShop({
+        shopSubdomain: shop.subdomain,
+        placeId: settings?.googlePlaceId,
+        placesApiKey: googleApiKey,
+      }),
       settings?.yelpReviewUrl && yelpApiKey
         ? fetchYelpBusinessData(extractYelpAlias(settings.yelpReviewUrl) ?? "", yelpApiKey)
         : null,
@@ -71,28 +74,9 @@ export async function GET(request: NextRequest) {
       ...(googleData?.reviews ?? []),
       ...(yelpData?.reviews ?? []),
     ];
-    const latestReviews = mergedLive
-      .slice()
-      .sort((a, b) => {
-        const ta = a.createdAt ? Date.parse(a.createdAt) : 0;
-        const tb = b.createdAt ? Date.parse(b.createdAt) : 0;
-        return (Number.isFinite(tb) ? tb : 0) - (Number.isFinite(ta) ? ta : 0);
-      })
-      .slice(0, 15);
-
     const featuredList = featuredReviews as unknown as ReviewEntry[];
-    const displayReviews = (() => {
-      if (latestReviews.length === 0) return featuredList.slice(0, 15);
-      if (latestReviews.length >= 15) return latestReviews.slice(0, 15);
-      const seen = new Set(latestReviews.map((r) => `${r.platform}|${r.author}|${r.rating}|${r.text}`.trim()));
-      const filler = featuredList.filter((r) => {
-        const k = `${r.platform}|${r.author}|${r.rating}|${r.text}`.trim();
-        if (seen.has(k)) return false;
-        seen.add(k);
-        return true;
-      });
-      return [...latestReviews, ...filler].slice(0, 15);
-    })();
+    const latestReviews = selectDisplayReviews(mergedLive, []);
+    const displayReviews = selectDisplayReviews(mergedLive, featuredList);
 
     const res = NextResponse.json({
       totalSent,
@@ -103,6 +87,7 @@ export async function GET(request: NextRequest) {
             rating: googleData.rating,
             reviewCount: googleData.reviewCount,
             reviews: googleData.reviews,
+            source: googleData.source,
           }
         : null,
       yelp: yelpData

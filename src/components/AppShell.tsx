@@ -4,16 +4,15 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Suspense, useState, useEffect } from "react";
 import { signOut, useSession } from "next-auth/react";
-import { useQueryClient } from "@tanstack/react-query";
 import { SidebarNav } from "@/components/SidebarNav";
 import { CustomerMobileNav } from "@/components/CustomerMobileNav";
+import { StaffBoardSyncProvider } from "@/contexts/StaffBoardSyncContext";
 import { StaffChatAttentionProvider } from "@/contexts/StaffChatAttentionContext";
 import { StaffWaitlistAttentionProvider } from "@/contexts/StaffWaitlistAttentionContext";
 import { AppFeaturesProvider, useAppFeatures } from "@/contexts/AppFeaturesContext";
 import { initNotificationSound } from "@/lib/notificationSound";
 import { BrandLogo, BrandingProvider, type BrandingResponse } from "@/components/BrandLogo";
 import { VersionUpdateBanner } from "@/components/VersionUpdateBanner";
-import { BOARD_JOBS_QUERY_KEY, fetchBoardJobsClient } from "@/lib/board-jobs";
 
 type BillingStatus = {
   status: string;
@@ -118,7 +117,6 @@ export function AppShell({
 function AppShellContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const queryClient = useQueryClient();
   const isLoginPage = pathname === "/login";
   const isSignupPage = pathname === "/signup" || pathname === "/signup/verify";
   const isAdminPage = pathname?.startsWith("/admin");
@@ -139,17 +137,6 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
       router.replace(`/login?callbackUrl=${encodeURIComponent(pathname ?? "/")}`);
     }
   }, [isStaffPage, status, router, pathname]);
-
-  // Warm job board cache on other staff pages so /calendar soft-nav is instant.
-  useEffect(() => {
-    if (!isStaffPage || status !== "authenticated") return;
-    if (pathname === "/calendar") return;
-    void queryClient.prefetchQuery({
-      queryKey: BOARD_JOBS_QUERY_KEY,
-      queryFn: fetchBoardJobsClient,
-      staleTime: 30_000,
-    });
-  }, [isStaffPage, status, pathname, queryClient]);
 
   useEffect(() => {
     initNotificationSound();
@@ -226,6 +213,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
   return (
     <AppFeaturesProvider>
       <FeatureRedirector />
+      <StaffBoardSyncProvider>
       <StaffWaitlistAttentionProvider syncEnabled={!isStaffWaitlistPage}>
       <StaffChatAttentionProvider syncEnabled={!isStaffChatPage}>
         <div className="flex min-h-screen flex-1 min-w-0 bg-staff-canvas">
@@ -345,6 +333,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
         </div>
       </StaffChatAttentionProvider>
       </StaffWaitlistAttentionProvider>
+      </StaffBoardSyncProvider>
     </AppFeaturesProvider>
   );
 }

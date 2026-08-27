@@ -130,6 +130,24 @@ export async function resolveGeneralConversation(
  * Finds or creates the customer's single general chat thread (jobId null).
  * Reuses archived threads instead of creating duplicates.
  */
+/**
+ * Staff routes may reference any conversation id (including stale job-linked threads).
+ * Always resolve to the customer's canonical general thread before read/write.
+ */
+export async function resolveStaffConversation(
+  shopId: string,
+  conversationId: string,
+  tx?: Db
+): Promise<Conversation | null> {
+  const client = tx ?? prisma;
+  const conversation = await client.conversation.findFirst({
+    where: { id: conversationId, shopId },
+    select: { customerId: true },
+  });
+  if (!conversation) return null;
+  return resolveGeneralConversation(shopId, conversation.customerId, tx);
+}
+
 export async function findOrCreateGeneralConversation(
   shopId: string,
   customerId: string,

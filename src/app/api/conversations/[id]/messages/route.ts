@@ -12,9 +12,10 @@ import { getAppFeatures } from "@/lib/app-settings";
 import { loadStaffConversationMessages } from "@/lib/chat/staff-conversation-messages";
 import { parseMessagePageOptions } from "@/lib/chat/message-page";
 import {
-  customerHasActiveChatJob,
+  customerHasSmsChatAccess,
   findActiveJobIdForCustomer,
 } from "@/lib/chat-session";
+import { resolveStaffConversation } from "@/lib/conversation";
 import { getEffectiveSmsConsent } from "@/lib/sms-consent";
 import { requireCurrentShop } from "@/lib/shop";
 import { attachmentNotificationLabel } from "@/lib/chat-media";
@@ -40,10 +41,15 @@ export async function GET(
     }
     ({ id: conversationId } = await params);
 
+    const resolved = await resolveStaffConversation(shop.id, conversationId);
+    if (!resolved) {
+      return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
+    }
+
     const page = parseMessagePageOptions(request.nextUrl.searchParams);
     const payload = await loadStaffConversationMessages(
       shop.id,
-      conversationId,
+      resolved.id,
       page
     );
     if (!payload) {
@@ -78,11 +84,19 @@ export async function POST(
     const body = await request.json();
     const { sender, body: bodyText, attachmentIds } = createSchema.parse(body);
 
-    const conversation = await prisma.conversation.findFirst({
+    const requested = await prisma.conversation.findFirst({
       where: { id: conversationId, shopId: shop.id },
       include: { customer: true },
     });
 
+    if (!requested) {
+      return NextResponse.json(
+        { error: "Conversation not found" },
+        { status: 404 }
+      );
+    }
+
+    const conversation = await resolveStaffConversation(shop.id, conversationId);
     if (!conversation) {
       return NextResponse.json(
         { error: "Conversation not found" },
@@ -97,10 +111,12 @@ export async function POST(
       );
     }
 
+    const targetConversationId = conversation.id;
+
     const message = await prisma.message.create({
       data: {
         shopId: shop.id,
-        conversationId,
+        conversationId: targetConversationId,
         sender,
         body: bodyText?.trim() || null,
         attachments: attachmentIds?.length
@@ -113,7 +129,7 @@ export async function POST(
     });
 
     await prisma.conversation.update({
-      where: { id: conversationId },
+      where: { id: targetConversationId },
       data: { updatedAt: new Date() },
     });
 
@@ -125,25 +141,25 @@ export async function POST(
       // App users get push instead of a parallel SMS for the same message.
       const preferAppPush = await customerHasPushTokens(
         shop.id,
-        conversation.customerId
+        requested.customerId
       );
 
       if (
         !preferAppPush &&
-        conversation.customer.phone &&
-        getEffectiveSmsConsent(conversation.customer) &&
-        (await customerHasActiveChatJob(shop.id, conversation.customerId))
+        requested.customer.phone &&
+        getEffectiveSmsConsent(requested.customer) &&
+        (await customerHasSmsChatAccess(shop.id, requested.customerId))
       ) {
         const activeJobId = await findActiveJobIdForCustomer(
           shop.id,
-          conversation.customerId
+          requested.customerId
         );
         const attachmentPayload = message.attachments.map((a) => ({
           url: a.url,
           mimeType: a.mimeType,
         }));
         const updateSmsDelivery = (smsText: string, attachmentOnly = false) => {
-          sendChatStaffSms(conversation.customer.phone!, smsText, {
+          sendChatStaffSms(requested.customer.phone!, smsText, {
             attachmentOnly,
             includeChatUrl: attachmentOnly || hasAtt,
             shopSubdomain: shop.subdomain,
@@ -188,17 +204,21 @@ export async function POST(
         : hasAtt
           ? attachmentNotificationLabel(message.attachments)
           : "New message";
-      await sendPushToCustomer(shop.id, conversation.customerId, {
+      await sendPushToCustomer(shop.id, requested.customerId, {
         title: shopName,
         body: pushBody,
-        data: { type: "new_message", conversationId, messageId: message.id },
+        data: {
+          type: "new_message",
+          conversationId: targetConversationId,
+          messageId: message.id,
+        },
       }).catch((err) => console.error("Push notify customer:", err));
     }
 
     if (sender === "CUSTOMER") {
       const customerName = [
-        conversation.customer.firstName,
-        conversation.customer.lastName,
+        requested.customer.firstName,
+        requested.customer.lastName,
       ]
         .filter(Boolean)
         .join(" ");
@@ -207,12 +227,16 @@ export async function POST(
       await sendPushToAllStaff(shop.id, {
         title: `New message from ${customerName}`,
         body: pushBody,
-        data: { type: "new_message", conversationId, messageId: message.id },
+        data: {
+          type: "new_message",
+          conversationId: targetConversationId,
+          messageId: message.id,
+        },
       }).catch((err) => console.error("Push notify staff:", err));
 
       void sendStaffNewChatMessageNotification({
         shopId: shop.id,
-        conversationId,
+        conversationId: targetConversationId,
         messageId: message.id,
         customerName: customerName || "Customer",
         messagePreview: pushBody,

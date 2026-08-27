@@ -42,6 +42,43 @@ export function getYelpApiKey(): string | null {
   return process.env.YELP_API_KEY?.trim() || null;
 }
 
+export type GoogleBusinessProfileConfig = {
+  clientId: string;
+  clientSecret: string;
+  refreshToken: string;
+  accountId: string;
+  locationId: string;
+  /** When set, GBP reviews are only used for this shop subdomain. Defaults to bbm. */
+  shopSubdomain: string;
+};
+
+export function getGoogleBusinessProfileConfig(): GoogleBusinessProfileConfig | null {
+  const clientId = process.env.GOOGLE_BUSINESS_PROFILE_CLIENT_ID?.trim() || "";
+  const clientSecret = process.env.GOOGLE_BUSINESS_PROFILE_CLIENT_SECRET?.trim() || "";
+  const refreshToken = process.env.GOOGLE_BUSINESS_PROFILE_REFRESH_TOKEN?.trim() || "";
+  const accountId = process.env.GOOGLE_BUSINESS_PROFILE_ACCOUNT_ID?.trim() || "";
+  const locationId = process.env.GOOGLE_BUSINESS_PROFILE_LOCATION_ID?.trim() || "";
+  if (!clientId || !clientSecret || !refreshToken || !accountId || !locationId) {
+    return null;
+  }
+  return {
+    clientId,
+    clientSecret,
+    refreshToken,
+    accountId,
+    locationId,
+    shopSubdomain: (
+      process.env.GOOGLE_BUSINESS_PROFILE_SHOP_SUBDOMAIN?.trim() || "bbm"
+    ).toLowerCase(),
+  };
+}
+
+export function isGoogleBusinessProfileEnabledForShop(subdomain: string): boolean {
+  const config = getGoogleBusinessProfileConfig();
+  if (!config) return false;
+  return subdomain.trim().toLowerCase() === config.shopSubdomain;
+}
+
 /** Resend API key - tries RESEND_API_KEY, then BIKEOPS_RESEND_API_KEY */
 export function getResendApiKey(): string | null {
   const key =

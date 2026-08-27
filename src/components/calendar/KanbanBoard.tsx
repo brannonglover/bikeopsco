@@ -22,7 +22,6 @@ import { BoardSkeleton } from "./BoardSkeleton";
 import { RejectBookingModal } from "./RejectBookingModal";
 import { NewJobModal } from "@/components/jobs/NewJobModal";
 import { JobDetailModal } from "@/components/jobs/JobDetailModal";
-import { useJobNotifications } from "@/hooks/useJobNotifications";
 import { useIsMobileBoard } from "@/hooks/useIsMobileBoard";
 import type { Job, Stage } from "@/lib/types";
 import { getJobBikeDisplayTitle } from "@/lib/job-display";
@@ -268,8 +267,6 @@ export function KanbanBoard({ initialJobs }: { initialJobs?: Job[] }) {
     },
     [queryClient]
   );
-
-  useJobNotifications(jobs, () => fetchJobs({ silent: true }));
 
   useEffect(() => {
     const handler = () => fetchJobs({ silent: true });

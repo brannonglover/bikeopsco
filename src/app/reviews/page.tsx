@@ -52,12 +52,15 @@ interface ReviewStats {
 
 interface ApiStatus {
   googlePlacesApiConfigured: boolean;
+  googleBusinessProfileConfigured: boolean;
   yelpApiConfigured: boolean;
 }
 
 interface LivePlatformStats {
   rating: number;
   reviewCount: number;
+  loadedCount?: number;
+  source?: string;
 }
 
 interface LiveReviewStats {
@@ -227,8 +230,21 @@ export default function ReviewsSettingsPage() {
       if (res.ok) {
         const data = await res.json();
         setLiveReviewStats({
-          google: data.google ?? null,
-          yelp: data.yelp ?? null,
+          google: data.google
+            ? {
+                rating: data.google.rating,
+                reviewCount: data.google.reviewCount,
+                loadedCount: Array.isArray(data.google.reviews) ? data.google.reviews.length : 0,
+                source: data.google.source,
+              }
+            : null,
+          yelp: data.yelp
+            ? {
+                rating: data.yelp.rating,
+                reviewCount: data.yelp.reviewCount,
+                loadedCount: Array.isArray(data.yelp.reviews) ? data.yelp.reviews.length : 0,
+              }
+            : null,
         });
       }
     } catch { /* ignore */ } finally { setLoadingLiveStats(false); }
@@ -364,7 +380,12 @@ export default function ReviewsSettingsPage() {
               <StatCard
                 label="Google Reviews"
                 value={liveReviewStats.google.reviewCount.toLocaleString()}
-                sub={`${liveReviewStats.google.rating.toFixed(1)}★ avg rating`}
+                sub={
+                  liveReviewStats.google.loadedCount != null &&
+                  liveReviewStats.google.loadedCount < liveReviewStats.google.reviewCount
+                    ? `Showing ${liveReviewStats.google.loadedCount} of ${liveReviewStats.google.reviewCount} (Places API cap)`
+                    : `${liveReviewStats.google.rating.toFixed(1)}★ avg · ${liveReviewStats.google.loadedCount ?? 0} on widget`
+                }
                 accent="blue"
               />
             )}
@@ -399,12 +420,13 @@ export default function ReviewsSettingsPage() {
       <section className="rounded-xl border border-surface-border bg-surface p-6 mb-8">
         <h2 className="text-base font-semibold text-foreground mb-1">Live Review Fetching</h2>
         <p className="text-sm text-text-secondary mb-5">
-          Connect your Google Places API and Yelp API keys to automatically pull real ratings and reviews into your widget — no manual entry needed. Both are free tiers that take about 5 minutes to set up.
+          Google Places can only return 5 reviews. To show every Google review on your site, connect Google Business Profile (the owner API) plus optional Yelp.
         </p>
 
         <div className="flex flex-wrap gap-2 mb-5">
           {apiStatus ? (
             <>
+              <ApiKeyBadge configured={apiStatus.googleBusinessProfileConfigured} label="Google Business Profile" />
               <ApiKeyBadge configured={apiStatus.googlePlacesApiConfigured} label="Google Places API" />
               <ApiKeyBadge configured={apiStatus.yelpApiConfigured} label="Yelp API" />
             </>
@@ -412,6 +434,16 @@ export default function ReviewsSettingsPage() {
             <div className="h-7 w-48 rounded-full bg-surface-border animate-pulse" />
           )}
         </div>
+
+        {apiStatus && !apiStatus.googleBusinessProfileConfigured && (
+          <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-4 py-3 text-sm text-amber-800 dark:text-amber-300 space-y-2 mb-4">
+            <p>
+              <strong>All Google reviews:</strong> Places API is capped at 5. Run{" "}
+              <code className="font-mono text-xs bg-amber-100 dark:bg-amber-800/40 px-1 rounded">node scripts/google-business-profile-oauth.js</code>
+              {" "}then set <code className="font-mono text-xs bg-amber-100 dark:bg-amber-800/40 px-1 rounded">GOOGLE_BUSINESS_PROFILE_*</code> env vars (client, secret, refresh token, account id, location id).
+            </p>
+          </div>
+        )}
 
         {apiStatus && (!apiStatus.googlePlacesApiConfigured || !apiStatus.yelpApiConfigured) && (
           <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-4 py-3 text-sm text-amber-800 dark:text-amber-300 space-y-2">
