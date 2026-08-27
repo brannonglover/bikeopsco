@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
+import type { QueryClient } from "@tanstack/react-query";
 import type { Job } from "@/lib/types";
+import { BOARD_JOBS_QUERY_KEY } from "@/lib/board-jobs";
 import { playNotificationSound } from "@/lib/notificationSound";
 import { useVisibilityAwarePolling } from "@/hooks/useVisibilityAwarePolling";
 
@@ -38,19 +40,51 @@ function requestPermission(): void {
   Notification.requestPermission();
 }
 
-export function useJobNotifications(jobs: Job[], fetchJobs: () => void): void {
+function isBoardJobsQueryKey(queryKey: readonly unknown[]): boolean {
+  return queryKey[0] === BOARD_JOBS_QUERY_KEY[0] && queryKey[1] === BOARD_JOBS_QUERY_KEY[1];
+}
+
+export function useJobNotifications(
+  queryClient: QueryClient,
+  options?: { enabled?: boolean }
+): void {
+  const enabled = options?.enabled ?? true;
   const seenJobIds = useRef<Set<string>>(new Set());
   const hasInitialized = useRef(false);
   const summaryBaseline = useRef<string | null>(null);
   const lastFullRefreshAt = useRef(0);
+  const [jobs, setJobs] = useState<Job[]>(
+    () => queryClient.getQueryData<Job[]>(BOARD_JOBS_QUERY_KEY) ?? []
+  );
   const jobsRef = useRef(jobs);
   jobsRef.current = jobs;
 
-  const requestPermissionCb = useCallback(requestPermission, []);
+  const fetchJobs = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: BOARD_JOBS_QUERY_KEY });
+  }, [queryClient]);
 
   useEffect(() => {
-    requestPermissionCb();
-  }, [requestPermissionCb]);
+    const syncFromCache = () => {
+      setJobs(queryClient.getQueryData<Job[]>(BOARD_JOBS_QUERY_KEY) ?? []);
+    };
+    syncFromCache();
+    return queryClient.getQueryCache().subscribe((event) => {
+      if (event?.query && isBoardJobsQueryKey(event.query.queryKey)) {
+        syncFromCache();
+      }
+    });
+  }, [queryClient]);
+
+  useEffect(() => {
+    requestPermission();
+  }, []);
+
+  useEffect(() => {
+    if (!enabled) {
+      summaryBaseline.current = null;
+      return;
+    }
+  }, [enabled]);
 
   useEffect(() => {
     if (jobs.length > 0 && !hasInitialized.current) {
@@ -73,10 +107,6 @@ export function useJobNotifications(jobs: Job[], fetchJobs: () => void): void {
       if (summaryBaseline.current === null) {
         summaryBaseline.current = fingerprint;
         lastFullRefreshAt.current = Date.now();
-        // First poll used to only snapshot the server. If the React Query cache
-        // is stale (e.g. waitlist promote while the board was prefetched), the
-        // new job is already in this fingerprint and would not refresh until
-        // the 60s full poll.
         if (fingerprint !== localJobsFingerprint(jobsRef.current)) {
           fetchJobs();
         }
@@ -96,11 +126,16 @@ export function useJobNotifications(jobs: Job[], fetchJobs: () => void): void {
     }
   }, [fetchJobs]);
 
-  useVisibilityAwarePolling(() => {
-    void pollBoardSummary();
-  }, JOB_POLL_MS);
+  useVisibilityAwarePolling(
+    () => {
+      void pollBoardSummary();
+    },
+    JOB_POLL_MS,
+    { enabled }
+  );
 
   useEffect(() => {
+    if (!enabled) return;
     if (typeof window === "undefined" || !("Notification" in window)) return;
     if (Notification.permission !== "granted") return;
 
@@ -129,5 +164,5 @@ export function useJobNotifications(jobs: Job[], fetchJobs: () => void): void {
         // Ignore notification errors
       }
     }
-  }, [jobs]);
+  }, [enabled, jobs]);
 }

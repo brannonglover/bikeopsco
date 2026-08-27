@@ -12,6 +12,10 @@ import type { StaffConversationMessagesPayload } from "@/lib/chat/staff-conversa
 import { ChatMessageBubble } from "@/components/chat/ChatMessageBubble";
 import { ConversationListRow } from "@/components/chat/ConversationListRow";
 import { mergeChatMessagesWithServer } from "@/lib/chat-messages";
+import {
+  clearChatPreviewMessage,
+  getChatPreviewSeed,
+} from "@/lib/chat-preview-cache";
 import { isCustomerTypingRecently } from "@/lib/chat-typing";
 import { isChatVideoFile, uploadChatVideoFile } from "@/lib/chat-video-upload";
 import { ChatPageSkeleton, SkeletonPulse } from "@/components/ui/Skeleton";
@@ -482,6 +486,7 @@ function ChatPageContent() {
     } else {
       applyMessagesPayload(data as StaffConversationMessagesPayload, convId);
     }
+    clearChatPreviewMessage(convId);
   }, [applyMessagesPayload]);
 
   useEffect(() => {
@@ -497,12 +502,18 @@ function ChatPageContent() {
     deepLinkConversationRef.current = null;
   }, [conversationIdFromUrl]);
 
+  // Open the thread immediately from deep links so preview cache can render before inbox loads.
+  useEffect(() => {
+    if (conversationIdFromUrl) {
+      setSelectedId(conversationIdFromUrl);
+    }
+  }, [conversationIdFromUrl]);
+
   useEffect(() => {
     if (loading || !conversationIdFromUrl) return;
 
     const existing = conversations.find((c) => c.id === conversationIdFromUrl);
     if (existing) {
-      setSelectedId(existing.id);
       deepLinkConversationRef.current = conversationIdFromUrl;
       router.replace("/chat", { scroll: false });
       return;
@@ -577,16 +588,39 @@ function ChatPageContent() {
       setMessagesLoading(false);
       return;
     }
-    const ac = new AbortController();
-    setMessagesLoading(true);
-    setMessages([]);
+    const conv = conversationsRef.current.find((c) => c.id === selectedId);
+    const seed = getChatPreviewSeed(selectedId, conv?.messages);
+    setMessages(seed);
+    setMessagesLoading(seed.length === 0);
     setCustomerTypingAt(null);
     setCustomerLastReadAt(null);
+    const ac = new AbortController();
     fetchMessages(selectedId, { signal: ac.signal }).finally(() => {
-      setMessagesLoading(false);
+      if (!ac.signal.aborted) setMessagesLoading(false);
     });
     return () => ac.abort();
   }, [selectedId, fetchMessages]);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ conversationId?: string; messageId?: string }>).detail;
+      const conversationId = detail?.conversationId;
+      if (!conversationId) return;
+      setSelectedId(conversationId);
+      if (detail.messageId) {
+        const params = new URLSearchParams(window.location.search);
+        params.set("conversation", conversationId);
+        params.set("messageId", detail.messageId);
+        router.replace(`/chat?${params.toString()}`, { scroll: false });
+      } else {
+        router.replace(`/chat?conversation=${encodeURIComponent(conversationId)}`, {
+          scroll: false,
+        });
+      }
+    };
+    window.addEventListener("bikeops:chat-open-conversation", handler);
+    return () => window.removeEventListener("bikeops:chat-open-conversation", handler);
+  }, [router]);
 
   useChatEventSource<StaffConversationMessagesPayload>({
     url: selectedId

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useCallback } from "react";
 import type { Conversation } from "@/lib/types";
+import { cacheChatPreviewMessage } from "@/lib/chat-preview-cache";
 import { playNotificationSound } from "@/lib/notificationSound";
 import { useVisibilityAwarePolling } from "@/hooks/useVisibilityAwarePolling";
 
@@ -70,6 +71,7 @@ export function useChatNotifications(
 
       if (seenMessageIds.current.has(last.id)) continue;
       seenMessageIds.current.add(last.id);
+      cacheChatPreviewMessage(conv.id, last);
 
       const isViewingThisConv = selectedId === conv.id;
       const isTabFocused = !document.hidden;
@@ -88,6 +90,16 @@ export function useChatNotifications(
         n.onclick = () => {
           window.focus();
           n.close();
+          const url = `/chat?conversation=${encodeURIComponent(conv.id)}&messageId=${encodeURIComponent(last.id)}`;
+          if (window.location.pathname === "/chat") {
+            window.dispatchEvent(
+              new CustomEvent("bikeops:chat-open-conversation", {
+                detail: { conversationId: conv.id, messageId: last.id },
+              })
+            );
+          } else {
+            window.location.assign(url);
+          }
         };
       } catch {
         // Ignore notification errors (e.g. in some embedded contexts)
