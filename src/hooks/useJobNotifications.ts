@@ -53,6 +53,7 @@ export function useJobNotifications(
   const hasInitialized = useRef(false);
   const summaryBaseline = useRef<string | null>(null);
   const lastFullRefreshAt = useRef(0);
+  const hiddenSince = useRef<number | null>(null);
   const [jobs, setJobs] = useState<Job[]>(
     () => queryClient.getQueryData<Job[]>(BOARD_JOBS_QUERY_KEY) ?? []
   );
@@ -126,12 +127,35 @@ export function useJobNotifications(
     }
   }, [fetchJobs]);
 
+  useEffect(() => {
+    if (!enabled) return;
+
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        hiddenSince.current = Date.now();
+      } else {
+        const elapsed = hiddenSince.current
+          ? Date.now() - hiddenSince.current
+          : 0;
+        hiddenSince.current = null;
+        if (elapsed > 2_000) {
+          summaryBaseline.current = null;
+          fetchJobs();
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () =>
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, [enabled, fetchJobs]);
+
   useVisibilityAwarePolling(
     () => {
       void pollBoardSummary();
     },
     JOB_POLL_MS,
-    { enabled }
+    { enabled, fireOnVisible: false }
   );
 
   useEffect(() => {

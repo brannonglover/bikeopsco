@@ -9,6 +9,8 @@ type UseVisibilityAwarePollingOptions = {
   /** Interval while the tab is hidden. `null` pauses until visible again. */
   hiddenIntervalMs?: number | null;
   runImmediately?: boolean;
+  /** Fire the callback immediately when the tab becomes visible. Default `true`. */
+  fireOnVisible?: boolean;
 };
 
 /**
@@ -24,6 +26,7 @@ export function useVisibilityAwarePolling(
     enabled = true,
     hiddenIntervalMs = DEFAULT_HIDDEN_INTERVAL_MS,
     runImmediately = true,
+    fireOnVisible = true,
   } = options;
 
   const callbackRef = useRef(callback);
@@ -57,7 +60,7 @@ export function useVisibilityAwarePolling(
     };
 
     const onVisibilityChange = () => {
-      if (!document.hidden) {
+      if (!document.hidden && fireOnVisible) {
         callbackRef.current();
       }
       schedule();
@@ -73,5 +76,5 @@ export function useVisibilityAwarePolling(
       clearScheduled();
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [enabled, activeIntervalMs, hiddenIntervalMs, runImmediately]);
+  }, [enabled, activeIntervalMs, hiddenIntervalMs, runImmediately, fireOnVisible]);
 }
