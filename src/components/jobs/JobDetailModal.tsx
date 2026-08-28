@@ -818,6 +818,10 @@ function JobBikeSection({
   const [editingBikeIndex, setEditingBikeIndex] = useState<number | null>(null);
   const [addingBike, setAddingBike] = useState(false);
   const [addBikeSelectValue, setAddBikeSelectValue] = useState("");
+  const [showAddNewBikeForm, setShowAddNewBikeForm] = useState(false);
+  const [newBikeMake, setNewBikeMake] = useState("");
+  const [newBikeModel, setNewBikeModel] = useState("");
+  const [newBikeType, setNewBikeType] = useState<BikeTypeForm>("AUTO");
 
   const patchJobInBackground = useCallback(
     (
@@ -878,6 +882,39 @@ function JobBikeSection({
         });
         if (res.ok) {
           onJobUpdated((await res.json()) as Job);
+        }
+      } finally {
+        setAddingBike(false);
+      }
+    })();
+  };
+
+  const handleAddNewBike = () => {
+    if (!onJobUpdated || !newBikeMake.trim()) return;
+    setAddingBike(true);
+    const bikeType = newBikeType === "AUTO" ? undefined : newBikeType;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/jobs/${job.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            addBike: {
+              make: newBikeMake.trim(),
+              model: newBikeModel.trim() || null,
+              nickname: null,
+              imageUrl: null,
+              bikeId: null,
+              bikeType,
+            },
+          }),
+        });
+        if (res.ok) {
+          onJobUpdated((await res.json()) as Job);
+          setNewBikeMake("");
+          setNewBikeModel("");
+          setNewBikeType("AUTO");
+          setShowAddNewBikeForm(false);
         }
       } finally {
         setAddingBike(false);
@@ -1304,30 +1341,103 @@ function JobBikeSection({
           );
         })}
       </div>
-      {onJobUpdated && availableToAdd.length > 0 && (
-        <div className="mt-3">
-          <select
-            value={addBikeSelectValue}
-            disabled={addingBike}
-            onChange={(e) => {
-              const id = e.target.value;
-              const bike = availableToAdd.find((b) => b.id === id);
-              if (bike) {
-                setAddBikeSelectValue("");
-                handleAddSavedBike(bike);
-              }
-            }}
-            className="text-sm rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-slate-600 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 cursor-pointer"
-          >
-            <option value="" disabled>
-              {addingBike ? "Adding…" : "+ Add saved bike"}
-            </option>
-            {availableToAdd.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.nickname ? `${b.nickname} (${[b.make, b.model].filter(Boolean).join(" ")})` : [b.make, b.model].filter(Boolean).join(" ")}
+      {onJobUpdated && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {availableToAdd.length > 0 && (
+            <select
+              value={addBikeSelectValue}
+              disabled={addingBike}
+              onChange={(e) => {
+                const id = e.target.value;
+                const bike = availableToAdd.find((b) => b.id === id);
+                if (bike) {
+                  setAddBikeSelectValue("");
+                  handleAddSavedBike(bike);
+                }
+              }}
+              className="text-sm rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-slate-600 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 cursor-pointer"
+            >
+              <option value="" disabled>
+                {addingBike ? "Adding…" : "+ Add saved bike"}
               </option>
-            ))}
-          </select>
+              {availableToAdd.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.nickname ? `${b.nickname} (${[b.make, b.model].filter(Boolean).join(" ")})` : [b.make, b.model].filter(Boolean).join(" ")}
+                </option>
+              ))}
+            </select>
+          )}
+          {!showAddNewBikeForm && (
+            <button
+              type="button"
+              disabled={addingBike}
+              onClick={() => setShowAddNewBikeForm(true)}
+              className="text-sm px-3 py-1.5 border border-slate-200 rounded-lg bg-white hover:bg-slate-50 font-medium text-slate-600 disabled:opacity-50"
+            >
+              + Add bike
+            </button>
+          )}
+        </div>
+      )}
+      {onJobUpdated && showAddNewBikeForm && (
+        <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50/50 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-slate-600">New bike</span>
+            <button
+              type="button"
+              onClick={() => {
+                setShowAddNewBikeForm(false);
+                setNewBikeMake("");
+                setNewBikeModel("");
+                setNewBikeType("AUTO");
+              }}
+              className="text-xs text-slate-400 hover:text-slate-600"
+            >
+              Cancel
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Make *</label>
+              <input
+                type="text"
+                value={newBikeMake}
+                onChange={(e) => setNewBikeMake(e.target.value)}
+                placeholder="e.g. Specialized"
+                className="w-full text-sm px-3 py-1.5 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Model</label>
+              <input
+                type="text"
+                value={newBikeModel}
+                onChange={(e) => setNewBikeModel(e.target.value)}
+                placeholder="e.g. Rockhopper"
+                className="w-full text-sm px-3 py-1.5 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1">Type</label>
+            <select
+              value={newBikeType}
+              onChange={(e) => setNewBikeType(e.target.value as BikeTypeForm)}
+              className="w-full text-sm px-3 py-1.5 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+            >
+              <option value="AUTO">Auto (from make/model)</option>
+              <option value="REGULAR">Standard bike</option>
+              <option value="E_BIKE">E-bike</option>
+            </select>
+          </div>
+          <button
+            type="button"
+            disabled={!newBikeMake.trim() || addingBike}
+            onClick={handleAddNewBike}
+            className="text-sm font-medium px-4 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {addingBike ? "Adding…" : "Add bike"}
+          </button>
         </div>
       )}
     </div>
