@@ -338,6 +338,9 @@ function ChatPageContent() {
   const selectedIdRef = useRef<string | null>(null);
   const conversationsRef = useRef(conversations);
   conversationsRef.current = conversations;
+  const messageCacheRef = useRef(new Map<string, ChatMessage[]>());
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
   const [customerActiveJobId, setCustomerActiveJobId] = useState<string | null>(null);
 
   useLayoutEffect(() => {
@@ -581,24 +584,37 @@ function ChatPageContent() {
   }, [loading, customerIdFromUrl, router]);
 
   useEffect(() => {
-    if (!selectedId) {
+    const currentId = selectedId;
+    if (!currentId) {
       setMessages([]);
       setCustomerTypingAt(null);
       setCustomerLastReadAt(null);
       setMessagesLoading(false);
       return;
     }
-    const conv = conversationsRef.current.find((c) => c.id === selectedId);
-    const seed = getChatPreviewSeed(selectedId, conv?.messages);
-    setMessages(seed);
-    setMessagesLoading(seed.length === 0);
+    const cached = messageCacheRef.current.get(currentId);
+    if (cached && cached.length > 0) {
+      setMessages(cached);
+      setMessagesLoading(false);
+    } else {
+      const conv = conversationsRef.current.find((c) => c.id === currentId);
+      const seed = getChatPreviewSeed(currentId, conv?.messages);
+      setMessages(seed);
+      setMessagesLoading(seed.length === 0);
+    }
     setCustomerTypingAt(null);
     setCustomerLastReadAt(null);
     const ac = new AbortController();
-    fetchMessages(selectedId, { signal: ac.signal }).finally(() => {
+    fetchMessages(currentId, { signal: ac.signal }).finally(() => {
       if (!ac.signal.aborted) setMessagesLoading(false);
     });
-    return () => ac.abort();
+    return () => {
+      ac.abort();
+      const msgs = messagesRef.current;
+      if (msgs.length > 0) {
+        messageCacheRef.current.set(currentId, msgs);
+      }
+    };
   }, [selectedId, fetchMessages]);
 
   useEffect(() => {
