@@ -274,7 +274,6 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // For each bike without a bikeId, find or create a Bike record on the customer's profile.
       const resolvedBikes: Array<(typeof bikes)[number] & { bikeId: string | null }> = [];
       for (const b of bikes) {
         let bikeId: string | null = b.bikeId ?? null;
@@ -309,10 +308,6 @@ export async function POST(request: NextRequest) {
         resolvedBikes.push({ ...b, bikeId });
       }
 
-      const catalogMatches = await Promise.all(
-        resolvedBikes.map((b) => matchCatalogFieldsForJobBike(b.make, b.model, b.year ?? null))
-      );
-
       await tx.jobBike.createMany({
         data: resolvedBikes.map((b, i) => ({
           shopId,
@@ -325,8 +320,6 @@ export async function POST(request: NextRequest) {
           bikeId: b.bikeId,
           bikeType: b.bikeType ?? null,
           sortOrder: i,
-          catalogBikeId: catalogMatches[i]?.catalogBikeId ?? null,
-          catalogMatchedAt: catalogMatches[i]?.catalogMatchedAt ?? null,
         })),
       });
 
@@ -359,7 +352,27 @@ export async function POST(request: NextRequest) {
           jobProducts: { include: { product: true } },
         },
       });
-    });
+    }, { timeout: 15000 });
+
+    // Run catalog matching in the background — update jobBike records after
+    // the job is created so it never blocks the response.
+    if (job?.jobBikes?.length) {
+      const jobBikes = job.jobBikes;
+      Promise.all(
+        jobBikes.map(async (jb) => {
+          const match = await matchCatalogFieldsForJobBike(jb.make, jb.model, jb.year ?? null);
+          if (match) {
+            await prisma.jobBike.update({
+              where: { id: jb.id },
+              data: {
+                catalogBikeId: match.catalogBikeId,
+                catalogMatchedAt: match.catalogMatchedAt,
+              },
+            });
+          }
+        })
+      ).catch((e) => console.error("[Job created] Background catalog matching failed:", e));
+    }
 
     if (!job) {
       return NextResponse.json({ error: "Failed to create job" }, { status: 500 });

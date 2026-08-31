@@ -540,7 +540,7 @@ export async function POST(request: NextRequest) {
           jobServices: { include: { service: true } },
         },
       });
-    });
+    }, { timeout: 15000 });
 
     if (!job) {
       const res = NextResponse.json(
