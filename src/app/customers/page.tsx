@@ -128,60 +128,82 @@ function CustomersPageContent() {
 
   const handleAdd = async () => {
     if (!newFirstName.trim()) return;
-    setSaving(true);
-    try {
-      const res = await fetch("/api/customers", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          firstName: newFirstName.trim(),
-          lastName: newLastName.trim() || null,
-          email: newEmail.trim() || null,
-          phone: newPhone.trim() || null,
-          address: newAddress.trim() || null,
-          notes: newNotes.trim() || null,
-        }),
+    const tempId = `temp-${Date.now()}`;
+    const optimistic: Customer = {
+      id: tempId,
+      firstName: newFirstName.trim(),
+      lastName: newLastName.trim() || null,
+      email: newEmail.trim() || null,
+      phone: newPhone.trim() || null,
+      address: newAddress.trim() || null,
+      notes: newNotes.trim() || null,
+      createdAt: new Date().toISOString(),
+    };
+
+    setCustomers((prev) => [optimistic, ...prev]);
+    setShowAddForm(false);
+    setNewFirstName("");
+    setNewLastName("");
+    setNewEmail("");
+    setNewPhone("");
+    setNewAddress("");
+    setNewNotes("");
+
+    fetch("/api/customers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        firstName: optimistic.firstName,
+        lastName: optimistic.lastName,
+        email: optimistic.email,
+        phone: optimistic.phone,
+        address: optimistic.address,
+        notes: optimistic.notes,
+      }),
+    })
+      .then(async (res) => {
+        if (res.ok) {
+          const created = await res.json();
+          setCustomers((prev) =>
+            prev.map((c) => (c.id === tempId ? created : c))
+          );
+        } else {
+          setCustomers((prev) => prev.filter((c) => c.id !== tempId));
+          const err = await res.json();
+          const msg =
+            typeof err.error === "object"
+              ? Object.values(err.error)
+                  .flat()
+                  .filter(Boolean)
+                  .join("; ")
+              : err.error || "Failed to create";
+          alert(msg);
+        }
+      })
+      .catch(() => {
+        setCustomers((prev) => prev.filter((c) => c.id !== tempId));
+        alert("Failed to create customer");
       });
-      if (res.ok) {
-        const created = await res.json();
-        setCustomers((prev) => [created, ...prev]);
-        setShowAddForm(false);
-        setNewFirstName("");
-        setNewLastName("");
-        setNewEmail("");
-        setNewPhone("");
-        setNewAddress("");
-        setNewNotes("");
-      } else {
-        const err = await res.json();
-        const msg =
-          typeof err.error === "object"
-            ? Object.values(err.error)
-                .flat()
-                .filter(Boolean)
-                .join("; ")
-            : err.error || "Failed to create";
-        alert(msg);
-      }
-    } finally {
-      setSaving(false);
-    }
   };
 
-  const handleDelete = async (id: string, displayName: string) => {
+  const handleDelete = (id: string, displayName: string) => {
     if (!confirm(`Delete customer "${displayName}"? Jobs linked to this customer will no longer show their details.`))
       return;
-    try {
-      const res = await fetch(`/api/customers/${id}`, { method: "DELETE" });
-      if (res.ok) {
-        setCustomers((prev) => prev.filter((c) => c.id !== id));
-      } else {
-        const err = await res.json();
-        alert(err.error || "Failed to delete");
-      }
-    } catch {
-      alert("Failed to delete");
-    }
+    const snapshot = customers;
+    setCustomers((prev) => prev.filter((c) => c.id !== id));
+
+    fetch(`/api/customers/${id}`, { method: "DELETE" })
+      .then(async (res) => {
+        if (!res.ok) {
+          setCustomers(snapshot);
+          const err = await res.json();
+          alert(err.error || "Failed to delete");
+        }
+      })
+      .catch(() => {
+        setCustomers(snapshot);
+        alert("Failed to delete customer");
+      });
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {

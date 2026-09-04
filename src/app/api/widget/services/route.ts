@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
     }
 
     const services = await prisma.service.findMany({
-      where: { shopId: shop.id, isSystem: false },
+      where: { shopId: shop.id, isSystem: false, isHidden: false },
       orderBy: { name: "asc" },
       select: { id: true, name: true, description: true, price: true },
     });

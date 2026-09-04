@@ -5,10 +5,10 @@ import { useForm, useController, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
-import type { Job } from "@/lib/types";
+import type { Job, JobBike, BikeType } from "@/lib/types";
 import { Price } from "@/components/ui/Price";
 import { useAppFeatures } from "@/contexts/AppFeaturesContext";
-import { JOBS_REFRESH_EVENT } from "@/lib/jobs-refresh";
+import { broadcastJobsRefresh, JOBS_REFRESH_EVENT } from "@/lib/jobs-refresh";
 
 interface JobFormProps {
   onSuccess?: (job: Job) => void;
@@ -489,66 +489,138 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
         ? validBikes[0].model?.trim() || null
         : `${validBikes.length} bikes`;
 
-    const res = await fetch("/api/jobs", {
+    const jobPayload = {
+      bikeMake,
+      bikeModel,
+      bikes: validBikes.map((b) => ({
+        make: b.make,
+        model: b.model?.trim() || null,
+        year: parseOptionalYear(b.year),
+        nickname: b.nickname || null,
+        imageUrl: b.imageUrl || null,
+        bikeId: b.bikeId || null,
+        bikeType: b.bikeType === "AUTO" ? undefined : b.bikeType,
+      })),
+      customerId: finalCustomerId || null,
+      deliveryType: data.deliveryType,
+      dropOffDate: data.dropOffDate || null,
+      pickupDate: data.pickupDate || null,
+      collectionAddress:
+        data.deliveryType === "COLLECTION_SERVICE"
+          ? data.collectionAddress || selectedCustomer?.address || null
+          : null,
+      collectionWindowStart:
+        data.deliveryType === "COLLECTION_SERVICE"
+          ? data.collectionWindowStart || null
+          : null,
+      collectionWindowEnd:
+        data.deliveryType === "COLLECTION_SERVICE"
+          ? data.collectionWindowEnd || null
+          : null,
+      internalNotes: data.internalNotes || null,
+      customerNotes: data.customerNotes || null,
+      serviceIds: selectedServiceIds,
+    };
+
+    const now = new Date().toISOString();
+    const tempId = `temp-${Date.now()}`;
+    const optimisticJob: Job = {
+      id: tempId,
+      bikeMake,
+      bikeModel: bikeModel || "",
+      stage: "BOOKED_IN",
+      deliveryType: data.deliveryType,
+      dropOffDate: data.dropOffDate || null,
+      pickupDate: data.pickupDate || null,
+      collectionAddress: jobPayload.collectionAddress ?? null,
+      collectionWindowStart: jobPayload.collectionWindowStart ?? null,
+      collectionWindowEnd: jobPayload.collectionWindowEnd ?? null,
+      collectionReturnWindowStart: null,
+      collectionReturnWindowEnd: null,
+      customerId: finalCustomerId || null,
+      customer: selectedCustomer
+        ? {
+            id: selectedCustomer.id,
+            firstName: selectedCustomer.firstName,
+            lastName: selectedCustomer.lastName,
+            email: selectedCustomer.email,
+            phone: selectedCustomer.phone,
+            address: selectedCustomer.address ?? null,
+            notes: null,
+            createdAt: now,
+            updatedAt: now,
+          }
+        : null,
+      notes: null,
+      internalNotes: data.internalNotes || null,
+      customerNotes: data.customerNotes || null,
+      completedAt: null,
+      createdAt: now,
+      updatedAt: now,
+      jobBikes: validBikes.map((b, i) => ({
+        id: `${tempId}-bike-${i}`,
+        jobId: tempId,
+        make: b.make,
+        model: b.model?.trim() || null,
+        year: parseOptionalYear(b.year),
+        bikeType: (b.bikeType === "AUTO" ? null : b.bikeType) as BikeType | null,
+        nickname: b.nickname || null,
+        imageUrl: b.imageUrl || null,
+        bikeId: b.bikeId || null,
+        sortOrder: i,
+        completedAt: null,
+        waitingOnPartsAt: null,
+      })),
+      jobServices: selectedServiceIds.map((sId, i) => {
+        const svc = services.find((s) => s.id === sId);
+        return {
+          id: `${tempId}-svc-${i}`,
+          jobId: tempId,
+          serviceId: sId,
+          service: svc
+            ? { id: svc.id, name: svc.name, description: svc.description, price: svc.price, createdAt: now, updatedAt: now }
+            : null,
+          quantity: 1,
+          unitPrice: svc?.price ?? 0,
+          notes: null,
+        };
+      }),
+      jobProducts: [],
+      paymentStatus: "UNPAID",
+      totalPaid: 0,
+    };
+
+    if (onSuccess) {
+      onSuccess(optimisticJob);
+    } else {
+      router.push("/calendar");
+    }
+
+    fetch("/api/jobs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        bikeMake,
-        bikeModel,
-        bikes: validBikes.map((b) => ({
-          make: b.make,
-          model: b.model?.trim() || null,
-          year: parseOptionalYear(b.year),
-          nickname: b.nickname || null,
-          imageUrl: b.imageUrl || null,
-          bikeId: b.bikeId || null,
-          bikeType: b.bikeType === "AUTO" ? undefined : b.bikeType,
-        })),
-        customerId: finalCustomerId || null,
-        deliveryType: data.deliveryType,
-        dropOffDate: data.dropOffDate || null,
-        pickupDate: data.pickupDate || null,
-        collectionAddress:
-          data.deliveryType === "COLLECTION_SERVICE"
-            ? data.collectionAddress || selectedCustomer?.address || null
-            : null,
-        collectionWindowStart:
-          data.deliveryType === "COLLECTION_SERVICE"
-            ? data.collectionWindowStart || null
-            : null,
-        collectionWindowEnd:
-          data.deliveryType === "COLLECTION_SERVICE"
-            ? data.collectionWindowEnd || null
-            : null,
-        internalNotes: data.internalNotes || null,
-        customerNotes: data.customerNotes || null,
-        serviceIds: selectedServiceIds,
-      }),
-    });
-
-    if (res.ok) {
-      const job = (await res.json()) as Job;
-      if (onSuccess) {
-        onSuccess(job);
-      } else {
-        router.push("/calendar");
-      }
-    } else {
-      let message = "Failed to create job";
-      try {
-        const text = await res.text();
-        if (text) {
-          const err = JSON.parse(text);
-          message =
-            typeof err.error === "string"
-              ? err.error
-              : err.error?.message || message;
+      body: JSON.stringify(jobPayload),
+    })
+      .then(async (res) => {
+        if (res.ok) {
+          broadcastJobsRefresh({ reason: "job-created" });
+        } else {
+          broadcastJobsRefresh({ reason: "job-create-failed" });
+          let message = "Failed to create job";
+          try {
+            const err = await res.json();
+            message =
+              typeof err.error === "string"
+                ? err.error
+                : err.error?.message || message;
+          } catch {}
+          alert(message);
         }
-      } catch {
-        // Response wasn't valid JSON, use default message
-      }
-      alert(message);
-    }
+      })
+      .catch(() => {
+        broadcastJobsRefresh({ reason: "job-create-failed" });
+        alert("Failed to create job — please check your connection and try again.");
+      });
     } finally {
       jobCreateLockRef.current = false;
     }

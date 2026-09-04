@@ -110,96 +110,141 @@ export default function ProductsPage() {
 
   const saveEdit = async () => {
     if (!editing) return;
-    setSaving(true);
-    try {
-      const res = await fetch(`/api/products/${editing}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: editName,
-          description: editDescription || null,
-          imageUrl: editImageUrl.trim() || null,
-          price: parseFloat(editPrice) || 0,
-          stockQuantity: parseInt(editStockQuantity, 10) || 0,
-          supplier: editSupplier.trim() || null,
-        }),
+    const editingId = editing;
+    const snapshot = products;
+    const updatedPrice = parseFloat(editPrice) || 0;
+    const updatedStock = parseInt(editStockQuantity, 10) || 0;
+    const updatedImageUrl = editImageUrl.trim() || null;
+    const updatedSupplier = editSupplier.trim() || null;
+
+    setProducts((prev) =>
+      prev.map((p) =>
+        p.id === editingId
+          ? {
+              ...p,
+              name: editName,
+              description: editDescription || null,
+              imageUrl: updatedImageUrl,
+              price: updatedPrice,
+              stockQuantity: updatedStock,
+              supplier: updatedSupplier,
+            }
+          : p
+      )
+    );
+    setEditing(null);
+    setEditImageUrl("");
+
+    fetch(`/api/products/${editingId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: editName,
+        description: editDescription || null,
+        imageUrl: updatedImageUrl,
+        price: updatedPrice,
+        stockQuantity: updatedStock,
+        supplier: updatedSupplier,
+      }),
+    })
+      .then(async (res) => {
+        if (res.ok) {
+          const updated = await res.json();
+          setProducts((prev) =>
+            prev.map((p) =>
+              p.id === updated.id
+                ? {
+                    ...updated,
+                    price:
+                      typeof updated.price === "string"
+                        ? parseFloat(updated.price)
+                        : Number(updated.price),
+                    stockQuantity:
+                      typeof updated.stockQuantity === "string"
+                        ? parseInt(updated.stockQuantity, 10)
+                        : Number(updated.stockQuantity ?? 0),
+                  }
+                : p
+            )
+          );
+        } else {
+          setProducts(snapshot);
+          setEditing(editingId);
+          const err = await res.json();
+          alert(err.error || "Failed to save");
+        }
+      })
+      .catch(() => {
+        setProducts(snapshot);
+        setEditing(editingId);
+        alert("Failed to save product");
       });
-      if (res.ok) {
-        const updated = await res.json();
-        setProducts((prev) =>
-          prev.map((p) =>
-            p.id === updated.id
-              ? {
-                  ...updated,
-                  price:
-                    typeof updated.price === "string"
-                      ? parseFloat(updated.price)
-                      : Number(updated.price),
-                  stockQuantity:
-                    typeof updated.stockQuantity === "string"
-                      ? parseInt(updated.stockQuantity, 10)
-                      : Number(updated.stockQuantity ?? 0),
-                }
-              : p
-          )
-        );
-        setEditing(null);
-        setEditImageUrl("");
-      } else {
-        const err = await res.json();
-        alert(err.error || "Failed to save");
-      }
-    } finally {
-      setSaving(false);
-    }
   };
 
   const handleAdd = async () => {
     if (!newName.trim()) return;
-    setSaving(true);
-    try {
-      const res = await fetch("/api/products", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: newName.trim(),
-          description: newDescription.trim() || null,
-          imageUrl: newImageUrl.trim() || null,
-          price: parseFloat(newPrice) || 0,
-          stockQuantity: parseInt(newStockQuantity, 10) || 0,
-          supplier: newSupplier.trim() || null,
-        }),
+    const tempId = `temp-${Date.now()}`;
+    const optimistic: Product = {
+      id: tempId,
+      name: newName.trim(),
+      description: newDescription.trim() || null,
+      imageUrl: newImageUrl.trim() || null,
+      price: parseFloat(newPrice) || 0,
+      stockQuantity: parseInt(newStockQuantity, 10) || 0,
+      supplier: newSupplier.trim() || null,
+    };
+
+    setProducts((prev) => [...prev, optimistic]);
+    setShowAddForm(false);
+    setNewName("");
+    setNewDescription("");
+    setNewImageUrl("");
+    setNewPrice("");
+    setNewStockQuantity("");
+    setNewSupplier("");
+
+    fetch("/api/products", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: optimistic.name,
+        description: optimistic.description,
+        imageUrl: optimistic.imageUrl,
+        price: optimistic.price,
+        stockQuantity: optimistic.stockQuantity,
+        supplier: optimistic.supplier,
+      }),
+    })
+      .then(async (res) => {
+        if (res.ok) {
+          const created = await res.json();
+          setProducts((prev) =>
+            prev.map((p) =>
+              p.id === tempId
+                ? {
+                    ...created,
+                    price:
+                      typeof created.price === "string"
+                        ? parseFloat(created.price)
+                        : Number(created.price),
+                    stockQuantity:
+                      typeof created.stockQuantity === "string"
+                        ? parseInt(created.stockQuantity, 10)
+                        : Number(created.stockQuantity ?? 0),
+                  }
+                : p
+            )
+          );
+        } else {
+          setProducts((prev) => prev.filter((p) => p.id !== tempId));
+          const err = await res.json();
+          alert(err.error || "Failed to create");
+        }
+      })
+      .catch(() => {
+        setProducts((prev) => prev.filter((p) => p.id !== tempId));
+        alert("Failed to create product");
       });
-      if (res.ok) {
-        const created = await res.json();
-        setProducts((prev) => [
-          ...prev,
-          {
-            ...created,
-            price:
-              typeof created.price === "string"
-                ? parseFloat(created.price)
-                : Number(created.price),
-            stockQuantity:
-              typeof created.stockQuantity === "string"
-                ? parseInt(created.stockQuantity, 10)
-                : Number(created.stockQuantity ?? 0),
-          },
-        ]);
-        setShowAddForm(false);
-        setNewName("");
-        setNewDescription("");
-        setNewImageUrl("");
-        setNewPrice("");
-        setNewStockQuantity("");
-        setNewSupplier("");
-      } else {
-        const err = await res.json();
-        alert(err.error || "Failed to create");
-      }
-    } finally {
-      setSaving(false);
-    }
   };
 
   const handleImageUpload = async (
@@ -232,19 +277,23 @@ export default function ProductsPage() {
     }
   };
 
-  const handleDelete = async (id: string, name: string) => {
+  const handleDelete = (id: string, name: string) => {
     if (!confirm(`Delete product "${name}"?`)) return;
-    try {
-      const res = await fetch(`/api/products/${id}`, { method: "DELETE" });
-      if (res.ok) {
-        setProducts((prev) => prev.filter((p) => p.id !== id));
-      } else {
-        const err = await res.json();
-        alert(err.error || "Failed to delete");
-      }
-    } catch {
-      alert("Failed to delete");
-    }
+    const snapshot = products;
+    setProducts((prev) => prev.filter((p) => p.id !== id));
+
+    fetch(`/api/products/${id}`, { method: "DELETE" })
+      .then(async (res) => {
+        if (!res.ok) {
+          setProducts(snapshot);
+          const err = await res.json();
+          alert(err.error || "Failed to delete");
+        }
+      })
+      .catch(() => {
+        setProducts(snapshot);
+        alert("Failed to delete product");
+      });
   };
 
   const handleExport = () => {

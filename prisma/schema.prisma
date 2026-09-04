@@ -273,6 +273,7 @@ model Service {
   /// Stable id for system-managed line items (e.g. collection fee)
   slug        String?
   isSystem    Boolean      @default(false)
+  isHidden    Boolean      @default(false)
   jobServices JobService[]
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
