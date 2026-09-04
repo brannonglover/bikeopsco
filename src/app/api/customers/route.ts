@@ -19,20 +19,23 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const q = searchParams.get("q") ?? "";
 
-    const customers = await prisma.customer.findMany({
-      where: q
-        ? {
-            shopId: shop.id,
-            OR: [
-              { firstName: { contains: q, mode: "insensitive" } },
-              { lastName: { contains: q, mode: "insensitive" } },
-              { email: { contains: q, mode: "insensitive" } },
-              { phone: { contains: q } },
-            ],
-          }
-        : { shopId: shop.id },
-      orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
-    });
+    const trimmed = q.trim();
+
+    const customers = trimmed
+      ? await prisma.$queryRaw`
+          SELECT * FROM "Customer"
+          WHERE "shopId" = ${shop.id}
+            AND (
+              ("firstName" || ' ' || COALESCE("lastName", '')) ILIKE ${'%' + trimmed + '%'}
+              OR "email" ILIKE ${'%' + trimmed + '%'}
+              OR "phone" LIKE ${'%' + trimmed + '%'}
+            )
+          ORDER BY "firstName" ASC, "lastName" ASC
+        `
+      : await prisma.customer.findMany({
+          where: { shopId: shop.id },
+          orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
+        });
 
     return NextResponse.json(customers);
   } catch (error) {
