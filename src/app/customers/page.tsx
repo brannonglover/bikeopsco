@@ -39,7 +39,6 @@ function CustomersPageContent() {
   const searchParams = useSearchParams();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newFirstName, setNewFirstName] = useState("");
   const [newLastName, setNewLastName] = useState("");
@@ -495,10 +494,10 @@ function CustomersPageContent() {
             <div className="flex gap-2">
               <button
                 onClick={handleAdd}
-                disabled={saving || !newFirstName.trim()}
+                disabled={!newFirstName.trim()}
                 className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors"
               >
-                {saving ? "Adding..." : "Add"}
+                Add
               </button>
               <button
                 onClick={() => {

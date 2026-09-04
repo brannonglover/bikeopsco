@@ -5,7 +5,7 @@ import { useForm, useController, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
-import type { Job, JobBike, BikeType } from "@/lib/types";
+import type { Job, BikeType } from "@/lib/types";
 import { Price } from "@/components/ui/Price";
 import { useAppFeatures } from "@/contexts/AppFeaturesContext";
 import { broadcastJobsRefresh, JOBS_REFRESH_EVENT } from "@/lib/jobs-refresh";
