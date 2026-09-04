@@ -11,6 +11,7 @@ interface Service {
   description: string | null;
   price: number;
   isSystem?: boolean;
+  isHidden?: boolean;
 }
 
 export default function ServicesPage() {
@@ -95,66 +96,95 @@ export default function ServicesPage() {
 
   const saveEdit = async () => {
     if (!editing) return;
-    setSaving(true);
-    try {
-      const res = await fetch(`/api/services/${editing}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: editName,
-          description: editDescription || null,
-          price: parseFloat(editPrice) || 0,
-        }),
+    const editingId = editing;
+    const snapshot = services;
+    const updatedPrice = parseFloat(editPrice) || 0;
+
+    setServices((prev) =>
+      prev.map((s) =>
+        s.id === editingId
+          ? { ...s, name: editName, description: editDescription || null, price: updatedPrice }
+          : s
+      )
+    );
+    setEditing(null);
+
+    fetch(`/api/services/${editingId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: editName,
+        description: editDescription || null,
+        price: updatedPrice,
+      }),
+    })
+      .then(async (res) => {
+        if (res.ok) {
+          const updated = await res.json();
+          setServices((prev) =>
+            prev.map((s) =>
+              s.id === updated.id
+                ? { ...updated, price: typeof updated.price === "string" ? parseFloat(updated.price) : Number(updated.price) }
+                : s
+            )
+          );
+        } else {
+          setServices(snapshot);
+          const err = await res.json();
+          alert(err.error || "Failed to save");
+        }
+      })
+      .catch(() => {
+        setServices(snapshot);
+        alert("Failed to save service");
       });
-      if (res.ok) {
-        const updated = await res.json();
-        setServices((prev) =>
-          prev.map((s) =>
-            s.id === updated.id
-              ? { ...updated, price: typeof updated.price === "string" ? parseFloat(updated.price) : Number(updated.price) }
-              : s
-          )
-        );
-        setEditing(null);
-      } else {
-        const err = await res.json();
-        alert(err.error || "Failed to save");
-      }
-    } finally {
-      setSaving(false);
-    }
   };
 
   const handleAdd = async () => {
     if (!newName.trim()) return;
-    setSaving(true);
-    try {
-      const res = await fetch("/api/services", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: newName.trim(),
-          description: newDescription.trim() || null,
-          price: parseFloat(newPrice) || 0,
-        }),
+    const tempId = `temp-${Date.now()}`;
+    const optimistic: Service = {
+      id: tempId,
+      name: newName.trim(),
+      description: newDescription.trim() || null,
+      price: parseFloat(newPrice) || 0,
+    };
+
+    setServices((prev) => [...prev, optimistic]);
+    setShowAddForm(false);
+    setNewName("");
+    setNewDescription("");
+    setNewPrice("");
+
+    fetch("/api/services", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: optimistic.name,
+        description: optimistic.description,
+        price: optimistic.price,
+      }),
+    })
+      .then(async (res) => {
+        if (res.ok) {
+          const created = await res.json();
+          setServices((prev) =>
+            prev.map((s) =>
+              s.id === tempId
+                ? { ...created, price: typeof created.price === "string" ? parseFloat(created.price) : Number(created.price) }
+                : s
+            )
+          );
+        } else {
+          setServices((prev) => prev.filter((s) => s.id !== tempId));
+          const err = await res.json();
+          alert(err.error || "Failed to create");
+        }
+      })
+      .catch(() => {
+        setServices((prev) => prev.filter((s) => s.id !== tempId));
+        alert("Failed to create service");
       });
-      if (res.ok) {
-        const created = await res.json();
-        setServices((prev) => [
-          ...prev,
-          { ...created, price: typeof created.price === "string" ? parseFloat(created.price) : Number(created.price) },
-        ]);
-        setShowAddForm(false);
-        setNewName("");
-        setNewDescription("");
-        setNewPrice("");
-      } else {
-        const err = await res.json();
-        alert(err.error || "Failed to create");
-      }
-    } finally {
-      setSaving(false);
-    }
   };
 
   const handleExport = () => {
@@ -252,19 +282,47 @@ export default function ServicesPage() {
     }
   };
 
-  const handleDelete = async (id: string, name: string) => {
+  const handleToggleHidden = (id: string, currentlyHidden: boolean) => {
+    const snapshot = services;
+    setServices((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, isHidden: !currentlyHidden } : s))
+    );
+
+    fetch(`/api/services/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isHidden: !currentlyHidden }),
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          setServices(snapshot);
+          const err = await res.json();
+          alert(err.error || "Failed to update visibility");
+        }
+      })
+      .catch(() => {
+        setServices(snapshot);
+        alert("Failed to update visibility");
+      });
+  };
+
+  const handleDelete = (id: string, name: string) => {
     if (!confirm(`Delete service "${name}"?`)) return;
-    try {
-      const res = await fetch(`/api/services/${id}`, { method: "DELETE" });
-      if (res.ok) {
-        setServices((prev) => prev.filter((s) => s.id !== id));
-      } else {
-        const err = await res.json();
-        alert(err.error || "Failed to delete");
-      }
-    } catch {
-      alert("Failed to delete");
-    }
+    const snapshot = services;
+    setServices((prev) => prev.filter((s) => s.id !== id));
+
+    fetch(`/api/services/${id}`, { method: "DELETE" })
+      .then(async (res) => {
+        if (!res.ok) {
+          setServices(snapshot);
+          const err = await res.json();
+          alert(err.error || "Failed to delete");
+        }
+      })
+      .catch(() => {
+        setServices(snapshot);
+        alert("Failed to delete service");
+      });
   };
 
   if (loading) {
@@ -612,6 +670,11 @@ export default function ServicesPage() {
                             Auto
                           </span>
                         )}
+                        {s.isHidden && (
+                          <span className="text-xs font-medium px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
+                            Hidden
+                          </span>
+                        )}
                       </h3>
                       <div className="mt-2">
                         <Price amount={Number(s.price)} />
@@ -652,6 +715,15 @@ export default function ServicesPage() {
                       )}
                     </div>
                     <div className="flex gap-2 flex-shrink-0">
+                      {!s.isSystem && (
+                        <button
+                          onClick={() => handleToggleHidden(s.id, !!s.isHidden)}
+                          className={`text-sm ${s.isHidden ? "text-emerald-600" : "text-amber-600"} hover:underline`}
+                          title={s.isHidden ? "Show to customers" : "Hide from customers"}
+                        >
+                          {s.isHidden ? "Show" : "Hide"}
+                        </button>
+                      )}
                       <button
                         onClick={() => startEdit(s)}
                         className="text-sm text-blue-600 hover:underline"

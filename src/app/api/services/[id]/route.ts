@@ -6,6 +6,7 @@ const updateServiceSchema = z.object({
   name: z.string().min(1).optional(),
   description: z.string().optional().nullable(),
   price: z.number().min(0).optional(),
+  isHidden: z.boolean().optional(),
 });
 
 export async function PATCH(
@@ -23,6 +24,7 @@ export async function PATCH(
         ...(data.name !== undefined && { name: data.name }),
         ...(data.description !== undefined && { description: data.description }),
         ...(data.price !== undefined && { price: data.price }),
+        ...(data.isHidden !== undefined && { isHidden: data.isHidden }),
       },
     });
 

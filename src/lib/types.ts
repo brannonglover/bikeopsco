@@ -48,6 +48,7 @@ export interface Service {
   price: number | string; // Prisma Decimal can come as string
   slug?: string | null;
   isSystem?: boolean;
+  isHidden?: boolean;
   createdAt: string;
   updatedAt: string;
 }
