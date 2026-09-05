@@ -177,11 +177,48 @@
       <section class="hero hero-visual">
         <div class="hero-backdrop" aria-hidden="true">
           <img
+            class="hero-slide active"
             src="/screenshots/seo-hero/job-board.png"
             alt=""
             width="2221"
             height="1392"
             fetchpriority="high"
+            decoding="async"
+          />
+          <img
+            class="hero-slide"
+            src="/screenshots/seo-hero/job-detail.png"
+            alt=""
+            width="2221"
+            height="1392"
+            loading="lazy"
+            decoding="async"
+          />
+          <img
+            class="hero-slide"
+            src="/screenshots/seo-hero/services.png"
+            alt=""
+            width="2221"
+            height="1392"
+            loading="lazy"
+            decoding="async"
+          />
+          <img
+            class="hero-slide"
+            src="/screenshots/seo-hero/customers.png"
+            alt=""
+            width="2221"
+            height="1392"
+            loading="lazy"
+            decoding="async"
+          />
+          <img
+            class="hero-slide"
+            src="/screenshots/seo-hero/mechanics.png"
+            alt=""
+            width="2221"
+            height="1392"
+            loading="lazy"
             decoding="async"
           />
         </div>
@@ -242,6 +279,32 @@
         </div>
       </nav>
     </footer>
+
+    <script>
+      (function () {
+        var slides = document.querySelectorAll('.hero-slide');
+        if (slides.length < 2) return;
+
+        var current = 0;
+        var interval = 5000;
+
+        function next() {
+          slides[current].classList.remove('active');
+          current = (current + 1) % slides.length;
+          slides[current].classList.add('active');
+        }
+
+        var timer = setInterval(next, interval);
+
+        document.addEventListener('visibilitychange', function () {
+          if (document.hidden) {
+            clearInterval(timer);
+          } else {
+            timer = setInterval(next, interval);
+          }
+        });
+      })();
+    </script>
 
     <script>
       (function () {

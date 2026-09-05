@@ -162,10 +162,18 @@ nav a:hover {
   height: auto;
   border-radius: 14px;
   box-shadow: 0 40px 100px rgba(16, 32, 51, 0.22);
-  opacity: 0.96;
   transform: translateX(-28%);
   transform-origin: top center;
   animation: hero-backdrop-drift 22s ease-in-out infinite alternate;
+}
+
+.hero-slide {
+  opacity: 0;
+  transition: opacity 1s ease-in-out;
+}
+
+.hero-slide.active {
+  opacity: 0.96;
 }
 
 .hero-visual::before {
@@ -369,6 +377,10 @@ p {
   .hero-inner,
   .hero-actions .button {
     animation: none;
+  }
+
+  .hero-slide {
+    transition: none;
   }
 
   .tour-slideshow-track {
