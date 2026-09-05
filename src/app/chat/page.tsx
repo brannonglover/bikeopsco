@@ -593,12 +593,25 @@ function ChatPageContent() {
       return;
     }
     const cached = messageCacheRef.current.get(currentId);
+    const conv = conversationsRef.current.find((c) => c.id === currentId);
+    const seed = getChatPreviewSeed(currentId, conv?.messages);
     if (cached && cached.length > 0) {
-      setMessages(cached);
+      const cachedIds = new Set(cached.map((m) => m.id));
+      const newFromSeed = seed.filter((m) => !cachedIds.has(m.id));
+      if (newFromSeed.length > 0) {
+        setMessages(
+          [...cached, ...newFromSeed].sort((a, b) => {
+            const ta = new Date(a.createdAt).getTime();
+            const tb = new Date(b.createdAt).getTime();
+            if (ta !== tb) return ta - tb;
+            return a.id.localeCompare(b.id);
+          })
+        );
+      } else {
+        setMessages(cached);
+      }
       setMessagesLoading(false);
     } else {
-      const conv = conversationsRef.current.find((c) => c.id === currentId);
-      const seed = getChatPreviewSeed(currentId, conv?.messages);
       setMessages(seed);
       setMessagesLoading(seed.length === 0);
     }
