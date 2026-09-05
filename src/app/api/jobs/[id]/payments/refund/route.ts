@@ -49,10 +49,6 @@ export async function POST(
       return NextResponse.json({ error: "Job not found" }, { status: 404 });
     }
 
-    const subtotal = computeJobSubtotal({
-      jobServices: job.jobServices,
-      jobProducts: job.jobProducts,
-    });
     const totalPaid = computeTotalPaid(job.payments);
 
     if (totalPaid <= 0) {
@@ -74,10 +70,6 @@ export async function POST(
         p.stripePaymentIntentId &&
         p.status === "succeeded" &&
         p.paymentMethod !== "cash"
-    );
-
-    const cashPayments = job.payments.filter(
-      (p) => p.paymentMethod === "cash" && p.status === "succeeded"
     );
 
     const totalStripe = stripePayments.reduce(
