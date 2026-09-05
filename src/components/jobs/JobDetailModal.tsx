@@ -2542,6 +2542,208 @@ function CopyPaymentLinkButton({ jobId }: { jobId: string }) {
   );
 }
 
+function RefundButton({
+  jobId,
+  totalPaid,
+  onRefunded,
+  suggestedAmount,
+}: {
+  jobId: string;
+  totalPaid: number;
+  onRefunded?: (job: Job) => void;
+  suggestedAmount?: number;
+}) {
+  const [showModal, setShowModal] = useState(false);
+  const [refundAmount, setRefundAmount] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (showModal && inputRef.current) {
+      setTimeout(() => inputRef.current?.focus(), 100);
+    }
+  }, [showModal]);
+
+  useEffect(() => {
+    if (!showModal) return;
+    const fn = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !loading) {
+        e.stopImmediatePropagation();
+        setShowModal(false);
+      }
+    };
+    document.addEventListener("keydown", fn, true);
+    return () => document.removeEventListener("keydown", fn, true);
+  }, [showModal, loading]);
+
+  const handleRefund = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const amount = parseFloat(refundAmount);
+    if (!amount || amount <= 0) {
+      setError("Enter a valid refund amount");
+      return;
+    }
+    if (amount > totalPaid) {
+      setError(`Amount exceeds total paid ($${totalPaid.toFixed(2)})`);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/payments/refund`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setSuccessMessage(data.message ?? "Refund processed");
+        const updatedJob = await fetch(`/api/jobs/${jobId}`).then((r) => r.json());
+        onRefunded?.(updatedJob);
+        setTimeout(() => {
+          setShowModal(false);
+          setSuccessMessage(null);
+          setRefundAmount("");
+        }, 4000);
+      } else {
+        setError(data.error ?? "Failed to process refund");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatted = totalPaid.toLocaleString("en-US", { style: "currency", currency: "USD" });
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => {
+          setShowModal(true);
+          setError(null);
+          setSuccessMessage(null);
+          setRefundAmount(suggestedAmount ? suggestedAmount.toFixed(2) : "");
+        }}
+        className="inline-flex items-center gap-2 rounded-lg border border-orange-300 bg-orange-50 px-3 py-2 text-sm font-medium text-orange-800 hover:bg-orange-100 disabled:opacity-50"
+      >
+        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+        </svg>
+        Issue refund
+      </button>
+
+      {showModal && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm"
+          onClick={(e) => e.target === e.currentTarget && !loading && setShowModal(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="refund-modal-title"
+        >
+          <div
+            className="w-full max-w-sm rounded-xl border border-slate-200/80 bg-white p-6 shadow-soft-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-100">
+                <svg className="h-5 w-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                </svg>
+              </div>
+              <div>
+                <h2 id="refund-modal-title" className="text-lg font-semibold text-slate-900">
+                  Issue refund
+                </h2>
+                <p className="text-sm text-slate-500">
+                  Total paid: {formatted}
+                </p>
+              </div>
+            </div>
+
+            {successMessage ? (
+              <div className="rounded-lg bg-emerald-50 px-3 py-3 text-sm text-emerald-700 mb-4">
+                <div className="flex items-start gap-2">
+                  <svg className="h-5 w-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  <span>{successMessage}</span>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleRefund}>
+                <div className="mb-4">
+                  <label htmlFor="refund-amount" className="block text-sm font-medium text-slate-700 mb-1">
+                    Refund amount
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
+                    <input
+                      ref={inputRef}
+                      id="refund-amount"
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      max={totalPaid}
+                      value={refundAmount}
+                      onChange={(e) => setRefundAmount(e.target.value)}
+                      placeholder={totalPaid.toFixed(2)}
+                      className="w-full pl-7 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                      disabled={loading}
+                    />
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                    {suggestedAmount && suggestedAmount < totalPaid && (
+                      <button
+                        type="button"
+                        onClick={() => setRefundAmount(suggestedAmount.toFixed(2))}
+                        className="text-xs text-orange-600 hover:text-orange-800 underline"
+                      >
+                        Refund overpayment ({suggestedAmount.toLocaleString("en-US", { style: "currency", currency: "USD" })})
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setRefundAmount(totalPaid.toFixed(2))}
+                      className="text-xs text-orange-600 hover:text-orange-800 underline"
+                    >
+                      Refund full amount ({formatted})
+                    </button>
+                  </div>
+                </div>
+                {error && (
+                  <p className="mb-4 text-sm text-red-600" role="alert">
+                    {error}
+                  </p>
+                )}
+                <div className="flex gap-3 justify-end">
+                  <button
+                    type="button"
+                    onClick={() => !loading && setShowModal(false)}
+                    disabled={loading}
+                    className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={loading || !refundAmount}
+                    className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-50 transition-colors shadow-soft"
+                  >
+                    {loading ? "Processing…" : "Refund"}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 const CANCELLATION_REASONS = [
   "Customer isn't ready",
   "Customer ghosted us",
@@ -3144,6 +3346,10 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
             ) : job.paymentStatus === "PENDING" ? (
               <span className="text-xs font-medium px-2 py-1 rounded bg-amber-100 text-amber-800 whitespace-nowrap">
                 Partially paid
+              </span>
+            ) : job.paymentStatus === "REFUNDED" ? (
+              <span className="text-xs font-medium px-2 py-1 rounded bg-orange-100 text-orange-800 whitespace-nowrap">
+                Refunded
               </span>
             ) : null}
           </div>
@@ -4855,8 +5061,18 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
       <div className="mt-2 space-y-1.5 text-sm">
         <div className="flex items-center justify-between gap-3">
           <span className="font-medium text-slate-600">Paid</span>
-          <Price amount={paidTowardTotal} variant="inline" />
+          <Price amount={paymentSummary.totalPaid} variant="inline" />
         </div>
+        {paymentSummary.totalPaid > total && total > 0 && (
+          <div className="flex items-center justify-between gap-3 rounded-md bg-orange-50 px-2 py-1.5 -mx-1">
+            <span className="font-medium text-orange-700 text-xs">Overpaid by</span>
+            <Price
+              amount={paymentSummary.totalPaid - total}
+              variant="inline"
+              className="text-orange-700 font-bold"
+            />
+          </div>
+        )}
         <div className="flex items-center justify-between gap-3 pt-2 mt-2 border-t border-slate-200">
           <span className="font-semibold text-slate-900">Remaining</span>
           <Price
@@ -4867,7 +5083,24 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
         </div>
       </div>
       {paymentSummary.isPaidInFull ? (
-        <PaidStatusBlock job={job} />
+        <div>
+          <PaidStatusBlock job={job} />
+          <div className="mt-3 flex flex-wrap gap-2">
+            <RefundButton
+              jobId={job.id}
+              totalPaid={paymentSummary.totalPaid}
+              onRefunded={onJobUpdated}
+              suggestedAmount={paymentSummary.totalPaid > total ? paymentSummary.totalPaid - total : undefined}
+            />
+          </div>
+        </div>
+      ) : paymentSummary.paymentStatus === "REFUNDED" ? (
+        <div className="mt-4 flex items-center gap-2 rounded-lg bg-orange-50 px-3 py-2 text-orange-700">
+          <svg className="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+          </svg>
+          <span className="font-medium">Refunded</span>
+        </div>
       ) : (
         <div className="mt-4 flex flex-col gap-2">
           {paymentSummary.totalPaid > 0 && <PartialPaymentStatusBlock />}
@@ -4887,6 +5120,9 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
             <CopyPaymentLinkButton jobId={job.id} />
             <ReprocessStripeButton jobId={job.id} onReprocessed={onJobUpdated} />
+            {paymentSummary.totalPaid > 0 && (
+              <RefundButton jobId={job.id} totalPaid={paymentSummary.totalPaid} onRefunded={onJobUpdated} />
+            )}
           </div>
         </div>
       )}

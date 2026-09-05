@@ -259,6 +259,27 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  if (event.type === "charge.refunded") {
+    const charge = event.data.object as Stripe.Charge;
+    const paymentIntentId =
+      typeof charge.payment_intent === "string"
+        ? charge.payment_intent
+        : charge.payment_intent?.id ?? null;
+    if (paymentIntentId) {
+      const payment = await prisma.payment.findFirst({
+        where: { stripePaymentIntentId: paymentIntentId },
+        select: { jobId: true },
+      });
+      if (payment?.jobId) {
+        try {
+          await refreshJobPaymentStatus(payment.jobId);
+        } catch (err) {
+          console.error("Failed to refresh job payment status after refund webhook:", err);
+        }
+      }
+    }
+  }
+
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
     const shopId =

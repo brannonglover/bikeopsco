@@ -79,6 +79,11 @@ export function computeTotalPaid(
     if (!Number.isFinite(amount)) return sum;
 
     const method = String(payment.paymentMethod ?? "").toLowerCase();
+
+    if (method === "refund") {
+      return sum + amount;
+    }
+
     const isStripe = Boolean(payment.stripePaymentIntentId);
     const mode =
       method === "terminal" || method === "card_present" ? "terminal" : "online";
@@ -90,7 +95,22 @@ export function computeTotalPaid(
     return sum + amountTowardJobTotal;
   }, 0);
 
-  return roundCurrency(totalPaid);
+  return roundCurrency(Math.max(0, totalPaid));
+}
+
+export function computeTotalRefunded(
+  payments: PaymentRecord[] | null | undefined
+): number {
+  const totalRefunded = (payments ?? []).reduce((sum, payment) => {
+    const status = String(payment.status ?? "").toLowerCase();
+    if (status !== "succeeded") return sum;
+    const method = String(payment.paymentMethod ?? "").toLowerCase();
+    if (method !== "refund") return sum;
+    const amount = Number.parseFloat(String(payment.amount));
+    if (!Number.isFinite(amount)) return sum;
+    return sum + Math.abs(amount);
+  }, 0);
+  return roundCurrency(totalRefunded);
 }
 
 export function getJobPaymentSummary(input: {
@@ -115,12 +135,12 @@ export function getJobPaymentSummary(input: {
   const isPaidInFull = remainingCents === 0 && toCents(subtotal) > 0;
 
   let paymentStatus: DerivedPaymentStatus;
-  if (isPaidInFull) {
+  if (currentStatus === "REFUNDED") {
+    paymentStatus = "REFUNDED";
+  } else if (isPaidInFull) {
     paymentStatus = "PAID";
   } else if (toCents(totalPaid) > 0) {
     paymentStatus = "PENDING";
-  } else if (currentStatus === "REFUNDED") {
-    paymentStatus = "REFUNDED";
   } else {
     paymentStatus = "UNPAID";
   }
