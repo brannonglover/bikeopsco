@@ -4389,7 +4389,6 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
     subtotal: total,
     totalPaid: grossPaid,
   });
-  const paidTowardTotal = Math.min(paymentSummary.totalPaid, total);
   const remaining = paymentSummary.remaining;
 
   return (
