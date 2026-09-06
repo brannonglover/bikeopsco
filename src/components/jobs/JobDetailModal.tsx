@@ -2627,7 +2627,7 @@ function RefundButton({
           setSuccessMessage(null);
           setRefundAmount(suggestedAmount ? suggestedAmount.toFixed(2) : "");
         }}
-        className="inline-flex items-center gap-2 rounded-lg border border-orange-300 bg-orange-50 px-3 py-2 text-sm font-medium text-orange-800 hover:bg-orange-100 disabled:opacity-50"
+        className="inline-flex items-center gap-2 rounded-lg border border-orange-300 bg-orange-50 px-3 py-2 text-sm font-medium text-orange-800 hover:bg-orange-100 disabled:opacity-50 dark:border-orange-700 dark:bg-orange-900/30 dark:text-orange-300 dark:hover:bg-orange-900/50"
       >
         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
@@ -2644,27 +2644,27 @@ function RefundButton({
           aria-labelledby="refund-modal-title"
         >
           <div
-            className="w-full max-w-sm rounded-xl border border-slate-200/80 bg-white p-6 shadow-soft-lg"
+            className="w-full max-w-sm rounded-xl border border-slate-200/80 bg-white p-6 shadow-soft-lg dark:border-slate-700 dark:bg-slate-800"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center gap-3 mb-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-100">
-                <svg className="h-5 w-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-100 dark:bg-orange-900/40">
+                <svg className="h-5 w-5 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
                 </svg>
               </div>
               <div>
-                <h2 id="refund-modal-title" className="text-lg font-semibold text-slate-900">
+                <h2 id="refund-modal-title" className="text-lg font-semibold text-slate-900 dark:text-white">
                   Issue refund
                 </h2>
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-slate-500 dark:text-slate-400">
                   Total paid: {formatted}
                 </p>
               </div>
             </div>
 
             {successMessage ? (
-              <div className="rounded-lg bg-emerald-50 px-3 py-3 text-sm text-emerald-700 mb-4">
+              <div className="rounded-lg bg-emerald-50 px-3 py-3 text-sm text-emerald-700 mb-4 dark:bg-emerald-900/30 dark:text-emerald-300">
                 <div className="flex items-start gap-2">
                   <svg className="h-5 w-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
@@ -2675,11 +2675,11 @@ function RefundButton({
             ) : (
               <form onSubmit={handleRefund}>
                 <div className="mb-4">
-                  <label htmlFor="refund-amount" className="block text-sm font-medium text-slate-700 mb-1">
+                  <label htmlFor="refund-amount" className="block text-sm font-medium text-slate-700 mb-1 dark:text-slate-300">
                     Refund amount
                   </label>
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm dark:text-slate-500">$</span>
                     <input
                       ref={inputRef}
                       id="refund-amount"
@@ -2690,7 +2690,7 @@ function RefundButton({
                       value={refundAmount}
                       onChange={(e) => setRefundAmount(e.target.value)}
                       placeholder={totalPaid.toFixed(2)}
-                      className="w-full pl-7 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                      className="w-full pl-7 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white dark:placeholder-slate-400"
                       disabled={loading}
                     />
                   </div>
@@ -2699,7 +2699,7 @@ function RefundButton({
                       <button
                         type="button"
                         onClick={() => setRefundAmount(suggestedAmount.toFixed(2))}
-                        className="text-xs text-orange-600 hover:text-orange-800 underline"
+                        className="text-xs text-orange-600 hover:text-orange-800 underline dark:text-orange-400 dark:hover:text-orange-300"
                       >
                         Refund overpayment ({suggestedAmount.toLocaleString("en-US", { style: "currency", currency: "USD" })})
                       </button>
@@ -2707,7 +2707,7 @@ function RefundButton({
                     <button
                       type="button"
                       onClick={() => setRefundAmount(totalPaid.toFixed(2))}
-                      className="text-xs text-orange-600 hover:text-orange-800 underline"
+                      className="text-xs text-orange-600 hover:text-orange-800 underline dark:text-orange-400 dark:hover:text-orange-300"
                     >
                       Refund full amount ({formatted})
                     </button>
@@ -2723,14 +2723,14 @@ function RefundButton({
                     type="button"
                     onClick={() => !loading && setShowModal(false)}
                     disabled={loading}
-                    className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                    className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-50 transition-colors dark:border-slate-600 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-700"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={loading || !refundAmount}
-                    className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-50 transition-colors shadow-soft"
+                    className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-50 transition-colors shadow-soft dark:bg-orange-700 dark:hover:bg-orange-600"
                   >
                     {loading ? "Processing…" : "Refund"}
                   </button>
@@ -3348,7 +3348,7 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
                 Partially paid
               </span>
             ) : job.paymentStatus === "REFUNDED" ? (
-              <span className="text-xs font-medium px-2 py-1 rounded bg-orange-100 text-orange-800 whitespace-nowrap">
+              <span className="text-xs font-medium px-2 py-1 rounded bg-orange-100 text-orange-800 whitespace-nowrap dark:bg-orange-900/40 dark:text-orange-300">
                 Refunded
               </span>
             ) : null}
@@ -5063,12 +5063,12 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
           <Price amount={paymentSummary.totalPaid} variant="inline" />
         </div>
         {paymentSummary.totalPaid > total && total > 0 && (
-          <div className="flex items-center justify-between gap-3 rounded-md bg-orange-50 px-2 py-1.5 -mx-1">
-            <span className="font-medium text-orange-700 text-xs">Overpaid by</span>
+          <div className="flex items-center justify-between gap-3 rounded-md bg-orange-50 px-2 py-1.5 -mx-1 dark:bg-orange-900/20">
+            <span className="font-medium text-orange-700 text-xs dark:text-orange-400">Overpaid by</span>
             <Price
               amount={paymentSummary.totalPaid - total}
               variant="inline"
-              className="text-orange-700 font-bold"
+              className="text-orange-700 font-bold dark:text-orange-400"
             />
           </div>
         )}
@@ -5094,7 +5094,7 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
           </div>
         </div>
       ) : paymentSummary.paymentStatus === "REFUNDED" ? (
-        <div className="mt-4 flex items-center gap-2 rounded-lg bg-orange-50 px-3 py-2 text-orange-700">
+        <div className="mt-4 flex items-center gap-2 rounded-lg bg-orange-50 px-3 py-2 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300">
           <svg className="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
           </svg>
