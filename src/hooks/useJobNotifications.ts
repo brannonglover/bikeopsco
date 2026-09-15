@@ -6,6 +6,7 @@ import type { Job } from "@/lib/types";
 import { BOARD_JOBS_QUERY_KEY } from "@/lib/board-jobs";
 import { playNotificationSound } from "@/lib/notificationSound";
 import { useVisibilityAwarePolling } from "@/hooks/useVisibilityAwarePolling";
+import { useForegroundSync } from "@/hooks/useForegroundSync";
 
 const JOB_POLL_MS = 5000;
 const FULL_BOARD_REFRESH_MS = 60_000;
@@ -53,7 +54,6 @@ export function useJobNotifications(
   const hasInitialized = useRef(false);
   const summaryBaseline = useRef<string | null>(null);
   const lastFullRefreshAt = useRef(0);
-  const hiddenSince = useRef<number | null>(null);
   const [jobs, setJobs] = useState<Job[]>(
     () => queryClient.getQueryData<Job[]>(BOARD_JOBS_QUERY_KEY) ?? []
   );
@@ -127,28 +127,12 @@ export function useJobNotifications(
     }
   }, [fetchJobs]);
 
-  useEffect(() => {
-    if (!enabled) return;
+  const syncOnForeground = useCallback(() => {
+    summaryBaseline.current = null;
+    fetchJobs();
+  }, [fetchJobs]);
 
-    const onVisibilityChange = () => {
-      if (document.hidden) {
-        hiddenSince.current = Date.now();
-      } else {
-        const elapsed = hiddenSince.current
-          ? Date.now() - hiddenSince.current
-          : 0;
-        hiddenSince.current = null;
-        if (elapsed > 2_000) {
-          summaryBaseline.current = null;
-          fetchJobs();
-        }
-      }
-    };
-
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    return () =>
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-  }, [enabled, fetchJobs]);
+  useForegroundSync(syncOnForeground, { enabled });
 
   useVisibilityAwarePolling(
     () => {
