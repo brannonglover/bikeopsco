@@ -1,12 +1,22 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-
-const DEFAULT_HIDDEN_INTERVAL_MS = 30_000;
+import {
+  acquire,
+  release,
+  setWorkerInterval,
+  clearWorkerTimer,
+} from "@/lib/worker-timers";
 
 type UseVisibilityAwarePollingOptions = {
   enabled?: boolean;
-  /** Interval while the tab is hidden. `null` pauses until visible again. */
+  /**
+   * Interval while the tab is hidden.
+   * - `undefined` (default): use the same interval as the active tab — no
+   *   slowdown. This keeps data fresh in background tabs.
+   * - a `number`: use a different (usually longer) interval when hidden.
+   * - `null`: pause polling entirely until the tab becomes visible.
+   */
   hiddenIntervalMs?: number | null;
   runImmediately?: boolean;
   /** Fire the callback immediately when the tab becomes visible. Default `true`. */
@@ -14,8 +24,11 @@ type UseVisibilityAwarePollingOptions = {
 };
 
 /**
- * Polls on an interval that backs off while the document is hidden.
- * Refetches immediately when the tab becomes visible again.
+ * Polls on an interval using a Web Worker timer so that background-tab
+ * throttling imposed by browsers does not delay updates.
+ *
+ * Optionally slows or pauses polling while the document is hidden and
+ * fires the callback immediately when the tab becomes visible again.
  */
 export function useVisibilityAwarePolling(
   callback: () => void,
@@ -24,7 +37,7 @@ export function useVisibilityAwarePolling(
 ): void {
   const {
     enabled = true,
-    hiddenIntervalMs = DEFAULT_HIDDEN_INTERVAL_MS,
+    hiddenIntervalMs,
     runImmediately = true,
     fireOnVisible = true,
   } = options;
@@ -35,18 +48,19 @@ export function useVisibilityAwarePolling(
   useEffect(() => {
     if (!enabled || activeIntervalMs <= 0) return;
 
-    let intervalId: ReturnType<typeof setInterval> | null = null;
+    acquire();
+    let timerId: string | null = null;
 
     const resolveIntervalMs = (): number | null => {
       if (typeof document === "undefined") return activeIntervalMs;
       if (!document.hidden) return activeIntervalMs;
-      return hiddenIntervalMs;
+      return hiddenIntervalMs === undefined ? activeIntervalMs : hiddenIntervalMs;
     };
 
     const clearScheduled = () => {
-      if (intervalId !== null) {
-        clearInterval(intervalId);
-        intervalId = null;
+      if (timerId !== null) {
+        clearWorkerTimer(timerId);
+        timerId = null;
       }
     };
 
@@ -54,7 +68,7 @@ export function useVisibilityAwarePolling(
       clearScheduled();
       const ms = resolveIntervalMs();
       if (ms === null || ms <= 0) return;
-      intervalId = setInterval(() => {
+      timerId = setWorkerInterval(() => {
         callbackRef.current();
       }, ms);
     };
@@ -75,6 +89,7 @@ export function useVisibilityAwarePolling(
     return () => {
       clearScheduled();
       document.removeEventListener("visibilitychange", onVisibilityChange);
+      release();
     };
   }, [enabled, activeIntervalMs, hiddenIntervalMs, runImmediately, fireOnVisible]);
 }
