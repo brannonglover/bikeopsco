@@ -8,7 +8,8 @@ import { playNotificationSound } from "@/lib/notificationSound";
 import { useVisibilityAwarePolling } from "@/hooks/useVisibilityAwarePolling";
 import { useForegroundSync } from "@/hooks/useForegroundSync";
 
-const JOB_POLL_MS = 5000;
+const JOB_POLL_MS = 5_000;
+const JOB_POLL_HIDDEN_MS = 30_000;
 const FULL_BOARD_REFRESH_MS = 60_000;
 const BOARD_SUMMARY_URL = "/api/jobs?view=board&summary=1";
 
@@ -139,7 +140,7 @@ export function useJobNotifications(
       void pollBoardSummary();
     },
     JOB_POLL_MS,
-    { enabled, fireOnVisible: false }
+    { enabled, fireOnVisible: false, hiddenIntervalMs: JOB_POLL_HIDDEN_MS }
   );
 
   useEffect(() => {
