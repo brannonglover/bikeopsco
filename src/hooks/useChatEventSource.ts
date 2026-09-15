@@ -2,6 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useVisibilityAwarePolling } from "@/hooks/useVisibilityAwarePolling";
+import {
+  setWorkerTimeout,
+  clearWorkerTimer,
+} from "@/lib/worker-timers";
 
 const MAX_SSE_FAILURES = 3;
 
@@ -16,6 +20,9 @@ type UseChatEventSourceOptions<T> = {
 /**
  * Subscribes to a chat SSE endpoint with automatic reconnect.
  * Falls back to HTTP polling after repeated connection failures.
+ *
+ * Reconnection timers use a Web Worker so they are not throttled when the
+ * browser tab is in the background.
  */
 export function useChatEventSource<T>({
   url,
@@ -42,7 +49,7 @@ export function useChatEventSource<T>({
     }
 
     let es: EventSource | null = null;
-    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let reconnectTimerId: string | null = null;
     let closed = false;
 
     const connect = () => {
@@ -67,7 +74,7 @@ export function useChatEventSource<T>({
           return;
         }
         if (!closed) {
-          reconnectTimer = setTimeout(connect, 2000);
+          reconnectTimerId = setWorkerTimeout(connect, 2000);
         }
       };
     };
@@ -77,7 +84,7 @@ export function useChatEventSource<T>({
     return () => {
       closed = true;
       es?.close();
-      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (reconnectTimerId) clearWorkerTimer(reconnectTimerId);
     };
   }, [url, enabled, useFallback]);
 

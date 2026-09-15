@@ -24,6 +24,15 @@ const nextConfig = {
           },
         ],
       },
+      {
+        source: "/poll-worker.js",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "no-cache, no-store, must-revalidate",
+          },
+        ],
+      },
     ];
   },
 };
