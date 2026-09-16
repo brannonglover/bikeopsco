@@ -5,7 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { getShopForHost, type CurrentShop } from "@/lib/shop";
 
 export type StaffShopAuth =
-  | { ok: true; shop: CurrentShop; shopId: string }
+  | { ok: true; shop: CurrentShop; shopId: string; userId: string }
   | { ok: false; response: NextResponse };
 
 export async function getRequestShop(request: NextRequest): Promise<CurrentShop | null> {
@@ -14,17 +14,19 @@ export async function getRequestShop(request: NextRequest): Promise<CurrentShop 
   return getShopForHost(hostHeader);
 }
 
-/** Resolve staff shopId from JWT cookie and/or NextAuth session (browser fallback). */
-export async function resolveStaffShopId(request: NextRequest): Promise<string | null> {
+/** Resolve staff shopId + userId from JWT cookie and/or NextAuth session (browser fallback). */
+export async function resolveStaffShopId(
+  request: NextRequest,
+): Promise<{ shopId: string; userId: string } | null> {
   const secret = process.env.NEXTAUTH_SECRET;
   const token = await getToken({ req: request, secret });
-  if (typeof token?.shopId === "string") {
-    return token.shopId;
+  if (typeof token?.shopId === "string" && typeof token?.id === "string") {
+    return { shopId: token.shopId, userId: token.id };
   }
 
   const session = await getServerSession(authOptions);
-  if (typeof session?.user?.shopId === "string") {
-    return session.user.shopId;
+  if (typeof session?.user?.shopId === "string" && typeof session?.user?.id === "string") {
+    return { shopId: session.user.shopId, userId: session.user.id };
   }
 
   return null;
@@ -32,9 +34,9 @@ export async function resolveStaffShopId(request: NextRequest): Promise<string |
 
 export async function requireStaffShop(request: NextRequest): Promise<StaffShopAuth> {
   try {
-    const tokenShopId = await resolveStaffShopId(request);
+    const resolved = await resolveStaffShopId(request);
 
-    if (!tokenShopId) {
+    if (!resolved) {
       return {
         ok: false,
         response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
@@ -42,14 +44,14 @@ export async function requireStaffShop(request: NextRequest): Promise<StaffShopA
     }
 
     const shop = await getRequestShop(request);
-    if (!shop || shop.id !== tokenShopId) {
+    if (!shop || shop.id !== resolved.shopId) {
       return {
         ok: false,
         response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
       };
     }
 
-    return { ok: true, shop, shopId: tokenShopId };
+    return { ok: true, shop, shopId: resolved.shopId, userId: resolved.userId };
   } catch (error) {
     console.error("requireStaffShop error:", error);
     return {

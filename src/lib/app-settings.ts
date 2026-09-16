@@ -17,6 +17,7 @@ export type AppFeatures = {
   collectionFeeEbike: number;
   notifyCustomerEnabled: boolean;
   chatEnabled: boolean;
+  voiceEnabled: boolean;
   reviewsEnabled: boolean;
   rentalsEnabled: boolean;
   jobBoardFiltersEnabled: boolean;
@@ -52,6 +53,7 @@ const DEFAULT_FEATURES: AppFeatures = {
   collectionFeeEbike: 30,
   notifyCustomerEnabled: true,
   chatEnabled: true,
+  voiceEnabled: false,
   reviewsEnabled: true,
   rentalsEnabled: true,
   jobBoardFiltersEnabled: false,
@@ -116,6 +118,7 @@ async function loadAppFeaturesForShop(shopId: string): Promise<AppFeatures> {
       collectionFeeEbike: Number(row.collectionFeeEbike),
       notifyCustomerEnabled: row.notifyCustomerEnabled,
       chatEnabled: row.chatEnabled,
+      voiceEnabled: row.voiceEnabled,
       reviewsEnabled: row.reviewsEnabled,
       rentalsEnabled: row.rentalsEnabled,
       jobBoardFiltersEnabled: row.jobBoardFiltersEnabled,
@@ -164,6 +167,7 @@ export async function upsertAppFeatures(
     collectionFeeEbike: Number(updated.collectionFeeEbike),
     notifyCustomerEnabled: updated.notifyCustomerEnabled,
     chatEnabled: updated.chatEnabled,
+    voiceEnabled: updated.voiceEnabled,
     reviewsEnabled: updated.reviewsEnabled,
     rentalsEnabled: updated.rentalsEnabled,
     jobBoardFiltersEnabled: updated.jobBoardFiltersEnabled,

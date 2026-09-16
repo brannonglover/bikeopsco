@@ -104,8 +104,8 @@ export async function hasStaffJobAccess(
   request: NextRequest,
   shopId: string
 ): Promise<boolean> {
-  const tokenShopId = await resolveStaffShopId(request);
-  return Boolean(tokenShopId && tokenShopId === shopId);
+  const resolved = await resolveStaffShopId(request);
+  return Boolean(resolved && resolved.shopId === shopId);
 }
 
 /** Staff session, valid signed ?access= for this job, or logged-in customer who owns it. */

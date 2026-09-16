@@ -9,118 +9,120 @@ datasource db {
 }
 
 model Shop {
-  id                         String   @id @default(cuid())
-  name                       String
-  subdomain                  String   @unique
+  id                          String    @id @default(cuid())
+  name                        String
+  subdomain                   String    @unique
   /// Public street address for directory / nearby search.
-  address                    String?
-  latitude                   Float?
-  longitude                  Float?
-  billingStatus              String   @default("trialing")
-  trialEndsAt                DateTime?
-  stripeCustomerId           String?  @unique
-  stripeSubscriptionId       String?  @unique
-  stripePriceId              String?
-  stripeCurrentPeriodEnd     DateTime?
-  stripeCancelAtPeriodEnd    Boolean  @default(false)
+  address                     String?
+  latitude                    Float?
+  longitude                   Float?
+  billingStatus               String    @default("trialing")
+  trialEndsAt                 DateTime?
+  stripeCustomerId            String?   @unique
+  stripeSubscriptionId        String?   @unique
+  stripePriceId               String?
+  stripeCurrentPeriodEnd      DateTime?
+  stripeCancelAtPeriodEnd     Boolean   @default(false)
   stripeSubscriptionUpdatedAt DateTime?
-  billingProvider            String?
-  appleOriginalTransactionId String?  @unique
-  appleProductId             String?
-  appleCurrentPeriodEnd      DateTime?
-  appleSubscriptionUpdatedAt DateTime?
-  createdAt                  DateTime @default(now())
-  updatedAt                  DateTime @updatedAt
+  billingProvider             String?
+  appleOriginalTransactionId  String?   @unique
+  appleProductId              String?
+  appleCurrentPeriodEnd       DateTime?
+  appleSubscriptionUpdatedAt  DateTime?
+  createdAt                   DateTime  @default(now())
+  updatedAt                   DateTime  @updatedAt
 
-  customers        Customer[]
-  bikes            Bike[]
-  jobs             Job[]
-  jobBikes         JobBike[]
-  jobBikeComponentOverrides JobBikeComponentOverride[]
-  payments         Payment[]
-  services         Service[]
-  jobServices      JobService[]
-  emailTemplates   EmailTemplate[]
-  jobEmails        JobEmail[]
-  jobSms           JobSms[]
-  products         Product[]
-  jobProducts      JobProduct[]
-  mechanics        Mechanic[]
-  conversations    Conversation[]
-  messages         Message[]
-  messageReactions MessageReaction[]
-  chatReminders    ChatReminderEmail[]
-  messageAttachments MessageAttachment[]
-  users            User[]
-  pushTokens       PushToken[]
-  magicLinkTokens  MagicLinkToken[]
-  chatSessions     ChatSession[]
-  reviewSettings   ReviewSettings[]
-  appSettings      AppSettings[]
-  waitlistEntries  WaitlistEntry[]
-  waitlistBikes    WaitlistBike[]
-  reviewRequests   ReviewRequest[]
-  importedRevenue  ImportedRevenue[]
-  rentalBikes      RentalBike[]
-  rentalRates      RentalRate[]
-  rentalAddons     RentalAddon[]
-  rentalReservations RentalReservation[]
-  rentalActivities RentalActivity[]
-  emailBroadcasts  EmailBroadcast[]
+  customers                   Customer[]
+  bikes                       Bike[]
+  jobs                        Job[]
+  jobBikes                    JobBike[]
+  jobBikeComponentOverrides   JobBikeComponentOverride[]
+  payments                    Payment[]
+  services                    Service[]
+  jobServices                 JobService[]
+  emailTemplates              EmailTemplate[]
+  jobEmails                   JobEmail[]
+  jobSms                      JobSms[]
+  products                    Product[]
+  jobProducts                 JobProduct[]
+  mechanics                   Mechanic[]
+  conversations               Conversation[]
+  messages                    Message[]
+  calls                       Call[]
+  messageReactions            MessageReaction[]
+  chatReminders               ChatReminderEmail[]
+  messageAttachments          MessageAttachment[]
+  users                       User[]
+  pushTokens                  PushToken[]
+  magicLinkTokens             MagicLinkToken[]
+  chatSessions                ChatSession[]
+  reviewSettings              ReviewSettings[]
+  appSettings                 AppSettings[]
+  waitlistEntries             WaitlistEntry[]
+  waitlistBikes               WaitlistBike[]
+  reviewRequests              ReviewRequest[]
+  importedRevenue             ImportedRevenue[]
+  rentalBikes                 RentalBike[]
+  rentalRates                 RentalRate[]
+  rentalAddons                RentalAddon[]
+  rentalReservations          RentalReservation[]
+  rentalActivities            RentalActivity[]
+  emailBroadcasts             EmailBroadcast[]
   /// Resend Marketing segment for consented email-update customers (Broadcasts).
   resendEmailUpdatesSegmentId String?
 }
 
 model Customer {
-  id               String           @id @default(cuid())
-  shopId           String
-  shop             Shop             @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  firstName        String
-  lastName         String?
-  email            String?
-  phone            String?
-  emailUpdatesConsent Boolean       @default(true)
-  emailUpdatesConsentSource String?
+  id                           String              @id @default(cuid())
+  shopId                       String
+  shop                         Shop                @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  firstName                    String
+  lastName                     String?
+  email                        String?
+  phone                        String?
+  emailUpdatesConsent          Boolean             @default(true)
+  emailUpdatesConsentSource    String?
   emailUpdatesConsentUpdatedAt DateTime?
-  smsConsent       Boolean          @default(false)
-  smsConsentSource String?
-  smsConsentUpdatedAt DateTime?
-  address          String?
-  notes            String?
-  imageUrl         String?
-  bikes            Bike[]
-  jobs             Job[]
-  conversations    Conversation[]
-  waitlistEntries  WaitlistEntry[]  @relation("WaitlistCustomer")
-  magicLinkTokens  MagicLinkToken[]
-  chatSessions     ChatSession[]
-  pushTokens       PushToken[]
-  reviewRequests   ReviewRequest[]
-  rentalReservations RentalReservation[]
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
+  smsConsent                   Boolean             @default(false)
+  smsConsentSource             String?
+  smsConsentUpdatedAt          DateTime?
+  address                      String?
+  notes                        String?
+  imageUrl                     String?
+  bikes                        Bike[]
+  jobs                         Job[]
+  conversations                Conversation[]
+  calls                        Call[]
+  waitlistEntries              WaitlistEntry[]     @relation("WaitlistCustomer")
+  magicLinkTokens              MagicLinkToken[]
+  chatSessions                 ChatSession[]
+  pushTokens                   PushToken[]
+  reviewRequests               ReviewRequest[]
+  rentalReservations           RentalReservation[]
+  createdAt                    DateTime            @default(now())
+  updatedAt                    DateTime            @updatedAt
 
   @@index([shopId])
 }
 
 model Bike {
-  id          String     @id @default(cuid())
-  shopId      String
-  shop        Shop       @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  make        String
-  model       String?
-  year        Int?
+  id            String    @id @default(cuid())
+  shopId        String
+  shop          Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  make          String
+  model         String?
+  year          Int?
   /// null = infer regular vs e-bike from make/model when needed
-  bikeType    BikeType?
-  nickname    String?
-  imageUrl    String?
+  bikeType      BikeType?
+  nickname      String?
+  imageUrl      String?
   /// Matched row in the separate bike-catalog database
   catalogBikeId String?
-  customerId  String
-  customer    Customer   @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  jobBikes    JobBike[]
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  customerId    String
+  customer      Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  jobBikes      JobBike[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   @@index([customerId])
   @@index([shopId])
@@ -128,30 +130,30 @@ model Bike {
 }
 
 model JobBike {
-  id        String   @id @default(cuid())
-  shopId    String
-  shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  jobId     String
-  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  make      String
-  model     String?
-  year      Int?
+  id                 String                     @id @default(cuid())
+  shopId             String
+  shop               Shop                       @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  jobId              String
+  job                Job                        @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  make               String
+  model              String?
+  year               Int?
   /// null = use linked customer bike or infer from make/model
-  bikeType  BikeType?
-  nickname  String?
-  imageUrl  String?
-  bikeId    String?
-  bike      Bike?    @relation(fields: [bikeId], references: [id], onDelete: SetNull)
-  sortOrder        Int       @default(0)
-  completedAt      DateTime?
-  waitingOnPartsAt DateTime?
+  bikeType           BikeType?
+  nickname           String?
+  imageUrl           String?
+  bikeId             String?
+  bike               Bike?                      @relation(fields: [bikeId], references: [id], onDelete: SetNull)
+  sortOrder          Int                        @default(0)
+  completedAt        DateTime?
+  waitingOnPartsAt   DateTime?
   /// Matched row in the separate bike-catalog database
-  catalogBikeId    String?
-  catalogMatchedAt DateTime?
-  createdAt        DateTime  @default(now())
-  workingOnJob Job?     @relation("WorkingOnBike")
-  jobServices  JobService[]
-  jobProducts  JobProduct[]
+  catalogBikeId      String?
+  catalogMatchedAt   DateTime?
+  createdAt          DateTime                   @default(now())
+  workingOnJob       Job?                       @relation("WorkingOnBike")
+  jobServices        JobService[]
+  jobProducts        JobProduct[]
   componentOverrides JobBikeComponentOverride[]
 
   @@index([jobId])
@@ -161,19 +163,19 @@ model JobBike {
 
 /// Per-job overrides / confirmations for catalog component slots (does not mutate global catalog).
 model JobBikeComponentOverride {
-  id           String                        @id @default(cuid())
+  id           String                @id @default(cuid())
   shopId       String
-  shop         Shop                          @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shop         Shop                  @relation(fields: [shopId], references: [id], onDelete: Cascade)
   jobBikeId    String
-  jobBike      JobBike                       @relation(fields: [jobBikeId], references: [id], onDelete: Cascade)
+  jobBike      JobBike               @relation(fields: [jobBikeId], references: [id], onDelete: Cascade)
   /// Matches CatalogComponentSlot values in bike-catalog
   slot         String
-  confirmation ComponentConfirmation         @default(UNREVIEWED)
+  confirmation ComponentConfirmation @default(UNREVIEWED)
   /// When confirmation is CUSTOMIZED, the part actually on this bike
   customValue  String?
   notes        String?
-  createdAt    DateTime                      @default(now())
-  updatedAt    DateTime                      @updatedAt
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
 
   @@unique([jobBikeId, slot])
   @@index([shopId])
@@ -187,46 +189,46 @@ enum ComponentConfirmation {
 }
 
 model Job {
-  id                String       @id @default(cuid())
-  shopId            String
-  shop              Shop         @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  bikeMake          String       // Legacy / summary – first bike or "Multiple"
-  bikeModel         String       // Legacy / summary
-  jobBikes          JobBike[]
-  workingOnJobBikeId String?     @unique
-  workingOnJobBike   JobBike?    @relation("WorkingOnBike", fields: [workingOnJobBikeId], references: [id], onDelete: SetNull)
-  stage             Stage        @default(BOOKED_IN)
-  deliveryType      DeliveryType @default(DROP_OFF_AT_SHOP)
-  dropOffDate       DateTime?
-  pickupDate        DateTime?
-  collectionAddress     String?
-  collectionWindowStart String?
-  collectionWindowEnd   String?
+  id                          String          @id @default(cuid())
+  shopId                      String
+  shop                        Shop            @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  bikeMake                    String // Legacy / summary – first bike or "Multiple"
+  bikeModel                   String // Legacy / summary
+  jobBikes                    JobBike[]
+  workingOnJobBikeId          String?         @unique
+  workingOnJobBike            JobBike?        @relation("WorkingOnBike", fields: [workingOnJobBikeId], references: [id], onDelete: SetNull)
+  stage                       Stage           @default(BOOKED_IN)
+  deliveryType                DeliveryType    @default(DROP_OFF_AT_SHOP)
+  dropOffDate                 DateTime?
+  pickupDate                  DateTime?
+  collectionAddress           String?
+  collectionWindowStart       String?
+  collectionWindowEnd         String?
   collectionReturnWindowStart String?
   collectionReturnWindowEnd   String?
-  customerId        String?
-  customer          Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  mechanicId        String?
-  mechanic          Mechanic?    @relation(fields: [mechanicId], references: [id], onDelete: SetNull)
-  notes             String?
-  internalNotes     String?
-  customerNotes     String?
-  cancellationReason String?
-  completedAt       DateTime?
-  receivedAt        DateTime?
-  archivedAt        DateTime?
-  columnSortOrder   Float?
-  paymentStatus     PaymentStatus @default(UNPAID)
-  sentEmails        JobEmail[]
-  sentSms           JobSms[]
-  jobServices       JobService[]
-  jobProducts       JobProduct[]
-  payments          Payment[]
-  conversations     Conversation[]
-  reviewRequests    ReviewRequest[]
-  promotedWaitlistEntries WaitlistEntry[] @relation("WaitlistPromotedJob")
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
+  customerId                  String?
+  customer                    Customer?       @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  mechanicId                  String?
+  mechanic                    Mechanic?       @relation(fields: [mechanicId], references: [id], onDelete: SetNull)
+  notes                       String?
+  internalNotes               String?
+  customerNotes               String?
+  cancellationReason          String?
+  completedAt                 DateTime?
+  receivedAt                  DateTime?
+  archivedAt                  DateTime?
+  columnSortOrder             Float?
+  paymentStatus               PaymentStatus   @default(UNPAID)
+  sentEmails                  JobEmail[]
+  sentSms                     JobSms[]
+  jobServices                 JobService[]
+  jobProducts                 JobProduct[]
+  payments                    Payment[]
+  conversations               Conversation[]
+  reviewRequests              ReviewRequest[]
+  promotedWaitlistEntries     WaitlistEntry[] @relation("WaitlistPromotedJob")
+  createdAt                   DateTime        @default(now())
+  updatedAt                   DateTime        @updatedAt
 
   @@index([shopId])
   @@index([shopId, archivedAt, stage])
@@ -269,7 +271,7 @@ model Service {
   shop        Shop         @relation(fields: [shopId], references: [id], onDelete: Cascade)
   name        String
   description String?
-  price       Decimal     @db.Decimal(10, 2)
+  price       Decimal      @db.Decimal(10, 2)
   /// Stable id for system-managed line items (e.g. collection fee)
   slug        String?
   isSystem    Boolean      @default(false)
@@ -439,49 +441,50 @@ model JobProduct {
 }
 
 model Conversation {
-  id                 String    @id @default(cuid())
+  id                 String              @id @default(cuid())
   shopId             String
-  shop               Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shop               Shop                @relation(fields: [shopId], references: [id], onDelete: Cascade)
   customerId         String
-  customer           Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customer           Customer            @relation(fields: [customerId], references: [id], onDelete: Cascade)
   jobId              String?
-  job                Job?      @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  job                Job?                @relation(fields: [jobId], references: [id], onDelete: SetNull)
   messages           Message[]
+  calls              Call[]
   chatReminderEmails ChatReminderEmail[]
-  archived           Boolean   @default(false)
+  archived           Boolean             @default(false)
   /// Last time the customer sent a typing heartbeat (staff UI treats as “typing” if recent).
   customerTypingAt   DateTime?
   /// When staff last opened this thread (GET messages). Used for unread badge vs customer messages.
   staffLastReadAt    DateTime?
   /// When the customer last opened this thread (GET messages). Used for "Viewed" indicator on staff messages.
   customerLastReadAt DateTime?
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
 
   @@index([shopId])
 }
 
 model Message {
-  id                 String              @id @default(cuid())
-  shopId             String
-  shop               Shop                @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  conversationId     String
-  conversation       Conversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sender             MessageSender
-  body               String?
+  id                           String              @id @default(cuid())
+  shopId                       String
+  shop                         Shop                @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  conversationId               String
+  conversation                 Conversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender                       MessageSender
+  body                         String?
   /// Twilio inbound MessageSid — dedupes webhook retries
-  smsSid             String?
-  smsProvider        String?
-  smsDeliveryStatus  String?
-  smsDeliveryStatusName String?
+  smsSid                       String?
+  smsProvider                  String?
+  smsDeliveryStatus            String?
+  smsDeliveryStatusName        String?
   smsDeliveryStatusDescription String?
-  smsDeliveryError   String?
-  smsDeliveredAt     DateTime?
-  attachments        MessageAttachment[]
-  reactions          MessageReaction[]
-  chatReminderEmails ChatReminderEmail[]
-  createdAt          DateTime            @default(now())
-  editedAt           DateTime?
+  smsDeliveryError             String?
+  smsDeliveredAt               DateTime?
+  attachments                  MessageAttachment[]
+  reactions                    MessageReaction[]
+  chatReminderEmails           ChatReminderEmail[]
+  createdAt                    DateTime            @default(now())
+  editedAt                     DateTime?
 
   @@unique([shopId, smsSid])
   @@index([shopId])
@@ -526,15 +529,15 @@ enum ChatReminderKind {
 }
 
 model MessageAttachment {
-  id        String    @id @default(cuid())
+  id        String   @id @default(cuid())
   shopId    String
-  shop      Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
   messageId String?
-  message   Message?  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  message   Message? @relation(fields: [messageId], references: [id], onDelete: Cascade)
   url       String
   filename  String
   mimeType  String
-  createdAt DateTime  @default(now())
+  createdAt DateTime @default(now())
 
   @@index([shopId])
 }
@@ -543,6 +546,57 @@ enum MessageSender {
   STAFF
   CUSTOMER
   SYSTEM
+}
+
+model Call {
+  id                  String        @id @default(cuid())
+  shopId              String
+  shop                Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  customerId          String?
+  customer            Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  conversationId      String?
+  conversation        Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  direction           CallDirection
+  status              CallStatus
+  fromNumber          String
+  toNumber            String
+  /// CallSid of the leg that initiated this logical call (inbound PSTN leg,
+  /// or the Voice-SDK-initiated leg for outbound). Stable correlation key.
+  twilioParentCallSid String
+  /// CallSid of the <Dial>'d leg (to <Client> for inbound, to <Number> for
+  /// outbound). Filled in once Twilio creates it; absent if never dialed out.
+  twilioChildCallSid  String?
+  startedAt           DateTime?
+  answeredAt          DateTime?
+  endedAt             DateTime?
+  durationSeconds     Int?
+  recordingSid        String?
+  recordingUrl        String?
+  recordingStatus     String?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  @@unique([shopId, twilioParentCallSid])
+  @@index([shopId])
+  @@index([shopId, twilioChildCallSid])
+  @@index([conversationId])
+}
+
+enum CallDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum CallStatus {
+  QUEUED
+  RINGING
+  IN_PROGRESS
+  COMPLETED
+  BUSY
+  FAILED
+  NO_ANSWER
+  CANCELED
+  VOICEMAIL
 }
 
 model User {
@@ -595,43 +649,43 @@ model PushToken {
 }
 
 model MagicLinkToken {
-  id        String   @id @default(cuid())
-  shopId    String
-  shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  token     String   @unique
+  id         String   @id @default(cuid())
+  shopId     String
+  shop       Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  token      String   @unique
   customerId String
-  customer  Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  expiresAt DateTime
-  createdAt DateTime @default(now())
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
 
   @@index([shopId])
 }
 
 model ChatSession {
-  id        String   @id @default(cuid())
-  shopId    String
-  shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  token     String   @unique
+  id         String   @id @default(cuid())
+  shopId     String
+  shop       Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  token      String   @unique
   customerId String
-  customer  Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  expiresAt DateTime
-  createdAt DateTime @default(now())
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
 
   @@index([shopId])
 }
 
 model ReviewSettings {
-  id                  String  @id @default(cuid())
-  shopId              String
-  shop                Shop    @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  googleReviewUrl     String?
-  yelpReviewUrl       String?
-  googlePlaceId       String?
-  googleRating        Float?
-  googleReviewCount   Int?
-  yelpRating          Float?
-  yelpReviewCount     Int?
-  featuredReviews     Json    @default("[]")
+  id                String  @id @default(cuid())
+  shopId            String
+  shop              Shop    @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  googleReviewUrl   String?
+  yelpReviewUrl     String?
+  googlePlaceId     String?
+  googleRating      Float?
+  googleReviewCount Int?
+  yelpRating        Float?
+  yelpReviewCount   Int?
+  featuredReviews   Json    @default("[]")
 
   @@unique([shopId])
   @@index([shopId])
@@ -651,11 +705,12 @@ model AppSettings {
   /// Collection eligibility radius, in miles
   collectionRadiusMiles    Float    @default(5)
   /// Collection fee (standard bike), USD
-  collectionFeeRegular     Decimal  @db.Decimal(10, 2) @default(20)
+  collectionFeeRegular     Decimal  @default(20) @db.Decimal(10, 2)
   /// Collection fee (e-bike), USD
-  collectionFeeEbike       Decimal  @db.Decimal(10, 2) @default(30)
+  collectionFeeEbike       Decimal  @default(30) @db.Decimal(10, 2)
   notifyCustomerEnabled    Boolean  @default(true)
   chatEnabled              Boolean  @default(true)
+  voiceEnabled             Boolean  @default(false)
   reviewsEnabled           Boolean  @default(true)
   /// When false: hide Rentals nav and block rental APIs.
   rentalsEnabled           Boolean  @default(true)
@@ -682,36 +737,36 @@ enum WaitlistStatus {
 }
 
 model WaitlistEntry {
-  id                   String         @id @default(cuid())
-  shopId               String
-  shop                 Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  status               WaitlistStatus @default(WAITING)
-  customerId           String?
-  customer             Customer?      @relation("WaitlistCustomer", fields: [customerId], references: [id], onDelete: SetNull)
+  id                          String         @id @default(cuid())
+  shopId                      String
+  shop                        Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  status                      WaitlistStatus @default(WAITING)
+  customerId                  String?
+  customer                    Customer?      @relation("WaitlistCustomer", fields: [customerId], references: [id], onDelete: SetNull)
   /// Snapshot of contact details from the booking request.
-  firstName            String
-  lastName             String
-  email                String
-  phone                String
-  address              String?
-  deliveryType         DeliveryType   @default(DROP_OFF_AT_SHOP)
-  dropOffDate          DateTime?
-  pickupDate           DateTime?
-  collectionAddress    String?
-  collectionWindowStart String?
-  collectionWindowEnd  String?
+  firstName                   String
+  lastName                    String
+  email                       String
+  phone                       String
+  address                     String?
+  deliveryType                DeliveryType   @default(DROP_OFF_AT_SHOP)
+  dropOffDate                 DateTime?
+  pickupDate                  DateTime?
+  collectionAddress           String?
+  collectionWindowStart       String?
+  collectionWindowEnd         String?
   collectionReturnWindowStart String?
   collectionReturnWindowEnd   String?
-  customerNotes        String?
+  customerNotes               String?
   /// Array of Service ids selected in the booking widget (catalog items only).
-  serviceIds           Json?          @default("[]")
-  bikes                WaitlistBike[]
-  promotedJobId        String?
-  promotedJob          Job?           @relation("WaitlistPromotedJob", fields: [promotedJobId], references: [id], onDelete: SetNull)
-  promotedAt           DateTime?
-  archivedAt           DateTime?
-  createdAt            DateTime       @default(now())
-  updatedAt            DateTime       @updatedAt
+  serviceIds                  Json?          @default("[]")
+  bikes                       WaitlistBike[]
+  promotedJobId               String?
+  promotedJob                 Job?           @relation("WaitlistPromotedJob", fields: [promotedJobId], references: [id], onDelete: SetNull)
+  promotedAt                  DateTime?
+  archivedAt                  DateTime?
+  createdAt                   DateTime       @default(now())
+  updatedAt                   DateTime       @updatedAt
 
   @@index([status, createdAt])
   @@index([customerId])
@@ -719,16 +774,16 @@ model WaitlistEntry {
 }
 
 model WaitlistBike {
-  id             String        @id @default(cuid())
-  shopId         String
-  shop           Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  id              String        @id @default(cuid())
+  shopId          String
+  shop            Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
   waitlistEntryId String
-  waitlistEntry  WaitlistEntry @relation(fields: [waitlistEntryId], references: [id], onDelete: Cascade)
-  make           String
-  model          String?
-  bikeType       BikeType?
-  sortOrder      Int           @default(0)
-  createdAt      DateTime      @default(now())
+  waitlistEntry   WaitlistEntry @relation(fields: [waitlistEntryId], references: [id], onDelete: Cascade)
+  make            String
+  model           String?
+  bikeType        BikeType?
+  sortOrder       Int           @default(0)
+  createdAt       DateTime      @default(now())
 
   @@index([waitlistEntryId])
   @@index([shopId])
@@ -763,7 +818,7 @@ model ImportedRevenue {
   description String?
   /// Square payment id or other stable id — avoids duplicate rows on re-import
   externalId  String?
-  createdAt   DateTime   @default(now())
+  createdAt   DateTime @default(now())
 
   @@unique([shopId, externalId])
   @@index([occurredAt])
@@ -773,17 +828,17 @@ model ImportedRevenue {
 
 /// Production release notes (draft → admin approve → public changelog).
 model PlatformRelease {
-  id          String               @id @default(cuid())
+  id          String                @id @default(cuid())
   /// Calendar version, e.g. 2026.07.25 or 2026.07.25.2
-  version     String               @unique
+  version     String                @unique
   /// Production git commit SHA this release documents
   gitSha      String
   title       String?
   /// Shop-facing bullet list
   bullets     String[]
   status      PlatformReleaseStatus @default(draft)
-  createdAt   DateTime             @default(now())
-  updatedAt   DateTime             @updatedAt
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
   publishedAt DateTime?
 
   @@index([gitSha])
@@ -815,21 +870,21 @@ enum RentalReservationStatus {
 
 /// Shop-owned bike available for customer rental (not a customer-owned Bike).
 model RentalBike {
-  id           String         @id @default(cuid())
+  id           String              @id @default(cuid())
   shopId       String
-  shop         Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shop         Shop                @relation(fields: [shopId], references: [id], onDelete: Cascade)
   make         String
   model        String
-  category     RentalCategory @default(MOUNTAIN)
+  category     RentalCategory      @default(MOUNTAIN)
   size         String?
   description  String?
   imageUrl     String?
   /// How many units of this bike are in the rental fleet
-  quantity     Int            @default(1)
-  isActive     Boolean        @default(true)
+  quantity     Int                 @default(1)
+  isActive     Boolean             @default(true)
   reservations RentalReservation[]
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
 
   @@index([shopId])
   @@index([shopId, category])
@@ -868,28 +923,28 @@ model RentalAddon {
 }
 
 model RentalReservation {
-  id            String                   @id @default(cuid())
+  id            String                  @id @default(cuid())
   shopId        String
-  shop          Shop                     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shop          Shop                    @relation(fields: [shopId], references: [id], onDelete: Cascade)
   customerId    String?
-  customer      Customer?                @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  customer      Customer?               @relation(fields: [customerId], references: [id], onDelete: SetNull)
   customerName  String
   customerEmail String?
   customerPhone String?
   rentalBikeId  String
-  rentalBike    RentalBike               @relation(fields: [rentalBikeId], references: [id], onDelete: Restrict)
-  startDate     DateTime                 @db.Date
-  endDate       DateTime                 @db.Date
+  rentalBike    RentalBike              @relation(fields: [rentalBikeId], references: [id], onDelete: Restrict)
+  startDate     DateTime                @db.Date
+  endDate       DateTime                @db.Date
   days          Int
-  unitPrice     Decimal                  @db.Decimal(10, 2)
-  totalPrice    Decimal                  @db.Decimal(10, 2)
-  status        RentalReservationStatus  @default(REQUESTED)
+  unitPrice     Decimal                 @db.Decimal(10, 2)
+  totalPrice    Decimal                 @db.Decimal(10, 2)
+  status        RentalReservationStatus @default(REQUESTED)
   pickupTime    String?
   notes         String?
   checkedOutAt  DateTime?
   checkedInAt   DateTime?
-  createdAt     DateTime                 @default(now())
-  updatedAt     DateTime                 @updatedAt
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
 
   @@index([shopId])
   @@index([rentalBikeId])
