@@ -181,11 +181,16 @@ export function buildIncomingCallTwiml(opts: {
     return twiml(`<Redirect method="POST">${escapeXml(voicemailActionUrl)}</Redirect>`);
   }
 
-  const clients = identities.map((id) => `<Client>${escapeXml(id)}</Client>`).join("");
+  // statusCallback* belong on the dialed noun, not on <Dial> — Twilio raises a
+  // 12200 validation warning and drops them if they sit on <Dial> itself.
+  const clientAttrs =
+    `statusCallback="${escapeXml(statusCallbackUrl)}" ` +
+    `statusCallbackEvent="initiated ringing answered completed" statusCallbackMethod="POST"`;
+  const clients = identities
+    .map((id) => `<Client ${clientAttrs}>${escapeXml(id)}</Client>`)
+    .join("");
   return twiml(
-    `<Dial timeout="${ringSeconds}" action="${escapeXml(voicemailActionUrl)}" method="POST" ` +
-      `statusCallback="${escapeXml(statusCallbackUrl)}" ` +
-      `statusCallbackEvent="initiated ringing answered completed" statusCallbackMethod="POST">` +
+    `<Dial timeout="${ringSeconds}" action="${escapeXml(voicemailActionUrl)}" method="POST">` +
       `${clients}</Dial>`
   );
 }
@@ -206,10 +211,10 @@ export function buildOutgoingCallTwiml(opts: {
 }): string {
   const { toNumber, callerId, statusCallbackUrl } = opts;
   return twiml(
-    `<Dial callerId="${escapeXml(callerId)}" ringTone="us" ` +
-      `statusCallback="${escapeXml(statusCallbackUrl)}" ` +
+    `<Dial callerId="${escapeXml(callerId)}" ringTone="us">` +
+      `<Number statusCallback="${escapeXml(statusCallbackUrl)}" ` +
       `statusCallbackEvent="initiated ringing answered completed" statusCallbackMethod="POST">` +
-      `<Number>${escapeXml(toNumber)}</Number></Dial>`
+      `${escapeXml(toNumber)}</Number></Dial>`
   );
 }
 

@@ -15,6 +15,7 @@ type AppFeatures = {
   collectionFeeEbike: number;
   notifyCustomerEnabled: boolean;
   chatEnabled: boolean;
+  voiceEnabled: boolean;
   reviewsEnabled: boolean;
   rentalsEnabled: boolean;
   jobBoardFiltersEnabled: boolean;
@@ -32,6 +33,7 @@ type FeatureFlagKey =
   | "collectionServiceEnabled"
   | "notifyCustomerEnabled"
   | "chatEnabled"
+  | "voiceEnabled"
   | "reviewsEnabled"
   | "rentalsEnabled"
   | "jobBoardFiltersEnabled";
@@ -46,6 +48,7 @@ const DEFAULT_FEATURES: AppFeatures = {
   collectionFeeEbike: 30,
   notifyCustomerEnabled: true,
   chatEnabled: true,
+  voiceEnabled: false,
   reviewsEnabled: true,
   rentalsEnabled: true,
   jobBoardFiltersEnabled: false,
@@ -581,6 +584,13 @@ export default function FeatureSettingsPage() {
             checked={features.chatEnabled}
             disabled={featuresSaving}
             onChange={(v) => setFeatureFlag("chatEnabled", v)}
+          />
+          <ToggleRow
+            title="Voice calls"
+            description="Enable in-app calling and the call log. Off means staff devices cannot register, so inbound calls go straight to voicemail."
+            checked={features.voiceEnabled}
+            disabled={featuresSaving}
+            onChange={(v) => setFeatureFlag("voiceEnabled", v)}
           />
           <ToggleRow
             title="Reviews"
