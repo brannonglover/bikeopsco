@@ -24,6 +24,7 @@ const updateSchema = z.object({
   collectionFeeEbike: z.number().min(0).max(10000).optional(),
   notifyCustomerEnabled: z.boolean().optional(),
   chatEnabled: z.boolean().optional(),
+  voiceEnabled: z.boolean().optional(),
   reviewsEnabled: z.boolean().optional(),
   rentalsEnabled: z.boolean().optional(),
   jobBoardFiltersEnabled: z.boolean().optional(),
