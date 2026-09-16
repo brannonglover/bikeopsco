@@ -573,6 +573,12 @@ model Call {
   recordingSid        String?
   recordingUrl        String?
   recordingStatus     String?
+  /// Voicemail transcript from Twilio's <Record transcribe>. Provider-agnostic
+  /// on purpose — swapping in a better STT later stays a backend change.
+  transcriptionText   String?
+  /// Twilio's TranscriptionStatus ("completed" | "failed"), or "in-progress"
+  /// while we're waiting on the callback. Null means never requested.
+  transcriptionStatus String?
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
 

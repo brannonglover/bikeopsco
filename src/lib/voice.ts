@@ -17,6 +17,15 @@ const androidPushCredentialSid =
 
 export const TWILIO_VOICE_NUMBER = process.env.TWILIO_PHONE_NUMBER?.trim() ?? null;
 
+/**
+ * Voicemail transcription bills per minute on Twilio's side, so it gets an
+ * explicit kill switch. Defaults to on — set VOICEMAIL_TRANSCRIPTION_ENABLED
+ * to "false" to stop requesting transcripts without touching any code.
+ */
+export function isVoicemailTranscriptionEnabled(): boolean {
+  return process.env.VOICEMAIL_TRANSCRIPTION_ENABLED?.trim().toLowerCase() !== "false";
+}
+
 export function isVoiceConfigured(): boolean {
   return Boolean(accountSid && apiKeySid && apiKeySecret && twimlAppSid && TWILIO_VOICE_NUMBER);
 }
@@ -221,20 +230,31 @@ export function buildOutgoingCallTwiml(opts: {
 /**
  * TwiML for /voicemail: greets and records. Deliberately does not persist
  * the recording itself — that arrives asynchronously via /recording once
- * Twilio finishes processing it.
+ * Twilio finishes processing it, and the transcript later still via
+ * /transcription. Three separate callbacks, three separate arrival times.
+ *
+ * Transcription is opt-in per call so a shop that doesn't want the per-minute
+ * charge simply gets no transcribeCallback URL. Twilio only transcribes the
+ * first 120 seconds, which is exactly maxLength here.
  */
 export function buildVoicemailTwiml(opts: {
   recordingStatusCallbackUrl: string;
+  transcribeCallbackUrl?: string | null;
   greeting?: string;
 }): string {
   const {
     recordingStatusCallbackUrl,
+    transcribeCallbackUrl = null,
     greeting = "Sorry we missed you. Please leave a message after the tone.",
   } = opts;
+  const transcribeAttrs = transcribeCallbackUrl
+    ? ` transcribe="true" transcribeCallback="${escapeXml(transcribeCallbackUrl)}"`
+    : "";
   return twiml(
     `<Say>${escapeXml(greeting)}</Say>` +
       `<Record maxLength="120" playBeep="true" ` +
       `recordingStatusCallback="${escapeXml(recordingStatusCallbackUrl)}" ` +
-      `recordingStatusCallbackEvent="completed" recordingStatusCallbackMethod="POST" />`
+      `recordingStatusCallbackEvent="completed" recordingStatusCallbackMethod="POST"` +
+      `${transcribeAttrs} />`
   );
 }

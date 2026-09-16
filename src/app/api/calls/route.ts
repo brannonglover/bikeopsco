@@ -22,12 +22,36 @@ export async function GET(request: NextRequest) {
       where: { shopId: auth.shopId },
       orderBy: { createdAt: "desc" },
       take: CALLS_PAGE_SIZE,
-      include: {
+      select: {
+        id: true,
+        customerId: true,
+        conversationId: true,
+        direction: true,
+        status: true,
+        fromNumber: true,
+        toNumber: true,
+        startedAt: true,
+        answeredAt: true,
+        endedAt: true,
+        durationSeconds: true,
+        recordingStatus: true,
+        transcriptionText: true,
+        transcriptionStatus: true,
+        createdAt: true,
         customer: { select: { id: true, firstName: true, lastName: true, phone: true } },
+        // recordingUrl is deliberately absent: it's a Twilio media URL that
+        // plays for anyone holding it. Clients get a boolean and stream the
+        // audio back through /api/calls/[id]/recording instead.
+        recordingUrl: true,
       },
     });
 
-    return NextResponse.json(calls);
+    const payload = calls.map(({ recordingUrl, ...call }) => ({
+      ...call,
+      hasRecording: Boolean(recordingUrl),
+    }));
+
+    return NextResponse.json(payload);
   } catch (error) {
     console.error("GET /api/calls error:", error);
     return NextResponse.json({ error: "Failed to fetch calls" }, { status: 500 });
