@@ -194,6 +194,10 @@ export function buildIncomingCallTwiml(opts: {
  * TwiML for /outgoing: the TwiML App's Voice Request URL, hit when the
  * mobile Voice SDK places an outbound call. Dials the PSTN leg to the
  * customer, showing the shop's Twilio number as caller ID.
+ *
+ * ringTone is pinned to "us" so the caller hears a familiar US ringback
+ * while the customer's phone rings. Without it Twilio picks its own default,
+ * which sounds foreign enough that staff mistake it for a failed call.
  */
 export function buildOutgoingCallTwiml(opts: {
   toNumber: string;
@@ -202,7 +206,7 @@ export function buildOutgoingCallTwiml(opts: {
 }): string {
   const { toNumber, callerId, statusCallbackUrl } = opts;
   return twiml(
-    `<Dial callerId="${escapeXml(callerId)}" ` +
+    `<Dial callerId="${escapeXml(callerId)}" ringTone="us" ` +
       `statusCallback="${escapeXml(statusCallbackUrl)}" ` +
       `statusCallbackEvent="initiated ringing answered completed" statusCallbackMethod="POST">` +
       `<Number>${escapeXml(toNumber)}</Number></Dial>`
