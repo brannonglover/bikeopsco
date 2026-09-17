@@ -6,7 +6,7 @@ import { findOrCreateGeneralConversation } from "@/lib/conversation";
 import { sendPushToAllStaff } from "@/lib/push";
 import { sendStaffNewChatMessageNotification } from "@/lib/email";
 import { z } from "zod";
-import { getAppFeatures } from "@/lib/app-settings";
+import { isChatEnabled } from "@/lib/app-settings";
 import { prisma } from "@/lib/db";
 import { requireCurrentShop } from "@/lib/shop";
 import { attachmentNotificationLabel } from "@/lib/chat-media";
@@ -26,8 +26,7 @@ export async function GET(request: NextRequest) {
   let customerId: string | null = null;
   try {
     const shop = await requireCurrentShop();
-    const features = await getAppFeatures(shop.id);
-    if (!features.chatEnabled) {
+    if (!(await isChatEnabled(shop.id))) {
       return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
     }
     customerId = await getCustomerFromSession();
@@ -60,8 +59,7 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   const shop = await requireCurrentShop();
-  const features = await getAppFeatures(shop.id);
-  if (!features.chatEnabled) {
+  if (!(await isChatEnabled(shop.id))) {
     return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
   }
   const customerId = await getCustomerFromSession();

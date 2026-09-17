@@ -8,14 +8,17 @@ import {
 } from "@/lib/push";
 import { sendStaffNewChatMessageNotification } from "@/lib/email";
 import { z } from "zod";
-import { getAppFeatures } from "@/lib/app-settings";
+import { isChatEnabled } from "@/lib/app-settings";
 import { loadStaffConversationMessages } from "@/lib/chat/staff-conversation-messages";
 import { parseMessagePageOptions } from "@/lib/chat/message-page";
 import {
   customerHasSmsChatAccess,
   findActiveJobIdForCustomer,
 } from "@/lib/chat-session";
-import { resolveStaffConversation } from "@/lib/conversation";
+import {
+  resolveStaffConversation,
+  resolveStaffConversationForRead,
+} from "@/lib/conversation";
 import { getEffectiveSmsConsent } from "@/lib/sms-consent";
 import { requireCurrentShop } from "@/lib/shop";
 import { attachmentNotificationLabel } from "@/lib/chat-media";
@@ -35,23 +38,20 @@ export async function GET(
   let conversationId: string | null = null;
   try {
     const shop = await requireCurrentShop();
-    const features = await getAppFeatures(shop.id);
-    if (!features.chatEnabled) {
+    if (!(await isChatEnabled(shop.id))) {
       return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
     }
     ({ id: conversationId } = await params);
 
-    const resolved = await resolveStaffConversation(shop.id, conversationId);
+    // Read path: resolve without the consolidation lock/transaction, and reuse
+    // the resolved row so the loader doesn't re-fetch the same conversation.
+    const resolved = await resolveStaffConversationForRead(shop.id, conversationId);
     if (!resolved) {
       return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
     }
 
     const page = parseMessagePageOptions(request.nextUrl.searchParams);
-    const payload = await loadStaffConversationMessages(
-      shop.id,
-      resolved.id,
-      page
-    );
+    const payload = await loadStaffConversationMessages(shop.id, resolved, page);
     if (!payload) {
       return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
     }
@@ -76,8 +76,7 @@ export async function POST(
 ) {
   try {
     const shop = await requireCurrentShop();
-    const features = await getAppFeatures(shop.id);
-    if (!features.chatEnabled) {
+    if (!(await isChatEnabled(shop.id))) {
       return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
     }
     const { id: conversationId } = await params;

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Suspense, useState, useEffect } from "react";
 import { signOut, useSession } from "next-auth/react";
+import { clearAllCachedMessages } from "@/lib/chat-message-store";
 import { SidebarNav } from "@/components/SidebarNav";
 import { CustomerMobileNav } from "@/components/CustomerMobileNav";
 import { StaffBoardSyncProvider } from "@/contexts/StaffBoardSyncContext";
@@ -297,7 +298,12 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
             <div className="p-2 border-t border-slate-600/50 flex items-center gap-1">
               <button
                 type="button"
-                onClick={() => signOut({ callbackUrl: "/login" })}
+                onClick={() => {
+                  // Cached chat history is per-shop — don't leave it behind
+                  // for the next person to sign in on this device.
+                  clearAllCachedMessages();
+                  signOut({ callbackUrl: "/login" });
+                }}
                 className="flex-1 rounded-lg px-3 py-2 text-left text-sm text-slate-300 hover:text-white hover:bg-slate-600/50 transition-colors"
               >
                 Sign out

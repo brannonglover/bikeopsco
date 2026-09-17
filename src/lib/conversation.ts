@@ -179,3 +179,103 @@ export async function findOrCreateGeneralConversation(
     include: options.include,
   });
 }
+
+/**
+ * Read-only fields the chat read path needs from a conversation.
+ * Mirrors the select in `loadStaffConversationMessages` so callers that already
+ * resolved a thread don't have to fetch it a second time.
+ */
+export type ReadConversation = {
+  id: string;
+  customerId: string;
+  updatedAt: Date;
+  customerTypingAt: Date | null;
+  customerLastReadAt: Date | null;
+  staffLastReadAt: Date | null;
+};
+
+const readConversationSelect = {
+  id: true,
+  customerId: true,
+  jobId: true,
+  archived: true,
+  updatedAt: true,
+  customerTypingAt: true,
+  customerLastReadAt: true,
+  staffLastReadAt: true,
+} as const;
+
+function toReadConversation(row: {
+  id: string;
+  customerId: string;
+  updatedAt: Date;
+  customerTypingAt: Date | null;
+  customerLastReadAt: Date | null;
+  staffLastReadAt: Date | null;
+}): ReadConversation {
+  return {
+    id: row.id,
+    customerId: row.customerId,
+    updatedAt: row.updatedAt,
+    customerTypingAt: row.customerTypingAt,
+    customerLastReadAt: row.customerLastReadAt,
+    staffLastReadAt: row.staffLastReadAt,
+  };
+}
+
+/**
+ * Resolves a staff-supplied conversation id to the customer's canonical general
+ * thread WITHOUT taking the advisory lock or opening a transaction.
+ *
+ * Reads must never block on the consolidation lock: it costs a BEGIN, a
+ * `pg_advisory_xact_lock` round trip and a COMMIT on every message fetch, and
+ * serializes concurrent readers of the same thread. When the id already points
+ * at an active general thread (the overwhelmingly common case) a single query
+ * answers it. Consolidation of duplicates still happens on the write paths and
+ * in the background sweep in `loadStaffConversations`.
+ */
+export async function resolveStaffConversationForRead(
+  shopId: string,
+  conversationId: string
+): Promise<ReadConversation | null> {
+  const direct = await prisma.conversation.findFirst({
+    where: { id: conversationId, shopId },
+    select: readConversationSelect,
+  });
+  if (!direct) return null;
+
+  // Already the canonical general thread — no further work.
+  if (direct.jobId === null && !direct.archived) {
+    return toReadConversation(direct);
+  }
+
+  // Stale job-linked or archived id: pick the primary thread read-only.
+  const all = await prisma.conversation.findMany({
+    where: { shopId, customerId: direct.customerId },
+    orderBy: { updatedAt: "desc" },
+  });
+  if (all.length === 0) return null;
+
+  return toReadConversation(pickPrimaryConversation(all));
+}
+
+/**
+ * Read-only counterpart to `resolveGeneralConversation`.
+ *
+ * Picks the customer's primary thread without the advisory lock or a
+ * transaction. Used by the customer read + SSE fingerprint paths, which ran
+ * every 3s per connected client and serialized against staff reads of the
+ * same thread. Returns null when the customer has no thread yet — callers
+ * that must create one still go through `findOrCreateGeneralConversation`.
+ */
+export async function resolveGeneralConversationForRead(
+  shopId: string,
+  customerId: string
+): Promise<Conversation | null> {
+  const all = await prisma.conversation.findMany({
+    where: { shopId, customerId },
+    orderBy: { updatedAt: "desc" },
+  });
+  if (all.length === 0) return null;
+  return pickPrimaryConversation(all);
+}

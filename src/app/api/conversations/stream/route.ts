@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { getAppFeatures } from "@/lib/app-settings";
+import { isChatEnabled } from "@/lib/app-settings";
 import {
   getStaffConversationsFingerprint,
   loadStaffConversations,
@@ -13,8 +13,7 @@ export const maxDuration = 60;
 export async function GET(request: NextRequest) {
   try {
     const shop = await requireCurrentShop();
-    const features = await getAppFeatures(shop.id);
-    if (!features.chatEnabled) {
+    if (!(await isChatEnabled(shop.id))) {
       return new Response("Chat is disabled", { status: 404 });
     }
 

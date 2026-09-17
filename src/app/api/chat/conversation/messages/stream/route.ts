@@ -4,7 +4,7 @@ import {
   getCustomerConversationMessagesFingerprint,
   loadCustomerConversationMessages,
 } from "@/lib/chat/customer-conversation-messages";
-import { getAppFeatures } from "@/lib/app-settings";
+import { isChatEnabled } from "@/lib/app-settings";
 import { createPollingSseResponse } from "@/lib/sse";
 import { requireCurrentShop } from "@/lib/shop";
 
@@ -14,8 +14,7 @@ export const maxDuration = 60;
 export async function GET(request: NextRequest) {
   try {
     const shop = await requireCurrentShop();
-    const features = await getAppFeatures(shop.id);
-    if (!features.chatEnabled) {
+    if (!(await isChatEnabled(shop.id))) {
       return new Response("Chat is disabled", { status: 404 });
     }
 

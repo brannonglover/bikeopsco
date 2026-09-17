@@ -276,3 +276,24 @@ export async function updateAppBranding(
 
   return toBranding(updated, shop);
 }
+
+/**
+ * Narrow chat-enabled check for the chat read paths.
+ *
+ * `getAppFeatures` fetches the whole settings row and, whenever
+ * `staffNotifyEmail` is unset, issues a second query for the shop owner's
+ * email — neither of which the chat gate uses. On a cross-region database
+ * that wasted round trip is pure latency on every message fetch and every
+ * SSE tick.
+ */
+export const isChatEnabled = cache(async (shopId: string): Promise<boolean> => {
+  try {
+    const row = await prisma.appSettings.findUnique({
+      where: { shopId },
+      select: { chatEnabled: true },
+    });
+    return row?.chatEnabled ?? DEFAULT_FEATURES.chatEnabled;
+  } catch {
+    return DEFAULT_FEATURES.chatEnabled;
+  }
+});

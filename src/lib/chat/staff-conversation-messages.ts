@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import type { ChatMessage } from "@/lib/types";
 import { serializeChatMessages } from "@/lib/chat/serialize-messages";
 import type { MessagePageOptions } from "@/lib/chat/message-page";
+import type { ReadConversation } from "@/lib/conversation";
 
 export type StaffConversationMessagesPayload = {
   messages: ChatMessage[];
@@ -15,28 +16,30 @@ export async function getStaffConversationMessagesFingerprint(
   shopId: string,
   conversationId: string
 ): Promise<string> {
-  const conversation = await prisma.conversation.findFirst({
-    where: { id: conversationId, shopId },
-    select: {
-      updatedAt: true,
-      customerTypingAt: true,
-      customerLastReadAt: true,
-      staffLastReadAt: true,
-    },
-  });
+  // Runs every 3s per open stream — issue the three reads concurrently so the
+  // tick costs one round trip instead of three.
+  const [conversation, messageStats, reactionStats] = await Promise.all([
+    prisma.conversation.findFirst({
+      where: { id: conversationId, shopId },
+      select: {
+        updatedAt: true,
+        customerTypingAt: true,
+        customerLastReadAt: true,
+        staffLastReadAt: true,
+      },
+    }),
+    prisma.message.aggregate({
+      where: { shopId, conversationId },
+      _count: { _all: true },
+      _max: { createdAt: true, editedAt: true },
+    }),
+    prisma.messageReaction.aggregate({
+      where: { shopId, message: { conversationId } },
+      _count: { _all: true },
+      _max: { createdAt: true },
+    }),
+  ]);
   if (!conversation) return "missing";
-
-  const messageStats = await prisma.message.aggregate({
-    where: { shopId, conversationId },
-    _count: { _all: true },
-    _max: { createdAt: true, editedAt: true },
-  });
-
-  const reactionStats = await prisma.messageReaction.aggregate({
-    where: { shopId, message: { conversationId } },
-    _count: { _all: true },
-    _max: { createdAt: true },
-  });
 
   return JSON.stringify({
     conversation,
@@ -131,22 +134,36 @@ async function loadMessagesForConversation(
   }
 }
 
+/**
+ * Loads a page of staff messages.
+ *
+ * `target` may be a conversation id, or a conversation already resolved by
+ * `resolveStaffConversationForRead` — pass the resolved object to skip a
+ * redundant round trip on the read path.
+ */
 export async function loadStaffConversationMessages(
   shopId: string,
-  conversationId: string,
+  target: string | ReadConversation,
   options: MessagePageOptions = {}
 ): Promise<StaffConversationMessagesPayload | null> {
-  const conversation = await prisma.conversation.findFirst({
-    where: { id: conversationId, shopId },
-    select: {
-      updatedAt: true,
-      customerTypingAt: true,
-      customerLastReadAt: true,
-      staffLastReadAt: true,
-    },
-  });
+  const resolved =
+    typeof target === "string"
+      ? await prisma.conversation.findFirst({
+          where: { id: target, shopId },
+          select: {
+            id: true,
+            updatedAt: true,
+            customerTypingAt: true,
+            customerLastReadAt: true,
+            staffLastReadAt: true,
+          },
+        })
+      : target;
 
-  if (!conversation) return null;
+  if (!resolved) return null;
+
+  const conversationId = resolved.id;
+  const conversation = resolved;
 
   const { messages, hasMore } = await loadMessagesForConversation(
     shopId,

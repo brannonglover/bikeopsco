@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { getAppFeatures } from "@/lib/app-settings";
+import { isChatEnabled } from "@/lib/app-settings";
 import {
   findOrCreateGeneralConversation,
 } from "@/lib/conversation";
@@ -29,8 +29,7 @@ const createSchema = z.object({
 export async function GET(request: NextRequest) {
   try {
     const shop = await requireCurrentShop();
-    const features = await getAppFeatures(shop.id);
-    if (!features.chatEnabled) {
+    if (!(await isChatEnabled(shop.id))) {
       return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
     }
     const query = request.nextUrl.searchParams.get("q")?.trim() ?? "";
@@ -89,8 +88,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const shop = await requireCurrentShop();
-    const features = await getAppFeatures(shop.id);
-    if (!features.chatEnabled) {
+    if (!(await isChatEnabled(shop.id))) {
       return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
     }
     const body = await request.json();

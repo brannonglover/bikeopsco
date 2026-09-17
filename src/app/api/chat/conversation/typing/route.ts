@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { getCustomerFromSession } from "@/lib/chat-session";
 import { findOrCreateGeneralConversation } from "@/lib/conversation";
-import { getAppFeatures } from "@/lib/app-settings";
+import { isChatEnabled } from "@/lib/app-settings";
 import { requireCurrentShop } from "@/lib/shop";
 
 export const dynamic = "force-dynamic";
@@ -17,8 +17,7 @@ const bodySchema = z.object({
  */
 export async function POST(request: NextRequest) {
   const shop = await requireCurrentShop();
-  const features = await getAppFeatures(shop.id);
-  if (!features.chatEnabled) {
+  if (!(await isChatEnabled(shop.id))) {
     return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
   }
   const customerId = await getCustomerFromSession();

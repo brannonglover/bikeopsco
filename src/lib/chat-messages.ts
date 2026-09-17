@@ -17,7 +17,16 @@ function optimisticMatchesServer(optimistic: ChatMessage, server: ChatMessage): 
   return dt < 120_000;
 }
 
-/** Merge a polled/fetched server list into local state without duplicating in-flight optimistic sends. */
+/**
+ * Merge a polled/fetched server list into local state without duplicating
+ * in-flight optimistic sends.
+ *
+ * The server list is a bounded page of the newest messages, so it is only
+ * authoritative for the window it covers. Messages already held locally that
+ * are older than the page's oldest entry were loaded by "load older" and must
+ * survive the merge — otherwise every SSE update would throw away scrollback.
+ * Inside the window the server still wins, so edits and deletes propagate.
+ */
 export function mergeChatMessagesWithServer(
   prev: ChatMessage[],
   serverMessages: ChatMessage[]
@@ -44,6 +53,21 @@ export function mergeChatMessagesWithServer(
       byId.set(msg.id, { ...msg, clientDeliveryState });
     } else {
       byId.set(msg.id, msg);
+    }
+  }
+
+  // Retain locally-loaded history that sits outside the server page window.
+  if (serverMessages.length > 0) {
+    const windowStart = serverMessages.reduce(
+      (min, m) => Math.min(min, new Date(m.createdAt).getTime()),
+      Number.POSITIVE_INFINITY
+    );
+    for (const msg of prev) {
+      if (msg.id.startsWith("temp-")) continue;
+      if (byId.has(msg.id)) continue;
+      if (new Date(msg.createdAt).getTime() < windowStart) {
+        byId.set(msg.id, msg);
+      }
     }
   }
 

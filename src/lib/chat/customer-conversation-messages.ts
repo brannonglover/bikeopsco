@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { resolveGeneralConversation } from "@/lib/conversation";
+import { resolveGeneralConversationForRead } from "@/lib/conversation";
 import { serializeChatMessages } from "@/lib/chat/serialize-messages";
 import type { MessagePageOptions } from "@/lib/chat/message-page";
 import type { ChatMessage } from "@/lib/types";
@@ -14,20 +14,22 @@ export async function getCustomerConversationMessagesFingerprint(
   shopId: string,
   customerId: string
 ): Promise<string> {
-  const conversation = await resolveGeneralConversation(shopId, customerId);
+  const conversation = await resolveGeneralConversationForRead(shopId, customerId);
   if (!conversation) return "empty";
 
-  const messageStats = await prisma.message.aggregate({
-    where: { shopId, conversationId: conversation.id },
-    _count: { _all: true },
-    _max: { createdAt: true, editedAt: true },
-  });
-
-  const reactionStats = await prisma.messageReaction.aggregate({
-    where: { shopId, message: { conversationId: conversation.id } },
-    _count: { _all: true },
-    _max: { createdAt: true },
-  });
+  // One round trip per 3s tick instead of two.
+  const [messageStats, reactionStats] = await Promise.all([
+    prisma.message.aggregate({
+      where: { shopId, conversationId: conversation.id },
+      _count: { _all: true },
+      _max: { createdAt: true, editedAt: true },
+    }),
+    prisma.messageReaction.aggregate({
+      where: { shopId, message: { conversationId: conversation.id } },
+      _count: { _all: true },
+      _max: { createdAt: true },
+    }),
+  ]);
 
   return JSON.stringify({
     conversationId: conversation.id,
@@ -47,7 +49,7 @@ export async function loadCustomerConversationMessages(
   customerId: string,
   options: MessagePageOptions = {}
 ): Promise<CustomerConversationMessagesPayload> {
-  const conversation = await resolveGeneralConversation(shopId, customerId);
+  const conversation = await resolveGeneralConversationForRead(shopId, customerId);
 
   if (!conversation) {
     return { messages: [], staffLastReadAt: null, hasMore: false };

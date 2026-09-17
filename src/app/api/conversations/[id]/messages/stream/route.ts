@@ -1,10 +1,11 @@
 import { NextRequest } from "next/server";
-import { getAppFeatures } from "@/lib/app-settings";
+import { isChatEnabled } from "@/lib/app-settings";
 import {
   getStaffConversationMessagesFingerprint,
   loadStaffConversationMessages,
 } from "@/lib/chat/staff-conversation-messages";
-import { resolveStaffConversation } from "@/lib/conversation";
+import { resolveStaffConversationForRead } from "@/lib/conversation";
+import { parseMessagePageOptions } from "@/lib/chat/message-page";
 import { createPollingSseResponse } from "@/lib/sse";
 import { requireCurrentShop } from "@/lib/shop";
 
@@ -18,26 +19,32 @@ export async function GET(
   let conversationId: string | null = null;
   try {
     const shop = await requireCurrentShop();
-    const features = await getAppFeatures(shop.id);
-    if (!features.chatEnabled) {
+    if (!(await isChatEnabled(shop.id))) {
       return new Response("Chat is disabled", { status: 404 });
     }
 
     ({ id: conversationId } = await params);
 
-    const resolved = await resolveStaffConversation(shop.id, conversationId!);
+    const resolved = await resolveStaffConversationForRead(shop.id, conversationId!);
     if (!resolved) {
       return new Response("Conversation not found", { status: 404 });
     }
 
     const resolvedId = resolved.id;
+    // Stream the same bounded page the client fetches, not the whole history —
+    // the payload is re-sent on every change and on every 55s reconnect.
+    const page = parseMessagePageOptions(request.nextUrl.searchParams);
 
     return createPollingSseResponse({
       signal: request.signal,
       getFingerprint: () =>
         getStaffConversationMessagesFingerprint(shop.id, resolvedId),
       getPayload: async () => {
-        const payload = await loadStaffConversationMessages(shop.id, resolvedId);
+        const payload = await loadStaffConversationMessages(
+          shop.id,
+          resolvedId,
+          page
+        );
         if (!payload) {
           throw new Error("Conversation not found");
         }

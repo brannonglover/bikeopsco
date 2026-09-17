@@ -1,10 +1,16 @@
 {
   "installCommand": "npm install --legacy-peer-deps",
+  "regions": [
+    "pdx1"
+  ],
   "headers": [
     {
       "source": "/.well-known/apple-app-site-association",
       "headers": [
-        { "key": "Content-Type", "value": "application/json" }
+        {
+          "key": "Content-Type",
+          "value": "application/json"
+        }
       ]
     }
   ],

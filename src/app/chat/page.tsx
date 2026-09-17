@@ -16,11 +16,22 @@ import {
   clearChatPreviewMessage,
   getChatPreviewSeed,
 } from "@/lib/chat-preview-cache";
+import {
+  readCachedConversations,
+  readCachedMessages,
+  writeCachedConversations,
+  writeCachedMessages,
+} from "@/lib/chat-message-store";
 import { isCustomerTypingRecently } from "@/lib/chat-typing";
 import { isChatVideoFile, uploadChatVideoFile } from "@/lib/chat-video-upload";
 import { ChatPageSkeleton, SkeletonPulse } from "@/components/ui/Skeleton";
 
 const POLL_INTERVAL_MS = 3000;
+
+// Only the newest page is fetched on open; older messages load on scroll.
+// Loading full thread history was the single largest chunk of open latency.
+const INITIAL_MESSAGE_LIMIT = 40;
+const OLDER_PAGE_SIZE = 40;
 
 // Vercel's serverless body limit is ~4.5 MB. Compress phone photos client-side
 // so they always come in under the wire, and convert HEIC → JPEG along the way.
@@ -335,6 +346,11 @@ function ChatPageContent() {
   const [customerLastReadAt, setCustomerLastReadAt] = useState<string | null>(null);
   const [, setTypingTick] = useState(0);
   const [messagesLoading, setMessagesLoading] = useState(false);
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const loadingOlderRef = useRef(false);
+  const hasMoreMessagesRef = useRef(false);
+  hasMoreMessagesRef.current = hasMoreMessages;
   const selectedIdRef = useRef<string | null>(null);
   const conversationsRef = useRef(conversations);
   conversationsRef.current = conversations;
@@ -381,6 +397,7 @@ function ChatPageContent() {
   }, []);
 
   const applyConversations = useCallback((data: Conversation[]) => {
+    writeCachedConversations(data);
     setConversations((prev) => {
       const selected = selectedIdRef.current;
       const pinned = selected ? prev.find((c) => c.id === selected) : undefined;
@@ -445,6 +462,7 @@ function ChatPageContent() {
     (data: StaffConversationMessagesPayload, convId: string) => {
       if (selectedIdRef.current !== convId) return;
       mergeServerMessages(data.messages);
+      if (typeof data.hasMore === "boolean") setHasMoreMessages(data.hasMore);
       setCustomerTypingAt(data.customerTypingAt ?? null);
       setCustomerLastReadAt(data.customerLastReadAt ?? null);
       if (typeof data.staffLastReadAt === "string") {
@@ -464,9 +482,10 @@ function ChatPageContent() {
   const fetchMessages = useCallback(async (convId: string, options?: { signal?: AbortSignal }) => {
     let res: Response;
     try {
-      res = await fetch(`/api/conversations/${convId}/messages`, {
-        signal: options?.signal,
-      });
+      res = await fetch(
+        `/api/conversations/${convId}/messages?limit=${INITIAL_MESSAGE_LIMIT}`,
+        { signal: options?.signal }
+      );
     } catch (e: unknown) {
       if (e && typeof e === "object" && "name" in e && (e as { name: string }).name === "AbortError") {
         return;
@@ -492,8 +511,18 @@ function ChatPageContent() {
     clearChatPreviewMessage(convId);
   }, [applyMessagesPayload]);
 
+  // Paint the last-known inbox before the network responds. This must be a
+  // layout effect, not a lazy `useState` initialiser: the page is still
+  // server-rendered, and reading localStorage during render would produce
+  // markup the server never emitted and break hydration.
+  useLayoutEffect(() => {
+    const cached = readCachedConversations<Conversation>();
+    if (cached.length === 0) return;
+    setConversations((prev) => (prev.length > 0 ? prev : cached));
+    setLoading(false);
+  }, []);
+
   useEffect(() => {
-    setLoading(true);
     fetchConversations().finally(() => setLoading(false));
   }, [fetchConversations]);
 
@@ -592,7 +621,10 @@ function ChatPageContent() {
       setMessagesLoading(false);
       return;
     }
-    const cached = messageCacheRef.current.get(currentId);
+    // Paint order, fastest first: in-memory cache (same session) → durable
+    // localStorage tail (survives app close) → single-message preview seed.
+    const cached =
+      messageCacheRef.current.get(currentId) ?? readCachedMessages(currentId);
     const conv = conversationsRef.current.find((c) => c.id === currentId);
     const seed = getChatPreviewSeed(currentId, conv?.messages);
     if (cached && cached.length > 0) {
@@ -617,6 +649,9 @@ function ChatPageContent() {
     }
     setCustomerTypingAt(null);
     setCustomerLastReadAt(null);
+    setHasMoreMessages(false);
+    setLoadingOlder(false);
+    loadingOlderRef.current = false;
     const ac = new AbortController();
     fetchMessages(currentId, { signal: ac.signal }).finally(() => {
       if (!ac.signal.aborted) setMessagesLoading(false);
@@ -626,9 +661,21 @@ function ChatPageContent() {
       const msgs = messagesRef.current;
       if (msgs.length > 0) {
         messageCacheRef.current.set(currentId, msgs);
+        writeCachedMessages(currentId, msgs);
       }
     };
   }, [selectedId, fetchMessages]);
+
+  // Keep the durable cache warm while the thread is open, so a hard app close
+  // (or a crash) still leaves the next open something to paint immediately.
+  useEffect(() => {
+    if (!selectedId) return;
+    if (messages.length === 0) return;
+    const id = window.setTimeout(() => {
+      writeCachedMessages(selectedId, messages);
+    }, 500);
+    return () => window.clearTimeout(id);
+  }, [selectedId, messages]);
 
   useEffect(() => {
     const handler = (event: Event) => {
@@ -653,7 +700,7 @@ function ChatPageContent() {
 
   useChatEventSource<StaffConversationMessagesPayload>({
     url: selectedId
-      ? `/api/conversations/${encodeURIComponent(selectedId)}/messages/stream`
+      ? `/api/conversations/${encodeURIComponent(selectedId)}/messages/stream?limit=${INITIAL_MESSAGE_LIMIT}`
       : null,
     enabled: !!selectedId,
     onUpdate: (data) => {
@@ -762,13 +809,67 @@ function ChatPageContent() {
     el.scrollTop = el.scrollHeight;
   }, [latestMessageKey, showCustomerTyping]);
 
+  const loadOlderMessages = useCallback(async () => {
+    const convId = selectedIdRef.current;
+    if (!convId) return;
+    if (loadingOlderRef.current) return;
+    if (!hasMoreMessagesRef.current) return;
+
+    const oldest = messagesRef.current.find((m) => !m.id.startsWith("temp-"));
+    if (!oldest) return;
+
+    loadingOlderRef.current = true;
+    setLoadingOlder(true);
+
+    // Anchor on distance from the bottom, not from the top: it stays correct
+    // no matter what gets added or removed above the viewport (prepended page,
+    // the loading row appearing and disappearing).
+    const el = messagesScrollRef.current;
+    const prevDistanceFromBottom = el ? el.scrollHeight - el.scrollTop : 0;
+
+    try {
+      const res = await fetch(
+        `/api/conversations/${convId}/messages?limit=${OLDER_PAGE_SIZE}&before=${encodeURIComponent(oldest.id)}`
+      );
+      if (!res.ok) return;
+      const data = (await res.json()) as StaffConversationMessagesPayload;
+      if (selectedIdRef.current !== convId) return;
+
+      const older = Array.isArray(data.messages) ? data.messages : [];
+      setHasMoreMessages(data.hasMore === true);
+      if (older.length === 0) return;
+
+      setMessages((prev) => {
+        const known = new Set(prev.map((m) => m.id));
+        const additions = older.filter((m) => !known.has(m.id));
+        if (additions.length === 0) return prev;
+        return [...additions, ...prev];
+      });
+
+      requestAnimationFrame(() => {
+        const node = messagesScrollRef.current;
+        if (!node) return;
+        node.scrollTop = node.scrollHeight - prevDistanceFromBottom;
+      });
+    } catch {
+      // Leave hasMore as-is so the user can retry by scrolling again.
+    } finally {
+      loadingOlderRef.current = false;
+      setLoadingOlder(false);
+    }
+  }, []);
+
   const handleMessagesScroll = useCallback(() => {
     const el = messagesScrollRef.current;
     if (!el) return;
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
     isAtBottomRef.current = atBottom;
     setShowScrollDown(!atBottom);
-  }, []);
+
+    if (el.scrollTop < 240) {
+      void loadOlderMessages();
+    }
+  }, [loadOlderMessages]);
 
   const scrollToBottom = useCallback(() => {
     const el = messagesScrollRef.current;
@@ -1102,7 +1203,9 @@ function ChatPageContent() {
     }
   };
 
-  if (loading) {
+  // Only block on the very first open with a cold cache and no target thread.
+  // A deep link paints its thread from the durable cache straight away.
+  if (loading && !selectedId) {
     return <ChatPageSkeleton />;
   }
 
@@ -1259,6 +1362,14 @@ function ChatPageContent() {
                   className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain touch-pan-y"
                 >
                   <div className="p-4 space-y-3">
+                    {loadingOlder ? (
+                      <p
+                        className="py-2 text-center text-xs text-slate-400"
+                        aria-live="polite"
+                      >
+                        Loading earlier messages…
+                      </p>
+                    ) : null}
                     {messagesLoading && messages.length === 0 ? (
                       <div className="space-y-3 py-2" aria-busy="true" aria-label="Loading messages">
                         <SkeletonPulse className="ml-auto h-12 w-2/3 max-w-sm rounded-2xl" />

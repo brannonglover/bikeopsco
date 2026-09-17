@@ -2,6 +2,9 @@ import { prisma } from "@/lib/db";
 import { getEffectiveSmsConsent } from "@/lib/sms-consent";
 import { consolidateCustomerConversations } from "@/lib/conversation";
 
+/** Bounds the inbox payload; older threads remain reachable through search. */
+const LIST_LIMIT = 200;
+
 const conversationInclude = {
   customer: true,
   job: true,
@@ -16,6 +19,7 @@ export async function getStaffConversationsFingerprint(shopId: string): Promise<
   const rows = await prisma.conversation.findMany({
     where: { shopId, archived: false, jobId: null },
     orderBy: { updatedAt: "desc" },
+    take: LIST_LIMIT,
     select: {
       id: true,
       updatedAt: true,
@@ -48,6 +52,7 @@ export async function loadStaffConversations(shopId: string) {
   const conversations = await prisma.conversation.findMany({
     where: { shopId, archived: false, jobId: null },
     orderBy: { updatedAt: "desc" },
+    take: LIST_LIMIT,
     include: conversationInclude,
   });
 
