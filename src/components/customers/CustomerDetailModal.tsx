@@ -12,6 +12,7 @@ import {
   phoneTelHref,
   phoneToInputValue,
 } from "@/lib/phone";
+import { describeSmsConsentSource } from "@/lib/sms-consent";
 import { BikePlaceholderIcon } from "@/components/ui/BikePlaceholderIcon";
 import type L from "leaflet";
 
@@ -57,9 +58,7 @@ function SmsConsentStatus({ customer }: { customer: Customer }) {
   const updatedAt = customer.smsConsentUpdatedAt
     ? new Date(customer.smsConsentUpdatedAt).toLocaleDateString()
     : null;
-  const source = customer.smsConsentSource
-    ? customer.smsConsentSource.replace(/_/g, " ").toLowerCase()
-    : null;
+  const source = describeSmsConsentSource(customer.smsConsentSource);
 
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">

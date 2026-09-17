@@ -9,7 +9,12 @@ import {
   validateTwilioWebhook,
 } from "@/lib/chat-sms";
 import { normalizePhone } from "@/lib/phone";
-import { buildSmsConsentUpdate, parseSmsConsentKeyword } from "@/lib/sms-consent";
+import {
+  buildSmsConsentUpdate,
+  parseSmsConsentKeyword,
+  SMS_CONSENT_NEVER_SET,
+  SMS_CONSENT_SOURCES,
+} from "@/lib/sms-consent";
 import { sendPushToAllStaff } from "@/lib/push";
 import { getShopForHost } from "@/lib/shop";
 
@@ -111,7 +116,7 @@ export async function POST(request: NextRequest) {
   if (consentKeyword === "stop") {
     await prisma.customer.updateMany({
       where: { id: customerId, shopId: shop.id },
-      data: buildSmsConsentUpdate(false, "SMS_STOP"),
+      data: buildSmsConsentUpdate(false, SMS_CONSENT_SOURCES.SMS_STOP),
     });
     return twimlMessage(
       "You’re unsubscribed from repair update texts. You can still follow your repair by email or on your status page."
@@ -120,7 +125,7 @@ export async function POST(request: NextRequest) {
   if (consentKeyword === "start") {
     await prisma.customer.updateMany({
       where: { id: customerId, shopId: shop.id },
-      data: buildSmsConsentUpdate(true, "SMS_START"),
+      data: buildSmsConsentUpdate(true, SMS_CONSENT_SOURCES.SMS_START),
     });
     return twimlMessage(
       "Text updates are back on for your repair. Reply STOP to opt out."
@@ -131,6 +136,15 @@ export async function POST(request: NextRequest) {
       "Need help with your repair? Reply STOP to opt out. You can also contact the shop by email or check your status page."
     );
   }
+
+  // A customer who texts us first has given prior express consent to be answered
+  // about their repair, so record it — otherwise a phone-booked customer who texts
+  // in still can't be sent an update. Scoped to SMS_CONSENT_NEVER_SET so a prior
+  // STOP is not reversed by this message; that path stays START-only.
+  await prisma.customer.updateMany({
+    where: { id: customerId, shopId: shop.id, ...SMS_CONSENT_NEVER_SET },
+    data: buildSmsConsentUpdate(true, SMS_CONSENT_SOURCES.INBOUND_SMS),
+  });
 
   const conversation = await findOrCreateConversationForInboundSms(
     shop.id,

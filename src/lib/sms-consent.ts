@@ -20,6 +20,60 @@ export const SMS_HELP_KEYWORDS = new Set([
   "INFO",
 ]);
 
+export const SMS_CONSENT_SOURCES = {
+  /** Customer ticked the opt-in box on their job status page. */
+  STATUS_PAGE: "STATUS_PAGE",
+  /** Customer ticked the opt-in box in the public booking widget. */
+  BOOKING_FORM: "BOOKING_FORM",
+  /** Customer texted the shop first, which is consent to be replied to. */
+  INBOUND_SMS: "INBOUND_SMS",
+  /** Staff attested that the customer agreed verbally on a call. */
+  PHONE_VERBAL: "PHONE_VERBAL",
+  /** Customer replied START after a previous opt-out. */
+  SMS_START: "SMS_START",
+  /** Customer replied STOP. */
+  SMS_STOP: "SMS_STOP",
+  /** Staff recorded an opt-out on the customer's behalf. */
+  STAFF_OPT_OUT: "STAFF_OPT_OUT",
+  /** Carried over from a profile merge. */
+  MERGE: "MERGE",
+} as const;
+
+const SMS_CONSENT_SOURCE_LABELS: Record<string, string> = {
+  STATUS_PAGE: "the status page",
+  BOOKING_FORM: "the booking form",
+  INBOUND_SMS: "texting the shop",
+  PHONE_VERBAL: "verbal consent on a call",
+  SMS_START: "replying START",
+  SMS_STOP: "replying STOP",
+  STAFF_OPT_OUT: "a staff opt-out",
+  MERGE: "a merged profile",
+};
+
+/** Human-readable consent source for staff-facing UI. */
+export function describeSmsConsentSource(
+  source: string | null | undefined
+): string | null {
+  if (!source?.trim()) return null;
+  return (
+    SMS_CONSENT_SOURCE_LABELS[source] ?? source.replace(/_/g, " ").toLowerCase()
+  );
+}
+
+/**
+ * Prisma filter matching customers whose consent has never been explicitly set:
+ * the `false` default with no timestamp written. Sources that grant consent from
+ * customer conduct rather than an explicit choice (currently INBOUND_SMS) must
+ * scope their update to this, so that an explicit opt-out — a written
+ * `smsConsentUpdatedAt` alongside `smsConsent: false`, from STOP, the status page,
+ * or staff — is never silently reversed. Re-opting in takes START or an explicit
+ * opt-in; carriers block outbound to a stopped number until then regardless.
+ */
+export const SMS_CONSENT_NEVER_SET = {
+  smsConsent: false,
+  smsConsentUpdatedAt: null,
+} as const;
+
 type SmsConsentLike = {
   phone: string | null;
   smsConsent: boolean;
@@ -39,6 +93,21 @@ export function buildSmsConsentUpdate(
     smsConsent,
     smsConsentSource,
     smsConsentUpdatedAt: new Date(),
+    // Any later consent change supersedes a prior verbal attestation, so the
+    // staff attribution is cleared unless the new source sets it again.
+    smsConsentCapturedBy: null as string | null,
+  };
+}
+
+/**
+ * Consent the customer gave verbally on a call, attested by the staff member who
+ * took it. Valid prior express consent for transactional repair updates; the
+ * attribution plus timestamp is the record of who took it and when.
+ */
+export function buildStaffVerbalSmsConsentUpdate(capturedByUserId: string) {
+  return {
+    ...buildSmsConsentUpdate(true, SMS_CONSENT_SOURCES.PHONE_VERBAL),
+    smsConsentCapturedBy: capturedByUserId,
   };
 }
 

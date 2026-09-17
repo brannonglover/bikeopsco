@@ -3,6 +3,8 @@ import { prisma } from "@/lib/db";
 import { coerceCustomerPhone } from "@/lib/phone";
 import { z } from "zod";
 import { requireCurrentShop } from "@/lib/shop";
+import { resolveStaffShopId } from "@/lib/api-auth";
+import { buildStaffVerbalSmsConsentUpdate } from "@/lib/sms-consent";
 
 const createCustomerSchema = z.object({
   firstName: z.string().min(1),
@@ -11,6 +13,8 @@ const createCustomerSchema = z.object({
   phone: z.string().optional().nullable(),
   address: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
+  /** Staff attests the customer agreed verbally on a call (phone bookings). */
+  smsConsent: z.boolean().optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -53,6 +57,19 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const data = createCustomerSchema.parse(body);
 
+    // Verbal consent is only a record if it names the staff member who took it.
+    let consentFields = {};
+    if (data.smsConsent) {
+      const staff = await resolveStaffShopId(request);
+      if (!staff || staff.shopId !== shop.id) {
+        return NextResponse.json(
+          { error: "Staff sign-in required to record verbal SMS consent" },
+          { status: 401 }
+        );
+      }
+      consentFields = buildStaffVerbalSmsConsentUpdate(staff.userId);
+    }
+
     const customer = await prisma.customer.create({
       data: {
         shopId: shop.id,
@@ -62,6 +79,7 @@ export async function POST(request: NextRequest) {
         phone: coerceCustomerPhone(data.phone),
         address: data.address ?? null,
         notes: data.notes ?? null,
+        ...consentFields,
       },
     });
 

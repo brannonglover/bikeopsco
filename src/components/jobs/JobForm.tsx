@@ -9,6 +9,7 @@ import type { Job, BikeType } from "@/lib/types";
 import { Price } from "@/components/ui/Price";
 import { useAppFeatures } from "@/contexts/AppFeaturesContext";
 import { broadcastJobsRefresh, JOBS_REFRESH_EVENT } from "@/lib/jobs-refresh";
+import { formatPhoneInputUS, phoneToInputValue } from "@/lib/phone";
 
 interface JobFormProps {
   onSuccess?: (job: Job) => void;
@@ -83,6 +84,7 @@ interface Customer {
   lastName: string | null;
   email: string | null;
   phone: string | null;
+  smsConsent?: boolean;
   address: string | null;
 }
 
@@ -103,6 +105,39 @@ interface Service {
   isSystem?: boolean;
 }
 
+/**
+ * Staff attestation of consent given verbally on a call. Deliberately unchecked by
+ * default and scripted, so the record reflects a disclosure actually read aloud.
+ */
+function SmsVerbalConsentBox({
+  checked,
+  onChange,
+}: {
+  checked: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  return (
+    <label className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 cursor-pointer">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="mt-0.5 h-4 w-4 flex-shrink-0 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+      />
+      <span className="min-w-0">
+        <span className="block text-sm font-medium text-slate-700">
+          Customer agreed on the phone to receive text updates
+        </span>
+        <span className="mt-1 block text-xs text-slate-500">
+          Say: &ldquo;I&rsquo;ll text you updates about your repair at this number
+          &mdash; message and data rates may apply, and you can reply STOP any
+          time.&rdquo; Only tick this if they said yes.
+        </span>
+      </span>
+    </label>
+  );
+}
+
 export function JobForm({ onSuccess, embedded }: JobFormProps) {
   const features = useAppFeatures();
   const router = useRouter();
@@ -111,6 +146,8 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
   const [customerInput, setCustomerInput] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
+  const [smsVerbalConsent, setSmsVerbalConsent] = useState(false);
   const [customerEntryMode, setCustomerEntryMode] = useState<"search" | "new">("search");
   const [newFirstName, setNewFirstName] = useState("");
   const [newLastName, setNewLastName] = useState("");
@@ -178,6 +215,17 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
   const showCreateOption =
     customerInput.trim().length > 0 && !exactMatch && !selectedCustomer;
   const showCustomerEmailField = Boolean(selectedCustomer && !selectedCustomer.email);
+  const showCustomerPhoneField = Boolean(selectedCustomer && !selectedCustomer.phone);
+  /**
+   * Phone bookings never touch the status page, so the opt-in box there is never
+   * reached. Staff attest the verbal consent instead — offered only when there is a
+   * number to text and the customer has not already opted in some other way.
+   */
+  const consentPhone = selectedCustomer?.phone ?? customerPhone.trim();
+  const showSmsConsentPrompt =
+    Boolean(consentPhone) &&
+    !selectedCustomer?.smsConsent &&
+    (customerEntryMode === "new" ? Boolean(newFirstName.trim()) : true);
 
   /** Load saved bikes when a customer is selected or when the typed name exactly matches a search result (dropdown click not required). */
   const resolvedCustomerIdForBikes = useMemo(
@@ -279,6 +327,8 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
     setAttachedCustomer(customer);
     setCustomerInput(customerDisplayName(customer));
     setCustomerEmail(customer.email ?? "");
+    setCustomerPhone(phoneToInputValue(customer.phone));
+    setSmsVerbalConsent(false);
     setShowDropdown(false);
     setCustomerEntryMode("search");
     setNewFirstName("");
@@ -299,6 +349,8 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
       setNewLastName("");
     }
     setCustomerEmail("");
+    setCustomerPhone("");
+    setSmsVerbalConsent(false);
   };
 
   const cancelNewCustomerForm = () => {
@@ -306,12 +358,16 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
     setNewFirstName("");
     setNewLastName("");
     setCustomerEmail("");
+    setCustomerPhone("");
+    setSmsVerbalConsent(false);
   };
 
   const createCustomerRecord = async (payload: {
     firstName: string;
     lastName: string | null;
     email: string | null;
+    phone?: string | null;
+    smsConsent?: boolean;
   }): Promise<Customer | null> => {
     const res = await fetch("/api/customers", {
       method: "POST",
@@ -373,6 +429,52 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
     return true;
   };
 
+  /**
+   * Persist a phone number typed during the booking and, when staff attested it,
+   * the verbal SMS consent. Both are no-ops for a customer who already has them.
+   */
+  const saveCustomerPhoneAndConsentIfNeeded = async (
+    customerId: string,
+    justCreated?: Customer | null
+  ): Promise<boolean> => {
+    const customer =
+      (justCreated?.id === customerId ? justCreated : null) ??
+      (attachedCustomer?.id === customerId ? attachedCustomer : null) ??
+      customers.find((c) => c.id === customerId);
+
+    const phone = customerPhone.trim();
+    const needsPhone = Boolean(phone) && !customer?.phone;
+    const needsConsent = smsVerbalConsent && !customer?.smsConsent;
+    if (!needsPhone && !needsConsent) return true;
+
+    const res = await fetch(`/api/customers/${customerId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...(needsPhone && { phone }),
+        ...(needsConsent && { smsConsent: true }),
+      }),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      let msg = "Failed to save customer contact preferences";
+      if (text) {
+        try {
+          const err = JSON.parse(text);
+          msg = typeof err.error === "string" ? err.error : err.error?.message || msg;
+        } catch {
+          msg = text.slice(0, 100);
+        }
+      }
+      alert(msg);
+      return false;
+    }
+    const updated = (await res.json()) as Customer;
+    setCustomers((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+    if (attachedCustomer?.id === updated.id) setAttachedCustomer(updated);
+    return true;
+  };
+
   const createCustomerFromForm = async () => {
     const firstName = newFirstName.trim();
     if (!firstName) {
@@ -385,6 +487,8 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
         firstName,
         lastName: newLastName.trim() || null,
         email: customerEmail.trim() || null,
+        phone: customerPhone.trim() || null,
+        smsConsent: smsVerbalConsent && Boolean(customerPhone.trim()),
       });
       if (!created) return;
       setCustomers((prev) => [created, ...prev.filter((c) => c.id !== created.id)]);
@@ -404,6 +508,8 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
         firstName,
         lastName,
         email: customerEmail.trim() || null,
+        phone: customerPhone.trim() || null,
+        smsConsent: smsVerbalConsent && Boolean(customerPhone.trim()),
       });
       if (!created) return;
       setCustomers((prev) => [created, ...prev.filter((c) => c.id !== created.id)]);
@@ -418,6 +524,8 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
     setAttachedCustomer(null);
     setCustomerInput("");
     setCustomerEmail("");
+    setCustomerPhone("");
+    setSmsVerbalConsent(false);
     setCustomerEntryMode("search");
     setNewFirstName("");
     setNewLastName("");
@@ -429,14 +537,18 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
     jobCreateLockRef.current = true;
     try {
     let finalCustomerId = data.customerId;
+    let createdCustomer: Customer | null = null;
 
     if (!finalCustomerId && customerEntryMode === "new" && newFirstName.trim()) {
       const created = await createCustomerRecord({
         firstName: newFirstName.trim(),
         lastName: newLastName.trim() || null,
         email: customerEmail.trim() || null,
+        phone: customerPhone.trim() || null,
+        smsConsent: smsVerbalConsent && Boolean(customerPhone.trim()),
       });
       if (!created) return;
+      createdCustomer = created;
       finalCustomerId = created.id;
       setAttachedCustomer(created);
       customerIdField.onChange(created.id);
@@ -456,6 +568,8 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
             firstName,
             lastName,
             email: customerEmail.trim() || null,
+            phone: customerPhone.trim() || null,
+            smsConsent: smsVerbalConsent && Boolean(customerPhone.trim()),
           }),
         });
         if (!customerRes.ok) {
@@ -472,7 +586,8 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
           alert(msg);
           return;
         }
-        const created = await customerRes.json();
+        const created = (await customerRes.json()) as Customer;
+        createdCustomer = created;
         finalCustomerId = created.id;
       }
     }
@@ -480,6 +595,11 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
     if (finalCustomerId) {
       const savedEmail = await saveCustomerEmailIfNeeded(finalCustomerId);
       if (!savedEmail) return;
+      const savedContact = await saveCustomerPhoneAndConsentIfNeeded(
+        finalCustomerId,
+        createdCustomer
+      );
+      if (!savedContact) return;
     }
 
     const validBikes = data.bikes.filter((b) => b.make?.trim());
@@ -678,6 +798,27 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
                   />
                 </div>
               )}
+              {showCustomerPhoneField && (
+                <div className="mt-2">
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Phone (optional)</label>
+                  <input
+                    type="tel"
+                    autoComplete="tel"
+                    value={customerPhone}
+                    onChange={(e) => setCustomerPhone(formatPhoneInputUS(e.target.value))}
+                    placeholder="(555) 123-4567"
+                    className="w-full min-w-0 px-4 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                  />
+                </div>
+              )}
+              {showSmsConsentPrompt && (
+                <div className="mt-2">
+                  <SmsVerbalConsentBox
+                    checked={smsVerbalConsent}
+                    onChange={setSmsVerbalConsent}
+                  />
+                </div>
+              )}
             </>
           ) : customerEntryMode === "new" ? (
             <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 space-y-3">
@@ -723,6 +864,23 @@ export function JobForm({ onSuccess, embedded }: JobFormProps) {
                   className="w-full min-w-0 px-4 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none bg-white"
                 />
               </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Phone (optional)</label>
+                <input
+                  type="tel"
+                  autoComplete="tel"
+                  value={customerPhone}
+                  onChange={(e) => setCustomerPhone(formatPhoneInputUS(e.target.value))}
+                  placeholder="(555) 123-4567"
+                  className="w-full min-w-0 px-4 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none bg-white"
+                />
+              </div>
+              {showSmsConsentPrompt && (
+                <SmsVerbalConsentBox
+                  checked={smsVerbalConsent}
+                  onChange={setSmsVerbalConsent}
+                />
+              )}
               <button
                 type="button"
                 onClick={createCustomerFromForm}

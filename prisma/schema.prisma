@@ -86,6 +86,8 @@ model Customer {
   smsConsent                   Boolean             @default(false)
   smsConsentSource             String?
   smsConsentUpdatedAt          DateTime?
+  /// Staff user id who attested verbal consent taken on a call (PHONE_VERBAL).
+  smsConsentCapturedBy         String?
   address                      String?
   notes                        String?
   imageUrl                     String?
