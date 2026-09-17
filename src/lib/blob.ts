@@ -45,6 +45,58 @@ export const TWILIO_PLAYABLE_AUDIO_TYPES = [
   "audio/mp3",
 ] as const;
 
+export type SniffedAudio =
+  | { playable: true; contentType: "audio/wav" | "audio/mpeg"; extension: "wav" | "mp3" }
+  | { playable: false; detected: string };
+
+/**
+ * Identify an audio container from its leading bytes.
+ *
+ * The uploaded part's declared MIME type is whatever the client claimed, and a
+ * mobile FormData part is easy to mislabel — so what matters is the bytes
+ * Twilio will actually try to decode. Reporting the detected container on
+ * failure also makes a rejected upload diagnosable instead of mysterious.
+ */
+export function sniffAudioContainer(bytes: Buffer): SniffedAudio {
+  if (bytes.length < 12) return { playable: false, detected: "empty or truncated file" };
+
+  // RIFF....WAVE
+  if (
+    bytes.toString("ascii", 0, 4) === "RIFF" &&
+    bytes.toString("ascii", 8, 12) === "WAVE"
+  ) {
+    return { playable: true, contentType: "audio/wav", extension: "wav" };
+  }
+
+  // MP3: an ID3 tag, or a raw frame sync (11 set bits).
+  if (
+    bytes.toString("ascii", 0, 3) === "ID3" ||
+    (bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0)
+  ) {
+    return { playable: true, contentType: "audio/mpeg", extension: "mp3" };
+  }
+
+  // ISO base media (m4a/mp4/3gp) carries an "ftyp" box at offset 4; the brand
+  // that follows is the most useful thing to report back.
+  if (bytes.toString("ascii", 4, 8) === "ftyp") {
+    const brand = bytes.toString("ascii", 8, 12).trim();
+    return { playable: false, detected: `MPEG-4 container (${brand})` };
+  }
+
+  if (bytes.toString("ascii", 0, 4) === "caff") {
+    return { playable: false, detected: "Core Audio Format (CAF)" };
+  }
+
+  if (bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3) {
+    return { playable: false, detected: "WebM/Matroska" };
+  }
+
+  return {
+    playable: false,
+    detected: `unrecognized (starts with ${bytes.toString("hex", 0, 4)})`,
+  };
+}
+
 /**
  * Resolve a stored media URL to an absolute HTTPS URL Twilio can fetch.
  * Public blobs use direct Vercel URLs; private blobs use the unauthenticated

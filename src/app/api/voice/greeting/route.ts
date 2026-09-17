@@ -3,7 +3,7 @@ import { randomUUID } from "crypto";
 import { put, del } from "@vercel/blob";
 import { requireStaffShop } from "@/lib/api-auth";
 import { getAppFeatures } from "@/lib/app-settings";
-import { BLOB_ACCESS, blobDisplayUrl, TWILIO_PLAYABLE_AUDIO_TYPES } from "@/lib/blob";
+import { BLOB_ACCESS, blobDisplayUrl, sniffAudioContainer } from "@/lib/blob";
 import { prisma } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -74,20 +74,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
 
-    if (
-      !TWILIO_PLAYABLE_AUDIO_TYPES.includes(
-        file.type as (typeof TWILIO_PLAYABLE_AUDIO_TYPES)[number]
-      )
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "Unsupported audio format. Twilio can only play WAV or MP3 greetings.",
-        },
-        { status: 400 }
-      );
-    }
-
     if (file.size > MAX_SIZE_MB * 1024 * 1024) {
       return NextResponse.json(
         { error: `Recording too large. Max size is ${MAX_SIZE_MB} MB.` },
@@ -95,13 +81,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Judge the bytes, not the client's declared MIME type — that's what Twilio
+    // has to decode, and a mislabelled part would otherwise sail through and
+    // leave callers with silence.
+    const bytes = Buffer.from(await file.arrayBuffer());
+    const sniffed = sniffAudioContainer(bytes);
+    if (!sniffed.playable) {
+      console.warn(
+        "Rejected voicemail greeting upload:",
+        sniffed.detected,
+        `(declared ${file.type || "no type"})`
+      );
+      return NextResponse.json(
+        {
+          error: `Twilio can only play WAV or MP3 greetings — this recording is ${sniffed.detected}.`,
+        },
+        { status: 400 }
+      );
+    }
+
     const previous = await currentGreeting(auth.shopId);
 
-    const ext = file.type === "audio/mpeg" || file.type === "audio/mp3" ? "mp3" : "wav";
     const blob = await put(
-      `voicemail-greetings/${auth.shopId}/${randomUUID()}.${ext}`,
-      file,
-      { access: BLOB_ACCESS, addRandomSuffix: false, contentType: file.type }
+      `voicemail-greetings/${auth.shopId}/${randomUUID()}.${sniffed.extension}`,
+      bytes,
+      { access: BLOB_ACCESS, addRandomSuffix: false, contentType: sniffed.contentType }
     );
 
     const url = blobDisplayUrl(blob.url, blob.pathname);
