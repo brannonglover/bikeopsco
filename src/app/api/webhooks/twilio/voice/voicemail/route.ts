@@ -10,8 +10,9 @@ import {
 export const runtime = "nodejs";
 
 /**
- * <Dial> action callback from /incoming when no staff device answers.
- * CallSid here is the parent (inbound) call, not a new leg.
+ * Where an unanswered inbound call ends up. Reached from /dequeued when the
+ * caller leaves the queue without being bridged, and by a REST redirect when
+ * staff decline. CallSid here is the parent (inbound) call, not a new leg.
  */
 export async function POST(request: NextRequest) {
   const ctx = await authenticateVoiceWebhook(request);

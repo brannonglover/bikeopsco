@@ -59,7 +59,15 @@ export async function POST(request: NextRequest) {
       twilioChildCallSid:
         parentCallSid && !call.twilioChildCallSid ? callSid : call.twilioChildCallSid,
       startedAt: call.startedAt ?? now,
-      answeredAt: status === "IN_PROGRESS" ? (call.answeredAt ?? now) : call.answeredAt,
+      // Only a bridged child leg reaching in-progress means a human picked up.
+      // An inbound caller's own leg goes in-progress the instant Twilio
+      // answers it to run <Enqueue>, which is not an answer at all — that
+      // signal comes from /answered instead. Stamping it here would log every
+      // voicemail as a taken call.
+      answeredAt:
+        status === "IN_PROGRESS" && parentCallSid
+          ? (call.answeredAt ?? now)
+          : call.answeredAt,
       endedAt: TERMINAL_STATUSES.has(status) ? now : call.endedAt,
       durationSeconds:
         TERMINAL_STATUSES.has(status) && durationSeconds !== undefined

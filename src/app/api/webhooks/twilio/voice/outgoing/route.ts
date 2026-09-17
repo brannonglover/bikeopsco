@@ -5,11 +5,16 @@ import { findOrCreateGeneralConversation } from "@/lib/conversation";
 import { normalizePhone } from "@/lib/phone";
 import {
   authenticateVoiceWebhook,
+  buildDequeueTwiml,
   buildOutgoingCallTwiml,
+  buildQueueName,
   getVoiceWebhookBaseUrl,
   parseStaffIdentity,
   TWILIO_VOICE_NUMBER,
 } from "@/lib/voice";
+
+/** Call states that mean the caller could still be holding in the queue. */
+const LIVE_STATUSES = ["QUEUED", "RINGING", "IN_PROGRESS"] as const;
 
 export const runtime = "nodejs";
 
@@ -37,6 +42,47 @@ export async function POST(request: NextRequest) {
   const callSid = params.CallSid;
   const identity = parseStaffIdentity((params.From ?? "").replace(/^client:/, ""));
   const toRaw = params.To;
+
+  // Answering an inbound call is technically an outbound leg: the device dials
+  // into the shop queue and Twilio bridges it to whoever is holding. See
+  // buildIncomingCallTwiml for why inbound no longer rings <Client> directly.
+  if (params.Mode === "answer") {
+    if (!identity || identity.shopId !== shop.id) {
+      console.warn("Twilio Voice /outgoing: rejecting answer", {
+        callSid,
+        from: params.From,
+        shopId: shop.id,
+      });
+      return sorryTwiml();
+    }
+
+    // A notification can outlive the call it announced — the caller may have
+    // hung up or timed out to voicemail. Say so rather than parking staff on
+    // an empty queue until the dial timeout expires.
+    const pending = await prisma.call.findFirst({
+      where: {
+        shopId: shop.id,
+        direction: "INBOUND",
+        status: { in: [...LIVE_STATUSES] },
+        endedAt: null,
+        ...(params.CallId ? { id: params.CallId } : {}),
+      },
+    });
+    if (!pending) {
+      return xmlResponse(
+        '<?xml version="1.0" encoding="UTF-8"?><Response>' +
+          "<Say>That call has already ended.</Say><Hangup/></Response>"
+      );
+    }
+
+    const base = getVoiceWebhookBaseUrl(request);
+    return xmlResponse(
+      buildDequeueTwiml({
+        queueName: buildQueueName(shop.id),
+        answeredUrl: `${base}/api/webhooks/twilio/voice/answered`,
+      })
+    );
+  }
 
   if (!callSid || !toRaw || !identity || identity.shopId !== shop.id || !TWILIO_VOICE_NUMBER) {
     console.warn("Twilio Voice /outgoing: rejecting call", {

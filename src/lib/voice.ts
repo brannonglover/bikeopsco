@@ -11,6 +11,7 @@ const accountSid = process.env.TWILIO_ACCOUNT_SID?.trim() ?? null;
 const apiKeySid = process.env.TWILIO_API_KEY_SID?.trim() ?? null;
 const apiKeySecret = process.env.TWILIO_API_KEY_SECRET?.trim() ?? null;
 const twimlAppSid = process.env.TWILIO_TWIML_APP_SID?.trim() ?? null;
+const authToken = process.env.TWILIO_AUTH_TOKEN?.trim() ?? null;
 const iosPushCredentialSid = process.env.TWILIO_IOS_PUSH_CREDENTIAL_SID?.trim() ?? null;
 const androidPushCredentialSid =
   process.env.TWILIO_ANDROID_PUSH_CREDENTIAL_SID?.trim() ?? null;
@@ -24,6 +25,15 @@ export const TWILIO_VOICE_NUMBER = process.env.TWILIO_PHONE_NUMBER?.trim() ?? nu
  */
 export function isVoicemailTranscriptionEnabled(): boolean {
   return process.env.VOICEMAIL_TRANSCRIPTION_ENABLED?.trim().toLowerCase() !== "false";
+}
+
+/**
+ * Optional audio played to callers waiting in the queue. Unset means the
+ * spoken hold in buildQueueWaitTwiml, which needs no hosted asset; point
+ * VOICE_HOLD_MUSIC_URL at an mp3/wav to play real ringback instead.
+ */
+export function getHoldMusicUrl(): string | null {
+  return process.env.VOICE_HOLD_MUSIC_URL?.trim() || null;
 }
 
 export function isVoiceConfigured(): boolean {
@@ -62,13 +72,12 @@ export function mintVoiceAccessToken(identity: string, platform: VoicePlatform):
     throw new Error("Twilio Voice is not configured");
   }
 
+  // Retained only so a device *could* register for Twilio push. Nothing does
+  // today: inbound calls ring via an ordinary notification and are answered by
+  // dialing into the shop queue, precisely so iOS never forces the call onto
+  // the CallKit screen. Its absence is therefore not worth warning about.
   const pushCredentialSid =
     platform === "ios" ? iosPushCredentialSid : androidPushCredentialSid;
-  if (!pushCredentialSid) {
-    console.warn(
-      `[voice] No push credential configured for platform "${platform}" — incoming calls won't ring while backgrounded/terminated.`
-    );
-  }
 
   const AccessToken = Twilio.jwt.AccessToken;
   const token = new AccessToken(accountSid, apiKeySid, apiKeySecret, {
@@ -83,6 +92,27 @@ export function mintVoiceAccessToken(identity: string, platform: VoicePlatform):
     })
   );
   return token.toJwt();
+}
+
+/**
+ * Sends a caller who is holding in the queue straight to voicemail. Used by
+ * the decline button: without it a declined caller keeps hearing hold audio
+ * until the ring window expires on its own.
+ *
+ * Redirecting pops the call out of the queue, so the <Enqueue> action fires
+ * with QueueResult=redirected — which /dequeued also routes to voicemail, so
+ * the two paths converge on the same place whichever lands first.
+ */
+export async function sendQueuedCallerToVoicemail(
+  callSid: string,
+  voicemailUrl: string
+): Promise<void> {
+  if (!accountSid || !authToken) {
+    throw new Error("Twilio is not configured");
+  }
+  await Twilio(accountSid, authToken)
+    .calls(callSid)
+    .update({ url: voicemailUrl, method: "POST" });
 }
 
 /** Scheme + host only, for building sibling webhook URLs to embed in TwiML. */
@@ -159,102 +189,13 @@ export function mapTwilioCallStatus(
   }
 }
 
-function escapeXml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
-
-function twiml(body: string): string {
-  return `<?xml version="1.0" encoding="UTF-8"?><Response>${body}</Response>`;
-}
-
-/**
- * TwiML for /incoming: ring every staff identity for the shop simultaneously
- * (first to answer wins) with an action fallback to /voicemail on no-answer.
- * Also sets statusCallback on the <Dial> so the child leg's answered/
- * completed/no-answer events reach /status (see call-leg correlation notes).
- */
-export function buildIncomingCallTwiml(opts: {
-  identities: string[];
-  statusCallbackUrl: string;
-  voicemailActionUrl: string;
-  ringSeconds?: number;
-}): string {
-  const { identities, statusCallbackUrl, voicemailActionUrl, ringSeconds = 20 } = opts;
-
-  if (identities.length === 0) {
-    return twiml(`<Redirect method="POST">${escapeXml(voicemailActionUrl)}</Redirect>`);
-  }
-
-  // statusCallback* belong on the dialed noun, not on <Dial> — Twilio raises a
-  // 12200 validation warning and drops them if they sit on <Dial> itself.
-  const clientAttrs =
-    `statusCallback="${escapeXml(statusCallbackUrl)}" ` +
-    `statusCallbackEvent="initiated ringing answered completed" statusCallbackMethod="POST"`;
-  const clients = identities
-    .map((id) => `<Client ${clientAttrs}>${escapeXml(id)}</Client>`)
-    .join("");
-  return twiml(
-    `<Dial timeout="${ringSeconds}" action="${escapeXml(voicemailActionUrl)}" method="POST">` +
-      `${clients}</Dial>`
-  );
-}
-
-/**
- * TwiML for /outgoing: the TwiML App's Voice Request URL, hit when the
- * mobile Voice SDK places an outbound call. Dials the PSTN leg to the
- * customer, showing the shop's Twilio number as caller ID.
- *
- * ringTone is pinned to "us" so the caller hears a familiar US ringback
- * while the customer's phone rings. Without it Twilio picks its own default,
- * which sounds foreign enough that staff mistake it for a failed call.
- */
-export function buildOutgoingCallTwiml(opts: {
-  toNumber: string;
-  callerId: string;
-  statusCallbackUrl: string;
-}): string {
-  const { toNumber, callerId, statusCallbackUrl } = opts;
-  return twiml(
-    `<Dial callerId="${escapeXml(callerId)}" ringTone="us">` +
-      `<Number statusCallback="${escapeXml(statusCallbackUrl)}" ` +
-      `statusCallbackEvent="initiated ringing answered completed" statusCallbackMethod="POST">` +
-      `${escapeXml(toNumber)}</Number></Dial>`
-  );
-}
-
-/**
- * TwiML for /voicemail: greets and records. Deliberately does not persist
- * the recording itself — that arrives asynchronously via /recording once
- * Twilio finishes processing it, and the transcript later still via
- * /transcription. Three separate callbacks, three separate arrival times.
- *
- * Transcription is opt-in per call so a shop that doesn't want the per-minute
- * charge simply gets no transcribeCallback URL. Twilio only transcribes the
- * first 120 seconds, which is exactly maxLength here.
- */
-export function buildVoicemailTwiml(opts: {
-  recordingStatusCallbackUrl: string;
-  transcribeCallbackUrl?: string | null;
-  greeting?: string;
-}): string {
-  const {
-    recordingStatusCallbackUrl,
-    transcribeCallbackUrl = null,
-    greeting = "Sorry we missed you. Please leave a message after the tone.",
-  } = opts;
-  const transcribeAttrs = transcribeCallbackUrl
-    ? ` transcribe="true" transcribeCallback="${escapeXml(transcribeCallbackUrl)}"`
-    : "";
-  return twiml(
-    `<Say>${escapeXml(greeting)}</Say>` +
-      `<Record maxLength="120" playBeep="true" ` +
-      `recordingStatusCallback="${escapeXml(recordingStatusCallbackUrl)}" ` +
-      `recordingStatusCallbackEvent="completed" recordingStatusCallbackMethod="POST"` +
-      `${transcribeAttrs} />`
-  );
-}
+export {
+  RING_SECONDS,
+  buildQueueName,
+  buildIncomingCallTwiml,
+  buildQueueWaitTwiml,
+  buildDequeuedTwiml,
+  buildDequeueTwiml,
+  buildOutgoingCallTwiml,
+  buildVoicemailTwiml,
+} from "@/lib/voice-twiml";
