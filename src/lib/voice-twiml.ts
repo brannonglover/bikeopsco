@@ -63,28 +63,40 @@ export function buildIncomingCallTwiml(opts: {
  * QueueResult=leave, where /dequeued sends them to voicemail.
  *
  * The cutoff is a floor, not an exact deadline — it is only re-evaluated
- * between documents, so the real hangup lands within about one <Pause> of it.
+ * between documents, so the real hangup lands within about one document of it.
  *
- * holdMusicUrl is optional so this works with no external audio asset at all;
- * set VOICE_HOLD_MUSIC_URL to play real ringback instead of the spoken hold.
+ * A held caller should hear what they'd hear on any other phone line: ringing,
+ * until someone picks up. Queued calls get no ringback from the carrier — the
+ * call is already answered as far as the network is concerned — so we play it
+ * ourselves. Announcing "connecting you now" and then going quiet sounded like
+ * a dropped call, which is why there is no longer anything spoken here.
+ *
+ * VOICE_HOLD_MUSIC_URL still overrides, for a shop that would rather play
+ * music or its own message than a ring.
  */
 export function buildQueueWaitTwiml(opts: {
   queueTimeSeconds: number;
   holdMusicUrl?: string | null;
+  ringbackUrl?: string | null;
   ringSeconds?: number;
 }): string {
-  const { queueTimeSeconds, holdMusicUrl = null, ringSeconds = RING_SECONDS } = opts;
+  const {
+    queueTimeSeconds,
+    holdMusicUrl = null,
+    ringbackUrl = null,
+    ringSeconds = RING_SECONDS,
+  } = opts;
 
   if (queueTimeSeconds >= ringSeconds) return twiml("<Leave/>");
 
   if (holdMusicUrl) return twiml(`<Play>${escapeXml(holdMusicUrl)}</Play>`);
 
-  // No audio asset configured. Greet once, then hold in silence in short
-  // chunks — each chunk ends the document, which re-requests this URL and
-  // re-checks the elapsed time above.
-  if (queueTimeSeconds < 2) {
-    return twiml("<Say>Thanks for calling. Connecting you now.</Say><Pause length=\"5\"/>");
-  }
+  // One 6s cadence per document (2s ring, 4s gap). Ending the document is what
+  // re-requests this URL and re-checks the elapsed time above, so the file
+  // length also sets how precisely the ring window is honoured.
+  if (ringbackUrl) return twiml(`<Play>${escapeXml(ringbackUrl)}</Play>`);
+
+  // Last resort with no audio asset reachable: silence in short chunks.
   return twiml('<Pause length="5"/>');
 }
 

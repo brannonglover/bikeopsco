@@ -3,6 +3,7 @@ import {
   authenticateVoiceWebhook,
   buildQueueWaitTwiml,
   getHoldMusicUrl,
+  getVoiceWebhookBaseUrl,
 } from "@/lib/voice";
 
 export const runtime = "nodejs";
@@ -18,6 +19,7 @@ export async function POST(request: NextRequest) {
   const ctx = await authenticateVoiceWebhook(request);
   if (ctx instanceof NextResponse) return ctx;
   const { params } = ctx;
+  const base = getVoiceWebhookBaseUrl(request);
 
   const queueTimeSeconds = Number.parseInt(params.QueueTime ?? "0", 10);
 
@@ -26,6 +28,8 @@ export async function POST(request: NextRequest) {
     // "past the window" errs toward voicemail rather than endless hold.
     queueTimeSeconds: Number.isFinite(queueTimeSeconds) ? queueTimeSeconds : Number.MAX_SAFE_INTEGER,
     holdMusicUrl: getHoldMusicUrl(),
+    // Served straight from /public, so Twilio fetches it with no auth.
+    ringbackUrl: `${base}/audio/ringback.wav`,
   });
 
   return new NextResponse(twiml, {
