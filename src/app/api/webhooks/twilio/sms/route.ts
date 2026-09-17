@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import {
   findCustomerIdBySmsFrom,
+  findOrCreateCustomerIdForInboundSms,
   findOrCreateConversationForInboundSms,
   getTwilioInboundWebhookUrl,
   importTwilioInboundMedia,
   parseTwilioInboundMedia,
   validateTwilioWebhook,
 } from "@/lib/chat-sms";
-import { normalizePhone } from "@/lib/phone";
+import { formatPhoneDisplay, normalizePhone } from "@/lib/phone";
 import {
   buildSmsConsentUpdate,
   parseSmsConsentKeyword,
@@ -106,27 +107,30 @@ export async function POST(request: NextRequest) {
     return twimlMessage();
   }
 
-  const customerId = await findCustomerIdBySmsFrom(shop.id, fromE164);
-  if (!customerId) {
-    console.warn("Twilio SMS: unknown sender", fromE164);
-    return twimlMessage();
-  }
+  const knownCustomerId = await findCustomerIdBySmsFrom(shop.id, fromE164);
 
+  // Keyword-only texts are answered without touching the customer table. A
+  // STOP or HELP from a number we don't know — a wrong number, or a stale
+  // forward — must not leave a profile behind just to record it.
   const consentKeyword = bodyText ? parseSmsConsentKeyword(bodyText) : null;
   if (consentKeyword === "stop") {
-    await prisma.customer.updateMany({
-      where: { id: customerId, shopId: shop.id },
-      data: buildSmsConsentUpdate(false, SMS_CONSENT_SOURCES.SMS_STOP),
-    });
+    if (knownCustomerId) {
+      await prisma.customer.updateMany({
+        where: { id: knownCustomerId, shopId: shop.id },
+        data: buildSmsConsentUpdate(false, SMS_CONSENT_SOURCES.SMS_STOP),
+      });
+    }
     return twimlMessage(
       "You’re unsubscribed from repair update texts. You can still follow your repair by email or on your status page."
     );
   }
   if (consentKeyword === "start") {
-    await prisma.customer.updateMany({
-      where: { id: customerId, shopId: shop.id },
-      data: buildSmsConsentUpdate(true, SMS_CONSENT_SOURCES.SMS_START),
-    });
+    if (knownCustomerId) {
+      await prisma.customer.updateMany({
+        where: { id: knownCustomerId, shopId: shop.id },
+        data: buildSmsConsentUpdate(true, SMS_CONSENT_SOURCES.SMS_START),
+      });
+    }
     return twimlMessage(
       "Text updates are back on for your repair. Reply STOP to opt out."
     );
@@ -137,20 +141,9 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // A customer who texts us first has given prior express consent to be answered
-  // about their repair, so record it — otherwise a phone-booked customer who texts
-  // in still can't be sent an update. Scoped to SMS_CONSENT_NEVER_SET so a prior
-  // STOP is not reversed by this message; that path stays START-only.
-  await prisma.customer.updateMany({
-    where: { id: customerId, shopId: shop.id, ...SMS_CONSENT_NEVER_SET },
-    data: buildSmsConsentUpdate(true, SMS_CONSENT_SOURCES.INBOUND_SMS),
-  });
-
-  const conversation = await findOrCreateConversationForInboundSms(
-    shop.id,
-    customerId
-  );
-
+  // Media is imported before the sender is resolved: an MMS whose only media is
+  // unusable is dropped below, and an unknown sender must not leave an empty
+  // profile behind for a message that never gets saved.
   const importedAttachments = await importTwilioInboundMedia(
     shop.id,
     mediaItems
@@ -159,6 +152,36 @@ export async function POST(request: NextRequest) {
     console.warn("Twilio MMS: no usable media in inbound message", messageSid);
     return twimlMessage();
   }
+
+  // A first text from a number that isn't on file is how new customers reach the
+  // shop, so create the profile rather than dropping the message.
+  let customerId = knownCustomerId;
+  let isNewCustomer = false;
+  if (!customerId) {
+    const resolved = await findOrCreateCustomerIdForInboundSms(
+      shop.id,
+      fromE164
+    );
+    customerId = resolved.customerId;
+    isNewCustomer = resolved.created;
+  }
+
+  // A customer who texts us first has given prior express consent to be answered
+  // about their repair, so record it — otherwise a phone-booked customer who texts
+  // in still can't be sent an update. Scoped to SMS_CONSENT_NEVER_SET so a prior
+  // STOP is not reversed by this message; that path stays START-only.
+  // Newly created profiles already carry INBOUND_SMS consent.
+  if (!isNewCustomer) {
+    await prisma.customer.updateMany({
+      where: { id: customerId, shopId: shop.id, ...SMS_CONSENT_NEVER_SET },
+      data: buildSmsConsentUpdate(true, SMS_CONSENT_SOURCES.INBOUND_SMS),
+    });
+  }
+
+  const conversation = await findOrCreateConversationForInboundSms(
+    shop.id,
+    customerId
+  );
 
   try {
     const message = await prisma.message.create({
@@ -191,12 +214,14 @@ export async function POST(request: NextRequest) {
       where: { id: customerId },
       select: { firstName: true, lastName: true },
     });
-    const customerName = [customer?.firstName, customer?.lastName]
-      .filter(Boolean)
-      .join(" ");
+    const customerName =
+      [customer?.firstName, customer?.lastName].filter(Boolean).join(" ") ||
+      formatPhoneDisplay(fromE164);
     const pushBody = bodyText?.trim() || "Sent a photo";
     await sendPushToAllStaff(shop.id, {
-      title: `New message from ${customerName}`,
+      title: isNewCustomer
+        ? `New message from ${customerName} (new contact)`
+        : `New message from ${customerName}`,
       body: pushBody,
       data: { type: "new_message", conversationId: conversation.id },
     }).catch((err) => console.error("Push notify staff:", err));

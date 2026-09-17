@@ -34,6 +34,8 @@ export interface Customer {
   smsConsent?: boolean;
   smsConsentSource?: string | null;
   smsConsentUpdatedAt?: string | null;
+  /** Auto-created to hold a text from an unknown number; name is a placeholder. */
+  provisional?: boolean;
   address: string | null;
   notes: string | null;
   createdAt: string;

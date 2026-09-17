@@ -88,6 +88,10 @@ model Customer {
   smsConsentUpdatedAt          DateTime?
   /// Staff user id who attested verbal consent taken on a call (PHONE_VERBAL).
   smsConsentCapturedBy         String?
+  /// Auto-created to hold a text from a number not on file. firstName is a
+  /// placeholder (the formatted number) until staff fill in the real details
+  /// with "Create contact" in the inbox, which clears this.
+  provisional                  Boolean             @default(false)
   address                      String?
   notes                        String?
   imageUrl                     String?

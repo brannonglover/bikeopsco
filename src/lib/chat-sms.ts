@@ -1,10 +1,17 @@
 import type { NextRequest } from "next/server";
 import { randomUUID } from "crypto";
 import { put } from "@vercel/blob";
+import type { Prisma } from "@prisma/client";
 import Twilio from "twilio";
 import { BLOB_ACCESS, blobDisplayUrl } from "@/lib/blob";
 import { prisma } from "@/lib/db";
-import { normalizePhone } from "@/lib/phone";
+import { formatPhoneDisplay, normalizePhone } from "@/lib/phone";
+import {
+  buildSmsConsentUpdate,
+  SMS_CONSENT_SOURCES,
+} from "@/lib/sms-consent";
+
+type Db = Prisma.TransactionClient;
 
 const MMS_MAX_SIZE_MB = 5;
 const MMS_ALLOWED_TYPES = [
@@ -57,9 +64,11 @@ export function validateTwilioWebhook(
 /** Match inbound SMS sender / customer.phone (stored formats vary). */
 export async function findCustomerIdBySmsFrom(
   shopId: string,
-  fromE164: string
+  fromE164: string,
+  tx?: Db
 ): Promise<string | null> {
-  const customers = await prisma.customer.findMany({
+  const client = tx ?? prisma;
+  const customers = await client.customer.findMany({
     where: { shopId, phone: { not: null } },
     select: { id: true, phone: true },
   });
@@ -69,6 +78,51 @@ export async function findCustomerIdBySmsFrom(
     if (n === fromE164) return c.id;
   }
   return null;
+}
+
+/**
+ * Resolve the sender of an inbound text, creating the customer when the number
+ * isn't on file yet — a new customer texting the shop for the first time is the
+ * common case, and without a profile there is nothing to hang the conversation
+ * off, so the message would be dropped.
+ *
+ * The profile is named with the formatted number (same fallback label the voice
+ * webhook uses for unknown callers) for staff to rename once they know who it
+ * is, and records INBOUND_SMS consent: texting us first is prior express consent
+ * to be answered.
+ *
+ * Takes the same advisory lock as conversation consolidation so two texts
+ * arriving together can't create two profiles for one number.
+ */
+export async function findOrCreateCustomerIdForInboundSms(
+  shopId: string,
+  fromE164: string
+): Promise<{ customerId: string; created: boolean }> {
+  const existing = await findCustomerIdBySmsFrom(shopId, fromE164);
+  if (existing) return { customerId: existing, created: false };
+
+  return prisma.$transaction(async (tx) => {
+    const lockKey = `${shopId}:${fromE164}:sms-customer`;
+    // pg_advisory_xact_lock returns void — must use $executeRaw.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+
+    // Re-check under the lock: a concurrent inbound message may have won.
+    const raced = await findCustomerIdBySmsFrom(shopId, fromE164, tx);
+    if (raced) return { customerId: raced, created: false };
+
+    const customer = await tx.customer.create({
+      data: {
+        shopId,
+        firstName: formatPhoneDisplay(fromE164) || fromE164,
+        phone: fromE164,
+        // Staff fill in the real details from the thread with "Create contact".
+        provisional: true,
+        ...buildSmsConsentUpdate(true, SMS_CONSENT_SOURCES.INBOUND_SMS),
+      },
+      select: { id: true },
+    });
+    return { customerId: customer.id, created: true };
+  });
 }
 
 /** MediaUrl0 / MediaContentType0 … from Twilio inbound SMS/MMS webhooks. */

@@ -11,6 +11,7 @@ import { useVisibilityAwarePolling } from "@/hooks/useVisibilityAwarePolling";
 import type { StaffConversationMessagesPayload } from "@/lib/chat/staff-conversation-messages";
 import { ChatMessageBubble } from "@/components/chat/ChatMessageBubble";
 import { ConversationListRow } from "@/components/chat/ConversationListRow";
+import { CreateContactModal } from "@/components/chat/CreateContactModal";
 import { mergeChatMessagesWithServer } from "@/lib/chat-messages";
 import {
   clearChatPreviewMessage,
@@ -291,6 +292,7 @@ function ChatPageContent() {
   const [inputText, setInputText] = useState("");
   const [pendingImages, setPendingImages] = useState<{ id: string; url: string; filename: string; mimeType?: string }[]>([]);
   const [showNewConvModal, setShowNewConvModal] = useState(false);
+  const [showCreateContact, setShowCreateContact] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customerSearch, setCustomerSearch] = useState("");
   const [chatSearch, setChatSearch] = useState("");
@@ -782,6 +784,24 @@ function ChatPageContent() {
       }
     },
     []
+  );
+
+  // A provisional contact that has just been filled in should stop reading as an
+  // unknown number straight away, in the open thread and in the list behind it.
+  const handleContactSaved = useCallback(
+    (customer: Customer) => {
+      const applyCustomer = (list: Conversation[]) =>
+        list.map((conv) =>
+          conv.customerId === customer.id
+            ? { ...conv, customer: { ...conv.customer, ...customer } }
+            : conv
+        );
+      setConversations(applyCustomer);
+      setSearchResults(applyCustomer);
+      setShowCreateContact(false);
+      fetchConversations();
+    },
+    [fetchConversations]
   );
 
   const selectedConv = conversations.find((c) => c.id === selectedId);
@@ -1349,6 +1369,21 @@ function ChatPageContent() {
                     Job card
                   </a>
                 )}
+                {selectedConv?.customer.provisional && (
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateContact(true)}
+                    className="flex flex-shrink-0 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-700"
+                    title="Fill in this contact from the conversation"
+                  >
+                    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} aria-hidden>
+                      <path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2" />
+                      <circle cx="9" cy="7" r="4" />
+                      <path d="M19 8v6M22 11h-6" />
+                    </svg>
+                    Create contact
+                  </button>
+                )}
                 {selectedConv?.customer.email && (
                   <InviteButton customerId={selectedConv.customerId} />
                 )}
@@ -1567,6 +1602,15 @@ function ChatPageContent() {
             </button>
           </div>
         </>
+      )}
+
+      {/* Fill in a contact auto-created for an inbound text from an unknown number */}
+      {showCreateContact && selectedId && (
+        <CreateContactModal
+          conversationId={selectedId}
+          onClose={() => setShowCreateContact(false)}
+          onSaved={handleContactSaved}
+        />
       )}
 
       {/* New conversation modal */}
