@@ -730,6 +730,9 @@ model AppSettings {
   /// Public shop phone shown to customers (e.g. call button on job status).
   shopPhone                String?
   logoUrl                  String?
+  /// Recorded voicemail greeting played to callers instead of the default
+  /// synthesized <Say>. Must be a format Twilio's <Play> accepts (mp3/wav).
+  voicemailGreetingUrl     String?
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
 

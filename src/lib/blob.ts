@@ -36,11 +36,22 @@ export function blobDisplayUrl(blobUrl: string, pathname?: string): string {
 
 export type MmsAttachment = { url: string; mimeType: string };
 
+/** Audio formats Twilio's <Play> verb accepts. Notably excludes m4a/AAC. */
+export const TWILIO_PLAYABLE_AUDIO_TYPES = [
+  "audio/wav",
+  "audio/wave",
+  "audio/x-wav",
+  "audio/mpeg",
+  "audio/mp3",
+] as const;
+
 /**
- * Resolve a chat attachment URL to an absolute HTTPS URL Twilio can fetch for MMS.
- * Public blobs use direct Vercel URLs; private blobs use the unauthenticated /api/blob proxy.
+ * Resolve a stored media URL to an absolute HTTPS URL Twilio can fetch.
+ * Public blobs use direct Vercel URLs; private blobs use the unauthenticated
+ * /api/blob proxy. Shared by MMS attachments and voicemail greetings — both
+ * need a URL Twilio's servers can reach without our session cookie.
  */
-export function resolveMmsMediaUrl(
+export function resolvePublicMediaUrl(
   attachmentUrl: string,
   shopSubdomain?: string | null
 ): string | null {
@@ -70,6 +81,14 @@ export function resolveMmsMediaUrl(
   }
 
   return null;
+}
+
+/** MMS-named alias of resolvePublicMediaUrl, so MMS call sites still read clearly. */
+export function resolveMmsMediaUrl(
+  attachmentUrl: string,
+  shopSubdomain?: string | null
+): string | null {
+  return resolvePublicMediaUrl(attachmentUrl, shopSubdomain);
 }
 
 /** Filter attachments to Twilio-compatible types and resolve publicly fetchable URLs. */

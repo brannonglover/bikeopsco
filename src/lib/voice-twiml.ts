@@ -178,18 +178,26 @@ export function buildOutgoingCallTwiml(opts: {
 export function buildVoicemailTwiml(opts: {
   recordingStatusCallbackUrl: string;
   transcribeCallbackUrl?: string | null;
+  /** Absolute URL of a recorded greeting. Takes precedence over `greeting`. */
+  greetingAudioUrl?: string | null;
   greeting?: string;
 }): string {
   const {
     recordingStatusCallbackUrl,
     transcribeCallbackUrl = null,
+    greetingAudioUrl = null,
     greeting = "Sorry we missed you. Please leave a message after the tone.",
   } = opts;
   const transcribeAttrs = transcribeCallbackUrl
     ? ` transcribe="true" transcribeCallback="${escapeXml(transcribeCallbackUrl)}"`
     : "";
+  // A recorded greeting wins, but <Say> stays the fallback so a shop that
+  // never records one still gets a working voicemail.
+  const intro = greetingAudioUrl
+    ? `<Play>${escapeXml(greetingAudioUrl)}</Play>`
+    : `<Say>${escapeXml(greeting)}</Say>`;
   return twiml(
-    `<Say>${escapeXml(greeting)}</Say>` +
+    intro +
       `<Record maxLength="120" playBeep="true" ` +
       `recordingStatusCallback="${escapeXml(recordingStatusCallbackUrl)}" ` +
       `recordingStatusCallbackEvent="completed" recordingStatusCallbackMethod="POST"` +
