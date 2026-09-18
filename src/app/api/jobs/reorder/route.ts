@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { getToken } from "next-auth/jwt";
+import { publishJobEvent } from "@/lib/realtime/publish-job-event";
 
 const reorderSchema = z.object({
   updates: z.array(
@@ -36,6 +37,13 @@ export async function POST(request: NextRequest) {
         })
       )
     );
+
+    // One event for the whole drag: the payload only identifies *a* changed
+    // job, and subscribers refetch the entire board regardless.
+    const shopId = typeof token.shopId === "string" ? token.shopId : null;
+    if (shopId && updates.length > 0) {
+      await publishJobEvent("job:updated", { jobId: updates[0].id, shopId });
+    }
 
     return NextResponse.json({ ok: true });
   } catch (error) {

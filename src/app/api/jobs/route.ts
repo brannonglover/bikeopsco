@@ -8,6 +8,7 @@ import { sendJobEmail, getTemplateForStage } from "@/lib/email";
 import { getTemplateSlugForStage } from "@/lib/sms";
 import { syncCollectionJobService } from "@/lib/collection-fee";
 import { sendPushToAllStaff } from "@/lib/push";
+import { publishJobEvent } from "@/lib/realtime/publish-job-event";
 import { getAppFeatures } from "@/lib/app-settings";
 import { mirrorJobStageToCustomerChat } from "@/lib/system-chat";
 import { getBoardJobsForShop } from "@/lib/board-jobs";
@@ -424,6 +425,8 @@ export async function POST(request: NextRequest) {
         }
       }
     }
+
+    await publishJobEvent("job:created", { jobId: job.id, shopId });
 
     return NextResponse.json(
       job.jobBikes

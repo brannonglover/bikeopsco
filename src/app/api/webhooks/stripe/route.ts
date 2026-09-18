@@ -6,6 +6,7 @@ import { sendPaymentReceiptEmail } from "@/lib/email";
 import { computeJobSubtotal, computeTotalPaid, getJobPaymentSummary } from "@/lib/job-payments";
 import { buildPaymentReceivedDetails, notifyShopOfPayment } from "@/lib/payment-notifications";
 import { syncStripeSubscription, toStripeDate } from "@/lib/billing";
+import { publishJobEvent } from "@/lib/realtime/publish-job-event";
 
 async function refreshJobPaymentStatus(jobId: string) {
   const jobWithPayments = await prisma.job.findUnique({
@@ -43,6 +44,13 @@ async function refreshJobPaymentStatus(jobId: string) {
     data: {
       paymentStatus: paymentSummary.paymentStatus,
     },
+  });
+
+  // Payment status is rendered on the board, and nobody is sitting on a
+  // mutation response here — this is the only way open boards learn about it.
+  await publishJobEvent("job:updated", {
+    jobId,
+    shopId: jobWithPayments.shopId,
   });
 
   return paymentSummary;

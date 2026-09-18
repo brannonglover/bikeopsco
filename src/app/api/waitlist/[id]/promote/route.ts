@@ -9,6 +9,7 @@ import { getWaitlistPromotedSmsSlug, sendJobSms } from "@/lib/sms";
 import { mirrorJobStageToCustomerChat } from "@/lib/system-chat";
 import { getEffectiveEmailUpdatesConsent, getEffectiveSmsConsent } from "@/lib/sms-consent";
 import { customerHasPushTokens, sendPushToCustomer } from "@/lib/push";
+import { publishJobEvent } from "@/lib/realtime/publish-job-event";
 
 function safeServiceIds(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
@@ -247,6 +248,8 @@ export async function POST(
         console.error("[Waitlist promote] Customer notification failed:", e);
       }
     }
+
+    await publishJobEvent("job:created", { jobId: job.id, shopId });
 
     return NextResponse.json({ jobId: job.id });
   } catch (error) {

@@ -1,40 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useCallback, useState } from "react";
+import { useEffect, useCallback, useRef, useState } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import type { Job } from "@/lib/types";
 import { BOARD_JOBS_QUERY_KEY } from "@/lib/board-jobs";
 import { playNotificationSound } from "@/lib/notificationSound";
-import { useVisibilityAwarePolling } from "@/hooks/useVisibilityAwarePolling";
 import { useForegroundSync } from "@/hooks/useForegroundSync";
-
-const JOB_POLL_MS = 5_000;
-const JOB_POLL_HIDDEN_MS = 30_000;
-const FULL_BOARD_REFRESH_MS = 60_000;
-const BOARD_SUMMARY_URL = "/api/jobs?view=board&summary=1";
-
-type BoardSummaryRow = {
-  id: string;
-  stage: string;
-  updatedAt: string;
-};
-
-function boardSummaryFingerprint(rows: BoardSummaryRow[]): string {
-  return rows
-    .map((row) => `${row.id}:${row.stage}:${row.updatedAt}`)
-    .sort()
-    .join("|");
-}
-
-function localJobsFingerprint(jobs: Job[]): string {
-  return boardSummaryFingerprint(
-    jobs.map((job) => ({
-      id: job.id,
-      stage: job.stage,
-      updatedAt: job.updatedAt,
-    }))
-  );
-}
+import { useJobRealtime } from "@/hooks/useJobRealtime";
 
 function requestPermission(): void {
   if (typeof window === "undefined" || !("Notification" in window)) return;
@@ -46,6 +18,16 @@ function isBoardJobsQueryKey(queryKey: readonly unknown[]): boolean {
   return queryKey[0] === BOARD_JOBS_QUERY_KEY[0] && queryKey[1] === BOARD_JOBS_QUERY_KEY[1];
 }
 
+/**
+ * Keeps the staff board fresh and raises a desktop notification for jobs that
+ * appear while the board is open.
+ *
+ * Freshness comes from Supabase Realtime (see `useJobRealtime`) rather than
+ * interval polling: the server broadcasts a minimal event on mutation, and the
+ * board refetches `/api/jobs?view=board`. `useForegroundSync` remains the
+ * backstop for anything missed while the connection was down — it fires when
+ * the tab becomes visible, the window regains focus, or the machine wakes.
+ */
 export function useJobNotifications(
   queryClient: QueryClient,
   options?: { enabled?: boolean }
@@ -53,17 +35,17 @@ export function useJobNotifications(
   const enabled = options?.enabled ?? true;
   const seenJobIds = useRef<Set<string>>(new Set());
   const hasInitialized = useRef(false);
-  const summaryBaseline = useRef<string | null>(null);
-  const lastFullRefreshAt = useRef(0);
   const [jobs, setJobs] = useState<Job[]>(
     () => queryClient.getQueryData<Job[]>(BOARD_JOBS_QUERY_KEY) ?? []
   );
-  const jobsRef = useRef(jobs);
-  jobsRef.current = jobs;
 
-  const fetchJobs = useCallback(() => {
+  useJobRealtime(queryClient, { enabled });
+
+  const syncOnForeground = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: BOARD_JOBS_QUERY_KEY });
   }, [queryClient]);
+
+  useForegroundSync(syncOnForeground, { enabled });
 
   useEffect(() => {
     const syncFromCache = () => {
@@ -82,66 +64,11 @@ export function useJobNotifications(
   }, []);
 
   useEffect(() => {
-    if (!enabled) {
-      summaryBaseline.current = null;
-      return;
-    }
-  }, [enabled]);
-
-  useEffect(() => {
     if (jobs.length > 0 && !hasInitialized.current) {
       hasInitialized.current = true;
       jobs.forEach((j) => seenJobIds.current.add(j.id));
     }
   }, [jobs]);
-
-  const pollBoardSummary = useCallback(async () => {
-    try {
-      const res = await fetch(BOARD_SUMMARY_URL, { cache: "no-store" });
-      if (!res.ok) return;
-
-      const data = await res.json();
-      if (!Array.isArray(data)) return;
-
-      const rows = data as BoardSummaryRow[];
-      const fingerprint = boardSummaryFingerprint(rows);
-
-      if (summaryBaseline.current === null) {
-        summaryBaseline.current = fingerprint;
-        lastFullRefreshAt.current = Date.now();
-        if (fingerprint !== localJobsFingerprint(jobsRef.current)) {
-          fetchJobs();
-        }
-        return;
-      }
-
-      const summaryChanged = fingerprint !== summaryBaseline.current;
-      const refreshDue = Date.now() - lastFullRefreshAt.current >= FULL_BOARD_REFRESH_MS;
-
-      if (summaryChanged || refreshDue) {
-        summaryBaseline.current = fingerprint;
-        lastFullRefreshAt.current = Date.now();
-        fetchJobs();
-      }
-    } catch {
-      // Ignore transient poll errors; next interval retries.
-    }
-  }, [fetchJobs]);
-
-  const syncOnForeground = useCallback(() => {
-    summaryBaseline.current = null;
-    fetchJobs();
-  }, [fetchJobs]);
-
-  useForegroundSync(syncOnForeground, { enabled });
-
-  useVisibilityAwarePolling(
-    () => {
-      void pollBoardSummary();
-    },
-    JOB_POLL_MS,
-    { enabled, fireOnVisible: false, hiddenIntervalMs: JOB_POLL_HIDDEN_MS }
-  );
 
   useEffect(() => {
     if (!enabled) return;

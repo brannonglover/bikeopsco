@@ -9,6 +9,7 @@ import {
   sendWaitlistRequestNotification,
 } from "@/lib/email";
 import { sendPushToAllStaff } from "@/lib/push";
+import { publishJobEvent } from "@/lib/realtime/publish-job-event";
 import { syncCollectionJobService } from "@/lib/collection-fee";
 import { coerceCustomerPhone } from "@/lib/phone";
 import { checkCollectionEligibility } from "@/lib/collection-radius";
@@ -568,6 +569,9 @@ export async function POST(request: NextRequest) {
     sendBookingReceivedEmail(job).then((result) => {
       if (!result.ok) console.error("[Widget book] Customer email failed:", result.error);
     }).catch((e) => console.error("[Widget book] Customer email threw:", e));
+
+    // Wake any staff board that is currently open.
+    await publishJobEvent("job:created", { jobId: job.id, shopId: job.shopId });
 
     const res = NextResponse.json({
       id: job.id,

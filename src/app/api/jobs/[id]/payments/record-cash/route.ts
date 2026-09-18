@@ -4,6 +4,7 @@ import { requireStaffShop } from "@/lib/api-auth";
 import { sendPaymentReceiptEmail } from "@/lib/email";
 import { computeJobSubtotal, computeTotalPaid, getJobPaymentSummary } from "@/lib/job-payments";
 import { buildPaymentReceivedDetails, notifyShopOfPayment } from "@/lib/payment-notifications";
+import { publishJobEvent } from "@/lib/realtime/publish-job-event";
 
 export async function POST(
   request: NextRequest,
@@ -78,6 +79,8 @@ export async function POST(
         },
       },
     });
+
+    await publishJobEvent("job:updated", { jobId, shopId: job.shopId });
 
     const jobForEmail = {
       id: job.id,

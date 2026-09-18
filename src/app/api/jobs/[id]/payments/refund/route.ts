@@ -4,6 +4,7 @@ import { requireStaffShop } from "@/lib/api-auth";
 import { getStripe, toCents, fromCents } from "@/lib/stripe";
 import { computeJobSubtotal, computeTotalPaid, getJobPaymentSummary } from "@/lib/job-payments";
 import { z } from "zod";
+import { publishJobEvent } from "@/lib/realtime/publish-job-event";
 
 const bodySchema = z.object({
   amount: z
@@ -149,6 +150,8 @@ export async function POST(
         data: { paymentStatus: newStatus },
       });
     }
+
+    await publishJobEvent("job:updated", { jobId, shopId: job.shopId });
 
     return NextResponse.json({
       success: true,

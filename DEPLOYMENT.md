@@ -226,6 +226,70 @@ Set both on **Preview** (staging) and **Production** in Vercel, then redeploy. `
 
 If the project is paused (Supabase free tier), restore it in the dashboard before redeploying.
 
+### Supabase Realtime (staff board live updates)
+
+The staff board no longer polls `/api/jobs`. Job mutations broadcast a minimal
+`{ jobId, shopId }` event on a **private** `shop:<shopId>:jobs` channel, and
+connected boards respond by refetching `/api/jobs?view=board` — the API and
+database stay the source of truth; Realtime only says "something changed".
+
+Copy these from **Project Settings → API** (same Supabase project as the
+connection strings above) and set them on **Preview** and **Production**:
+
+| Variable | Scope | Value |
+|----------|-------|-------|
+| `NEXT_PUBLIC_SUPABASE_URL` | Browser + server | Project URL (`https://[project-ref].supabase.co`) |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Browser | `anon` / publishable key |
+| `SUPABASE_SERVICE_ROLE_KEY` | **Server only** | `service_role` key — never expose to the browser |
+| `SUPABASE_JWT_SECRET` | **Server only** | **JWT Settings → JWT Secret** — signs the staff channel token |
+
+All four must come from the **same** Supabase project as `DATABASE_URL`. A JWT
+secret from a different project produces tokens Realtime will reject, which
+shows up as a persistent `CHANNEL_ERROR` in the browser console.
+
+#### How a staff browser is authorized
+
+NextAuth stays the only thing that authenticates staff. Realtime access is
+derived from it, not parallel to it:
+
+1. The browser calls `GET /api/realtime/token`. The route takes **no input** —
+   `requireStaffShop` resolves the shop from the NextAuth session and checks it
+   against the request host, so the browser cannot name a different tenant.
+2. The route returns a 5-minute HS256 JWT with a `shop_id` claim, plus the
+   channel topic the caller is allowed to join.
+3. supabase-js holds that token through its `accessToken` hook (its supported
+   third-party-auth entry point) and refreshes from the same endpoint. No
+   Supabase auth session is created and nothing is written to browser storage.
+4. Supabase evaluates the `realtime.messages` policy on every subscription and
+   permits the topic only when it equals `shop:<shop_id claim>:jobs`.
+
+The policy grants `SELECT` only. Publishing happens server-side with the
+service role key, so no browser can forge a job event.
+
+#### The RLS policy
+
+Applied by migration `20260918120000_realtime_private_job_channel`, which runs
+as part of `prisma migrate deploy` during `npm run build`. It is idempotent, so
+re-running is safe. Nothing needs to be added to a Postgres publication —
+this is Realtime **Broadcast**, not change-data-capture.
+
+If that migration fails with a permissions error on `realtime.messages`, run
+the same file by hand in the **Supabase SQL editor** as the project owner, then
+redeploy.
+
+#### When it is not configured
+
+The app still runs. It logs a `[realtime]` warning once and falls back to
+foreground sync, so boards refresh when the tab becomes visible, the window
+regains focus, or the machine wakes — just not the instant a booking lands.
+Check the browser console for `[realtime]` warnings and the function logs for
+`[realtime] broadcast ... failed`.
+
+Broadcasts are best-effort by design: publishing has a 1.5s timeout and never
+fails the surrounding mutation. A dropped event is recovered by the next
+foreground sync or by the catch-up refetch that runs whenever the channel
+re-subscribes.
+
 ### Username correct but build still fails? (P1000 / auth)
 
 If the username is already `postgres.[project-ref]` and you still see **P1000** (auth failed) or connection errors, check these **in order**:

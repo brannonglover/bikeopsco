@@ -17,6 +17,7 @@ import { withPrismaRetry } from "@/lib/prisma-retry";
 import { optionalTrimmedString } from "@/lib/zod-helpers";
 import { getJobQueueInfo } from "@/lib/job-queue-position";
 import { customerHasPushTokens, sendPushToCustomer } from "@/lib/push";
+import { publishJobEvent } from "@/lib/realtime/publish-job-event";
 import {
   enrichJobBikesWithCatalogThumbnails,
   matchCatalogFieldsForJobBike,
@@ -802,6 +803,19 @@ export async function PATCH(
       );
     }
 
+    // A pending widget booking leaving PENDING_APPROVAL for anything other than
+    // CANCELLED is the approval itself; everything else is a plain stage move.
+    const approvalReceived =
+      stageChanged && existingJob.stage === "PENDING_APPROVAL" && data.stage !== "CANCELLED";
+    await publishJobEvent(
+      approvalReceived
+        ? "job:approval_received"
+        : stageChanged
+          ? "job:status_changed"
+          : "job:updated",
+      { jobId: job.id, shopId: shop.id }
+    );
+
     const subtotal = computeJobSubtotal({
       jobServices: job.jobServices,
       jobProducts: job.jobProducts,
@@ -864,6 +878,11 @@ export async function DELETE(
 
     await prisma.job.delete({
       where: { id },
+    });
+
+    await publishJobEvent("job:deleted", {
+      jobId: id,
+      shopId: existingJob.shopId,
     });
 
     return NextResponse.json({ success: true });
