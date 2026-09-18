@@ -34,6 +34,34 @@ export async function GET(request: NextRequest) {
     }
     const query = request.nextUrl.searchParams.get("q")?.trim() ?? "";
     const terms = query.split(/\s+/).filter(Boolean).slice(0, 8);
+    const archivedOnly =
+      request.nextUrl.searchParams.get("archived") === "true";
+
+    // Archived threads are read straight out, never through
+    // loadStaffConversations: its duplicate-consolidation sweep unarchives the
+    // thread it keeps, which would undo the archiving as soon as it was listed.
+    if (archivedOnly) {
+      const archived = await prisma.conversation.findMany({
+        where: { shopId: shop.id, archived: true },
+        orderBy: { updatedAt: "desc" },
+        take: 200,
+        include: conversationInclude,
+      });
+      return NextResponse.json(
+        archived.map((conversation) =>
+          conversation.customer
+            ? {
+                ...conversation,
+                customer: {
+                  ...conversation.customer,
+                  smsConsent: getEffectiveSmsConsent(conversation.customer),
+                },
+              }
+            : conversation
+        )
+      );
+    }
+
     const listWhere = {
       shopId: shop.id,
       archived: false,

@@ -293,6 +293,9 @@ function ChatPageContent() {
   const [pendingImages, setPendingImages] = useState<{ id: string; url: string; filename: string; mimeType?: string }[]>([]);
   const [showNewConvModal, setShowNewConvModal] = useState(false);
   const [showCreateContact, setShowCreateContact] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
+  const [archivedConvs, setArchivedConvs] = useState<Conversation[]>([]);
+  const [archivedLoading, setArchivedLoading] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customerSearch, setCustomerSearch] = useState("");
   const [chatSearch, setChatSearch] = useState("");
@@ -804,8 +807,51 @@ function ChatPageContent() {
     [fetchConversations]
   );
 
-  const selectedConv = conversations.find((c) => c.id === selectedId);
-  const visibleConversations = debouncedChatSearch ? searchResults : conversations;
+  const fetchArchived = useCallback(async () => {
+    setArchivedLoading(true);
+    try {
+      const res = await fetch("/api/conversations?archived=true", {
+        cache: "no-store",
+      });
+      if (res.ok) setArchivedConvs(await res.json());
+    } catch {
+      // Leave whatever was already listed; the toggle can be retried.
+    } finally {
+      setArchivedLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (showArchived) void fetchArchived();
+  }, [showArchived, fetchArchived]);
+
+  const unarchiveConversation = useCallback(
+    async (id: string) => {
+      try {
+        const res = await fetch(`/api/conversations/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ archived: false }),
+        });
+        if (res.ok) {
+          setArchivedConvs((prev) => prev.filter((c) => c.id !== id));
+          fetchConversations();
+        }
+      } catch {
+        alert("Failed to restore");
+      }
+    },
+    [fetchConversations]
+  );
+
+  const selectedConv =
+    conversations.find((c) => c.id === selectedId) ??
+    archivedConvs.find((c) => c.id === selectedId);
+  const visibleConversations = showArchived
+    ? archivedConvs
+    : debouncedChatSearch
+      ? searchResults
+      : conversations;
   const typingSignal =
     customerTypingAt ?? selectedConv?.customerTypingAt ?? null;
   const showCustomerTyping =
@@ -1269,15 +1315,38 @@ function ChatPageContent() {
             >
               + New conversation
             </button>
+            <div className="mt-2 flex gap-1">
+              {([false, true] as const).map((archived) => (
+                <button
+                  key={String(archived)}
+                  type="button"
+                  onClick={() => {
+                    setShowArchived(archived);
+                    setSelectedId(null);
+                  }}
+                  className={`flex-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                    showArchived === archived
+                      ? "bg-slate-800 text-white"
+                      : "bg-white text-slate-600 border border-slate-300 hover:bg-slate-50"
+                  }`}
+                >
+                  {archived ? "Archived" : "Active"}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="flex-1 overflow-y-auto">
-            {searchLoading ? (
+            {showArchived && archivedLoading ? (
+              <p className="p-4 text-slate-500 text-sm">Loading archived…</p>
+            ) : searchLoading ? (
               <p className="p-4 text-slate-500 text-sm">Searching…</p>
             ) : visibleConversations.length === 0 ? (
               <p className="p-4 text-slate-500 text-sm">
-                {debouncedChatSearch
-                  ? `No chats found for "${debouncedChatSearch}".`
-                  : "No conversations yet. Start one above."}
+                {showArchived
+                  ? "Nothing archived. Threads you archive show up here."
+                  : debouncedChatSearch
+                    ? `No chats found for "${debouncedChatSearch}".`
+                    : "No conversations yet. Start one above."}
               </p>
             ) : (
               <ul className="divide-y divide-slate-200">
@@ -1368,6 +1437,27 @@ function ChatPageContent() {
                     </svg>
                     Job card
                   </a>
+                )}
+                {selectedConv && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      showArchived
+                        ? unarchiveConversation(selectedConv.id)
+                        : archiveConversation(selectedConv.id)
+                    }
+                    className="flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50"
+                    title={
+                      showArchived
+                        ? "Move back to active conversations"
+                        : "Archive this conversation"
+                    }
+                  >
+                    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} aria-hidden>
+                      <path d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                    </svg>
+                    {showArchived ? "Restore" : "Archive"}
+                  </button>
                 )}
                 {selectedConv?.customer.provisional && (
                   <button
