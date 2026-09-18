@@ -107,27 +107,27 @@ async function sendSms(
 /** SMS templates - slugs match email templates. {{statusUrl}} links to /status/[jobId] */
 const SMS_TEMPLATES: Record<string, string> = {
   booking_confirmation_dropoff:
-    "{{shopName}}\n\nBooking confirmed! Your {{bikeMake}} {{bikeModel}} is scheduled.\n\nDrop off at the shop.\n\nTrack: {{statusUrl}}\n\nReply STOP to opt out.",
+    "Booking confirmed! Your {{bikeMake}} {{bikeModel}} is scheduled.\n\nDrop off at the shop.\n\nTrack: {{statusUrl}}\n\nReply HELP for help, STOP to opt out.",
   booking_confirmation_collection:
-    "{{shopName}}\n\nBooking confirmed! We'll collect your {{bikeMake}} {{bikeModel}} as arranged.\n\nTrack: {{statusUrl}}\n\nReply STOP to opt out.",
+    "Booking confirmed! We'll collect your {{bikeMake}} {{bikeModel}} as arranged.\n\nTrack: {{statusUrl}}\n\nReply HELP for help, STOP to opt out.",
   bike_arrived:
-    "{{shopName}}\n\nYour {{bikeMake}} {{bikeModel}} has arrived.\n\nTrack status: {{statusUrl}}\n\nReply STOP to opt out.",
+    "Your {{bikeMake}} {{bikeModel}} has arrived.\n\nTrack status: {{statusUrl}}\n\nReply HELP for help, STOP to opt out.",
   bike_collected:
-    "{{shopName}}\n\nWe've collected your {{bikeMake}} {{bikeModel}}.\n\nTrack status: {{statusUrl}}\n\nReply STOP to opt out.",
+    "We've collected your {{bikeMake}} {{bikeModel}}.\n\nTrack status: {{statusUrl}}\n\nReply HELP for help, STOP to opt out.",
   working_on_bike:
-    "{{shopName}}\n\nWe're working on your {{bikeMake}} {{bikeModel}}.\n\nTrack: {{statusUrl}}\n\nReply STOP to opt out.",
+    "We're working on your {{bikeMake}} {{bikeModel}}.\n\nTrack: {{statusUrl}}\n\nReply HELP for help, STOP to opt out.",
   waiting_on_parts:
-    "{{shopName}}\n\nWaiting on parts for your {{bikeMake}} {{bikeModel}}.\n\nTrack: {{statusUrl}}\n\nReply STOP to opt out.",
+    "Waiting on parts for your {{bikeMake}} {{bikeModel}}.\n\nTrack: {{statusUrl}}\n\nReply HELP for help, STOP to opt out.",
   waiting_on_customer:
-    "{{shopName}}\n\nWe need your approval to continue work on your {{bikeMake}} {{bikeModel}}.\n\nTrack: {{statusUrl}}\n\nReply STOP to opt out.",
+    "We need your approval to continue work on your {{bikeMake}} {{bikeModel}}.\n\nTrack: {{statusUrl}}\n\nReply HELP for help, STOP to opt out.",
   bike_ready:
-    "{{shopName}}\n\n{{bikeReadyMessage}}\n\nView your itemized bill: {{billUrl}}\n\nReply STOP to opt out.",
+    "{{bikeReadyMessage}}\n\nView your itemized bill: {{billUrl}}\n\nReply HELP for help, STOP to opt out.",
   bike_ready_invoice:
-    "{{shopName}}\n\n{{bikeReadyMessage}}\n\nView your itemized bill: {{billUrl}}\n\nReply STOP to opt out.",
+    "{{bikeReadyMessage}}\n\nView your itemized bill: {{billUrl}}\n\nReply HELP for help, STOP to opt out.",
   waitlist_promoted_dropoff:
-    "{{shopName}}\n\nGreat news — a spot opened up! Your {{bikeMake}} {{bikeModel}} is now booked in and off the waitlist.\n\nDrop off at the shop.\n\nTrack: {{statusUrl}}\n\nReply STOP to opt out.",
+    "Great news — a spot opened up! Your {{bikeMake}} {{bikeModel}} is now booked in and off the waitlist.\n\nDrop off at the shop.\n\nTrack: {{statusUrl}}\n\nReply HELP for help, STOP to opt out.",
   waitlist_promoted_collection:
-    "{{shopName}}\n\nGreat news — a spot opened up! Your {{bikeMake}} {{bikeModel}} is now booked in and off the waitlist.\n\nWe'll collect it as arranged.\n\nTrack: {{statusUrl}}\n\nReply STOP to opt out.",
+    "Great news — a spot opened up! Your {{bikeMake}} {{bikeModel}} is now booked in and off the waitlist.\n\nWe'll collect it as arranged.\n\nTrack: {{statusUrl}}\n\nReply HELP for help, STOP to opt out.",
 };
 
 /** Slug for the SMS sent when a waitlist entry is promoted to a booked-in job. */
@@ -274,7 +274,7 @@ export async function sendJobSms(
 
 const CHAT_SMS_MAX_LEN = 1500;
 
-/** Staff chat → customer phone. Plain text + shop footer; truncates if needed. */
+/** Staff chat → customer phone. Plain text, no footer; truncates if needed. */
 export async function sendChatStaffSms(
   phoneNumber: string,
   messageText: string,
@@ -288,7 +288,6 @@ export async function sendChatStaffSms(
     attachments?: MmsAttachment[];
   }
 ): Promise<SmsSendResult> {
-  const shopName = process.env.SHOP_NAME || "Basement Bike Mechanic";
   const chatUrl =
     opts?.jobId && opts?.shopId
       ? getCustomerChatUrl(opts.jobId, opts.shopId, opts.shopSubdomain)
@@ -309,21 +308,20 @@ export async function sendChatStaffSms(
 
   const buildTextOnlyBody = (): string | null => {
     if (opts?.attachmentOnly) {
-      return `${shopName}\n\n${attachmentOnlyLabel}${chatUrlLine}\n\nReply to this text to message us.\n\nReply STOP to opt out.`;
+      return `${attachmentOnlyLabel}${chatUrlLine}`;
     }
     const trimmed = messageText.trim();
     if (!trimmed) {
       return null;
     }
-    return `${trimmed}${chatUrlLine}\n\n— ${shopName}\nReply to this text to continue. Reply STOP to opt out.`;
+    return `${trimmed}${chatUrlLine}`;
   };
 
   const buildMmsBody = (): string => {
     if (opts?.attachmentOnly) {
-      return `${shopName}\n\nReply to this text to message us.\n\nReply STOP to opt out.`;
+      return "";
     }
-    const trimmed = messageText.trim();
-    return `${trimmed}\n\n— ${shopName}\nReply to this text to continue. Reply STOP to opt out.`;
+    return messageText.trim();
   };
 
   const truncate = (body: string) =>
