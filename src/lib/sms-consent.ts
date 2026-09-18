@@ -27,6 +27,14 @@ export const SMS_CONSENT_SOURCES = {
   BOOKING_FORM: "BOOKING_FORM",
   /** Customer texted the shop first, which is consent to be replied to. */
   INBOUND_SMS: "INBOUND_SMS",
+  /**
+   * Staff answered an inbound call by text. The caller reached the shop with an
+   * enquiry and their number came in on caller ID, so a reply about that
+   * enquiry is responsive to it — but it is a weaker record than INBOUND_SMS,
+   * which the customer put in writing. Only ever set from an explicit staff
+   * action on a call log entry, never automatically when a call arrives.
+   */
+  INBOUND_CALL: "INBOUND_CALL",
   /** Staff attested that the customer agreed verbally on a call. */
   PHONE_VERBAL: "PHONE_VERBAL",
   /** Customer replied START after a previous opt-out. */
@@ -43,6 +51,7 @@ const SMS_CONSENT_SOURCE_LABELS: Record<string, string> = {
   STATUS_PAGE: "the status page",
   BOOKING_FORM: "the booking form",
   INBOUND_SMS: "texting the shop",
+  INBOUND_CALL: "a reply to their call",
   PHONE_VERBAL: "verbal consent on a call",
   SMS_START: "replying START",
   SMS_STOP: "replying STOP",

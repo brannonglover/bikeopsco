@@ -44,3 +44,7 @@ next-env.d.ts
 
 # bike catalog generated Prisma client
 /bike-catalog/generated/
+
+# EAS CLI recreates this stub if run from this directory by mistake;
+# the native staff app's real Expo config lives in its own repo.
+app.json

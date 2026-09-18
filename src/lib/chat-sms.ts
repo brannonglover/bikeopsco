@@ -81,48 +81,64 @@ export async function findCustomerIdBySmsFrom(
 }
 
 /**
- * Resolve the sender of an inbound text, creating the customer when the number
- * isn't on file yet — a new customer texting the shop for the first time is the
- * common case, and without a profile there is nothing to hang the conversation
- * off, so the message would be dropped.
+ * Resolve a phone number to a customer, creating a placeholder profile when the
+ * number isn't on file yet.
  *
- * The profile is named with the formatted number (same fallback label the voice
- * webhook uses for unknown callers) for staff to rename once they know who it
- * is, and records INBOUND_SMS consent: texting us first is prior express consent
- * to be answered.
+ * Both entry points for a stranger need this: a first inbound text (there is
+ * nothing to hang the conversation off, so the message would be dropped) and
+ * staff answering an unknown caller by text. The profile is named with the
+ * formatted number — the same fallback label the voice webhook uses for unknown
+ * callers — and flagged provisional for staff to fill in with "Create contact".
  *
- * Takes the same advisory lock as conversation consolidation so two texts
- * arriving together can't create two profiles for one number.
+ * `consentSource` records why we may text this number back; see
+ * SMS_CONSENT_SOURCES. It is only written on creation, so a number that already
+ * exists keeps whatever consent it had — an earlier STOP is never reversed here.
+ *
+ * Takes the same advisory lock as conversation consolidation so two inbound
+ * events arriving together can't create two profiles for one number.
  */
-export async function findOrCreateCustomerIdForInboundSms(
+export async function findOrCreateProvisionalCustomer(
   shopId: string,
-  fromE164: string
+  phoneE164: string,
+  consentSource: string
 ): Promise<{ customerId: string; created: boolean }> {
-  const existing = await findCustomerIdBySmsFrom(shopId, fromE164);
+  const existing = await findCustomerIdBySmsFrom(shopId, phoneE164);
   if (existing) return { customerId: existing, created: false };
 
   return prisma.$transaction(async (tx) => {
-    const lockKey = `${shopId}:${fromE164}:sms-customer`;
+    const lockKey = `${shopId}:${phoneE164}:sms-customer`;
     // pg_advisory_xact_lock returns void — must use $executeRaw.
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
 
-    // Re-check under the lock: a concurrent inbound message may have won.
-    const raced = await findCustomerIdBySmsFrom(shopId, fromE164, tx);
+    // Re-check under the lock: a concurrent inbound event may have won.
+    const raced = await findCustomerIdBySmsFrom(shopId, phoneE164, tx);
     if (raced) return { customerId: raced, created: false };
 
     const customer = await tx.customer.create({
       data: {
         shopId,
-        firstName: formatPhoneDisplay(fromE164) || fromE164,
-        phone: fromE164,
+        firstName: formatPhoneDisplay(phoneE164) || phoneE164,
+        phone: phoneE164,
         // Staff fill in the real details from the thread with "Create contact".
         provisional: true,
-        ...buildSmsConsentUpdate(true, SMS_CONSENT_SOURCES.INBOUND_SMS),
+        ...buildSmsConsentUpdate(true, consentSource),
       },
       select: { id: true },
     });
     return { customerId: customer.id, created: true };
   });
+}
+
+/** Inbound text from a stranger: texting us first is consent to be answered. */
+export async function findOrCreateCustomerIdForInboundSms(
+  shopId: string,
+  fromE164: string
+): Promise<{ customerId: string; created: boolean }> {
+  return findOrCreateProvisionalCustomer(
+    shopId,
+    fromE164,
+    SMS_CONSENT_SOURCES.INBOUND_SMS
+  );
 }
 
 /** MediaUrl0 / MediaContentType0 … from Twilio inbound SMS/MMS webhooks. */
