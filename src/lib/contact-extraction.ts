@@ -37,6 +37,17 @@ const INTRO_RE =
 const SIGN_OFF_RE =
   /(?:^|[\n.,!?;])[ \t]*(?:thanks|thank you|thx|ty|cheers|regards|best|sincerely|[-–—]{1,2})[\s,.!—–-]+([a-z][a-z'’-]*(?:\s+[a-z][a-z'’-]*)?)[\s.!]*$/i;
 
+/**
+ * "Hi Dave", "Hey Dave Cox," at the very start of a staff message.
+ *
+ * This is the only pattern read from the shop's own messages, and only from the
+ * salutation, because that position addresses the customer. The intro and
+ * sign-off patterns must never be applied to a staff message — "this is Brannon
+ * at Basement Bike Mechanic" would hand back the shop's own name.
+ */
+const STAFF_GREETING_RE =
+  /^\s*(?:hi|hey|hello|hiya|yo|good (?:morning|afternoon|evening))[\s,!.:-]+([a-z][a-z'’-]*(?:\s+[a-z][a-z'’-]*)?)/i;
+
 /** A last line that is just a name, e.g. a two-word signature. */
 const BARE_SIGNATURE_RE = /^([a-z][a-z'’-]*)\s+([a-z][a-z'’-]*)\.?$/i;
 
@@ -91,6 +102,9 @@ const NON_NAME_WORDS = new Set([
   "hopefully", "definitely", "absolutely", "perfect", "awesome", "cool",
   "nice", "sounds", "sound", "guys", "folks", "sir", "maam", "madam", "team",
   "thats", "theres", "whats", "hows", "youre", "lets", "gotta", "wanna",
+  // common salutation filler, so "hi there" is not a customer called There
+  "there", "again", "both", "everybody", "somebody", "man", "dude", "bud",
+  "buddy", "friend", "mate", "boss", "chief", "sorry",
 ]);
 
 const MAX_NAME_TOKEN_LENGTH = 20;
@@ -178,10 +192,16 @@ export function extractContactFromMessages(
   messages: ContactExtractionMessage[],
   options?: { excludePhone?: string | null }
 ): ExtractedContact {
-  const bodies = messages
+  const withBodies = messages
+    .map((message) => ({
+      sender: message.sender,
+      body: message.body?.trim() ?? "",
+    }))
+    .filter((message) => message.body.length > 0);
+
+  const bodies = withBodies
     .filter((message) => message.sender === "CUSTOMER")
-    .map((message) => message.body?.trim())
-    .filter((body): body is string => Boolean(body));
+    .map((message) => message.body);
 
   let name: NameParts | null = null;
   let email: string | null = null;
@@ -207,10 +227,37 @@ export function extractContactFromMessages(
     }
   }
 
+  // Nobody introduced themselves in writing. When the name was learned on a
+  // call and staff then opened with "Hi Dave", the shop's own greeting is the
+  // only record of it — so read the salutation, and nothing else, from staff
+  // messages. Ordered after the customer's own words, which are stronger.
+  if (!name) {
+    for (const message of withBodies) {
+      if (message.sender !== "STAFF") continue;
+      const greeted = toNameParts(STAFF_GREETING_RE.exec(message.body)?.[1]);
+      if (greeted) {
+        name = greeted;
+        break;
+      }
+    }
+  }
+
   // An address-style email is a weaker signal than an introduction, so it only
   // fills in a name nothing else supplied.
   if (!name && email) {
     name = nameFromEmail(email);
+  }
+
+  // A greeting gives a first name far more often than a surname. If an address
+  // in the thread supplies one for the same person, complete the name with it.
+  if (name && !name.lastName && email) {
+    const fromEmail = nameFromEmail(email);
+    if (
+      fromEmail?.lastName &&
+      fromEmail.firstName.toLowerCase() === name.firstName.toLowerCase()
+    ) {
+      name = { firstName: name.firstName, lastName: fromEmail.lastName };
+    }
   }
 
   return {
