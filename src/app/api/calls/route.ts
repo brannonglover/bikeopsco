@@ -37,6 +37,7 @@ export async function GET(request: NextRequest) {
         recordingStatus: true,
         transcriptionText: true,
         transcriptionStatus: true,
+        staffSeenAt: true,
         createdAt: true,
         customer: { select: { id: true, firstName: true, lastName: true, phone: true } },
         // recordingUrl is deliberately absent: it's a Twilio media URL that

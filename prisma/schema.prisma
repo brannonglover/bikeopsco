@@ -92,6 +92,12 @@ model Customer {
   /// placeholder (the formatted number) until staff fill in the real details
   /// with "Create contact" in the inbox, which clears this.
   provisional                  Boolean             @default(false)
+  /// When staff first opened this provisional contact's thread. Drops the "New"
+  /// badge from the inbox once seen, without waiting for the contact to be
+  /// named. Kept separate from Conversation.staffLastReadAt, which is only
+  /// written when there is a customer message to mark read — a thread opened
+  /// from a call has none.
+  provisionalSeenAt            DateTime?
   address                      String?
   notes                        String?
   imageUrl                     String?
@@ -577,6 +583,10 @@ model Call {
   answeredAt          DateTime?
   endedAt             DateTime?
   durationSeconds     Int?
+  /// When staff opened this call in the log. Drops the "New" badge from a call
+  /// with no contact once seen; the call itself carries the flag because an
+  /// unidentified caller has no customer record to hang it on.
+  staffSeenAt         DateTime?
   recordingSid        String?
   recordingUrl        String?
   recordingStatus     String?

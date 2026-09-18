@@ -36,6 +36,8 @@ export interface Customer {
   smsConsentUpdatedAt?: string | null;
   /** Auto-created to hold a text from an unknown number; name is a placeholder. */
   provisional?: boolean;
+  /** When staff first opened the thread; clears the inbox "New" badge. */
+  provisionalSeenAt?: string | null;
   address: string | null;
   notes: string | null;
   createdAt: string;

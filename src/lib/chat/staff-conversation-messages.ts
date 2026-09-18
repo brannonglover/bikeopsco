@@ -180,6 +180,27 @@ export async function loadStaffConversationMessages(
   // Mark read after payload is ready — don't block the response on the write.
   // Only on the newest page (no beforeId).
   if (!options.beforeId) {
+    // Opening the thread counts as seeing the contact, which clears the inbox
+    // "New" badge. Deliberately independent of staffLastReadAt below: that is
+    // only written when there is a customer message to mark read, and a thread
+    // opened from a call has none, so the badge would never clear.
+    void prisma.customer
+      .updateMany({
+        where: {
+          shopId,
+          provisional: true,
+          provisionalSeenAt: null,
+          conversations: { some: { id: conversationId } },
+        },
+        data: { provisionalSeenAt: new Date() },
+      })
+      .catch((e) =>
+        console.warn("[chat] Failed to mark provisionalSeenAt; continuing:", {
+          conversationId,
+          error: e,
+        })
+      );
+
     // Optimistic: if the page includes a customer message newer than last read,
     // return the bumped timestamp immediately while the write runs in background.
     const latestInPage = messages.reduce<Date | null>((latest, message) => {
