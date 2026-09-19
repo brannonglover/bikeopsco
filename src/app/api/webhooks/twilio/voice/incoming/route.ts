@@ -3,7 +3,11 @@ import { prisma } from "@/lib/db";
 import { findCustomerIdBySmsFrom } from "@/lib/chat-sms";
 import { findOrCreateGeneralConversation } from "@/lib/conversation";
 import { formatPhoneDisplay, normalizePhone } from "@/lib/phone";
-import { sendPushToAllStaff } from "@/lib/push";
+import {
+  INCOMING_CALL_CHANNEL_ID,
+  INCOMING_CALL_SOUND,
+  sendPushToAllStaff,
+} from "@/lib/push";
 import {
   authenticateVoiceWebhook,
   buildIncomingCallTwiml,
@@ -78,6 +82,14 @@ export async function POST(request: NextRequest) {
   await sendPushToAllStaff(shop.id, {
     title: "Incoming call",
     body: callerLabel,
+    // Everything that makes this sound like a phone ringing rather than
+    // another notification: its own tone, its own Android channel, and
+    // priorities that keep a dozing phone or a Focus mode from sitting on it
+    // until the caller has already been sent to voicemail.
+    sound: INCOMING_CALL_SOUND,
+    channelId: INCOMING_CALL_CHANNEL_ID,
+    priority: "high",
+    interruptionLevel: "time-sensitive",
     data: {
       type: "incoming_call",
       callId: call.id,

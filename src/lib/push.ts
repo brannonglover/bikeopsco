@@ -2,13 +2,33 @@ import { prisma } from "@/lib/db";
 
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 
+/**
+ * The staff app's ring, named on both sides of the push.
+ *
+ * iOS takes the sound by filename; Android takes it from the channel, and
+ * drops outright any notification naming a channel the device has not created
+ * yet. Both must match lib/notifications.ts in the staff app — and because the
+ * ringtone is bundled into the binary and an Android channel's settings freeze
+ * the first time it is created, an app build carrying them has to reach staff
+ * devices before this server starts asking for them.
+ */
+export const INCOMING_CALL_SOUND = "incoming_call.wav";
+export const INCOMING_CALL_CHANNEL_ID = "incoming_call_v1";
+
 interface ExpoPushMessage {
   to: string;
-  sound?: "default" | null;
+  /** "default" for the stock notification tone, or a filename bundled in the app. */
+  sound?: string | null;
   title?: string;
   body?: string;
   data?: Record<string, unknown>;
   badge?: number;
+  /** Android only — which notification channel rings, vibrates and shows this. */
+  channelId?: string;
+  /** "high" wakes a dozing Android device instead of batching for later. */
+  priority?: "default" | "normal" | "high";
+  /** iOS only — "time-sensitive" lets it through Focus modes. */
+  interruptionLevel?: "active" | "critical" | "passive" | "time-sensitive";
 }
 
 interface ExpoPushTicket {
@@ -29,7 +49,7 @@ async function sendPushToTokens(
   const valid = tokens.filter(isExpoPushToken);
   if (valid.length === 0) return;
 
-  const messages: ExpoPushMessage[] = valid.map((to) => ({ to, sound: "default", ...message }));
+  const messages: ExpoPushMessage[] = valid.map((to) => ({ to, ...message }));
 
   try {
     const res = await fetch(EXPO_PUSH_URL, {
@@ -71,6 +91,30 @@ export interface PushPayload {
   title: string;
   body: string;
   data?: Record<string, unknown>;
+  /**
+   * How loudly this one should arrive. Left out, a notification gets the
+   * stock tone on the default channel, which is right for everything that can
+   * wait; an inbound call cannot, so it sets all of these.
+   */
+  sound?: string;
+  channelId?: string;
+  priority?: "default" | "normal" | "high";
+  interruptionLevel?: "active" | "critical" | "passive" | "time-sensitive";
+}
+
+/** The fields Expo sends, with the defaults every ordinary notification uses. */
+function toExpoMessage(payload: PushPayload): Omit<ExpoPushMessage, "to"> {
+  return {
+    title: payload.title,
+    body: payload.body,
+    data: payload.data,
+    sound: payload.sound ?? "default",
+    ...(payload.channelId ? { channelId: payload.channelId } : {}),
+    ...(payload.priority ? { priority: payload.priority } : {}),
+    ...(payload.interruptionLevel
+      ? { interruptionLevel: payload.interruptionLevel }
+      : {}),
+  };
 }
 
 /** True when the customer has registered the mobile app for this shop (push token present). */
@@ -90,7 +134,7 @@ export async function sendPushToCustomer(
   const records = await prisma.pushToken.findMany({ where: { shopId, customerId } });
   await sendPushToTokens(
     records.map((r) => r.token),
-    { title: payload.title, body: payload.body, data: payload.data }
+    toExpoMessage(payload)
   );
 }
 
@@ -106,6 +150,6 @@ export async function sendPushToAllStaff(shopId: string, payload: PushPayload): 
   }
   await sendPushToTokens(
     records.map((r) => r.token),
-    { title: payload.title, body: payload.body, data: payload.data }
+    toExpoMessage(payload)
   );
 }
