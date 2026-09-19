@@ -20,10 +20,9 @@ function twiml(body: string): string {
 }
 
 /**
- * How long a caller waits in the queue before being sent to voicemail. This
- * replaces the old <Dial timeout>: it has to cover push delivery plus app
- * launch plus the dequeue leg, so it is longer than the 20s a direct
- * <Client> ring needed.
+ * How long staff devices ring before the caller is sent to voicemail. Roughly
+ * what a desk phone gives you, and comfortably more than the VoIP push needs
+ * to wake a sleeping device and raise the CallKit screen.
  */
 export const RING_SECONDS = 25;
 
@@ -33,26 +32,90 @@ export function buildQueueName(shopId: string): string {
 }
 
 /**
- * TwiML for /incoming: park the caller in the shop's queue and let the push
- * notification do the ringing.
+ * TwiML for /incoming: ring every registered staff device as a real call.
  *
- * This deliberately does NOT <Dial><Client>. Dialing a Client makes Twilio
- * send a PushKit VoIP push, and iOS then *requires* the app to hand the call
- * to CallKit — which is the native call screen we are trying not to show.
- * Parking the caller instead means staff are alerted by an ordinary push
- * notification and answer by dialing into this queue (see buildDequeueTwiml).
+ * Dialing <Client> is precisely what makes Twilio send a PushKit VoIP push,
+ * which iOS then requires the app to hand to CallKit. That used to be the
+ * thing this avoided; it is now the thing it is for. Only a CallKit call
+ * rings until it is answered, declined or times out, rings through the silent
+ * switch, and reaches a paired Apple Watch — an ordinary notification gets one
+ * short alert, and a worn Watch takes even that off the phone. The app dresses
+ * the system screen with the shop's own ringtone and icon via
+ * setCallKitConfiguration, so what staff see still reads as this app.
+ *
+ * answerOnBridge keeps the caller hearing ringback instead of being answered
+ * the instant this document runs — the same reason /outgoing sets it.
  */
 export function buildIncomingCallTwiml(opts: {
-  queueName: string;
-  waitUrl: string;
+  clientIdentities: string[];
   actionUrl: string;
+  voicemailUrl: string;
+  /**
+   * Ridden along on the invite as <Parameter>, which is the only way to get
+   * anything to the device before it answers. The app reads these to name the
+   * caller on the ringing screen rather than showing a bare number.
+   */
+  clientParameters?: Record<string, string>;
+  ringSeconds?: number;
 }): string {
-  const { queueName, waitUrl, actionUrl } = opts;
+  const {
+    clientIdentities,
+    actionUrl,
+    voicemailUrl,
+    clientParameters = {},
+    ringSeconds = RING_SECONDS,
+  } = opts;
+
+  // Nobody has a device registered, so there is no one to ring. Going straight
+  // to voicemail beats an empty <Dial>, which would spend the whole ring
+  // window on silence before arriving in the same place.
+  if (clientIdentities.length === 0) {
+    return twiml(`<Redirect method="POST">${escapeXml(voicemailUrl)}</Redirect>`);
+  }
+
+  // Empty values are dropped rather than sent: Twilio rejects a <Parameter>
+  // with no value, which would fail the whole call over a missing name.
+  const parameters = Object.entries(clientParameters)
+    .filter(([, value]) => value !== "")
+    .map(
+      ([name, value]) =>
+        `<Parameter name="${escapeXml(name)}" value="${escapeXml(value)}"/>`
+    )
+    .join("");
+
+  const clients = clientIdentities
+    .map(
+      (identity) =>
+        `<Client><Identity>${escapeXml(identity)}</Identity>${parameters}</Client>`
+    )
+    .join("");
+
   return twiml(
-    `<Enqueue waitUrl="${escapeXml(waitUrl)}" waitUrlMethod="POST" ` +
-      `action="${escapeXml(actionUrl)}" method="POST">` +
-      `${escapeXml(queueName)}</Enqueue>`
+    `<Dial timeout="${ringSeconds}" answerOnBridge="true" ringTone="us" ` +
+      `action="${escapeXml(actionUrl)}" method="POST">${clients}</Dial>`
   );
+}
+
+/**
+ * TwiML for /dialed — the <Dial> action URL, reached once the ring ends
+ * however it ended.
+ *
+ * "completed" means a device picked up and the conversation has since
+ * finished, so the caller is done. Every other outcome — nobody answered in
+ * time, every device declined, no device was reachable — still owes them a
+ * voicemail. Branching here rather than letting TwiML fall through past <Dial>
+ * is what stops an answered call from landing in voicemail after both parties
+ * hang up.
+ */
+export function buildDialedTwiml(opts: {
+  dialCallStatus: string | undefined;
+  voicemailUrl: string;
+}): string {
+  const { dialCallStatus, voicemailUrl } = opts;
+  if (dialCallStatus === "completed" || dialCallStatus === "answered") {
+    return twiml("<Hangup/>");
+  }
+  return twiml(`<Redirect method="POST">${escapeXml(voicemailUrl)}</Redirect>`);
 }
 
 /**

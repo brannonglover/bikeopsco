@@ -2,19 +2,6 @@ import { prisma } from "@/lib/db";
 
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 
-/**
- * The staff app's ring, named on both sides of the push.
- *
- * iOS takes the sound by filename; Android takes it from the channel, and
- * drops outright any notification naming a channel the device has not created
- * yet. Both must match lib/notifications.ts in the staff app — and because the
- * ringtone is bundled into the binary and an Android channel's settings freeze
- * the first time it is created, an app build carrying them has to reach staff
- * devices before this server starts asking for them.
- */
-export const INCOMING_CALL_SOUND = "incoming_call.wav";
-export const INCOMING_CALL_CHANNEL_ID = "incoming_call_v1";
-
 interface ExpoPushMessage {
   to: string;
   /** "default" for the stock notification tone, or a filename bundled in the app. */
@@ -104,9 +91,10 @@ export interface PushPayload {
   body: string;
   data?: Record<string, unknown>;
   /**
-   * How loudly this one should arrive. Left out, a notification gets the
-   * stock tone on the default channel, which is right for everything that can
-   * wait; an inbound call cannot, so it sets all of these.
+   * How loudly this one should arrive. Left out — as everything does today —
+   * a notification gets the stock tone on the default channel. A ringing call
+   * no longer comes through here at all: it rings as a real call over CallKit,
+   * so nothing left in this file needs to shout.
    */
   sound?: string;
   channelId?: string;
