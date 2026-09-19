@@ -70,6 +70,18 @@ async function sendPushToTokens(
     const result = (await res.json()) as { data: ExpoPushTicket[] };
     const tickets = result.data ?? [];
 
+    // Expo answers 200 even when it refuses individual messages, so the
+    // per-ticket status is the only place a failed push shows up. Leaving it
+    // unlogged made a push that never arrived look exactly like one that did,
+    // which is worth a line even though nothing here can retry it.
+    const failures = tickets.filter((t) => t.status === "error");
+    if (failures.length > 0) {
+      console.error(
+        `[push] Expo rejected ${failures.length}/${tickets.length} message(s):`,
+        failures.map((t) => t.details?.error ?? t.message ?? "unknown").join(", ")
+      );
+    }
+
     // Clean up stale tokens that are no longer registered
     const staleTokens: string[] = [];
     tickets.forEach((ticket, i) => {
@@ -132,6 +144,9 @@ export async function sendPushToCustomer(
   payload: PushPayload
 ): Promise<void> {
   const records = await prisma.pushToken.findMany({ where: { shopId, customerId } });
+  console.log(
+    `[push] sending "${payload.title}" to ${records.length} staff device(s) in shop ${shopId}`
+  );
   await sendPushToTokens(
     records.map((r) => r.token),
     toExpoMessage(payload)
@@ -148,6 +163,9 @@ export async function sendPushToAllStaff(shopId: string, payload: PushPayload): 
     );
     return;
   }
+  console.log(
+    `[push] sending "${payload.title}" to ${records.length} staff device(s) in shop ${shopId}`
+  );
   await sendPushToTokens(
     records.map((r) => r.token),
     toExpoMessage(payload)
