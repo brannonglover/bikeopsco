@@ -72,17 +72,12 @@ export function mintVoiceAccessToken(identity: string, platform: VoicePlatform):
     throw new Error("Twilio Voice is not configured");
   }
 
-  // The device registers this token with Twilio, and this SID is what tells
-  // Twilio where to send the VoIP push that rings it. Without it an inbound
-  // call reaches a registered device only while the app happens to be running,
-  // which is the one case staff least need it.
+  // Retained only so a device *could* register for Twilio push. Nothing does
+  // today: inbound calls ring via an ordinary notification and are answered by
+  // dialing into the shop queue, precisely so iOS never forces the call onto
+  // the CallKit screen. Its absence is therefore not worth warning about.
   const pushCredentialSid =
     platform === "ios" ? iosPushCredentialSid : androidPushCredentialSid;
-  if (!pushCredentialSid) {
-    console.warn(
-      `[voice] No ${platform} push credential configured — inbound calls will not ring this device in the background.`
-    );
-  }
 
   const AccessToken = Twilio.jwt.AccessToken;
   const token = new AccessToken(accountSid, apiKeySid, apiKeySecret, {
@@ -198,7 +193,6 @@ export {
   RING_SECONDS,
   buildQueueName,
   buildIncomingCallTwiml,
-  buildDialedTwiml,
   buildQueueWaitTwiml,
   buildDequeuedTwiml,
   buildDequeueTwiml,

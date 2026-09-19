@@ -4,9 +4,14 @@ import { findCustomerIdBySmsFrom } from "@/lib/chat-sms";
 import { findOrCreateGeneralConversation } from "@/lib/conversation";
 import { formatPhoneDisplay, normalizePhone } from "@/lib/phone";
 import {
+  INCOMING_CALL_CHANNEL_ID,
+  INCOMING_CALL_SOUND,
+  sendPushToAllStaff,
+} from "@/lib/push";
+import {
   authenticateVoiceWebhook,
   buildIncomingCallTwiml,
-  getStaffIdentitiesForShop,
+  buildQueueName,
   getVoiceWebhookBaseUrl,
 } from "@/lib/voice";
 
@@ -20,10 +25,9 @@ function xmlResponse(xml: string): NextResponse {
  * Twilio inbound Voice webhook — configure on the shop's Twilio number:
  * Voice → "A call comes in" → POST https://YOUR_SHOP.bikeops.co/api/webhooks/twilio/voice/incoming
  *
- * Rings every registered staff device as a real call: <Dial><Client> makes
- * Twilio send a VoIP push, which the app hands to CallKit. See
- * buildIncomingCallTwiml for why that is now the point rather than the thing
- * being avoided, and /dialed for where an unanswered call ends up.
+ * The caller is parked in the shop queue and staff are alerted with an
+ * ordinary push notification; tapping it dials them into the queue. See
+ * buildIncomingCallTwiml for why this no longer dials <Client> directly.
  */
 export async function POST(request: NextRequest) {
   const ctx = await authenticateVoiceWebhook(request);
@@ -63,39 +67,48 @@ export async function POST(request: NextRequest) {
     update: {},
   });
 
-  // Named while the phone is still ringing: <Parameter> is the only channel to
-  // the device before it answers, so this is what puts a customer's name on
-  // the CallKit screen instead of a bare number.
   const customer = customerId
     ? await prisma.customer.findUnique({
         where: { id: customerId },
         select: { firstName: true, lastName: true },
       })
     : null;
-  const customerName = customer
+  const callerLabel = customer
     ? [customer.firstName, customer.lastName].filter(Boolean).join(" ")
-    : "";
+    : formatPhoneDisplay(fromE164);
 
-  // Twilio rings the devices itself from here on, so nothing is sent over the
-  // ordinary notification channel: a second alert alongside the CallKit screen
-  // is noise. The "missed call" push is raised in /dialed instead, once the
-  // ring is over and there is actually something to report.
-  const base = getVoiceWebhookBaseUrl(request);
-  const identities = await getStaffIdentitiesForShop(shop.id);
-  if (identities.length === 0) {
-    console.warn(
-      `[voice] No staff identities for shop ${shop.id} — the caller goes straight to voicemail.`
-    );
-  }
-
-  const twiml = buildIncomingCallTwiml({
-    clientIdentities: identities,
-    actionUrl: `${base}/api/webhooks/twilio/voice/dialed`,
-    voicemailUrl: `${base}/api/webhooks/twilio/voice/voicemail`,
-    clientParameters: {
+  // This push *is* the ring — it has to go out before the TwiML response, or
+  // the caller starts holding before any device has been told to wake up.
+  await sendPushToAllStaff(shop.id, {
+    title: "Incoming call",
+    body: callerLabel,
+    // Everything that makes this sound like a phone ringing rather than
+    // another notification: its own tone, its own Android channel, and
+    // priorities that keep a dozing phone or a Focus mode from sitting on it
+    // until the caller has already been sent to voicemail.
+    sound: INCOMING_CALL_SOUND,
+    channelId: INCOMING_CALL_CHANNEL_ID,
+    priority: "high",
+    interruptionLevel: "time-sensitive",
+    data: {
+      type: "incoming_call",
       callId: call.id,
-      customerName: customerName || formatPhoneDisplay(fromE164),
+      callSid,
+      from: fromE164,
+      customerId,
+      customerName: customer ? callerLabel : null,
     },
+  }).catch((error) => {
+    // A push failure must not take the call down — the caller should still
+    // reach voicemail rather than hear an error.
+    console.error("[voice] staff push for incoming call failed:", error);
+  });
+
+  const base = getVoiceWebhookBaseUrl(request);
+  const twiml = buildIncomingCallTwiml({
+    queueName: buildQueueName(shop.id),
+    waitUrl: `${base}/api/webhooks/twilio/voice/wait`,
+    actionUrl: `${base}/api/webhooks/twilio/voice/dequeued`,
   });
 
   return xmlResponse(twiml);
