@@ -74,6 +74,79 @@ async function fetchPage(url: URL): Promise<string | null> {
   }
 }
 
+/**
+ * Pulls what a page states about itself in its <head>: the meta description and
+ * any schema.org JSON-LD.
+ *
+ * On a site whose body is built client-side there is no prose in the HTML at
+ * all, but the head is still served — and for a small business it usually
+ * carries the description, address, and phone. That is worth far more than the
+ * page title on its own.
+ */
+function extractStructuredData(html: string): string {
+  const parts: string[] = [];
+
+  const description = html.match(
+    /<meta[^>]+name=["\']description["\'][^>]+content=["\']([^"\']+)["\']/i
+  );
+  if (description?.[1]) parts.push(description[1].trim());
+
+  const blocks = html.matchAll(
+    /<script[^>]*type=["\']application\/ld\+json["\'][^>]*>([\s\S]*?)<\/script>/gi
+  );
+  for (const block of blocks) {
+    let data: unknown;
+    try {
+      data = JSON.parse(block[1]);
+    } catch {
+      continue;
+    }
+    // Flatten a @graph wrapper so one business object isn't missed inside it.
+    const entries = Array.isArray(data)
+      ? data
+      : (data as { "@graph"?: unknown })?.["@graph"] &&
+          Array.isArray((data as { "@graph": unknown[] })["@graph"])
+        ? (data as { "@graph": unknown[] })["@graph"]
+        : [data];
+
+    for (const entry of entries) {
+      if (!entry || typeof entry !== "object") continue;
+      const record = entry as Record<string, unknown>;
+      const lines: string[] = [];
+      const str = (key: string) =>
+        typeof record[key] === "string" ? (record[key] as string).trim() : null;
+
+      const name = str("name");
+      const type = str("@type");
+      if (name) lines.push(`${name}${type ? ` (${type})` : ""}`);
+      const entryDescription = str("description");
+      if (entryDescription && entryDescription !== description?.[1]?.trim()) {
+        lines.push(entryDescription);
+      }
+      for (const key of ["telephone", "email", "priceRange", "openingHours"]) {
+        const value = str(key);
+        if (value) lines.push(`${key}: ${value}`);
+      }
+      const address = record.address as Record<string, unknown> | undefined;
+      if (address && typeof address === "object") {
+        const formatted = [
+          "streetAddress",
+          "addressLocality",
+          "addressRegion",
+          "postalCode",
+        ]
+          .map((key) => (typeof address[key] === "string" ? address[key] : null))
+          .filter(Boolean)
+          .join(", ");
+        if (formatted) lines.push(`address: ${formatted}`);
+      }
+      if (lines.length) parts.push(lines.join("\n"));
+    }
+  }
+
+  return parts.join("\n\n").trim();
+}
+
 /** Strips scripts, styles, and markup, leaving readable prose. */
 function htmlToText(html: string): string {
   return html
@@ -138,6 +211,12 @@ export type WebsiteImportResult = {
   text: string;
   /** Every page that contributed, in the order it was read. */
   pages: string[];
+  /**
+   * True when the site builds itself in the browser, so the page source held
+   * almost no prose. Whatever came back is metadata, not the real page, and the
+   * caller must say so rather than implying the site was read.
+   */
+  clientRendered: boolean;
 };
 
 /**
@@ -160,9 +239,18 @@ export async function importWebsiteKnowledge(
   const sections: string[] = [];
   const pages: string[] = [];
 
+  const structured = extractStructuredData(entryHtml);
   const entryText = htmlToText(entryHtml);
-  if (entryText) {
-    sections.push(`## ${entry.toString()}\n\n${entryText}`);
+
+  // A single-page app serves a near-empty shell: a title, some meta tags, and a
+  // div for the framework to fill in. Short body text next to real scripts is
+  // that shell, not a thin page.
+  const clientRendered =
+    entryText.length < 400 && /<script[\s>]/i.test(entryHtml);
+
+  const entryBody = [structured, entryText].filter(Boolean).join("\n\n");
+  if (entryBody) {
+    sections.push(`## ${entry.toString()}\n\n${entryBody}`);
     pages.push(entry.toString());
   }
 
@@ -182,5 +270,5 @@ export async function importWebsiteKnowledge(
     );
   }
 
-  return { url: entry.toString(), text: combined, pages };
+  return { url: entry.toString(), text: combined, pages, clientRendered };
 }

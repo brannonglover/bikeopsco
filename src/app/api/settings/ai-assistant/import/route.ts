@@ -32,6 +32,7 @@ export async function POST(request: NextRequest) {
       websiteUrl: result.url,
       knowledge: result.text,
       pages: result.pages,
+      clientRendered: result.clientRendered,
     });
   } catch (error) {
     if (error instanceof WebsiteImportError) {

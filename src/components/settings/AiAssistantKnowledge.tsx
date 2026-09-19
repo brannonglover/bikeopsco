@@ -74,6 +74,15 @@ export function AiAssistantKnowledge({ disabled }: { disabled?: boolean }) {
       setKnowledge(data.knowledge);
       setDirty(true);
       const pageCount = Array.isArray(data.pages) ? data.pages.length : 1;
+      if (data.clientRendered) {
+        // Saying "read 1 page" here would be a lie of omission: what came back
+        // is the page's metadata, and the services almost certainly aren't in
+        // it. Send them to the site to copy the real thing.
+        setError(
+          "Your site builds its pages in the browser, so there was almost nothing to read in the page source — only the site description below. Open your site, copy your services and prices, and paste them in here."
+        );
+        return;
+      }
       setNotice(
         `Read ${pageCount} page${pageCount === 1 ? "" : "s"}. Check it over and trim anything the assistant shouldn't repeat, then save.`
       );
