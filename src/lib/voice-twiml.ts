@@ -159,9 +159,20 @@ export function buildDequeueTwiml(opts: {
  * mobile Voice SDK places an outbound call. Dials the PSTN leg to the
  * customer, showing the shop's Twilio number as caller ID.
  *
- * ringTone is pinned to "us" so the caller hears a familiar US ringback
- * while the customer's phone rings. Without it Twilio picks its own default,
- * which sounds foreign enough that staff mistake it for a failed call.
+ * answerOnBridge is what makes the staff device behave like a phone. Without
+ * it Twilio answers the app's leg the instant this document runs, so the
+ * Voice SDK jumps straight to Connected while the customer's phone has not
+ * even rung: the app starts its duration timer on a call nobody has picked
+ * up, and — because the SDK only plays ringback from its own `callDidStartRinging`
+ * / `onRinging` callback, which that shortcut skips — the line is silent.
+ * Staff had no way to tell a ringing phone from an answered one.
+ *
+ * With it, the app's leg stays unanswered until the customer picks up, so
+ * the SDK passes through Ringing (audible ringback, "Calling…" on screen)
+ * and reaches Connected — the timer's start — only on a real answer.
+ *
+ * ringTone is pinned to "us" so a caller Twilio does generate ringback for
+ * hears a familiar US tone rather than Twilio's foreign-sounding default.
  */
 export function buildOutgoingCallTwiml(opts: {
   toNumber: string;
@@ -170,7 +181,7 @@ export function buildOutgoingCallTwiml(opts: {
 }): string {
   const { toNumber, callerId, statusCallbackUrl } = opts;
   return twiml(
-    `<Dial callerId="${escapeXml(callerId)}" ringTone="us">` +
+    `<Dial callerId="${escapeXml(callerId)}" answerOnBridge="true" ringTone="us">` +
       `<Number statusCallback="${escapeXml(statusCallbackUrl)}" ` +
       `statusCallbackEvent="initiated ringing answered completed" statusCallbackMethod="POST">` +
       `${escapeXml(toNumber)}</Number></Dial>`
