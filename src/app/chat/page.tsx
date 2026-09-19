@@ -11,6 +11,7 @@ import { useVisibilityAwarePolling } from "@/hooks/useVisibilityAwarePolling";
 import type { StaffConversationMessagesPayload } from "@/lib/chat/staff-conversation-messages";
 import { ChatMessageBubble } from "@/components/chat/ChatMessageBubble";
 import { ConversationListRow } from "@/components/chat/ConversationListRow";
+import { AiAssistantBanner } from "@/components/chat/AiAssistantBanner";
 import { CreateContactModal } from "@/components/chat/CreateContactModal";
 import { mergeChatMessagesWithServer } from "@/lib/chat-messages";
 import {
@@ -1478,6 +1479,26 @@ function ChatPageContent() {
                   <InviteButton customerId={selectedConv.customerId} />
                 )}
               </header>
+
+              {selectedConv && (
+                <AiAssistantBanner
+                  conversation={selectedConv}
+                  onChange={(updated) => {
+                    const merge = (prev: Conversation[]) =>
+                      prev.map((c) =>
+                        c.id === updated.id
+                          ? {
+                              ...c,
+                              aiAssistantState: updated.aiAssistantState,
+                              aiAssistantSummary: updated.aiAssistantSummary,
+                            }
+                          : c
+                      );
+                    setConversations(merge);
+                    setArchivedConvs(merge);
+                  }}
+                />
+              )}
 
               {/* Clip scroll overscroll so elastic bounce doesn’t distort the composer below */}
               <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">

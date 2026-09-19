@@ -125,6 +125,8 @@ export interface ChatMessage {
   smsDeliveryStatusDescription?: string | null;
   smsDeliveryError?: string | null;
   smsDeliveredAt?: string | null;
+  /** Written by the AI assistant rather than a person at the shop. */
+  aiGenerated?: boolean;
   /**
    * Client-only delivery indicator for optimistic UI (not persisted).
    * - SENDING: request in flight
@@ -152,6 +154,10 @@ export interface Conversation {
   staffLastReadAt?: string | null;
   /** ISO time when the customer last loaded this thread; "Viewed" indicator on staff messages. */
   customerLastReadAt?: string | null;
+  /** Whether the AI assistant is handling this thread. */
+  aiAssistantState?: "OFF" | "ACTIVE" | "PAUSED" | "DONE";
+  /** What the assistant learned before handing the thread over. */
+  aiAssistantSummary?: string | null;
   createdAt: string;
   updatedAt: string;
 }

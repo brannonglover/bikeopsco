@@ -50,6 +50,7 @@ type SerializableMessage = {
   smsDeliveryStatusDescription?: string | null;
   smsDeliveryError?: string | null;
   smsDeliveredAt?: Date | null;
+  aiGenerated?: boolean;
   attachments: Array<{
     id: string;
     url: string;
@@ -83,5 +84,6 @@ export function serializeChatMessages(messages: SerializableMessage[]): ChatMess
     smsDeliveryStatusDescription: message.smsDeliveryStatusDescription ?? null,
     smsDeliveryError: message.smsDeliveryError ?? null,
     smsDeliveredAt: message.smsDeliveredAt?.toISOString() ?? null,
+    aiGenerated: message.aiGenerated ?? false,
   }));
 }

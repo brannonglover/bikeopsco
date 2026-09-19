@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { startAssistantCallOutreach } from "@/lib/ai/call-outreach";
 import { authenticateVoiceWebhook, mapTwilioCallStatus } from "@/lib/voice";
 
 export const runtime = "nodejs";
@@ -75,6 +76,25 @@ export async function POST(request: NextRequest) {
           : call.durationSeconds,
     },
   });
+
+  // A caller who rang off before voicemail leaves no recording and no
+  // transcript, so this callback is the only place the AI assistant can learn
+  // they tried. Calls that reached voicemail are handled from the recording
+  // and transcription callbacks instead, which know what was said.
+  // mapTwilioCallStatus never returns VOICEMAIL — that status is written by
+  // the voicemail route itself, so the stored one is what rules it out here.
+  const wentUnanswered =
+    TERMINAL_STATUSES.has(status) &&
+    call.status !== "VOICEMAIL" &&
+    !call.answeredAt &&
+    !call.recordingSid;
+  if (wentUnanswered) {
+    await startAssistantCallOutreach({
+      shopId: shop.id,
+      callId: call.id,
+      trigger: "missed_call",
+    });
+  }
 
   return new NextResponse("ok", { status: 200 });
 }

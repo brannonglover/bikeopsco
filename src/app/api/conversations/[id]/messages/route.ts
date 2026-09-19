@@ -1,25 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getConfiguredSmsProvider, sendChatStaffSms } from "@/lib/sms";
-import {
-  customerHasPushTokens,
-  sendPushToCustomer,
-  sendPushToAllStaff,
-} from "@/lib/push";
+import { sendPushToAllStaff } from "@/lib/push";
 import { sendStaffNewChatMessageNotification } from "@/lib/email";
 import { z } from "zod";
 import { isChatEnabled } from "@/lib/app-settings";
 import { loadStaffConversationMessages } from "@/lib/chat/staff-conversation-messages";
 import { parseMessagePageOptions } from "@/lib/chat/message-page";
-import {
-  customerHasSmsChatAccess,
-  findActiveJobIdForCustomer,
-} from "@/lib/chat-session";
+import { deliverStaffMessage } from "@/lib/chat/send-staff-message";
 import {
   resolveStaffConversation,
   resolveStaffConversationForRead,
 } from "@/lib/conversation";
-import { getEffectiveSmsConsent } from "@/lib/sms-consent";
 import { requireCurrentShop } from "@/lib/shop";
 import { attachmentNotificationLabel } from "@/lib/chat-media";
 
@@ -132,86 +123,31 @@ export async function POST(
       data: { updatedAt: new Date() },
     });
 
-    const shopName = shop.name;
-
     if (sender === "STAFF") {
-      const hasText = Boolean(bodyText?.trim());
-      const hasAtt = Boolean(attachmentIds?.length);
-      // App users get push instead of a parallel SMS for the same message.
-      const preferAppPush = await customerHasPushTokens(
-        shop.id,
-        requested.customerId
-      );
-
-      if (
-        !preferAppPush &&
-        requested.customer.phone &&
-        getEffectiveSmsConsent(requested.customer) &&
-        (await customerHasSmsChatAccess(shop.id, requested.customerId))
-      ) {
-        const activeJobId = await findActiveJobIdForCustomer(
-          shop.id,
-          requested.customerId
-        );
-        const attachmentPayload = message.attachments.map((a) => ({
-          url: a.url,
-          mimeType: a.mimeType,
-        }));
-        const updateSmsDelivery = (smsText: string, attachmentOnly = false) => {
-          sendChatStaffSms(requested.customer.phone!, smsText, {
-            attachmentOnly,
-            includeChatUrl: attachmentOnly || hasAtt,
-            shopSubdomain: shop.subdomain,
-            messageId: message.id,
-            jobId: activeJobId ?? undefined,
-            shopId: shop.id,
-            attachments: attachmentPayload,
-          })
-            .then((result) =>
-              prisma.message.update({
-                where: { id: message.id },
-                data: {
-                  smsProvider: result.provider ?? getConfiguredSmsProvider(),
-                  smsSid: result.externalMessageId,
-                  smsDeliveryStatus: result.ok
-                    ? result.externalStatus ?? "SENT"
-                    : "FAILED",
-                  smsDeliveryStatusName: result.ok
-                    ? result.externalStatusName ?? null
-                    : "SEND_FAILED",
-                  smsDeliveryStatusDescription: result.ok
-                    ? result.externalStatusDescription ?? null
-                    : result.error ?? null,
-                  smsDeliveryError: result.ok ? null : result.error ?? "SMS send failed",
-                },
-              })
-            )
-            .catch((err) =>
-              console.error("Chat SMS delivery persistence failed:", err)
-            );
-        };
-
-        if (hasText) {
-          updateSmsDelivery(bodyText!.trim());
-        } else if (hasAtt) {
-          updateSmsDelivery("", true);
-        }
+      // A person answering is the kill switch: the assistant stops the moment
+      // staff join the thread, without anyone having to find a toggle first.
+      // Its own messages are written with aiGenerated set, so they never
+      // trip this.
+      if (conversation.aiAssistantState === "ACTIVE") {
+        await prisma.conversation.update({
+          where: { id: targetConversationId },
+          data: { aiAssistantState: "PAUSED" },
+        });
       }
 
-      const pushBody = hasText
-        ? bodyText!.trim()
-        : hasAtt
-          ? attachmentNotificationLabel(message.attachments)
-          : "New message";
-      await sendPushToCustomer(shop.id, requested.customerId, {
-        title: shopName,
-        body: pushBody,
-        data: {
-          type: "new_message",
+      await deliverStaffMessage({
+        shop,
+        customer: requested.customer,
+        message: {
+          id: message.id,
           conversationId: targetConversationId,
-          messageId: message.id,
+          body: message.body,
+          attachments: message.attachments.map((a) => ({
+            url: a.url,
+            mimeType: a.mimeType,
+          })),
         },
-      }).catch((err) => console.error("Push notify customer:", err));
+      });
     }
 
     if (sender === "CUSTOMER") {

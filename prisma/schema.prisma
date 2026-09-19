@@ -470,6 +470,11 @@ model Conversation {
   staffLastReadAt    DateTime?
   /// When the customer last opened this thread (GET messages). Used for "Viewed" indicator on staff messages.
   customerLastReadAt DateTime?
+  /// Whether the AI assistant is handling this thread. See AiAssistantState.
+  aiAssistantState   AiAssistantState    @default(OFF)
+  /// What the assistant learned before it handed off, in one staff-facing line.
+  /// Written only on the handoff turn, so its presence means "ready for you".
+  aiAssistantSummary String?
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 
@@ -495,6 +500,10 @@ model Message {
   attachments                  MessageAttachment[]
   reactions                    MessageReaction[]
   chatReminderEmails           ChatReminderEmail[]
+  /// Written by the AI assistant rather than a person. Sent as STAFF so the
+  /// customer sees one voice from the shop, but staff see a badge — and a
+  /// genuine staff reply is what pauses the assistant, so the two must differ.
+  aiGenerated                  Boolean             @default(false)
   createdAt                    DateTime            @default(now())
   editedAt                     DateTime?
 
@@ -561,6 +570,19 @@ enum MessageSender {
   SYSTEM
 }
 
+/// Per-conversation kill switch for the AI assistant.
+enum AiAssistantState {
+  /// Never engaged here, or the thread predates the feature.
+  OFF
+  /// Answering the customer.
+  ACTIVE
+  /// Staff took over — explicitly, or by sending a message themselves.
+  /// Only staff resume it.
+  PAUSED
+  /// Got what it needed and handed off. Terminal; staff resume to reopen.
+  DONE
+}
+
 model Call {
   id                  String        @id @default(cuid())
   shopId              String
@@ -596,6 +618,10 @@ model Call {
   /// Twilio's TranscriptionStatus ("completed" | "failed"), or "in-progress"
   /// while we're waiting on the callback. Null means never requested.
   transcriptionStatus String?
+  /// When the AI assistant texted this caller back. Set once, and checked
+  /// before sending: voicemail, recording, and status callbacks can all land
+  /// for one missed call, and the caller must only be texted once.
+  aiOutreachAt        DateTime?
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
 
@@ -749,6 +775,17 @@ model AppSettings {
   /// Recorded voicemail greeting played to callers instead of the default
   /// synthesized <Say>. Must be a format Twilio's <Play> accepts (mp3/wav).
   voicemailGreetingUrl     String?
+  /// When true, the AI assistant texts callers who miss us and answers customer
+  /// texts until staff take over. Off by default: it speaks as the shop.
+  aiAssistantEnabled       Boolean  @default(false)
+  /// Shop website the service description was imported from. Kept so the
+  /// "import from site" button has somewhere to go back to.
+  aiAssistantWebsiteUrl    String?
+  /// What the assistant is allowed to say the shop offers. Imported from the
+  /// website once, then owned by staff — the assistant never re-fetches on its
+  /// own, so nothing a site edit introduces reaches a customer unreviewed.
+  aiAssistantKnowledge     String?
+  aiAssistantKnowledgeAt   DateTime?
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
 

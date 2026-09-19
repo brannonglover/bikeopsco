@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { startAssistantCallOutreach } from "@/lib/ai/call-outreach";
 import { authenticateVoiceWebhook } from "@/lib/voice";
 
 export const runtime = "nodejs";
@@ -33,6 +34,22 @@ export async function POST(request: NextRequest) {
       transcriptionText: text,
     },
   });
+
+  // Where the AI assistant picks up a voicemail. It waits for this callback
+  // rather than the recording one so its first text can name what the caller
+  // actually asked for — and this fires on a failed transcription too, so a
+  // caller is still texted back when the audio couldn't be read.
+  const call = await prisma.call.findFirst({
+    where: { shopId: shop.id, twilioParentCallSid: callSid },
+    select: { id: true },
+  });
+  if (call) {
+    await startAssistantCallOutreach({
+      shopId: shop.id,
+      callId: call.id,
+      trigger: "voicemail",
+    });
+  }
 
   return new NextResponse("ok", { status: 200 });
 }

@@ -28,11 +28,16 @@ export const SMS_CONSENT_SOURCES = {
   /** Customer texted the shop first, which is consent to be replied to. */
   INBOUND_SMS: "INBOUND_SMS",
   /**
-   * Staff answered an inbound call by text. The caller reached the shop with an
-   * enquiry and their number came in on caller ID, so a reply about that
+   * The shop answered an inbound call by text. The caller reached the shop with
+   * an enquiry and their number came in on caller ID, so a reply about that
    * enquiry is responsive to it — but it is a weaker record than INBOUND_SMS,
-   * which the customer put in writing. Only ever set from an explicit staff
-   * action on a call log entry, never automatically when a call arrives.
+   * which the customer put in writing.
+   *
+   * Set from exactly two places, both of which are a deliberate decision by the
+   * shop to answer a call by text: a staff action on a call log entry, and the
+   * AI assistant texting back a caller who reached voicemail or hung up, which
+   * only runs while the shop has that feature switched on. Never set merely
+   * because a call arrived.
    */
   INBOUND_CALL: "INBOUND_CALL",
   /** Staff attested that the customer agreed verbally on a call. */

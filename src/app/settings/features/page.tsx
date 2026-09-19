@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { broadcastAppFeaturesUpdated } from "@/contexts/AppFeaturesContext";
 import { US_SHOP_TIMEZONES } from "@/lib/timezone";
 import { FormSectionSkeleton } from "@/components/ui/Skeleton";
+import { AiAssistantKnowledge } from "@/components/settings/AiAssistantKnowledge";
 
 type AppFeatures = {
   bookingsEnabled: boolean;
@@ -19,6 +20,7 @@ type AppFeatures = {
   reviewsEnabled: boolean;
   rentalsEnabled: boolean;
   jobBoardFiltersEnabled: boolean;
+  aiAssistantEnabled: boolean;
   timezone: string;
   staffNotifyEmail: string | null;
 };
@@ -36,7 +38,8 @@ type FeatureFlagKey =
   | "voiceEnabled"
   | "reviewsEnabled"
   | "rentalsEnabled"
-  | "jobBoardFiltersEnabled";
+  | "jobBoardFiltersEnabled"
+  | "aiAssistantEnabled";
 
 const DEFAULT_FEATURES: AppFeatures = {
   bookingsEnabled: true,
@@ -52,6 +55,7 @@ const DEFAULT_FEATURES: AppFeatures = {
   reviewsEnabled: true,
   rentalsEnabled: true,
   jobBoardFiltersEnabled: false,
+  aiAssistantEnabled: false,
   timezone: "America/New_York",
   staffNotifyEmail: null,
 };
@@ -613,6 +617,23 @@ export default function FeatureSettingsPage() {
             disabled={featuresSaving}
             onChange={(v) => setFeatureFlag("jobBoardFiltersEnabled", v)}
           />
+
+          <div className="space-y-3 border-t border-surface-border pt-4">
+            <ToggleRow
+              title="AI assistant"
+              description="Texts customers who reach voicemail or hang up, and answers incoming texts, to find out what they need. It stops the moment you reply in a thread. Needs Chat switched on."
+              checked={features.aiAssistantEnabled}
+              disabled={featuresSaving || !features.chatEnabled}
+              onChange={(v) => setFeatureFlag("aiAssistantEnabled", v)}
+            />
+            {!features.chatEnabled && features.aiAssistantEnabled && (
+              <p className="text-sm text-amber-700 dark:text-amber-400">
+                Chat is off, so the assistant is not replying to anyone. Turn
+                Chat back on to resume it.
+              </p>
+            )}
+            <AiAssistantKnowledge disabled={featuresSaving} />
+          </div>
 
           {(featuresError || featuresSaved) && (
             <div className="pt-2">

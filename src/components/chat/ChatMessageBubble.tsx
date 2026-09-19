@@ -274,6 +274,9 @@ export function ChatMessageBubble({
               >
                 <span className="min-w-0">
                   {formatChatTime(msg.createdAt)}
+                  {msg.aiGenerated ? (
+                    <span className="opacity-80"> · AI assistant</span>
+                  ) : null}
                   {msg.editedAt ? <span className="opacity-80"> · Edited</span> : null}
                   {isOwn && viewed ? <span className="opacity-80"> · Viewed</span> : null}
                 </span>
@@ -390,6 +393,9 @@ export function ChatMessageBubble({
                 >
                   <span className="min-w-0">
                     {formatChatTime(msg.createdAt)}
+                    {msg.aiGenerated ? (
+                      <span className="opacity-80"> · AI assistant</span>
+                    ) : null}
                     {msg.editedAt ? <span className="opacity-80"> · Edited</span> : null}
                     {isOwn && viewed ? <span className="opacity-80"> · Viewed</span> : null}
                   </span>
