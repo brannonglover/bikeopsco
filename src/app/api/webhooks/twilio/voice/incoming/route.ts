@@ -2,17 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { findCustomerIdBySmsFrom } from "@/lib/chat-sms";
 import { findOrCreateGeneralConversation } from "@/lib/conversation";
-import { formatPhoneDisplay, normalizePhone } from "@/lib/phone";
-import {
-  INCOMING_CALL_CHANNEL_ID,
-  INCOMING_CALL_SOUND,
-  sendPushToAllStaff,
-} from "@/lib/push";
+import { normalizePhone } from "@/lib/phone";
 import {
   authenticateVoiceWebhook,
   buildIncomingCallTwiml,
   buildQueueName,
   getVoiceWebhookBaseUrl,
+  ringStaffForCall,
 } from "@/lib/voice";
 
 export const runtime = "nodejs";
@@ -51,7 +47,7 @@ export async function POST(request: NextRequest) {
     ? await findOrCreateGeneralConversation(shop.id, customerId)
     : null;
 
-  const call = await prisma.call.upsert({
+  await prisma.call.upsert({
     where: { shopId_twilioParentCallSid: { shopId: shop.id, twilioParentCallSid: callSid } },
     create: {
       shopId: shop.id,
@@ -67,38 +63,10 @@ export async function POST(request: NextRequest) {
     update: {},
   });
 
-  const customer = customerId
-    ? await prisma.customer.findUnique({
-        where: { id: customerId },
-        select: { firstName: true, lastName: true },
-      })
-    : null;
-  const callerLabel = customer
-    ? [customer.firstName, customer.lastName].filter(Boolean).join(" ")
-    : formatPhoneDisplay(fromE164);
-
-  // This push *is* the ring — it has to go out before the TwiML response, or
-  // the caller starts holding before any device has been told to wake up.
-  await sendPushToAllStaff(shop.id, {
-    title: "Incoming call",
-    body: callerLabel,
-    // Everything that makes this sound like a phone ringing rather than
-    // another notification: its own tone, its own Android channel, and
-    // priorities that keep a dozing phone or a Focus mode from sitting on it
-    // until the caller has already been sent to voicemail.
-    sound: INCOMING_CALL_SOUND,
-    channelId: INCOMING_CALL_CHANNEL_ID,
-    priority: "high",
-    interruptionLevel: "time-sensitive",
-    data: {
-      type: "incoming_call",
-      callId: call.id,
-      callSid,
-      from: fromE164,
-      customerId,
-      customerName: customer ? callerLabel : null,
-    },
-  }).catch((error) => {
+  // The first ring. It has to go out before the TwiML response, or the caller
+  // starts holding before any device has been told to wake up; /wait keeps it
+  // ringing from there.
+  await ringStaffForCall(shop.id, callSid).catch((error) => {
     // A push failure must not take the call down — the caller should still
     // reach voicemail rather than hear an error.
     console.error("[voice] staff push for incoming call failed:", error);

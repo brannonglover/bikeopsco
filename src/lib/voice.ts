@@ -4,6 +4,12 @@ import Twilio from "twilio";
 import { prisma } from "@/lib/db";
 import { getTwilioInboundWebhookUrl, validateTwilioWebhook } from "@/lib/chat-sms";
 import { getShopForHost, type CurrentShop } from "@/lib/shop";
+import { formatPhoneDisplay } from "@/lib/phone";
+import {
+  INCOMING_CALL_CHANNEL_ID,
+  INCOMING_CALL_SOUND,
+  sendPushToAllStaff,
+} from "@/lib/push";
 
 export type VoicePlatform = "ios" | "android";
 
@@ -92,6 +98,65 @@ export function mintVoiceAccessToken(identity: string, platform: VoicePlatform):
     })
   );
   return token.toJwt();
+}
+
+/**
+ * Rings every staff device for a call that is still waiting to be answered.
+ *
+ * This push *is* the ring — there is no PushKit here — and one alert is not a
+ * ring, so it is sent repeatedly for as long as the caller holds. /incoming
+ * fires the first, and /wait fires another on each pass, which Twilio requests
+ * roughly every six seconds while the caller is in the queue. That cadence is
+ * also what makes it stop by itself: a caller who has been answered, declined
+ * or timed out is no longer in the queue, so the waitUrl is never requested
+ * again and there is no timer to cancel.
+ *
+ * Resolves false without sending when the call is no longer ringing, which
+ * covers the race where one last /wait lands just after someone picks up.
+ *
+ * Each send is a separate notification, so a call left to ring out leaves a
+ * short stack of them behind; the app clears them once the call is no longer
+ * ringing.
+ */
+export async function ringStaffForCall(shopId: string, callSid: string): Promise<boolean> {
+  const call = await prisma.call.findUnique({
+    where: { shopId_twilioParentCallSid: { shopId, twilioParentCallSid: callSid } },
+    select: {
+      id: true,
+      status: true,
+      fromNumber: true,
+      customerId: true,
+      customer: { select: { firstName: true, lastName: true } },
+    },
+  });
+  if (!call || call.status !== "RINGING") return false;
+
+  const name = call.customer
+    ? [call.customer.firstName, call.customer.lastName].filter(Boolean).join(" ")
+    : "";
+  const callerLabel = name || formatPhoneDisplay(call.fromNumber);
+
+  await sendPushToAllStaff(shopId, {
+    title: "Incoming call",
+    body: callerLabel,
+    // Everything that makes this sound like a phone ringing rather than
+    // another notification: its own tone, its own Android channel, and
+    // priorities that keep a dozing phone or a Focus mode from sitting on it
+    // until the caller has already been sent to voicemail.
+    sound: INCOMING_CALL_SOUND,
+    channelId: INCOMING_CALL_CHANNEL_ID,
+    priority: "high",
+    interruptionLevel: "time-sensitive",
+    data: {
+      type: "incoming_call",
+      callId: call.id,
+      callSid,
+      from: call.fromNumber,
+      customerId: call.customerId,
+      customerName: name || null,
+    },
+  });
+  return true;
 }
 
 /**
