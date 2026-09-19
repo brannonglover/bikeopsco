@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { runAssistantTurn } from "@/lib/ai/assistant";
 import {
   findCustomerIdBySmsFrom,
   findOrCreateCustomerIdForInboundSms,
@@ -225,6 +226,18 @@ export async function POST(request: NextRequest) {
       body: pushBody,
       data: { type: "new_message", conversationId: conversation.id },
     }).catch((err) => console.error("Push notify staff:", err));
+
+    // The AI assistant answers if the shop has it on and no one from the shop
+    // has taken this thread over. Awaited rather than backgrounded: a
+    // serverless function stops executing once it responds, so a reply left
+    // running past this point would simply never be sent. Twilio retries this
+    // webhook on a slow response, and the MessageSid check above makes that
+    // retry a no-op, so the customer is never answered twice.
+    await runAssistantTurn({
+      shopId: shop.id,
+      conversationId: conversation.id,
+      trigger: "inbound_sms",
+    });
   } catch (e) {
     console.error("Twilio SMS webhook: failed to save message", e);
     return new NextResponse("Error", { status: 500 });

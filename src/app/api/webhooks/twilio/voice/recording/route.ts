@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { authenticateVoiceWebhook } from "@/lib/voice";
+import { startAssistantCallOutreach } from "@/lib/ai/call-outreach";
+import {
+  authenticateVoiceWebhook,
+  isVoicemailTranscriptionEnabled,
+} from "@/lib/voice";
 
 export const runtime = "nodejs";
 
@@ -32,6 +36,23 @@ export async function POST(request: NextRequest) {
         : undefined,
     },
   });
+
+  // With transcription on, the AI assistant waits for that callback instead so
+  // it can read the voicemail before replying. This is the fallback for shops
+  // running without it, where the recording is the last thing that happens.
+  if (!isVoicemailTranscriptionEnabled()) {
+    const call = await prisma.call.findFirst({
+      where: { shopId: shop.id, twilioParentCallSid: callSid },
+      select: { id: true },
+    });
+    if (call) {
+      await startAssistantCallOutreach({
+        shopId: shop.id,
+        callId: call.id,
+        trigger: "voicemail",
+      });
+    }
+  }
 
   return new NextResponse("ok", { status: 200 });
 }

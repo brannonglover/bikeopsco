@@ -28,6 +28,7 @@ const updateSchema = z.object({
   reviewsEnabled: z.boolean().optional(),
   rentalsEnabled: z.boolean().optional(),
   jobBoardFiltersEnabled: z.boolean().optional(),
+  aiAssistantEnabled: z.boolean().optional(),
   timezone: z
     .string()
     .trim()

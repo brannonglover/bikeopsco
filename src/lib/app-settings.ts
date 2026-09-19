@@ -21,6 +21,7 @@ export type AppFeatures = {
   reviewsEnabled: boolean;
   rentalsEnabled: boolean;
   jobBoardFiltersEnabled: boolean;
+  aiAssistantEnabled: boolean;
   timezone: string;
   staffNotifyEmail: string | null;
 };
@@ -57,6 +58,7 @@ const DEFAULT_FEATURES: AppFeatures = {
   reviewsEnabled: true,
   rentalsEnabled: true,
   jobBoardFiltersEnabled: false,
+  aiAssistantEnabled: false,
   timezone: DEFAULT_SHOP_TIMEZONE,
   staffNotifyEmail: null,
 };
@@ -122,6 +124,7 @@ async function loadAppFeaturesForShop(shopId: string): Promise<AppFeatures> {
       reviewsEnabled: row.reviewsEnabled,
       rentalsEnabled: row.rentalsEnabled,
       jobBoardFiltersEnabled: row.jobBoardFiltersEnabled,
+      aiAssistantEnabled: row.aiAssistantEnabled,
       timezone: normalizeIANATimezone(row.timezone),
       staffNotifyEmail,
     };
@@ -171,6 +174,7 @@ export async function upsertAppFeatures(
     reviewsEnabled: updated.reviewsEnabled,
     rentalsEnabled: updated.rentalsEnabled,
     jobBoardFiltersEnabled: updated.jobBoardFiltersEnabled,
+    aiAssistantEnabled: updated.aiAssistantEnabled,
     timezone: normalizeIANATimezone(updated.timezone),
     staffNotifyEmail,
   };
