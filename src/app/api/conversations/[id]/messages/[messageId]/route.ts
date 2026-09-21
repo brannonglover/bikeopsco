@@ -3,9 +3,20 @@ import { prisma } from "@/lib/db";
 import { publishChatEvent } from "@/lib/realtime/publish-chat-event";
 import { z } from "zod";
 import { getAppFeatures } from "@/lib/app-settings";
+import { requireCurrentShop } from "@/lib/shop";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Staff edit/delete for a single chat message.
+ *
+ * Every lookup here is scoped by `shopId` as well as by conversation. The
+ * middleware only guarantees that the signed-in session matches the request
+ * host — it says nothing about the *resource* being asked for, so a route that
+ * finds a message by id alone would let one shop's staff edit another shop's
+ * message given its ids. `requireCurrentShop()` resolves the shop from the
+ * host, which is the value the session was already checked against.
+ */
 const patchSchema = z.object({
   body: z.string().optional().nullable(),
 });
@@ -15,7 +26,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string; messageId: string }> }
 ) {
   try {
-    const features = await getAppFeatures();
+    const shop = await requireCurrentShop();
+    const features = await getAppFeatures(shop.id);
     if (!features.chatEnabled) {
       return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
     }
@@ -24,7 +36,7 @@ export async function PATCH(
     const { body: bodyText } = patchSchema.parse(json);
 
     const message = await prisma.message.findFirst({
-      where: { id: messageId, conversationId },
+      where: { shopId: shop.id, id: messageId, conversationId },
       include: { attachments: true },
     });
 
@@ -45,8 +57,10 @@ export async function PATCH(
       );
     }
 
+    // Safe to address by id alone: the findFirst above is what proves this row
+    // belongs to this shop, and Prisma's `update` needs a unique selector.
     const updated = await prisma.message.update({
-      where: { id: messageId },
+      where: { id: message.id },
       data: {
         body: trimmed,
         editedAt: new Date(),
@@ -55,14 +69,14 @@ export async function PATCH(
     });
 
     await prisma.conversation.update({
-      where: { id: conversationId },
+      where: { id: message.conversationId },
       data: { updatedAt: new Date() },
     });
 
     await publishChatEvent("chat:message", {
-      shopId: updated.shopId,
-      conversationId: conversationId,
-      messageId,
+      shopId: shop.id,
+      conversationId: message.conversationId,
+      messageId: message.id,
     });
 
     return NextResponse.json(updated);
@@ -80,10 +94,11 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string; messageId: string }> }
 ) {
   try {
+    const shop = await requireCurrentShop();
     const { id: conversationId, messageId } = await params;
 
     const message = await prisma.message.findFirst({
-      where: { id: messageId, conversationId },
+      where: { shopId: shop.id, id: messageId, conversationId },
     });
 
     if (!message) {
@@ -94,17 +109,17 @@ export async function DELETE(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    await prisma.message.delete({ where: { id: messageId } });
+    await prisma.message.delete({ where: { id: message.id } });
 
     await prisma.conversation.update({
-      where: { id: conversationId },
+      where: { id: message.conversationId },
       data: { updatedAt: new Date() },
     });
 
     await publishChatEvent("chat:message", {
-      shopId: message.shopId,
-      conversationId: conversationId,
-      messageId,
+      shopId: shop.id,
+      conversationId: message.conversationId,
+      messageId: message.id,
     });
 
     return NextResponse.json({ ok: true });

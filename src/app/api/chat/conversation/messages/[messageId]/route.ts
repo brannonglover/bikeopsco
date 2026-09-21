@@ -4,6 +4,7 @@ import { publishChatEvent } from "@/lib/realtime/publish-chat-event";
 import { getCustomerFromSession } from "@/lib/chat-session";
 import { z } from "zod";
 import { getAppFeatures } from "@/lib/app-settings";
+import { requireCurrentShop } from "@/lib/shop";
 
 export const dynamic = "force-dynamic";
 
@@ -11,9 +12,16 @@ const patchSchema = z.object({
   body: z.string().optional().nullable(),
 });
 
-async function getCustomerConversation(customerId: string) {
+/**
+ * The customer's own general thread, resolved within the shop being addressed.
+ *
+ * Scoped by shop as well as customer so a session can only ever act on the
+ * thread belonging to the host it was presented to — matching the sibling
+ * reactions route, and the staff routes.
+ */
+async function getCustomerConversation(shopId: string, customerId: string) {
   return prisma.conversation.findFirst({
-    where: { customerId, jobId: null },
+    where: { shopId, customerId, jobId: null },
   });
 }
 
@@ -21,7 +29,8 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ messageId: string }> }
 ) {
-  const features = await getAppFeatures();
+  const shop = await requireCurrentShop();
+  const features = await getAppFeatures(shop.id);
   if (!features.chatEnabled) {
     return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
   }
@@ -30,7 +39,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   }
 
-  const conversation = await getCustomerConversation(customerId);
+  const conversation = await getCustomerConversation(shop.id, customerId);
   if (!conversation) {
     return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
   }
@@ -41,7 +50,7 @@ export async function PATCH(
     const { body: bodyText } = patchSchema.parse(json);
 
     const message = await prisma.message.findFirst({
-      where: { id: messageId, conversationId: conversation.id },
+      where: { shopId: shop.id, id: messageId, conversationId: conversation.id },
       include: { attachments: true },
     });
 
@@ -63,7 +72,7 @@ export async function PATCH(
     }
 
     const updated = await prisma.message.update({
-      where: { id: messageId },
+      where: { id: message.id },
       data: {
         body: trimmed,
         editedAt: new Date(),
@@ -77,9 +86,9 @@ export async function PATCH(
     });
 
     await publishChatEvent("chat:message", {
-      shopId: updated.shopId,
+      shopId: shop.id,
       conversationId: conversation.id,
-      messageId,
+      messageId: message.id,
     });
 
     return NextResponse.json(updated);
@@ -96,12 +105,13 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ messageId: string }> }
 ) {
+  const shop = await requireCurrentShop();
   const customerId = await getCustomerFromSession();
   if (!customerId) {
     return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   }
 
-  const conversation = await getCustomerConversation(customerId);
+  const conversation = await getCustomerConversation(shop.id, customerId);
   if (!conversation) {
     return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
   }
@@ -110,7 +120,7 @@ export async function DELETE(
     const { messageId } = await params;
 
     const message = await prisma.message.findFirst({
-      where: { id: messageId, conversationId: conversation.id },
+      where: { shopId: shop.id, id: messageId, conversationId: conversation.id },
     });
 
     if (!message) {
@@ -121,7 +131,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    await prisma.message.delete({ where: { id: messageId } });
+    await prisma.message.delete({ where: { id: message.id } });
 
     await prisma.conversation.update({
       where: { id: conversation.id },
@@ -129,9 +139,9 @@ export async function DELETE(
     });
 
     await publishChatEvent("chat:message", {
-      shopId: message.shopId,
+      shopId: shop.id,
       conversationId: conversation.id,
-      messageId,
+      messageId: message.id,
     });
 
     return NextResponse.json({ ok: true });

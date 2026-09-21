@@ -27,11 +27,11 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const features = await getAppFeatures();
+    const shop = await requireCurrentShop();
+    const features = await getAppFeatures(shop.id);
     if (!features.chatEnabled) {
       return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
     }
-    const shop = await requireCurrentShop();
     const { id } = await params;
     const body = await request.json();
     const { archived, aiAssistantState } = patchSchema.parse(body);
@@ -48,7 +48,7 @@ export async function PATCH(
     }
 
     const conversation = await prisma.conversation.update({
-      where: { id },
+      where: { id: existing.id },
       data: {
         ...(archived !== undefined ? { archived } : {}),
         ...(aiAssistantState !== undefined
