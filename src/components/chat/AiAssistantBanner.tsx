@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Conversation } from "@/lib/types";
+import { AiHandoffModal } from "./AiHandoffModal";
 
 /**
  * The per-conversation kill switch, shown above the thread.
@@ -20,8 +21,29 @@ export function AiAssistantBanner({
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showHandoff, setShowHandoff] = useState(false);
 
   const state = conversation.aiAssistantState ?? "OFF";
+  const summary = conversation.aiAssistantSummary;
+
+  // A handoff note is news, so it opens by itself the first time the thread is
+  // opened — the banner line only ever shows the start of it. Remembering just
+  // the last thread is deliberate: closing it doesn't reopen it while you stay
+  // in the thread, and coming back to the thread later counts as opening it
+  // again.
+  const openedFor = useRef<string | null>(null);
+  useEffect(() => {
+    // Also covers leaving for a thread with nothing to hand over, and the
+    // assistant being put back to work: neither should leave the note up.
+    if (!summary || state === "ACTIVE" || state === "OFF") {
+      setShowHandoff(false);
+      return;
+    }
+    if (openedFor.current === conversation.id) return;
+    openedFor.current = conversation.id;
+    setShowHandoff(true);
+  }, [conversation.id, summary, state]);
+
   // A thread the assistant has never touched says nothing at all — staff
   // shouldn't have to read a banner about a feature that isn't in play.
   if (state === "OFF") return null;
@@ -48,9 +70,13 @@ export function AiAssistantBanner({
   };
 
   const active = state === "ACTIVE";
+  // Only colour levels that globals.css remaps for dark mode. text-indigo-900
+  // and border-indigo-200 have no dark rule, so in the dark theme they render
+  // near-black navy on a dark indigo ground — which is how this banner shipped
+  // unreadable. indigo-700 and slate-200 are both remapped.
   const tone = active
-    ? "border-indigo-200 bg-indigo-50 text-indigo-900"
-    : "border-slate-200 bg-slate-50 text-slate-700";
+    ? "border-slate-200 bg-indigo-50 text-indigo-700"
+    : "border-slate-200 bg-slate-50 text-slate-600";
 
   const headline = active
     ? "The AI assistant is answering this conversation."
@@ -72,26 +98,44 @@ export function AiAssistantBanner({
         {headline}
       </span>
 
-      {conversation.aiAssistantSummary && (
-        <span className="min-w-0 flex-1 opacity-90">
-          {conversation.aiAssistantSummary}
-        </span>
+      {/* The note is routinely a couple of sentences — far more than fits on
+          one banner line — so the banner shows the start of it and the whole
+          thing opens in a dialog. */}
+      {summary && (
+        <button
+          type="button"
+          onClick={() => setShowHandoff(true)}
+          className="min-w-0 flex-1 truncate text-left font-normal underline decoration-dotted underline-offset-2 hover:decoration-solid"
+          title="See the whole note"
+        >
+          {summary}
+        </button>
       )}
 
       {active && (
-        <span className="opacity-80">Sending a message stops it.</span>
+        <span className="font-normal text-text-secondary">
+          Sending a message stops it.
+        </span>
       )}
 
       <button
         type="button"
         onClick={() => void setState(active ? "PAUSED" : "ACTIVE")}
         disabled={busy}
-        className="ml-auto flex-shrink-0 rounded-lg border border-current px-2.5 py-1 font-semibold transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50"
+        className="ml-auto flex-shrink-0 rounded-lg border border-current px-2.5 py-1 font-semibold transition-opacity hover:opacity-75 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {busy ? "…" : active ? "Take over" : "Let the assistant reply"}
       </button>
 
       {error && <span className="w-full text-red-700">{error}</span>}
+
+      {showHandoff && summary && (
+        <AiHandoffModal
+          conversation={conversation}
+          summary={summary}
+          onClose={() => setShowHandoff(false)}
+        />
+      )}
     </div>
   );
 }
