@@ -1,8 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Conversation } from "@/lib/types";
 import { AiHandoffModal } from "./AiHandoffModal";
+import {
+  isHandoffDismissed,
+  markHandoffDismissed,
+} from "@/lib/ai-handoff-dismissals";
 
 /**
  * The per-conversation kill switch, shown above the thread.
@@ -26,12 +30,10 @@ export function AiAssistantBanner({
   const state = conversation.aiAssistantState ?? "OFF";
   const summary = conversation.aiAssistantSummary;
 
-  // A handoff note is news, so it opens by itself the first time the thread is
-  // opened — the banner line only ever shows the start of it. Remembering just
-  // the last thread is deliberate: closing it doesn't reopen it while you stay
-  // in the thread, and coming back to the thread later counts as opening it
-  // again.
-  const openedFor = useRef<string | null>(null);
+  // A handoff note is news, so it opens by itself when the thread is opened —
+  // the banner line only ever shows the start of it. Closing it is final: the
+  // dismissal is remembered on this device, and only a fresh handoff on the
+  // same thread opens the note again.
   useEffect(() => {
     // Also covers leaving for a thread with nothing to hand over, and the
     // assistant being put back to work: neither should leave the note up.
@@ -39,10 +41,13 @@ export function AiAssistantBanner({
       setShowHandoff(false);
       return;
     }
-    if (openedFor.current === conversation.id) return;
-    openedFor.current = conversation.id;
-    setShowHandoff(true);
+    setShowHandoff(!isHandoffDismissed(conversation.id, summary));
   }, [conversation.id, summary, state]);
+
+  const closeHandoff = useCallback(() => {
+    if (summary) markHandoffDismissed(conversation.id, summary);
+    setShowHandoff(false);
+  }, [conversation.id, summary]);
 
   // A thread the assistant has never touched says nothing at all — staff
   // shouldn't have to read a banner about a feature that isn't in play.
@@ -133,7 +138,7 @@ export function AiAssistantBanner({
         <AiHandoffModal
           conversation={conversation}
           summary={summary}
-          onClose={() => setShowHandoff(false)}
+          onClose={closeHandoff}
         />
       )}
     </div>
