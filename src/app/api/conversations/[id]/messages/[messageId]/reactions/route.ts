@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { publishChatEvent } from "@/lib/realtime/publish-chat-event";
 import { z } from "zod";
 import { getAppFeatures } from "@/lib/app-settings";
 import { requireCurrentShop } from "@/lib/shop";
@@ -38,6 +39,12 @@ export async function POST(
       create: { shopId: shop.id, messageId, emoji, reactorType: "STAFF" },
     });
 
+    await publishChatEvent("chat:message", {
+      shopId: shop.id,
+      conversationId: conversationId,
+      messageId,
+    });
+
     return NextResponse.json(reaction);
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -66,6 +73,12 @@ export async function DELETE(
 
     await prisma.messageReaction.deleteMany({
       where: { shopId: shop.id, messageId, reactorType: "STAFF" },
+    });
+
+    await publishChatEvent("chat:message", {
+      shopId: shop.id,
+      conversationId: conversationId,
+      messageId,
     });
 
     return NextResponse.json({ ok: true });

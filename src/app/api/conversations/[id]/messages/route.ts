@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { publishChatEvent } from "@/lib/realtime/publish-chat-event";
 import { sendPushToAllStaff } from "@/lib/push";
 import { sendStaffNewChatMessageNotification } from "@/lib/email";
 import { z } from "zod";
@@ -135,6 +136,14 @@ export async function POST(
         });
       }
 
+      // Ahead of delivery: the SMS round trip must not delay the shop's own
+      // other devices from showing what was just sent.
+      await publishChatEvent("chat:message", {
+        shopId: shop.id,
+        conversationId: targetConversationId,
+        messageId: message.id,
+      });
+
       await deliverStaffMessage({
         shop,
         customer: requested.customer,
@@ -151,6 +160,12 @@ export async function POST(
     }
 
     if (sender === "CUSTOMER") {
+      await publishChatEvent("chat:message", {
+        shopId: shop.id,
+        conversationId: targetConversationId,
+        messageId: message.id,
+      });
+
       const customerName = [
         requested.customer.firstName,
         requested.customer.lastName,

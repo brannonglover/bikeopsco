@@ -226,12 +226,26 @@ Set both on **Preview** (staging) and **Production** in Vercel, then redeploy. `
 
 If the project is paused (Supabase free tier), restore it in the dashboard before redeploying.
 
-### Supabase Realtime (staff board live updates)
+### Supabase Realtime (staff board + chat live updates)
 
 The staff board no longer polls `/api/jobs`. Job mutations broadcast a minimal
 `{ jobId, shopId }` event on a **private** `shop:<shopId>:jobs` channel, and
 connected boards respond by refetching `/api/jobs?view=board` — the API and
 database stay the source of truth; Realtime only says "something changed".
+
+Staff chat uses the same mechanism on a second private channel,
+`shop:<shopId>:chat`. Anything that writes a chat message — an inbound text,
+a staff reply, the AI assistant, a job-stage mirror, an edit or a reaction —
+broadcasts `{ conversationId, shopId, messageId }`, and open staff clients
+refetch the inbox and the open thread.
+
+Chat keeps its SSE streams (`/api/conversations/stream` and the per-thread
+stream) underneath as a safety net, so an unconfigured or unreachable Realtime
+only costs freshness: messages still arrive on the stream's few-second poll
+instead of instantly. Those streams also now send a named `heartbeat` event
+rather than a `:` comment, because comments are invisible to the browser's
+EventSource API and the client uses heartbeats to detect a half-open socket
+left behind by a suspended tab.
 
 Copy these from **Project Settings → API** (same Supabase project as the
 connection strings above) and set them on **Preview** and **Production**:
@@ -261,27 +275,35 @@ derived from it, not parallel to it:
    third-party-auth entry point) and refreshes from the same endpoint. No
    Supabase auth session is created and nothing is written to browser storage.
 4. Supabase evaluates the `realtime.messages` policy on every subscription and
-   permits the topic only when it equals `shop:<shop_id claim>:jobs`.
+   permits the topic only when it equals `shop:<shop_id claim>:jobs` or
+   `shop:<shop_id claim>:chat`. One token authorizes both; the route returns
+   both topic names (`channel` for jobs, `chatChannel` for chat).
 
 The policy grants `SELECT` only. Publishing happens server-side with the
 service role key, so no browser can forge a job event.
 
 #### The RLS policy
 
-Applied by migration `20260918120000_realtime_private_job_channel`, which runs
-as part of `prisma migrate deploy` during `npm run build`. It is idempotent, so
-re-running is safe. Nothing needs to be added to a Postgres publication —
-this is Realtime **Broadcast**, not change-data-capture.
+Applied by two migrations that run as part of `prisma migrate deploy` during
+`npm run build`: `20260918120000_realtime_private_job_channel` created the
+jobs-only policy, and `20260921190000_realtime_private_chat_channel` replaces
+it with one covering both topics. Both are idempotent, so re-running is safe.
+Nothing needs to be added to a Postgres publication — this is Realtime
+**Broadcast**, not change-data-capture.
 
-If that migration fails with a permissions error on `realtime.messages`, run
+If either migration fails with a permissions error on `realtime.messages`, run
 the same file by hand in the **Supabase SQL editor** as the project owner, then
-redeploy.
+redeploy. Until the chat migration lands, staff browsers log a persistent
+`[realtime] chat channel channel_error` and chat falls back to its SSE
+streams — visibly slower, but not broken.
 
 #### When it is not configured
 
 The app still runs. It logs a `[realtime]` warning once and falls back to
 foreground sync, so boards refresh when the tab becomes visible, the window
 regains focus, or the machine wakes — just not the instant a booking lands.
+Chat additionally falls back to its SSE streams, which poll the database every
+few seconds.
 Check the browser console for `[realtime]` warnings and the function logs for
 `[realtime] broadcast ... failed`.
 

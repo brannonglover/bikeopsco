@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { publishChatEvent } from "@/lib/realtime/publish-chat-event";
 import { findOrCreateGeneralConversation } from "@/lib/conversation";
 import { buildJobSmsMessage, type JobForSms } from "@/lib/sms";
 
@@ -31,6 +32,12 @@ export async function addCustomerSystemChatMessage({
     await prisma.conversation.update({
       where: { id: conversation.id },
       data: { updatedAt: new Date() },
+    });
+
+    await publishChatEvent("chat:message", {
+      shopId,
+      conversationId: conversation.id,
+      messageId: message.id,
     });
 
     return message;
@@ -109,6 +116,12 @@ export async function mirrorJobStageToCustomerChat({
   await prisma.conversation.update({
     where: { id: conversation.id },
     data: { updatedAt: new Date() },
+  });
+
+  await publishChatEvent("chat:message", {
+    shopId,
+    conversationId: conversation.id,
+    messageId: message.id,
   });
 
   console.info("[system-chat] mirrorJobStageToCustomerChat: posted", {

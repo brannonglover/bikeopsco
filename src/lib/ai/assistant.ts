@@ -2,6 +2,7 @@ import "server-only";
 
 import type { AiAssistantState, MessageSender } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { publishChatEvent } from "@/lib/realtime/publish-chat-event";
 import { deliverStaffMessage } from "@/lib/chat/send-staff-message";
 import { sendPushToAllStaff } from "@/lib/push";
 import { ASSISTANT_MODEL, getAnthropicClient } from "@/lib/ai/client";
@@ -412,6 +413,12 @@ export async function runAssistantTurn({
         aiAssistantSummary:
           nextState === "ACTIVE" ? null : buildSummary(turn),
       },
+    });
+
+    await publishChatEvent("chat:message", {
+      shopId,
+      conversationId: conversation.id,
+      messageId: message.id,
     });
 
     await applyCollectedContact({

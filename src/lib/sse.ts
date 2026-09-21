@@ -57,7 +57,12 @@ export function createPollingSseResponse<T>(options: PollingSseOptions<T>): Resp
             const payload = await options.getPayload();
             controller.enqueue(encoder.encode(encodeSseEvent("update", payload)));
           } else {
-            controller.enqueue(encoder.encode(": heartbeat\n\n"));
+            // A named event rather than a `:` comment: comment lines keep the
+            // socket warm but are invisible to the browser's EventSource API,
+            // so a client cannot use them to tell a live stream from a
+            // half-open one. This is what the client's staleness watchdog
+            // listens for.
+            controller.enqueue(encoder.encode(encodeSseEvent("heartbeat", {})));
           }
         }
       } catch (error) {

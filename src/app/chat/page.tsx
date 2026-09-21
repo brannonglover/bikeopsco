@@ -7,6 +7,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import type { Conversation, ChatMessage, Customer } from "@/lib/types";
 import { useChatNotifications, CHAT_PAGE_CONVERSATIONS_POLL_MS } from "@/hooks/useChatNotifications";
 import { useChatEventSource } from "@/hooks/useChatEventSource";
+import { useChatRealtime } from "@/hooks/useChatRealtime";
 import { useVisibilityAwarePolling } from "@/hooks/useVisibilityAwarePolling";
 import type { StaffConversationMessagesPayload } from "@/lib/chat/staff-conversation-messages";
 import { ChatMessageBubble } from "@/components/chat/ChatMessageBubble";
@@ -726,6 +727,23 @@ function ChatPageContent() {
     onUpdate: applyConversations,
     fallbackPoll: fetchConversations,
     fallbackIntervalMs: CHAT_PAGE_CONVERSATIONS_POLL_MS,
+  });
+
+  // Realtime is what makes an arriving message land immediately; the streams
+  // above stay as the safety net when a broadcast is missed or Realtime is
+  // not configured. Both funnel into the same fetchers, so a duplicate
+  // notification costs one extra request and nothing else.
+  useChatRealtime({
+    onChange: (conversationIds) => {
+      void fetchConversations();
+      const selected = selectedIdRef.current;
+      if (!selected) return;
+      // `null` means we reconnected and may have missed events.
+      if (conversationIds && !conversationIds.has(selected)) return;
+      // Same guard the stream uses: never clobber a send in flight.
+      if (sendingRef.current || hasPendingOptimisticRef.current) return;
+      void fetchMessages(selected);
+    },
   });
 
   useChatNotifications(conversations, fetchConversations, selectedId, false);

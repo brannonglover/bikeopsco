@@ -18,6 +18,7 @@ import {
   SMS_CONSENT_SOURCES,
 } from "@/lib/sms-consent";
 import { sendPushToAllStaff } from "@/lib/push";
+import { publishChatEvent } from "@/lib/realtime/publish-chat-event";
 import { getShopForHost } from "@/lib/shop";
 
 export const runtime = "nodejs";
@@ -209,6 +210,14 @@ export async function POST(request: NextRequest) {
         customerTypingAt: null,
         customerLastReadAt: message.createdAt,
       },
+    });
+
+    // Before the push and the assistant turn: staff already looking at the
+    // web app should see the text at the same moment their phone buzzes.
+    await publishChatEvent("chat:message", {
+      shopId: shop.id,
+      conversationId: conversation.id,
+      messageId: message.id,
     });
 
     const customer = await prisma.customer.findUnique({

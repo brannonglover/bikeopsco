@@ -13,7 +13,10 @@
 export type RealtimeAuth = {
   token: string;
   shopId: string;
+  /** The jobs topic. Named `channel` since it predates the chat topic. */
   channel: string;
+  /** The chat topic. Authorized by the same token and the same `shop_id` claim. */
+  chatChannel: string;
   /** Epoch milliseconds. */
   expiresAt: number;
 };
@@ -39,7 +42,13 @@ async function requestAuth(): Promise<RealtimeAuth | null> {
     }
 
     const data = (await res.json()) as Partial<RealtimeAuth>;
-    if (!data.token || !data.shopId || !data.channel || !data.expiresAt) {
+    if (
+      !data.token ||
+      !data.shopId ||
+      !data.channel ||
+      !data.chatChannel ||
+      !data.expiresAt
+    ) {
       console.warn("[realtime] token response was malformed");
       return null;
     }
@@ -48,6 +57,7 @@ async function requestAuth(): Promise<RealtimeAuth | null> {
       token: data.token,
       shopId: data.shopId,
       channel: data.channel,
+      chatChannel: data.chatChannel,
       expiresAt: data.expiresAt,
     };
     return cached;

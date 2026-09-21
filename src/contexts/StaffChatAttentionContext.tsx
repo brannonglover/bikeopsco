@@ -13,6 +13,7 @@ import type { Conversation } from "@/lib/types";
 import { hasUnreadCustomerMessage } from "@/lib/chat-unread";
 import { useChatNotifications, NOTIFICATION_POLL_MS } from "@/hooks/useChatNotifications";
 import { useChatEventSource } from "@/hooks/useChatEventSource";
+import { useChatRealtime } from "@/hooks/useChatRealtime";
 import { useDeferredSyncEnabled } from "@/hooks/useDeferredSyncEnabled";
 
 const StaffChatAttentionContext = createContext(0);
@@ -56,6 +57,15 @@ export function StaffChatAttentionProvider({
     onUpdate: applyConversations,
     fallbackPoll: fetchConversations,
     fallbackIntervalMs: NOTIFICATION_POLL_MS,
+  });
+
+  // Lights the nav badge — and fires the notification sound — the moment a
+  // message lands, rather than on the stream's next poll tick.
+  useChatRealtime({
+    enabled: deferredSyncEnabled,
+    onChange: () => {
+      void fetchConversations();
+    },
   });
 
   useChatNotifications(conversations, fetchConversations, null, false);

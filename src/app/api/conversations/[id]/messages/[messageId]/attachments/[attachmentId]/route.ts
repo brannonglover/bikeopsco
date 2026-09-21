@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { publishChatEvent } from "@/lib/realtime/publish-chat-event";
 import { getAppFeatures } from "@/lib/app-settings";
 
 export const dynamic = "force-dynamic";
@@ -52,6 +53,12 @@ export async function DELETE(
         where: { id: conversationId },
         data: { updatedAt: new Date() },
       });
+    await publishChatEvent("chat:message", {
+      shopId: message.shopId,
+      conversationId: conversationId,
+      messageId,
+    });
+
       return NextResponse.json({ messageDeleted: true });
     }
 
@@ -68,6 +75,12 @@ export async function DELETE(
     const updated = await prisma.message.findUnique({
       where: { id: messageId },
       include: { attachments: true, reactions: true },
+    });
+
+    await publishChatEvent("chat:message", {
+      shopId: message.shopId,
+      conversationId: conversationId,
+      messageId,
     });
 
     return NextResponse.json({ messageDeleted: false, message: updated });

@@ -8,6 +8,7 @@ import { sendStaffNewChatMessageNotification } from "@/lib/email";
 import { z } from "zod";
 import { isChatEnabled } from "@/lib/app-settings";
 import { prisma } from "@/lib/db";
+import { publishChatEvent } from "@/lib/realtime/publish-chat-event";
 import { requireCurrentShop } from "@/lib/shop";
 import { attachmentNotificationLabel } from "@/lib/chat-media";
 
@@ -105,6 +106,12 @@ export async function POST(request: NextRequest) {
       data: { updatedAt: new Date(), customerTypingAt: null },
     }),
   ]);
+
+  await publishChatEvent("chat:message", {
+    shopId: shop.id,
+    conversationId: conversation.id,
+    messageId: message.id,
+  });
 
   const customerName = customer
     ? [customer.firstName, customer.lastName].filter(Boolean).join(" ")
