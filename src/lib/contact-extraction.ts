@@ -52,6 +52,23 @@ const STAFF_GREETING_RE =
 const BARE_SIGNATURE_RE = /^([a-z][a-z'’-]*)\s+([a-z][a-z'’-]*)\.?$/i;
 
 /**
+ * A shop message asking the customer what they're called.
+ *
+ * Matched against the message immediately before a customer's reply, which is
+ * what makes a bare "Dave" readable as a name. Nothing else in this file has
+ * that context, and without it a one-word text is unparseable — it could be an
+ * answer to anything. The AI assistant asks this question in almost every
+ * thread it opens, so the bare reply is now the common case rather than an
+ * oddity.
+ */
+const NAME_REQUEST_RE =
+  /\b(?:your (?:full |first and last |first |last )?name|who am i (?:speaking|texting|chatting) (?:with|to)|what(?:'|’)?s your name|may i (?:get|have|ask))\b/i;
+
+/** Filler people put in front of a name when answering: "sure, Dave Cox". */
+const ANSWER_PREFIX_RE =
+  /^(?:sure|yes|yeah|yep|ok|okay|sorry|hi|hey|hello)[\s,.!:-]+/i;
+
+/**
  * Words that turn up where a name would sit but never are one. Without this,
  * "this is regarding my bike" reads as a customer called "Regarding My".
  */
@@ -155,6 +172,30 @@ function nameFromEmail(email: string): NameParts | null {
   return toNameParts(tokens.slice(0, 2).join(" "));
 }
 
+/**
+ * Reads a whole short message as a name, for a reply to a direct question.
+ *
+ * Only ever called when the shop's previous message asked for a name, because
+ * that is the only thing separating "Dave Cox" from any other two words. Longer
+ * replies are left alone — someone answering at length is making a sentence,
+ * and the ordinary patterns handle those.
+ */
+function nameFromDirectAnswer(body: string): NameParts | null {
+  const stripped = body
+    .replace(ANSWER_PREFIX_RE, "")
+    .replace(/[.,!?;:]+$/, "")
+    .trim();
+  if (!stripped) return null;
+
+  const tokens = stripped.split(/\s+/);
+  if (tokens.length === 0 || tokens.length > 2) return null;
+  // Every token has to look like a name. A two-word answer where only the
+  // first passes ("road bike") is a description, not a name.
+  if (!tokens.every(isPlausibleNameToken)) return null;
+
+  return toNameParts(tokens.join(" "));
+}
+
 function findNameInMessage(body: string): NameParts | null {
   const fromIntro = toNameParts(INTRO_RE.exec(body)?.[1]);
   if (fromIntro) return fromIntro;
@@ -199,9 +240,21 @@ export function extractContactFromMessages(
     }))
     .filter((message) => message.body.length > 0);
 
-  const bodies = withBodies
-    .filter((message) => message.sender === "CUSTOMER")
-    .map((message) => message.body);
+  // Each customer message is paired with whether the shop had just asked for a
+  // name, so a bare reply can be read as the answer it is.
+  const customerMessages = withBodies
+    .map((message, index) => {
+      const previous = withBodies[index - 1];
+      return {
+        body: message.body,
+        sender: message.sender,
+        answersNameRequest:
+          previous !== undefined &&
+          previous.sender !== "CUSTOMER" &&
+          NAME_REQUEST_RE.test(previous.body),
+      };
+    })
+    .filter((message) => message.sender === "CUSTOMER");
 
   let name: NameParts | null = null;
   let email: string | null = null;
@@ -210,9 +263,15 @@ export function extractContactFromMessages(
     ? normalizePhone(options.excludePhone)
     : null;
 
-  for (const body of bodies) {
+  for (const message of customerMessages) {
+    const body = message.body;
     if (!name) {
       name = findNameInMessage(body);
+      // Only after the ordinary patterns: "my name is Dave Cox" should be read
+      // as an introduction, not as a two-word answer.
+      if (!name && message.answersNameRequest) {
+        name = nameFromDirectAnswer(body);
+      }
     }
     if (!email) {
       email = EMAIL_RE.exec(body)?.[0]?.toLowerCase() ?? null;

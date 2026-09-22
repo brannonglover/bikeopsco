@@ -6,7 +6,7 @@ import {
   resolveStaffConversation,
   resolveStaffConversationForRead,
 } from "@/lib/conversation";
-import { coerceCustomerPhone } from "@/lib/phone";
+import { coerceCustomerPhone, formatPhoneDisplay } from "@/lib/phone";
 import { requireCurrentShop } from "@/lib/shop";
 
 export const dynamic = "force-dynamic";
@@ -78,8 +78,12 @@ export async function GET(
       return NextResponse.json({ error: "Customer not found" }, { status: 404 });
     }
 
+    // The whole thread, both sides. The extractor decides for itself what it
+    // will read from a shop message — a salutation, and whether it had just
+    // asked the customer their name — and filtering to CUSTOMER here left it
+    // blind to both.
     const messages = await prisma.message.findMany({
-      where: { conversationId: conversation.id, sender: "CUSTOMER" },
+      where: { conversationId: conversation.id },
       orderBy: { createdAt: "asc" },
       take: SCAN_MESSAGE_LIMIT,
       select: { sender: true, body: true },
@@ -88,6 +92,22 @@ export async function GET(
     const suggestion = extractContactFromMessages(messages, {
       excludePhone: customer.phone,
     });
+
+    // A provisional contact's name is normally the formatted phone number
+    // standing in for one, which must never reach the form. But the AI
+    // assistant writes a real name there when a customer gives it, so fall back
+    // to the record when it holds something other than the placeholder.
+    const placeholder = customer.phone
+      ? formatPhoneDisplay(customer.phone) || customer.phone
+      : null;
+    const storedName =
+      customer.firstName && customer.firstName !== placeholder
+        ? customer.firstName
+        : null;
+    if (!suggestion.firstName && storedName) {
+      suggestion.firstName = storedName;
+      suggestion.lastName = customer.lastName ?? null;
+    }
 
     // A regular who texts from a new number also lands here, and saving would
     // quietly leave the shop with two records for one person. Surfacing the
