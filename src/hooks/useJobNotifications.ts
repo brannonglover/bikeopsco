@@ -5,6 +5,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import type { Job } from "@/lib/types";
 import { BOARD_JOBS_QUERY_KEY } from "@/lib/board-jobs";
 import { playNotificationSound } from "@/lib/notificationSound";
+import { realtimeLog } from "@/lib/realtime/debug";
 import { useForegroundSync } from "@/hooks/useForegroundSync";
 import { useJobRealtime } from "@/hooks/useJobRealtime";
 
@@ -42,7 +43,19 @@ export function useJobNotifications(
   useJobRealtime(queryClient, { enabled });
 
   const syncOnForeground = useCallback(() => {
-    void queryClient.invalidateQueries({ queryKey: BOARD_JOBS_QUERY_KEY });
+    // Independent of the socket on purpose: this is what makes a job created
+    // while the tab was backgrounded appear the moment you come back, whether
+    // or not Realtime has finished reconnecting.
+    realtimeLog("foreground", "tab visible/focused — refetching board");
+    void queryClient
+      .invalidateQueries({ queryKey: BOARD_JOBS_QUERY_KEY })
+      .then(() => {
+        const jobs = queryClient.getQueryData<Job[]>(BOARD_JOBS_QUERY_KEY);
+        realtimeLog(
+          "foreground",
+          `board refetch settled — ${jobs?.length ?? 0} jobs on the board`
+        );
+      });
   }, [queryClient]);
 
   useForegroundSync(syncOnForeground, { enabled });

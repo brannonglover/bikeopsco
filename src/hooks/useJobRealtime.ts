@@ -9,6 +9,7 @@ import {
   JOB_REALTIME_EVENTS,
   type JobRealtimePayload,
 } from "@/lib/realtime/job-events";
+import { realtimeDebugState, realtimeLog } from "@/lib/realtime/debug";
 import { setWorkerTimeout, clearWorkerTimer, acquire, release } from "@/lib/worker-timers";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
@@ -31,16 +32,26 @@ const INVALIDATE_DEBOUNCE_MS = 250;
  *
  * Catch-up after a dropped connection is handled two ways: re-subscribing
  * invalidates once, and `useForegroundSync` still fires on visible / focus / wake.
+ *
+ * Every step traces through `realtimeLog`, which is off unless a browser opts
+ * in (see `@/lib/realtime/debug`). A board that stops updating is otherwise
+ * indistinguishable from a quiet shop.
  */
 export function useJobRealtime(
   queryClient: QueryClient,
   { enabled = true }: { enabled?: boolean } = {}
 ): void {
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled) {
+      realtimeLog("jobs", "disabled — not subscribing");
+      return;
+    }
 
     const supabase = getRealtimeClient();
-    if (!supabase) return;
+    if (!supabase) {
+      realtimeLog("jobs", "no Supabase client (env vars missing)");
+      return;
+    }
 
     acquire();
     let cancelled = false;
@@ -51,8 +62,20 @@ export function useJobRealtime(
     // missed events while offline, so those do need a catch-up refetch.
     let hasSubscribed = false;
 
-    const invalidateBoard = () => {
-      void queryClient.invalidateQueries({ queryKey: BOARD_JOBS_QUERY_KEY });
+    const invalidateBoard = (reason: string) => {
+      realtimeLog("jobs", `invalidating board (${reason})`);
+      void queryClient
+        .invalidateQueries({ queryKey: BOARD_JOBS_QUERY_KEY })
+        .then(() => {
+          realtimeDebugState.lastRefetchAt = Date.now();
+          const jobs = queryClient.getQueryData<{ id: string }[]>(
+            BOARD_JOBS_QUERY_KEY
+          );
+          realtimeLog(
+            "jobs",
+            `board refetch settled — ${jobs?.length ?? 0} jobs on the board`
+          );
+        });
     };
 
     const scheduleInvalidate = () => {
@@ -60,7 +83,7 @@ export function useJobRealtime(
       if (debounceId) clearWorkerTimer(debounceId);
       debounceId = setWorkerTimeout(() => {
         debounceId = null;
-        if (!cancelled) invalidateBoard();
+        if (!cancelled) invalidateBoard("broadcast");
       }, INVALIDATE_DEBOUNCE_MS);
     };
 
@@ -75,20 +98,42 @@ export function useJobRealtime(
         return;
       }
 
+      realtimeDebugState.jobsTopic = auth.channel;
+      realtimeLog("jobs", `joining ${auth.channel}`, {
+        tokenExpiresIn: `${Math.round((auth.expiresAt - Date.now()) / 1000)}s`,
+      });
+
       const next = supabase.channel(auth.channel, { config: { private: true } });
 
       for (const event of JOB_REALTIME_EVENTS) {
         next.on("broadcast", { event }, (message) => {
           const payload = message.payload as JobRealtimePayload | undefined;
           // Belt and braces: RLS already scopes the topic to this shop.
-          if (payload?.shopId && payload.shopId !== auth.shopId) return;
+          if (payload?.shopId && payload.shopId !== auth.shopId) {
+            realtimeLog("jobs", `ignored ${event} for another shop`);
+            return;
+          }
+          realtimeDebugState.eventCount += 1;
+          realtimeDebugState.lastEvent = event;
+          realtimeDebugState.lastEventAt = Date.now();
+          realtimeLog("jobs", `received ${event}`, {
+            jobId: payload?.jobId,
+            // Gap between the server publishing and this browser seeing it.
+            deliveryMs: payload?.at ? Date.now() - payload.at : "unknown",
+          });
           scheduleInvalidate();
         });
       }
 
       next.subscribe((status, error) => {
+        if (cancelled) return;
+        realtimeDebugState.jobsStatus = status;
+        realtimeDebugState.jobsStatusAt = Date.now();
+        realtimeLog("jobs", `channel status ${status}`, error?.message);
+
         if (status === "SUBSCRIBED") {
-          if (hasSubscribed) invalidateBoard();
+          realtimeDebugState.subscribeCount += 1;
+          if (hasSubscribed) invalidateBoard("resubscribed");
           hasSubscribed = true;
           return;
         }
@@ -109,6 +154,7 @@ export function useJobRealtime(
 
     return () => {
       cancelled = true;
+      realtimeLog("jobs", "tearing down subscription");
       if (debounceId) {
         clearWorkerTimer(debounceId);
         debounceId = null;

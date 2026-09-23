@@ -27,6 +27,7 @@ import type { Job, Stage } from "@/lib/types";
 import { getJobBikeDisplayTitle } from "@/lib/job-display";
 import { useAppFeatures } from "@/contexts/AppFeaturesContext";
 import { JOBS_REFRESH_EVENT } from "@/lib/jobs-refresh";
+import { realtimeLog } from "@/lib/realtime/debug";
 import {
   mergeBoardJobsFromFetch,
 } from "@/lib/board-stage-merge";
@@ -211,7 +212,12 @@ export function KanbanBoard({ initialJobs }: { initialJobs?: Job[] }) {
   const { data: jobs = EMPTY_BOARD_JOBS, isPending } = useQuery({
     queryKey: BOARD_JOBS_QUERY_KEY,
     queryFn: async () => {
+      const startedAt = Date.now();
       const incoming = await fetchBoardJobsClient();
+      realtimeLog(
+        "board",
+        `/api/jobs?view=board returned ${incoming.length} jobs in ${Date.now() - startedAt}ms`
+      );
       const prev =
         queryClient.getQueryData<Job[]>(BOARD_JOBS_QUERY_KEY) ?? EMPTY_BOARD_JOBS;
       const next = applyPendingBoardMovesRef.current(
@@ -226,7 +232,15 @@ export function KanbanBoard({ initialJobs }: { initialJobs?: Job[] }) {
       return next;
     },
     initialData: initialJobs,
-    initialDataUpdatedAt: initialJobs ? Date.now() : undefined,
+    // The service worker serves /calendar cache-first, so this server-rendered
+    // snapshot can be from the first visit on this deploy rather than from now.
+    // Stamping it 0 paints it immediately but marks it stale, so the mount
+    // refetch always runs and a ghost card cannot survive on the board.
+    initialDataUpdatedAt: 0,
+    // The snapshot above is for painting only. Always go to the API on mount so
+    // the board is reconciled against the authoritative payload even when the
+    // cached document that carried the snapshot is fresh by React Query's clock.
+    refetchOnMount: "always",
     staleTime: 30_000,
   });
 

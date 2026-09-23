@@ -23,6 +23,12 @@ export type JobRealtimeEvent = (typeof JOB_REALTIME_EVENTS)[number];
 export type JobRealtimePayload = {
   jobId: string;
   shopId: string;
+  /**
+   * Epoch ms the server published this event. Stamped by
+   * `broadcastRealtimeEvent`, not by callers, and read only for diagnostics —
+   * subscribers must not branch on it.
+   */
+  at?: number;
 };
 
 /** Realtime topic carrying job events for a single shop. */

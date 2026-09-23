@@ -53,6 +53,8 @@ export async function broadcastRealtimeEvent({
   const config = getConfig();
   if (!config) return;
 
+  const publishedAt = Date.now();
+
   try {
     const res = await fetch(`${config.url}/realtime/v1/api/broadcast`, {
       method: "POST",
@@ -66,7 +68,11 @@ export async function broadcastRealtimeEvent({
           {
             topic,
             event,
-            payload,
+            // `at` is stamped here rather than by each caller so every channel
+            // carries it: subscribers log the gap between publish and receipt,
+            // which is what separates "the event was slow" from "the event
+            // never arrived" when a board looks stale.
+            payload: { ...payload, at: publishedAt },
             // The channel is RLS-protected; the service role key is what
             // authorizes this publish. Subscribers get read access only.
             private: true,
@@ -82,7 +88,15 @@ export async function broadcastRealtimeEvent({
         res.status,
         await res.text().catch(() => "")
       );
+      return;
     }
+
+    // Logged on success too: without it a silent board is ambiguous between
+    // "nothing was published" and "it was published and never delivered", and
+    // only one of those is a client problem.
+    console.log(
+      `[realtime] broadcast ${event} -> ${topic} ok in ${Date.now() - publishedAt}ms`
+    );
   } catch (error) {
     // Includes the abort timeout. Clients recover on their next catch-up.
     console.error(`[realtime] broadcast ${event} threw:`, error);
