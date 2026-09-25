@@ -520,7 +520,11 @@ export function KanbanBoard({ initialJobs }: { initialJobs?: Job[] }) {
       jobPatchGenerationRef.current.set(jobId, generation);
 
       const persistStage = async () => {
-        const body: Record<string, unknown> = { stage: newStage };
+        // Job-level move: the whole card leaves the column, so every bike's parts hold goes with it.
+        const body: Record<string, unknown> = {
+          stage: newStage,
+          clearBikePartsHolds: true,
+        };
         if (!features.notifyCustomerEnabled || jobsSkippingCustomerNotify.has(jobId)) {
           body.notifyCustomer = false;
         }

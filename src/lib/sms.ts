@@ -120,6 +120,8 @@ const SMS_TEMPLATES: Record<string, string> = {
     "Waiting on parts for your {{bikeMake}} {{bikeModel}}.\n\nTrack: {{statusUrl}}\n\nReply HELP for help, STOP to opt out.",
   waiting_on_customer:
     "We need your approval to continue work on your {{bikeMake}} {{bikeModel}}.\n\nTrack: {{statusUrl}}\n\nReply HELP for help, STOP to opt out.",
+  bike_waiting_on_parts:
+    "Update on your {{bikeName}}: we're waiting on parts to finish it. We'll let you know as soon as they arrive.\n\nTrack: {{statusUrl}}\n\nReply HELP for help, STOP to opt out.",
   bike_ready:
     "{{bikeReadyMessage}}\n\nView your itemized bill: {{billUrl}}\n\nReply HELP for help, STOP to opt out.",
   bike_ready_invoice:
@@ -191,10 +193,20 @@ function getBikeReadySmsMessage(job: JobForSms): string {
 
 type ShopSmsContext = { name: string; subdomain: string | null };
 
+/** Overrides for a send scoped to one bike of a multi-bike job. */
+export type BikeScopedSend = {
+  /** Display name for the bike — nickname, else make + model. */
+  bikeName?: string;
+  bikeMake?: string;
+  bikeModel?: string;
+  jobBikeId?: string;
+};
+
 export async function buildJobSmsMessage(
   templateSlug: string,
   job: JobForSms,
-  shopHint?: ShopSmsContext
+  shopHint?: ShopSmsContext,
+  bikeScope?: BikeScopedSend
 ): Promise<{ ok: boolean; message?: string; error?: string }> {
   const body = SMS_TEMPLATES[templateSlug];
   if (!body) {
@@ -218,10 +230,15 @@ export async function buildJobSmsMessage(
   const statusUrl = getCustomerStatusUrl(job.id, job.shopId, shopRow?.subdomain);
   const billUrl = getCustomerBillUrl(job.id, job.shopId, shopRow?.subdomain);
 
+  // A bike-scoped send names that bike, so even templates written against
+  // {{bikeMake}} {{bikeModel}} render the affected bike, not "Multiple / 3 bikes".
+  const bikeMake = bikeScope?.bikeMake ?? job.bikeMake;
+  const bikeModel = bikeScope?.bikeModel ?? job.bikeModel;
   const vars: Record<string, string> = {
     customerName,
-    bikeMake: job.bikeMake,
-    bikeModel: job.bikeModel,
+    bikeMake,
+    bikeModel,
+    bikeName: bikeScope?.bikeName ?? `${bikeMake} ${bikeModel}`.trim(),
     bikeReadyMessage: getBikeReadySmsMessage(job),
     shopName,
     statusUrl,
@@ -235,9 +252,10 @@ export async function sendJobSms(
   templateSlug: string,
   phoneNumber: string,
   job: JobForSms,
-  shopHint?: ShopSmsContext
+  shopHint?: ShopSmsContext,
+  bikeScope?: BikeScopedSend
 ): Promise<{ ok: boolean; message?: string; error?: string }> {
-  const built = await buildJobSmsMessage(templateSlug, job, shopHint);
+  const built = await buildJobSmsMessage(templateSlug, job, shopHint, bikeScope);
   if (!built.ok || !built.message) {
     return { ok: false, error: built.error };
   }
@@ -259,6 +277,7 @@ export async function sendJobSms(
       data: {
         shopId: job.shopId,
         jobId: job.id,
+        jobBikeId: bikeScope?.jobBikeId ?? null,
         templateSlug,
         recipient: normalized,
       },

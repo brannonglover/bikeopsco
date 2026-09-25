@@ -1,7 +1,27 @@
-import type { DeliveryType, Job, Stage } from "@/lib/types";
+import type { DeliveryType, Job, JobBike, Stage } from "@/lib/types";
 
-/** Match PATCH semantics so UI does not snap when server JSON arrives. */
-export function withOptimisticStageChange(job: Job, newStage: Stage): Job {
+/** True when some other bike on the job is still workable — not done and not on a parts hold. */
+export function hasWorkableBikeBesides(
+  bikes: JobBike[] | undefined,
+  bikeId: string
+): boolean {
+  return (bikes ?? []).some(
+    (b) => b.id !== bikeId && !b.completedAt && !b.waitingOnPartsAt
+  );
+}
+
+/**
+ * Match PATCH semantics so UI does not snap when server JSON arrives.
+ *
+ * `clearPartsHolds` mirrors the API's `clearBikePartsHolds`: job-level moves drop every
+ * bike's hold, bike-level actions pass false so one bike's hold survives work on another.
+ */
+export function withOptimisticStageChange(
+  job: Job,
+  newStage: Stage,
+  opts?: { clearPartsHolds?: boolean }
+): Job {
+  const clearPartsHolds = opts?.clearPartsHolds ?? true;
   const bikes = job.jobBikes ?? [];
   const incomplete = bikes.filter((b) => !b.completedAt);
 
@@ -26,9 +46,9 @@ export function withOptimisticStageChange(job: Job, newStage: Stage): Job {
   let next: Job = {
     ...job,
     stage: newStage,
-    jobBikes: bikes.map((b) =>
-      b.completedAt ? b : { ...b, waitingOnPartsAt: null }
-    ),
+    jobBikes: clearPartsHolds
+      ? bikes.map((b) => (b.completedAt ? b : { ...b, waitingOnPartsAt: null }))
+      : bikes,
   };
 
   if (newStage === "WORKING_ON" && incomplete.length === 1) {
@@ -72,7 +92,9 @@ export function applyOptimisticWorkingOnToggle(job: Job, bikeId: string): Job {
   const nextId = job.workingOnJobBikeId === bikeId ? null : bikeId;
   let next: Job = { ...job, workingOnJobBikeId: nextId };
   if (nextId && job.stage !== "WORKING_ON") {
-    next = withOptimisticStageChange(next, "WORKING_ON");
+    next = withOptimisticStageChange(next, "WORKING_ON", {
+      clearPartsHolds: false,
+    });
     next = { ...next, workingOnJobBikeId: nextId };
   }
   return next;
@@ -101,10 +123,13 @@ export function applyOptimisticWaitForParts(job: Job, bikeId: string): Job {
   const jobBikes = (job.jobBikes ?? []).map((b) =>
     b.id === bikeId ? { ...b, waitingOnPartsAt: now } : b
   );
-  let next = withOptimisticStageChange(
-    { ...job, jobBikes },
-    "WAITING_ON_PARTS"
-  );
+  let next: Job = { ...job, jobBikes };
+  // The column follows the active work: only move once nothing else is workable.
+  if (!hasWorkableBikeBesides(jobBikes, bikeId)) {
+    next = withOptimisticStageChange(next, "WAITING_ON_PARTS", {
+      clearPartsHolds: false,
+    });
+  }
   if (job.workingOnJobBikeId === bikeId) {
     next = { ...next, workingOnJobBikeId: null };
   }
@@ -115,10 +140,9 @@ export function applyOptimisticResumeWork(job: Job, bikeId: string): Job {
   const jobBikes = (job.jobBikes ?? []).map((b) =>
     b.id === bikeId ? { ...b, waitingOnPartsAt: null } : b
   );
-  const next = withOptimisticStageChange(
-    { ...job, jobBikes },
-    "WORKING_ON"
-  );
+  const next = withOptimisticStageChange({ ...job, jobBikes }, "WORKING_ON", {
+    clearPartsHolds: false,
+  });
   return { ...next, workingOnJobBikeId: bikeId };
 }
 
@@ -127,7 +151,9 @@ export function applyOptimisticUnwaitOnly(job: Job, bikeId: string): Job {
     b.id === bikeId ? { ...b, waitingOnPartsAt: null } : b
   );
   if (job.stage !== "WORKING_ON") {
-    return withOptimisticStageChange({ ...job, jobBikes }, "WORKING_ON");
+    return withOptimisticStageChange({ ...job, jobBikes }, "WORKING_ON", {
+      clearPartsHolds: false,
+    });
   }
   return { ...job, jobBikes };
 }

@@ -50,6 +50,7 @@ import {
   applyOptimisticUnwaitOnly,
   applyOptimisticWaitForParts,
   applyOptimisticWorkingOnToggle,
+  hasWorkableBikeBesides,
 } from "@/lib/optimistic-job-patch";
 import { ServiceName } from "@/components/ui/ServiceName";
 
@@ -1059,7 +1060,11 @@ function JobBikeSection({
   const handleWaitForParts = (bikeId: string) => {
     if (!onJobUpdated) return;
     const body: Record<string, unknown> = { waitForPartsJobBikeId: bikeId };
-    if (job.stage !== "WAITING_ON_PARTS") {
+    // The column follows the active work: only move the card once nothing else is workable.
+    if (
+      job.stage !== "WAITING_ON_PARTS" &&
+      !hasWorkableBikeBesides(job.jobBikes, bikeId)
+    ) {
       body.stage = "WAITING_ON_PARTS";
     }
     patchJobInBackground(applyOptimisticWaitForParts(job, bikeId), body);
@@ -1275,15 +1280,28 @@ function JobBikeSection({
                         Undo done
                       </button>
                     ) : isWaitingOnParts ? (
-                      <button
-                        type="button"
-                        onClick={() => handleResumeWork(b.id)}
-                        className="inline-flex items-center gap-1.5 self-start text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-amber-100 text-amber-800 hover:bg-amber-200 transition-colors touch-manipulation min-h-[32px]"
-                        title="Parts arrived — resume working on this bike"
-                      >
-                        <WrenchIcon className="w-3.5 h-3.5" />
-                        Resume work
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handleResumeWork(b.id)}
+                          className="inline-flex items-center gap-1.5 self-start text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-amber-100 text-amber-800 hover:bg-amber-200 transition-colors touch-manipulation min-h-[32px]"
+                          title="Parts arrived — resume working on this bike"
+                        >
+                          <WrenchIcon className="w-3.5 h-3.5" />
+                          Resume work
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleToggleComplete(b.id, false)}
+                            className="inline-flex items-center gap-1.5 self-start text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors touch-manipulation min-h-[32px] hover:bg-emerald-50 hover:text-emerald-800 hover:border-emerald-200"
+                            title="Mark this bike as done"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden>
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                            Mark done
+                          </button>
+                      </>
                     ) : isWorkingOn ? (
                       <>
                         <button
@@ -1324,15 +1342,39 @@ function JobBikeSection({
                         )}
                       </>
                     ) : (
-                      <button
-                        type="button"
-                        onClick={() => handleToggleWorkingOn(b.id)}
-                        className="inline-flex items-center gap-1.5 self-start text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-amber-100 hover:text-amber-800 transition-colors touch-manipulation min-h-[32px]"
-                        title="Mark as working on this bike"
-                      >
-                        <WrenchIcon className="w-3.5 h-3.5" />
-                        Work on this
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleWorkingOn(b.id)}
+                          className="inline-flex items-center gap-1.5 self-start text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-amber-100 hover:text-amber-800 transition-colors touch-manipulation min-h-[32px]"
+                          title="Mark as working on this bike"
+                        >
+                          <WrenchIcon className="w-3.5 h-3.5" />
+                          Work on this
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleWaitForParts(b.id)}
+                            className="inline-flex items-center gap-1.5 self-start text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors touch-manipulation min-h-[32px] hover:bg-red-50 hover:text-red-800 hover:border-red-200"
+                            title="Mark this bike as waiting on parts (customer sees this status)"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden>
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                            </svg>
+                            Need parts
+                          </button>
+                        <button
+                            type="button"
+                            onClick={() => handleToggleComplete(b.id, false)}
+                            className="inline-flex items-center gap-1.5 self-start text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors touch-manipulation min-h-[32px] hover:bg-emerald-50 hover:text-emerald-800 hover:border-emerald-200"
+                            title="Mark this bike as done"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden>
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                            Mark done
+                          </button>
+                      </>
                     )}
                   </div>
                 )}

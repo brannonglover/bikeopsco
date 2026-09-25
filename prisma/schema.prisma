@@ -164,6 +164,8 @@ model JobBike {
   catalogMatchedAt   DateTime?
   createdAt          DateTime                   @default(now())
   workingOnJob       Job?                       @relation("WorkingOnBike")
+  jobEmails          JobEmail[]
+  jobSmses           JobSms[]
   jobServices        JobService[]
   jobProducts        JobProduct[]
   componentOverrides JobBikeComponentOverride[]
@@ -379,11 +381,15 @@ model JobEmail {
   shop         Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
   jobId        String
   job          Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  /// Set for bike-level sends (one bike of a multi-bike job); null for job-level sends.
+  jobBikeId    String?
+  jobBike      JobBike? @relation(fields: [jobBikeId], references: [id], onDelete: SetNull)
   templateSlug String
   sentAt       DateTime @default(now())
   recipient    String
 
   @@index([shopId])
+  @@index([jobBikeId])
 }
 
 model JobSms {
@@ -392,11 +398,15 @@ model JobSms {
   shop         Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
   jobId        String
   job          Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  /// Set for bike-level sends (one bike of a multi-bike job); null for job-level sends.
+  jobBikeId    String?
+  jobBike      JobBike? @relation(fields: [jobBikeId], references: [id], onDelete: SetNull)
   templateSlug String
   sentAt       DateTime @default(now())
   recipient    String
 
   @@index([shopId])
+  @@index([jobBikeId])
 }
 
 model Product {
@@ -741,32 +751,32 @@ model ReviewSettings {
 }
 
 model AppSettings {
-  id                       String   @id @default(cuid())
+  id                       String    @id @default(cuid())
   shopId                   String
-  shop                     Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shop                     Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
   /// When false: new booking requests go to the waitlist instead of creating a job.
-  bookingsEnabled          Boolean  @default(true)
+  bookingsEnabled          Boolean   @default(true)
   /// Maximum number of bikes allowed to be active (RECEIVED + WORKING_ON) before new bookings are waitlisted.
-  maxActiveBikes           Int      @default(5)
+  maxActiveBikes           Int       @default(5)
   /// Array of closed calendar dates ({ date: "YYYY-MM-DD", reason?: string }) that cannot be booked.
-  closedDates              Json     @default("[]")
-  collectionServiceEnabled Boolean  @default(true)
+  closedDates              Json      @default("[]")
+  collectionServiceEnabled Boolean   @default(true)
   /// Collection eligibility radius, in miles
-  collectionRadiusMiles    Float    @default(5)
+  collectionRadiusMiles    Float     @default(5)
   /// Collection fee (standard bike), USD
-  collectionFeeRegular     Decimal  @default(20) @db.Decimal(10, 2)
+  collectionFeeRegular     Decimal   @default(20) @db.Decimal(10, 2)
   /// Collection fee (e-bike), USD
-  collectionFeeEbike       Decimal  @default(30) @db.Decimal(10, 2)
-  notifyCustomerEnabled    Boolean  @default(true)
-  chatEnabled              Boolean  @default(true)
-  voiceEnabled             Boolean  @default(false)
-  reviewsEnabled           Boolean  @default(true)
+  collectionFeeEbike       Decimal   @default(30) @db.Decimal(10, 2)
+  notifyCustomerEnabled    Boolean   @default(true)
+  chatEnabled              Boolean   @default(true)
+  voiceEnabled             Boolean   @default(false)
+  reviewsEnabled           Boolean   @default(true)
   /// When false: hide Rentals nav and block rental APIs.
-  rentalsEnabled           Boolean  @default(true)
+  rentalsEnabled           Boolean   @default(true)
   /// When true, show status filter pills on the job board to narrow visible columns.
-  jobBoardFiltersEnabled   Boolean  @default(false)
+  jobBoardFiltersEnabled   Boolean   @default(false)
   /// IANA timezone for shop scheduling (e.g. America/New_York).
-  timezone                 String   @default("America/New_York")
+  timezone                 String    @default("America/New_York")
   /// Staff email for booking, payment, chat, and waitlist notifications.
   staffNotifyEmail         String?
   /// Public shop phone shown to customers (e.g. call button on job status).
@@ -777,7 +787,7 @@ model AppSettings {
   voicemailGreetingUrl     String?
   /// When true, the AI assistant texts callers who miss us and answers customer
   /// texts until staff take over. Off by default: it speaks as the shop.
-  aiAssistantEnabled       Boolean  @default(false)
+  aiAssistantEnabled       Boolean   @default(false)
   /// Shop website the service description was imported from. Kept so the
   /// "import from site" button has somewhere to go back to.
   aiAssistantWebsiteUrl    String?
@@ -786,8 +796,8 @@ model AppSettings {
   /// own, so nothing a site edit introduces reaches a customer unreviewed.
   aiAssistantKnowledge     String?
   aiAssistantKnowledgeAt   DateTime?
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
 
   @@unique([shopId])
   @@index([shopId])

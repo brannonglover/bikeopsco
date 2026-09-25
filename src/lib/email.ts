@@ -7,6 +7,7 @@ import { getShopTimezone } from "./shop-timezone";
 import { getShopNotifyEmail } from "./shop-notify-email";
 import type { ChatCustomerReminderDelivery } from "./chat-reminder-delivery";
 import { getCustomerBillUrl, getCustomerStatusUrl } from "./job-customer-access";
+import type { BikeScopedSend } from "./sms";
 import {
   getAppUrl,
   getCustomerNotificationBlockReason,
@@ -499,6 +500,9 @@ const LEGACY_WAITING_ON_CUSTOMER_TEMPLATE_BODY =
 const WAITING_ON_CUSTOMER_TEMPLATE_BODY =
   `<p>Hi {{customerName}},</p><p>We’re ready to move forward with your {{bikeMake}} {{bikeModel}}, but we need your approval before we continue.</p><p>Please contact the shop to approve the work so we can continue.</p><p style="margin: 20px 0;">{{statusButtonHtml}}</p><p>Thanks,<br/>The {{shopName}} Team</p>`;
 
+const BIKE_WAITING_ON_PARTS_TEMPLATE_BODY =
+  `<p>Hi {{customerName}},</p><p>A quick update on your {{bikeName}}: we're waiting on parts before we can finish it.</p><p>We'll let you know as soon as the parts arrive. Any other bikes on this repair are unaffected.</p><p style="margin: 20px 0;">{{statusButtonHtml}}</p><p>Thanks,<br/>The {{shopName}} Team</p>`;
+
 const WAITLIST_PROMOTED_DROPOFF_TEMPLATE_BODY =
   `<p>Hi {{customerName}},</p><p>Great news — a spot has opened up and we’ve booked in your {{bikeMake}} {{bikeModel}}! You’re off the waitlist.</p><p>Please drop your bike off at {{shopName}} at your scheduled time. We’ll keep you posted as the repair progresses.</p><p style="margin: 20px 0;">{{statusButtonHtml}}</p><p>Thanks,<br/>The {{shopName}} Team</p>`;
 
@@ -609,7 +613,8 @@ interface JobForEmail {
 export async function sendJobEmail(
   templateSlug: string,
   recipient: string,
-  job: JobForEmail
+  job: JobForEmail,
+  bikeScope?: BikeScopedSend
 ): Promise<{ ok: boolean; error?: string }> {
   const blocked = skipIfCustomerNotificationsBlocked("sendJobEmail");
   if (blocked) return blocked;
@@ -639,6 +644,28 @@ export async function sendJobEmail(
   });
 
   // Backfill newly-added default templates for older databases that haven't been re-seeded.
+  if (!template && templateSlug === "bike_waiting_on_parts") {
+    try {
+      template = await prisma.emailTemplate.create({
+        data: {
+          shopId,
+          slug: templateSlug,
+          name: "Bike Waiting on Parts",
+          subject: "Update: waiting on parts for your {{bikeName}} – {{shopName}}",
+          bodyHtml: BIKE_WAITING_ON_PARTS_TEMPLATE_BODY,
+          triggerType: "MANUAL",
+          stage: null,
+          deliveryType: null,
+          delayDays: null,
+        },
+      });
+    } catch {
+      template = await prisma.emailTemplate.findUnique({
+        where: { shopId_slug: { shopId, slug: templateSlug } },
+      });
+    }
+  }
+
   if (!template && templateSlug === "waiting_on_customer") {
     try {
       template = await prisma.emailTemplate.create({
@@ -720,14 +747,19 @@ export async function sendJobEmail(
     });
   };
 
+  // A bike-scoped send names that bike, so even templates written against
+  // {{bikeMake}} {{bikeModel}} render the affected bike, not "Multiple / 3 bikes".
+  const bikeMake = bikeScope?.bikeMake ?? job.bikeMake;
+  const bikeModel = bikeScope?.bikeModel ?? job.bikeModel;
   const vars: Record<string, string> = {
     customerName: job.customer
       ? job.customer.lastName
         ? `${job.customer.firstName} ${job.customer.lastName}`
         : job.customer.firstName
       : "Customer",
-    bikeMake: job.bikeMake,
-    bikeModel: job.bikeModel,
+    bikeMake,
+    bikeModel,
+    bikeName: bikeScope?.bikeName ?? `${bikeMake} ${bikeModel}`.trim(),
     shopName: shopRow?.name ?? process.env.SHOP_NAME ?? "Basement Bike Mechanic",
     customerNotes: job.customerNotes ?? "",
     statusUrl,
@@ -767,6 +799,7 @@ export async function sendJobEmail(
       data: {
         shopId,
         jobId: job.id,
+        jobBikeId: bikeScope?.jobBikeId ?? null,
         templateSlug,
         recipient,
       },

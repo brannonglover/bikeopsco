@@ -12,6 +12,10 @@ import { getEffectiveEmailUpdatesConsent, getEffectiveSmsConsent } from "@/lib/s
 import { hasJobReadAccess } from "@/lib/job-customer-access";
 import { getShopForHost } from "@/lib/shop";
 import { mirrorJobStageToCustomerChat } from "@/lib/system-chat";
+import {
+  findBikeEnteringPartsHold,
+  notifyBikeWaitingOnParts,
+} from "@/lib/job-bike-notifications";
 import { normalizeJobCollectionWindowsForStorage } from "@/lib/normalize-job-collection-windows";
 import { withPrismaRetry } from "@/lib/prisma-retry";
 import { optionalTrimmedString } from "@/lib/zod-helpers";
@@ -61,6 +65,9 @@ const updateJobSchema = z.object({
   uncompleteJobBikeId: z.string().optional(),
   waitForPartsJobBikeId: z.string().optional(),
   unwaitForPartsJobBikeId: z.string().optional(),
+  /** Job-level stage move (board drag / stage picker): drop every bike's parts hold.
+   * Bike-level actions omit this so one bike's hold survives work on another. */
+  clearBikePartsHolds: z.boolean().optional(),
   customerId: z.string().optional().nullable(),
   mechanicId: z.string().optional().nullable(),
   deliveryType: z.enum(["DROP_OFF_AT_SHOP", "COLLECTION_SERVICE"]).optional(),
@@ -186,7 +193,7 @@ export async function PATCH(
       where: { id, shopId: shop.id },
       include: {
         customer: true,
-        jobBikes: { select: { id: true, completedAt: true, make: true, model: true } },
+        jobBikes: { select: { id: true, completedAt: true, waitingOnPartsAt: true, make: true, model: true } },
       },
     });
     if (!existingJob) {
@@ -213,8 +220,35 @@ export async function PATCH(
       }
     }
 
+    /**
+     * A single bike going on hold must not drag the whole card into Waiting on parts
+     * while another bike is still workable — the column follows the active work.
+     */
+    if (data.stage === "WAITING_ON_PARTS" && data.waitForPartsJobBikeId) {
+      const stillWorkable = (existingJob.jobBikes ?? []).some(
+        (b) =>
+          b.id !== data.waitForPartsJobBikeId &&
+          !b.completedAt &&
+          !b.waitingOnPartsAt
+      );
+      if (stillWorkable) data.stage = undefined;
+    }
+
     const stageChanged =
       data.stage !== undefined && data.stage !== existingJob.stage;
+
+    /**
+     * Bike status drives bike-specific customer notifications; job stage drives board
+     * behavior. Resolved before the write from the same conditions the transaction uses
+     * to stamp the hold, and it replaces the job-level Waiting on parts notification so
+     * the last workable bike going on hold does not notify twice.
+     */
+    const bikeEnteringPartsHoldId = findBikeEnteringPartsHold({
+      existingJob,
+      data,
+    });
+    const bikeNotificationReplacesStageNotification =
+      bikeEnteringPartsHoldId !== null && data.stage === "WAITING_ON_PARTS";
 
     const updateData: Record<string, unknown> = {};
     if (data.stage !== undefined) updateData.stage = data.stage;
@@ -593,8 +627,11 @@ export async function PATCH(
       ) {
         await tx.job.update({ where: { id, shopId: shop.id }, data: { workingOnJobBikeId: null } });
       }
-      /** Dragging the card out of Waiting on parts (or any other column) must drop bike-level flags; only staying in WAITING_ON_PARTS keeps them. */
-      if (stageChanged && data.stage !== undefined && data.stage !== "WAITING_ON_PARTS") {
+      /**
+       * Job-level moves out of Waiting on parts drop every bike's hold. Bike-level actions
+       * never sweep: starting or completing one bike must leave another bike's hold intact.
+       */
+      if (data.clearBikePartsHolds && data.stage !== "WAITING_ON_PARTS") {
         await tx.jobBike.updateMany({
           where: {
             shopId: shop.id,
@@ -654,6 +691,7 @@ export async function PATCH(
       data.stage &&
       data.stage !== "CANCELLED" &&
       data.stage !== "COMPLETED" &&
+      !bikeNotificationReplacesStageNotification &&
       existingJob
         ? getTemplateSlugForStage(data.stage, existingJob.deliveryType)
         : null;
@@ -668,7 +706,20 @@ export async function PATCH(
       data.stage &&
       data.stage !== "CANCELLED" &&
       data.stage !== "COMPLETED" &&
+      !bikeNotificationReplacesStageNotification &&
       existingJob;
+
+    // Bike-level hold: notify about that bike by name whether or not the job stage moved.
+    if (bikeEnteringPartsHoldId) {
+      await notifyBikeWaitingOnParts({
+        job,
+        jobBikeId: bikeEnteringPartsHoldId,
+        shopHint: shopSmsContext,
+        features,
+        notifyCustomer: data.notifyCustomer !== false,
+        resend: Boolean(data.resendNotification),
+      });
+    }
 
     // Chat mirror is in-app history (not SMS/email); run before the response so
     // serverless does not drop the write. SMS/email run after the response.
@@ -777,7 +828,8 @@ export async function PATCH(
       data.stage &&
       job.customer?.id &&
       features.notifyCustomerEnabled &&
-      data.notifyCustomer !== false
+      data.notifyCustomer !== false &&
+      !bikeNotificationReplacesStageNotification
     ) {
       const stageLabels: Record<string, string> = {
         PENDING_APPROVAL: "Pending approval",

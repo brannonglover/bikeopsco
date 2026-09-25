@@ -80,6 +80,16 @@ const DEFAULT_TEMPLATES = [
     delayDays: null,
   },
   {
+    slug: "bike_waiting_on_parts",
+    name: "Bike Waiting on Parts",
+    subject: "Update: waiting on parts for your {{bikeName}} – {{shopName}}",
+    bodyHtml: `<p>Hi {{customerName}},</p><p>A quick update on your {{bikeName}}: we're waiting on parts before we can finish it.</p><p>We'll let you know as soon as the parts arrive. Any other bikes on this repair are unaffected.</p><p style="margin: 20px 0;">{{statusButtonHtml}}</p><p>Thanks,<br/>The {{shopName}} Team</p>`,
+    triggerType: "MANUAL",
+    stage: null,
+    deliveryType: null,
+    delayDays: null,
+  },
+  {
     slug: "bike_ready",
     name: "Bike Ready",
     subject: "Your bike is ready!",

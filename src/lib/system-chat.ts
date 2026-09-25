@@ -1,7 +1,11 @@
 import { prisma } from "@/lib/db";
 import { publishChatEvent } from "@/lib/realtime/publish-chat-event";
 import { findOrCreateGeneralConversation } from "@/lib/conversation";
-import { buildJobSmsMessage, type JobForSms } from "@/lib/sms";
+import {
+  buildJobSmsMessage,
+  type BikeScopedSend,
+  type JobForSms,
+} from "@/lib/sms";
 
 type ShopSmsContext = { name: string; subdomain: string | null };
 
@@ -54,6 +58,9 @@ export async function addCustomerSystemChatMessage({
 /**
  * Posts a stage-change notification to the customer's general chat thread.
  * Independent of SMS/email delivery so chat stays in sync when texts send.
+ *
+ * `bikeScope` names one bike of a multi-bike job. Its message body differs per bike, so
+ * the duplicate check below lets each bike post once without a separate dedup key.
  */
 export async function mirrorJobStageToCustomerChat({
   shopId,
@@ -62,6 +69,7 @@ export async function mirrorJobStageToCustomerChat({
   smsTemplateSlug,
   force = false,
   shopHint,
+  bikeScope,
 }: {
   shopId: string;
   customerId: string;
@@ -69,8 +77,9 @@ export async function mirrorJobStageToCustomerChat({
   smsTemplateSlug: string;
   force?: boolean;
   shopHint?: ShopSmsContext;
+  bikeScope?: BikeScopedSend;
 }): Promise<void> {
-  const built = await buildJobSmsMessage(smsTemplateSlug, job, shopHint);
+  const built = await buildJobSmsMessage(smsTemplateSlug, job, shopHint, bikeScope);
   if (!built.ok || !built.message) {
     console.error("[system-chat] mirrorJobStageToCustomerChat: template build failed:", {
       shopId,
