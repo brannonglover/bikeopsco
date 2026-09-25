@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Stage } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { resolveProfileBikeForJobBike } from "@/lib/resolve-profile-bike";
 import { z } from "zod";
 import { getAuthorizedShopId, requireStaffShop } from "@/lib/api-auth";
 import { withPrismaRetry } from "@/lib/prisma-retry";
@@ -276,36 +277,20 @@ export async function POST(request: NextRequest) {
       });
 
       const resolvedBikes: Array<(typeof bikes)[number] & { bikeId: string | null }> = [];
+      // One profile bike per bike on the job: two same-make/model bikes are two bikes.
+      const claimedBikeIds = new Set<string>();
       for (const b of bikes) {
         let bikeId: string | null = b.bikeId ?? null;
         if (!bikeId && customerId) {
-          const trimmedModel = b.model?.trim() || null;
-          const existing = await tx.bike.findFirst({
-            where: {
-              shopId,
-              customerId,
-              make: { equals: b.make.trim(), mode: "insensitive" },
-              model: trimmedModel ? { equals: trimmedModel, mode: "insensitive" } : null,
-            },
+          bikeId = await resolveProfileBikeForJobBike({
+            tx,
+            shopId,
+            customerId,
+            bike: b,
+            claimedBikeIds,
           });
-          if (existing) {
-            bikeId = existing.id;
-          } else {
-            const created = await tx.bike.create({
-              data: {
-                shopId,
-                customerId,
-                make: b.make.trim(),
-                model: trimmedModel,
-                year: b.year ?? null,
-                bikeType: b.bikeType ?? null,
-                nickname: b.nickname ?? null,
-                imageUrl: b.imageUrl ?? null,
-              },
-            });
-            bikeId = created.id;
-          }
         }
+        if (bikeId) claimedBikeIds.add(bikeId);
         resolvedBikes.push({ ...b, bikeId });
       }
 

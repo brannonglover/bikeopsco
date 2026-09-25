@@ -12,6 +12,7 @@ import { getEffectiveEmailUpdatesConsent, getEffectiveSmsConsent } from "@/lib/s
 import { hasJobReadAccess } from "@/lib/job-customer-access";
 import { getShopForHost } from "@/lib/shop";
 import { mirrorJobStageToCustomerChat } from "@/lib/system-chat";
+import { resolveProfileBikeForJobBike } from "@/lib/resolve-profile-bike";
 import {
   findBikeEnteringPartsHold,
   notifyBikeWaitingOnParts,
@@ -193,7 +194,7 @@ export async function PATCH(
       where: { id, shopId: shop.id },
       include: {
         customer: true,
-        jobBikes: { select: { id: true, completedAt: true, waitingOnPartsAt: true, make: true, model: true } },
+        jobBikes: { select: { id: true, completedAt: true, waitingOnPartsAt: true, bikeId: true, make: true, model: true } },
       },
     });
     if (!existingJob) {
@@ -358,6 +359,17 @@ export async function PATCH(
       ) {
         updateData.archivedAt = null;
       }
+      // Uncancelling clears the cancellation and puts the job back on the board.
+      if (
+        existingJob.stage === "CANCELLED" &&
+        data.stage &&
+        data.stage !== "CANCELLED"
+      ) {
+        updateData.cancellationReason = null;
+        if (data.archived === undefined) {
+          updateData.archivedAt = null;
+        }
+      }
     }
 
     if (!stageChanged && data.stage !== undefined) {
@@ -434,36 +446,20 @@ export async function PATCH(
 
         // For each bike without a bikeId, find or create a Bike record on the customer's profile.
         const resolvedBikes: Array<(typeof bikes)[number] & { bikeId: string | null }> = [];
+        // One profile bike per bike on the job: two same-make/model bikes are two bikes.
+        const claimedBikeIds = new Set<string>();
         for (const b of bikes) {
           let bikeId: string | null = ("bikeId" in b ? b.bikeId : null) ?? null;
           if (!bikeId && effectiveCustomerId) {
-            const trimmedModel = b.model?.trim() || null;
-            const existing = await tx.bike.findFirst({
-              where: {
-                shopId: shop.id,
-                customerId: effectiveCustomerId,
-                make: { equals: b.make.trim(), mode: "insensitive" },
-                model: trimmedModel ? { equals: trimmedModel, mode: "insensitive" } : null,
-              },
+            bikeId = await resolveProfileBikeForJobBike({
+              tx,
+              shopId: shop.id,
+              customerId: effectiveCustomerId,
+              bike: b,
+              claimedBikeIds,
             });
-            if (existing) {
-              bikeId = existing.id;
-            } else {
-              const created = await tx.bike.create({
-                data: {
-                  shopId: shop.id,
-                  customerId: effectiveCustomerId,
-                  make: b.make.trim(),
-                  model: trimmedModel,
-                  year: ("year" in b ? b.year : null) ?? null,
-                  bikeType: ("bikeType" in b ? b.bikeType : null) ?? null,
-                  nickname: ("nickname" in b ? b.nickname : null) ?? null,
-                  imageUrl: ("imageUrl" in b ? b.imageUrl : null) ?? null,
-                },
-              });
-              bikeId = created.id;
-            }
           }
+          if (bikeId) claimedBikeIds.add(bikeId);
           resolvedBikes.push({ ...b, bikeId });
         }
 
@@ -500,32 +496,19 @@ export async function PATCH(
           data.customerId !== undefined ? data.customerId : existingJob.customerId;
         let bikeId: string | null = b.bikeId ?? null;
         if (!bikeId && effectiveCustomerId) {
-          const trimmedModel = b.model?.trim() || null;
-          const found = await tx.bike.findFirst({
-            where: {
-              shopId: shop.id,
-              customerId: effectiveCustomerId,
-              make: { equals: b.make.trim(), mode: "insensitive" },
-              model: trimmedModel ? { equals: trimmedModel, mode: "insensitive" } : null,
-            },
+          // Adding a second same-make/model bike must not re-claim the first one's profile row.
+          const claimedBikeIds = new Set(
+            (existingJob.jobBikes ?? [])
+              .map((jb) => jb.bikeId)
+              .filter((id): id is string => Boolean(id))
+          );
+          bikeId = await resolveProfileBikeForJobBike({
+            tx,
+            shopId: shop.id,
+            customerId: effectiveCustomerId,
+            bike: b,
+            claimedBikeIds,
           });
-          if (found) {
-            bikeId = found.id;
-          } else {
-            const created = await tx.bike.create({
-              data: {
-                shopId: shop.id,
-                customerId: effectiveCustomerId,
-                make: b.make.trim(),
-                model: trimmedModel,
-                year: b.year ?? null,
-                bikeType: b.bikeType ?? null,
-                nickname: b.nickname ?? null,
-                imageUrl: b.imageUrl ?? null,
-              },
-            });
-            bikeId = created.id;
-          }
         }
         const catalogMatch = await matchCatalogFieldsForJobBike(b.make, b.model, b.year ?? null);
         const nextSortOrder = (existingJob.jobBikes?.length ?? 0);
@@ -686,10 +669,16 @@ export async function PATCH(
       }).catch((e) => console.error("[Reject] Declined email failed:", e));
     }
 
+    // Restoring a cancelled job re-enters an earlier stage the customer was already
+    // told about — the templated email/SMS would read as a fresh announcement.
+    const restoredFromCancelled =
+      stageChanged && existingJob.stage === "CANCELLED" && data.stage !== "CANCELLED";
+
     const stageNotificationSlug =
       stageChanged &&
       data.stage &&
       data.stage !== "CANCELLED" &&
+      !restoredFromCancelled &&
       data.stage !== "COMPLETED" &&
       !bikeNotificationReplacesStageNotification &&
       existingJob
@@ -706,6 +695,7 @@ export async function PATCH(
       data.stage &&
       data.stage !== "CANCELLED" &&
       data.stage !== "COMPLETED" &&
+      !restoredFromCancelled &&
       !bikeNotificationReplacesStageNotification &&
       existingJob;
 

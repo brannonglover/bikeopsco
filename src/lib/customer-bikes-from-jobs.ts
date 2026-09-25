@@ -136,13 +136,30 @@ export async function ensureCustomerBikesFromJobs(
     }
 
     if (candidate.jobBikeIds.length > 0) {
-      await db.jobBike.updateMany({
-        where: {
-          id: { in: candidate.jobBikeIds },
-          OR: [{ bikeId: null }, { bikeId: { not: bike.id } }],
-        },
-        data: { bikeId: bike.id },
+      // At most one bike per job may link to this profile row — two same-make/model bikes
+      // on one job are two bikes, and sharing a row makes an edit to it fan out to both.
+      const rows = await db.jobBike.findMany({
+        where: { id: { in: candidate.jobBikeIds } },
+        select: { id: true, jobId: true },
+        orderBy: { sortOrder: "asc" },
       });
+      const seenJobIds = new Set<string>();
+      const linkableIds: string[] = [];
+      for (const row of rows) {
+        if (seenJobIds.has(row.jobId)) continue;
+        seenJobIds.add(row.jobId);
+        linkableIds.push(row.id);
+      }
+
+      if (linkableIds.length > 0) {
+        await db.jobBike.updateMany({
+          where: {
+            id: { in: linkableIds },
+            OR: [{ bikeId: null }, { bikeId: { not: bike.id } }],
+          },
+          data: { bikeId: bike.id },
+        });
+      }
     }
   }
 

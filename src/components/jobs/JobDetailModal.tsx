@@ -2797,6 +2797,18 @@ const CANCELLATION_REASONS = [
   "Other",
 ] as const;
 
+/** Stages a cancelled job can be restored to — the active board columns. */
+const RESTORE_STAGES = [
+  "BOOKED_IN",
+  "RECEIVED",
+  "WORKING_ON",
+  "WAITING_ON_CUSTOMER",
+  "WAITING_ON_PARTS",
+  "BIKE_READY",
+] as const;
+
+type RestoreStage = (typeof RESTORE_STAGES)[number];
+
 function mergeCustomerBikesForModal(
   liveBikes: Bike[] | undefined,
   fetchedBikes: Bike[] | undefined
@@ -2849,6 +2861,9 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
   const [sendingReview, setSendingReview] = useState(false);
   const [accepting, setAccepting] = useState(false);
   const [archiving, setArchiving] = useState(false);
+  const [showRestore, setShowRestore] = useState(false);
+  const [restoreStage, setRestoreStage] = useState<RestoreStage>("BOOKED_IN");
+  const [restoring, setRestoring] = useState(false);
   const [showRejectReason, setShowRejectReason] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [rejectSubmitting, setRejectSubmitting] = useState(false);
@@ -2984,6 +2999,34 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
     setShowCancelReason(false);
     setCancelReason("");
     setCancelReasonOther("");
+  };
+
+  const handleRestoreJobClick = () => {
+    if (!job || job.stage !== "CANCELLED") return;
+    // A job that was already received picks up where it left off; anything else
+    // goes back to the front of the board.
+    setRestoreStage(job.receivedAt ? "RECEIVED" : "BOOKED_IN");
+    setShowRestore(true);
+  };
+
+  const handleRestoreConfirm = async () => {
+    if (!job) return;
+    setRestoring(true);
+    try {
+      const res = await fetch(`/api/jobs/${job.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stage: restoreStage }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setJob(updated);
+        onJobUpdated?.(updated);
+        setShowRestore(false);
+      }
+    } finally {
+      setRestoring(false);
+    }
   };
 
   const handleAcceptBooking = async () => {
@@ -3226,6 +3269,53 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
                 >
                   {cancelling ? "Cancelling…" : "Confirm cancellation"}
                 </button>
+            </div>
+          </div>
+        )}
+        {showRestore && (
+          <div className="absolute inset-0 z-10 flex flex-col bg-white/95 rounded-xl p-6 overflow-hidden">
+            <h3 className="text-lg font-semibold text-slate-900 flex-shrink-0 mb-1">
+              Restore this job?
+            </h3>
+            <p className="text-sm text-slate-500 mb-4 flex-shrink-0">
+              The cancellation reason is cleared and the job goes back on the Job
+              Board. The customer is not emailed or texted about the move.
+            </p>
+            <div className="overflow-y-auto flex-1 min-h-0 space-y-2 -mx-1 px-1">
+              {RESTORE_STAGES.map((stage) => (
+                <label
+                  key={stage}
+                  className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-50"
+                >
+                  <input
+                    type="radio"
+                    name="restoreStage"
+                    value={stage}
+                    checked={restoreStage === stage}
+                    onChange={() => setRestoreStage(stage)}
+                    className="w-4 h-4 text-emerald-600 border-slate-300 focus:ring-emerald-500"
+                  />
+                  <span className="text-sm font-medium text-slate-900">
+                    {STAGE_LABELS[stage]}
+                  </span>
+                </label>
+              ))}
+            </div>
+            <div className="flex gap-2 justify-end flex-shrink-0 border-t border-slate-200 mt-4 pt-4">
+              <button
+                onClick={() => setShowRestore(false)}
+                disabled={restoring}
+                className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors disabled:opacity-50"
+              >
+                Back
+              </button>
+              <button
+                onClick={handleRestoreConfirm}
+                disabled={restoring}
+                className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {restoring ? "Restoring…" : "Restore job"}
+              </button>
             </div>
           </div>
         )}
@@ -3684,7 +3774,15 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
                   ? "Unarchive"
                   : "Archive"}
             </button>
-            {job.stage !== "CANCELLED" && (
+            {job.stage === "CANCELLED" ? (
+              <button
+                onClick={handleRestoreJobClick}
+                disabled={restoring}
+                className="px-4 py-2 text-sm font-medium text-emerald-800 bg-emerald-100 hover:bg-emerald-200 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {restoring ? "Restoring…" : "Restore Job"}
+              </button>
+            ) : (
               <button
                 onClick={handleCancelJobClick}
                 disabled={cancelling}

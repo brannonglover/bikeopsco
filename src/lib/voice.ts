@@ -10,6 +10,9 @@ import {
   INCOMING_CALL_SOUND,
   sendPushToAllStaff,
 } from "@/lib/push";
+// Also re-exported at the foot of this file; imported here because the ring
+// push has to tell the app when the window closes.
+import { ringDeadline } from "@/lib/voice-twiml";
 
 export type VoicePlatform = "ios" | "android";
 
@@ -125,6 +128,8 @@ export async function ringStaffForCall(shopId: string, callSid: string): Promise
       id: true,
       status: true,
       fromNumber: true,
+      startedAt: true,
+      createdAt: true,
       customerId: true,
       customer: { select: { firstName: true, lastName: true } },
     },
@@ -135,6 +140,13 @@ export async function ringStaffForCall(shopId: string, callSid: string): Promise
     ? [call.customer.firstName, call.customer.lastName].filter(Boolean).join(" ")
     : "";
   const callerLabel = name || formatPhoneDisplay(call.fromNumber);
+
+  // When this caller runs out of hold and falls through to voicemail. Sent
+  // with every repeat of the ring so the app can retire its answer buttons on
+  // the caller's clock rather than its own: the ring repeats, and a device
+  // waking up on the fourth alert has no other way to know how much of the
+  // window is already gone.
+  const ringEndsAt = ringDeadline(call.startedAt ?? call.createdAt).toISOString();
 
   await sendPushToAllStaff(shopId, {
     title: "Incoming call",
@@ -154,6 +166,7 @@ export async function ringStaffForCall(shopId: string, callSid: string): Promise
       from: call.fromNumber,
       customerId: call.customerId,
       customerName: name || null,
+      ringEndsAt,
     },
   });
   return true;
@@ -256,6 +269,9 @@ export function mapTwilioCallStatus(
 
 export {
   RING_SECONDS,
+  ringDeadline,
+  hasRungOut,
+  ringWindowCutoff,
   buildQueueName,
   buildIncomingCallTwiml,
   buildQueueWaitTwiml,

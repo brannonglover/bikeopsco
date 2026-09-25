@@ -20,14 +20,22 @@ export async function POST(
     const { id } = await params;
     const call = await prisma.call.findFirst({
       where: { shopId: auth.shopId, id, direction: "INBOUND" },
-      select: { id: true, twilioParentCallSid: true, endedAt: true },
+      select: { id: true, twilioParentCallSid: true, endedAt: true, answeredAt: true },
     });
     if (!call) {
       return NextResponse.json({ error: "Call not found" }, { status: 404 });
     }
     // Already over — declining is a no-op rather than an error, since the
     // caller may have hung up in the moment between ring and tap.
-    if (call.endedAt) return NextResponse.json({ ok: true, alreadyEnded: true });
+    //
+    // `answeredAt` covers the other half of that: the ring goes to every
+    // device, so a colleague can pick up while this one is still showing the
+    // call. Redirecting then would pull a live conversation into voicemail
+    // mid-sentence, which is why a call someone already took is left alone
+    // rather than declined.
+    if (call.endedAt || call.answeredAt) {
+      return NextResponse.json({ ok: true, alreadyEnded: true });
+    }
 
     const origin = request.nextUrl.origin;
     await sendQueuedCallerToVoicemail(

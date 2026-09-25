@@ -10,6 +10,9 @@ import {
   buildQueueName,
   getVoiceWebhookBaseUrl,
   parseStaffIdentity,
+  hasRungOut,
+  ringWindowCutoff,
+  sendQueuedCallerToVoicemail,
   TWILIO_VOICE_NUMBER,
 } from "@/lib/voice";
 
@@ -25,6 +28,12 @@ function xmlResponse(xml: string): NextResponse {
 function sorryTwiml(): NextResponse {
   return xmlResponse(
     '<?xml version="1.0" encoding="UTF-8"?><Response><Say>Sorry, this call could not be completed.</Say><Hangup/></Response>'
+  );
+}
+
+function spokenHangup(message: string): NextResponse {
+  return xmlResponse(
+    `<?xml version="1.0" encoding="UTF-8"?><Response><Say>${message}</Say><Hangup/></Response>`
   );
 }
 
@@ -56,26 +65,102 @@ export async function POST(request: NextRequest) {
       return sorryTwiml();
     }
 
+    const base = getVoiceWebhookBaseUrl(request);
+
     // A notification can outlive the call it announced — the caller may have
-    // hung up or timed out to voicemail. Say so rather than parking staff on
-    // an empty queue until the dial timeout expires.
-    const pending = await prisma.call.findFirst({
+    // hung up, timed out to voicemail, or been picked up by a colleague. This
+    // is the only gate on joining the queue, so it decides answerability on
+    // the server's own clock: a device with a slow push, a skewed clock or a
+    // build that predates the ring deadline still cannot bridge into a queue
+    // the caller has left.
+    //
+    // `answeredAt` is what rules out a call someone else already took. Status
+    // cannot: an inbound caller's leg goes IN_PROGRESS the moment Twilio
+    // answers it to run <Enqueue>, long before anyone picks up (see
+    // /answered). Leaving it out would make every conversation lasting longer
+    // than the ring window look like an expired caller below — and get it
+    // redirected into voicemail mid-sentence.
+    const holding = {
+      shopId: shop.id,
+      direction: "INBOUND" as const,
+      status: { in: [...LIVE_STATUSES] },
+      endedAt: null,
+      answeredAt: null,
+      ...(params.CallId ? { id: params.CallId } : {}),
+    };
+    // Oldest first because <Queue> bridges the longest-waiting caller: that is
+    // the one an older app build, which sends no CallId to narrow this down,
+    // would be handed.
+    const oldestFirst = [{ startedAt: "asc" as const }, { createdAt: "asc" as const }];
+
+    const now = new Date();
+    const cutoff = ringWindowCutoff(now);
+    const answerable = await prisma.call.findFirst({
+      // Comparing in the query rather than reading a row and checking it here
+      // keeps a caller who is out of time from ever being chosen — including
+      // the no-CallId case, where a newer caller may still be answerable while
+      // the longest-waiting one is not.
       where: {
-        shopId: shop.id,
-        direction: "INBOUND",
-        status: { in: [...LIVE_STATUSES] },
-        endedAt: null,
-        ...(params.CallId ? { id: params.CallId } : {}),
+        ...holding,
+        OR: [
+          { startedAt: { gt: cutoff } },
+          { startedAt: null, createdAt: { gt: cutoff } },
+        ],
       },
+      orderBy: oldestFirst,
+      select: { id: true },
     });
-    if (!pending) {
-      return xmlResponse(
-        '<?xml version="1.0" encoding="UTF-8"?><Response>' +
-          "<Say>That call has already ended.</Say><Hangup/></Response>"
-      );
+
+    if (!answerable) {
+      // Nothing to bridge to. A row that is still live but out of time is a
+      // caller the ring window has already given up on, and they are handed
+      // to voicemail here rather than left holding: <Enqueue waitUrl> only
+      // re-checks the window between documents, so without this they can sit
+      // in the queue for a few seconds past their deadline — the very gap
+      // that had staff dialing into an empty queue for ten seconds.
+      const expired = await prisma.call.findFirst({
+        where: holding,
+        orderBy: oldestFirst,
+        select: {
+          id: true,
+          startedAt: true,
+          createdAt: true,
+          twilioParentCallSid: true,
+        },
+      });
+      if (!expired || !hasRungOut(expired.startedAt ?? expired.createdAt, now)) {
+        // Nothing live at all, or it was closed out between the two queries.
+        return spokenHangup("That call has already ended.");
+      }
+
+      // Claiming the row is the lock that makes repeated Answer taps safe:
+      // only the attempt that wins this update redirects the caller, so a
+      // second tap can't restart a voicemail greeting that is already
+      // playing. NO_ANSWER is the honest interim state — nobody took the call
+      // — and /voicemail overwrites it the moment the caller lands there.
+      const claimed = await prisma.call.updateMany({
+        where: {
+          id: expired.id,
+          status: { in: [...LIVE_STATUSES] },
+          endedAt: null,
+          answeredAt: null,
+        },
+        data: { status: "NO_ANSWER", endedAt: now },
+      });
+      if (claimed.count > 0) {
+        await sendQueuedCallerToVoicemail(
+          expired.twilioParentCallSid,
+          `${base}/api/webhooks/twilio/voice/voicemail`
+        ).catch((error) => {
+          // The caller may have hung up, or /dequeued may have redirected them
+          // a moment earlier. Either way the row is closed out above, and
+          // anyone still holding leaves on /wait's next pass regardless.
+          console.error("[voice] could not send an expired caller to voicemail:", error);
+        });
+      }
+      return spokenHangup("That caller has gone to voicemail.");
     }
 
-    const base = getVoiceWebhookBaseUrl(request);
     return xmlResponse(
       buildDequeueTwiml({
         queueName: buildQueueName(shop.id),

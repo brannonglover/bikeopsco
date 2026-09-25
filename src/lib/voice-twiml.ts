@@ -27,6 +27,34 @@ function twiml(body: string): string {
  */
 export const RING_SECONDS = 25;
 
+/**
+ * The instant a caller stops being answerable: RING_SECONDS after they joined
+ * the queue, at which point they are on their way to voicemail.
+ *
+ * One definition for every side of the ring — the push that tells the app how
+ * long is left, and the answer path that refuses to bridge past it — so the
+ * two can never disagree about whose clock decides. `startedAt` is nullable on
+ * the row, so callers pass the creation time as the fallback rather than
+ * letting a missing value read as "started now".
+ */
+export function ringDeadline(startedAt: Date): Date {
+  return new Date(startedAt.getTime() + RING_SECONDS * 1000);
+}
+
+/** True once a caller who joined at `startedAt` has run out of ring window. */
+export function hasRungOut(startedAt: Date, now: Date = new Date()): boolean {
+  return now.getTime() >= ringDeadline(startedAt).getTime();
+}
+
+/**
+ * The query form of the same deadline: the join time before which a caller is
+ * already out of time, for `startedAt > cutoff` comparisons in SQL. Derived
+ * from RING_SECONDS like the rest, so there is still only one window.
+ */
+export function ringWindowCutoff(now: Date = new Date()): Date {
+  return new Date(now.getTime() - RING_SECONDS * 1000);
+}
+
 /** The single per-shop hold queue. <Enqueue> creates it on first use. */
 export function buildQueueName(shopId: string): string {
   return `shop-${shopId}`;
