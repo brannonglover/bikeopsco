@@ -117,7 +117,7 @@ export async function POST(
       statusUrl: getCustomerStatusUrl(job.id, shopId, shop.subdomain),
     });
   } catch (error) {
-    console.error("POST /api/booking-review/[id]/release error:", error);
+    console.error("POST /api/held-bookings/[id]/release error:", error);
     return NextResponse.json(
       { error: "Failed to release the booking" },
       { status: 500 }

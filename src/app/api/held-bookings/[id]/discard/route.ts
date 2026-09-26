@@ -45,7 +45,7 @@ export async function POST(
 
     return NextResponse.json({ ok: true });
   } catch (error) {
-    console.error("POST /api/booking-review/[id]/discard error:", error);
+    console.error("POST /api/held-bookings/[id]/discard error:", error);
     return NextResponse.json(
       { error: "Failed to discard the booking" },
       { status: 500 }

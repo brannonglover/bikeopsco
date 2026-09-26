@@ -56,7 +56,7 @@ export default function BookingReviewPage() {
     if (!opts?.silent) setStatus("loading");
     setError(null);
     try {
-      const res = await fetch("/api/booking-review", { cache: "no-store" });
+      const res = await fetch("/api/held-bookings", { cache: "no-store" });
       if (!res.ok) throw new Error("Failed");
       const data = (await res.json()) as HeldBooking[];
       setEntries(Array.isArray(data) ? data : []);
@@ -86,7 +86,7 @@ export default function BookingReviewPage() {
     void (async () => {
       try {
         const res = await fetch(
-          `/api/booking-review/${encodeURIComponent(id)}/${action}`,
+          `/api/held-bookings/${encodeURIComponent(id)}/${action}`,
           { method: "POST" }
         );
         const data = await res.json();
@@ -102,7 +102,7 @@ export default function BookingReviewPage() {
             queryKey: BOARD_JOBS_QUERY_KEY,
             refetchType: "all",
           });
-          broadcastJobsRefresh({ reason: "booking-review-released" });
+          broadcastJobsRefresh({ reason: "held-booking-released" });
         }
       } catch {
         setEntries(snapshot);

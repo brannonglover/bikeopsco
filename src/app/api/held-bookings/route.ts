@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
       }))
     );
   } catch (error) {
-    console.error("GET /api/booking-review error:", error);
+    console.error("GET /api/held-bookings error:", error);
     return NextResponse.json(
       { error: "Failed to load held bookings" },
       { status: 500 }
