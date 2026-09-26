@@ -20,7 +20,9 @@
     "catalog:generate": "node scripts/catalog-prisma.js generate",
     "catalog:push": "node scripts/catalog-prisma.js db push",
     "catalog:seed": "node scripts/run-catalog-ts.js bike-catalog/seed.ts",
-    "catalog:scrape": "node scripts/run-catalog-ts.js bike-catalog/scrapers/run.ts"
+    "catalog:scrape": "node scripts/run-catalog-ts.js bike-catalog/scrapers/run.ts",
+    "check:booking-spam": "TS_NODE_PROJECT=scripts/tsconfig.scripts.json ts-node -r tsconfig-paths/register scripts/check-booking-spam.ts",
+    "build:gibberish-model": "node scripts/build-gibberish-model.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.127.0",

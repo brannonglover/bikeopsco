@@ -10,7 +10,6 @@ import {
 } from "@/lib/email";
 import { sendPushToAllStaff } from "@/lib/push";
 import { publishJobEvent } from "@/lib/realtime/publish-job-event";
-import { syncCollectionJobService } from "@/lib/collection-fee";
 import { coerceCustomerPhone } from "@/lib/phone";
 import { checkCollectionEligibility } from "@/lib/collection-radius";
 import { getAppFeatures } from "@/lib/app-settings";
@@ -19,7 +18,13 @@ import { buildSmsConsentOptInUpdate } from "@/lib/sms-consent";
 import { getShopForHost } from "@/lib/shop";
 import { getCustomerStatusUrl } from "@/lib/job-customer-access";
 import { normalizeJobCollectionWindowsForStorage } from "@/lib/normalize-job-collection-windows";
-import { getRequestClientIp, verifyTurnstileToken } from "@/lib/turnstile";
+import {
+  TURNSTILE_BOOKING_ACTION,
+  getRequestClientIp,
+  verifyTurnstileToken,
+} from "@/lib/turnstile";
+import { assessBookingForSpam } from "@/lib/booking-spam";
+import { createBookingJob } from "@/lib/create-booking-job";
 
 export const dynamic = "force-dynamic";
 
@@ -151,9 +156,11 @@ export async function POST(request: NextRequest) {
 
     const data = bookSchema.parse(body);
 
+    const clientIp = getRequestClientIp(request);
     const turnstile = await verifyTurnstileToken(
       data.turnstileToken,
-      getRequestClientIp(request)
+      clientIp,
+      TURNSTILE_BOOKING_ACTION
     );
     if (!turnstile.ok) {
       const res = NextResponse.json({ error: turnstile.error }, { status: 403 });
@@ -230,6 +237,75 @@ export async function POST(request: NextRequest) {
 
     const emailNormalized = data.email.trim().toLowerCase();
     const phoneStored = coerceCustomerPhone(data.phone);
+
+    // Turnstile proves a browser submitted the form; it says nothing about what
+    // was typed into it. Content that looks machine-generated is parked for a
+    // human to look at instead of becoming a job: no Customer row, no staff
+    // notification, no confirmation email to an address we have no reason to
+    // trust, and no capacity consumed against maxActiveBikes.
+    const spam = assessBookingForSpam({
+      firstName: data.firstName,
+      lastName: data.lastName,
+      email: data.email,
+      phone: data.phone,
+      address: data.address,
+      customerNotes: data.customerNotes,
+      bikes: bikesInput,
+    });
+
+    if (spam.quarantine) {
+      await prisma.waitlistEntry.create({
+        data: {
+          shopId: shop.id,
+          status: "HELD_FOR_REVIEW",
+          firstName: data.firstName,
+          lastName: data.lastName,
+          email: data.email.trim(),
+          phone: phoneStored ?? data.phone.trim(),
+          address: data.address ?? null,
+          deliveryType: data.deliveryType as "DROP_OFF_AT_SHOP" | "COLLECTION_SERVICE",
+          dropOffDate: data.dropOffDate ? new Date(data.dropOffDate) : null,
+          pickupDate: data.pickupDate ? new Date(data.pickupDate) : null,
+          collectionAddress: data.collectionAddress ?? null,
+          collectionWindowStart: collectionWindows.collectionWindowStart ?? null,
+          collectionWindowEnd: collectionWindows.collectionWindowEnd ?? null,
+          customerNotes: data.customerNotes ?? null,
+          serviceIds: data.serviceIds ?? [],
+          spamScore: spam.score,
+          spamSignals: spam.signals,
+          submittedIp: clientIp,
+          submittedUserAgent: request.headers.get("user-agent"),
+          bikes: {
+            create: bikesInput.map((b, i) => ({
+              shopId: shop.id,
+              make: b.make.trim(),
+              model: b.model?.trim() || null,
+              bikeType: b.bikeType ?? null,
+              sortOrder: i,
+            })),
+          },
+        },
+      });
+
+      console.warn(
+        `[Widget book] Held booking for review (score ${spam.score}): ${spam.signals
+          .map((s) => s.code)
+          .join(", ")}`
+      );
+
+      // Deliberately indistinguishable from a normal submission. Telling the
+      // sender it was flagged just tells them which field to change next, and a
+      // wrongly-held real customer should not be made to think booking failed.
+      const res = NextResponse.json({
+        status: "PENDING_REVIEW",
+        message:
+          "Thanks — we’ve received your request. We’ll confirm your booking by email shortly.",
+      });
+      return addWidgetCorsHeaders(res, origin, {
+        methods: "POST, OPTIONS",
+        allowHeaders: "Content-Type, Authorization",
+      });
+    }
 
     const maxActiveBikes = features.maxActiveBikes ?? 5;
     const bookingsEnabled = features.bookingsEnabled ?? true;
@@ -409,139 +485,30 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const job = await prisma.$transaction(async (tx) => {
-      let customer = null;
-
-      if (data.customerId) {
-        customer = await tx.customer.findFirst({
-          where: { id: data.customerId, shopId: shop.id },
-        });
-      }
-
-      if (!customer) {
-        customer = await tx.customer.findFirst({
-          where: {
-            shopId: shop.id,
-            email: { equals: emailNormalized, mode: "insensitive" },
-          },
-        });
-      }
-
-      if (!customer) {
-        customer = await tx.customer.create({
-          data: {
-            shopId: shop.id,
-            firstName: data.firstName,
-            lastName: data.lastName ?? null,
-            email: data.email.trim(),
-            phone: phoneStored,
-            ...buildSmsConsentOptInUpdate(Boolean(data.smsConsent), "BOOKING_FORM"),
-            address: data.address ?? null,
-          },
-        });
-      } else {
-        await tx.customer.update({
-          where: { id: customer.id },
-          data: {
-            firstName: data.firstName,
-            lastName: data.lastName ?? null,
-            phone: phoneStored,
-            ...buildSmsConsentOptInUpdate(Boolean(data.smsConsent), "BOOKING_FORM"),
-            address: data.address ?? customer.address,
-          },
-        });
-      }
-
-      // Build summary fields for the job (first bike's make/model, or "Multiple" for many)
-      const bikeMakeSummary =
-        bikesInput.length === 1 ? bikesInput[0].make.trim() : "Multiple";
-      const bikeModelSummary =
-        bikesInput.length === 1 ? (bikesInput[0].model?.trim() ?? "") : `${bikesInput.length} bikes`;
-
-      const newJob = await tx.job.create({
-        data: {
+    const job = await prisma.$transaction(
+      (tx) =>
+        createBookingJob(tx, {
           shopId: shop.id,
-          stage: Stage.PENDING_APPROVAL,
-          bikeMake: bikeMakeSummary,
-          bikeModel: bikeModelSummary,
-          customerId: customer.id,
+          customerId: data.customerId,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          email: data.email,
+          phone: phoneStored,
+          address: data.address,
+          smsConsent: data.smsConsent,
           deliveryType: data.deliveryType as "DROP_OFF_AT_SHOP" | "COLLECTION_SERVICE",
           dropOffDate: data.dropOffDate ? new Date(data.dropOffDate) : null,
           pickupDate: data.pickupDate ? new Date(data.pickupDate) : null,
-          collectionAddress: data.collectionAddress ?? null,
-          collectionWindowStart: collectionWindows.collectionWindowStart ?? null,
-          collectionWindowEnd: collectionWindows.collectionWindowEnd ?? null,
-          customerNotes: data.customerNotes ?? null,
-        },
-      });
-
-      // For each submitted bike: find-or-create a customer Bike record, then create a JobBike
-      for (let i = 0; i < bikesInput.length; i++) {
-        const b = bikesInput[i];
-        const makeNormalized = b.make.trim();
-        const modelNormalized = b.model?.trim() || null;
-
-        let bike = await tx.bike.findFirst({
-          where: {
-            shopId: shop.id,
-            customerId: customer.id,
-            make: { equals: makeNormalized, mode: "insensitive" },
-            model: modelNormalized ? { equals: modelNormalized, mode: "insensitive" } : null,
-          },
-        });
-        if (!bike) {
-          bike = await tx.bike.create({
-            data: {
-              shopId: shop.id,
-              customerId: customer.id,
-              make: makeNormalized,
-              model: modelNormalized,
-              bikeType: b.bikeType ?? null,
-            },
-          });
-        }
-
-        await tx.jobBike.create({
-          data: {
-            shopId: shop.id,
-            jobId: newJob.id,
-            make: makeNormalized,
-            model: modelNormalized,
-            sortOrder: i,
-            bikeType: b.bikeType ?? null,
-            bikeId: bike.id,
-          },
-        });
-      }
-
-      if (data.serviceIds && data.serviceIds.length > 0) {
-        const services = await tx.service.findMany({
-          where: { shopId: shop.id, id: { in: data.serviceIds }, isSystem: false },
-        });
-        await tx.jobService.createMany({
-          data: services.map((s) => ({
-            shopId: shop.id,
-            jobId: newJob.id,
-            serviceId: s.id,
-            quantity: 1,
-            unitPrice: s.price,
-          })),
-        });
-      }
-
-      if (features.collectionServiceEnabled) {
-        await syncCollectionJobService(tx, newJob.id);
-      }
-
-      return tx.job.findUnique({
-        where: { id: newJob.id },
-        include: {
-          customer: true,
-          jobBikes: { orderBy: { sortOrder: "asc" } },
-          jobServices: { include: { service: true } },
-        },
-      });
-    }, { timeout: 15000 });
+          collectionAddress: data.collectionAddress,
+          collectionWindowStart: collectionWindows.collectionWindowStart,
+          collectionWindowEnd: collectionWindows.collectionWindowEnd,
+          customerNotes: data.customerNotes,
+          serviceIds: data.serviceIds ?? [],
+          bikes: bikesInput,
+          collectionServiceEnabled: features.collectionServiceEnabled,
+        }),
+      { timeout: 15000 }
+    );
 
     if (!job) {
       const res = NextResponse.json(

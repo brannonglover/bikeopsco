@@ -12,6 +12,7 @@ declare global {
         container: HTMLElement,
         options: {
           sitekey: string;
+          action?: string;
           callback?: (token: string) => void;
           "expired-callback"?: () => void;
           "error-callback"?: () => void;
@@ -65,12 +66,18 @@ type TurnstileWidgetProps = {
   siteKey: string;
   onToken: (token: string | null) => void;
   resetSignal?: number;
+  /**
+   * Stamped into the token and checked server-side, so a token this widget
+   * mints cannot be spent on a different endpoint sharing the same site key.
+   */
+  action?: string;
 };
 
 export function TurnstileWidget({
   siteKey,
   onToken,
   resetSignal = 0,
+  action,
 }: TurnstileWidgetProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
@@ -103,6 +110,7 @@ export function TurnstileWidget({
 
       widgetIdRef.current = window.turnstile.render(containerRef.current, {
         sitekey: siteKey,
+        ...(action ? { action } : {}),
         callback: (token) => onTokenRef.current(token),
         "expired-callback": () => onTokenRef.current(null),
         "error-callback": () => onTokenRef.current(null),
@@ -123,7 +131,7 @@ export function TurnstileWidget({
         widgetIdRef.current = null;
       }
     };
-  }, [siteKey]);
+  }, [siteKey, action]);
 
   useEffect(() => {
     if (resetSignal === 0) return;

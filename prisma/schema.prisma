@@ -807,6 +807,9 @@ enum WaitlistStatus {
   WAITING
   PROMOTED
   CANCELLED
+  /// Booking request the spam scorer held back. Never shown on the waitlist —
+  /// it is not queued for capacity, it is queued for a human to look at.
+  HELD_FOR_REVIEW
 }
 
 model WaitlistEntry {
@@ -837,10 +840,21 @@ model WaitlistEntry {
   promotedJobId               String?
   promotedJob                 Job?           @relation("WaitlistPromotedJob", fields: [promotedJobId], references: [id], onDelete: SetNull)
   promotedAt                  DateTime?
+  /// Total from `assessBookingForSpam`, set only on HELD_FOR_REVIEW entries.
+  spamScore                   Int?
+  /// The individual signals behind `spamScore`, so the review screen can say
+  /// why a booking was held rather than asking staff to take it on trust.
+  spamSignals                 Json?
+  /// Submission origin, kept for rate limiting and for spotting a repeat
+  /// offender across several held bookings.
+  submittedIp                 String?
+  submittedUserAgent          String?
+  reviewedAt                  DateTime?
   archivedAt                  DateTime?
   createdAt                   DateTime       @default(now())
   updatedAt                   DateTime       @updatedAt
 
+  @@index([shopId, status, createdAt])
   @@index([status, createdAt])
   @@index([customerId])
   @@index([shopId])

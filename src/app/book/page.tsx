@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { BikeLoader } from "@/components/ui/BikeLoader";
 import { Price } from "@/components/ui/Price";
 import { TurnstileWidget } from "@/components/TurnstileWidget";
+import { TURNSTILE_BOOKING_ACTION } from "@/lib/turnstile-action";
 import { formatPhoneInputUS } from "@/lib/phone";
 import type { CollectionEligibility } from "@/lib/collection-radius";
 
@@ -77,6 +78,10 @@ function BookForm() {
   const [success, setSuccess] = useState<
     | { kind: "JOB"; id: string; statusUrl: string }
     | { kind: "WAITLIST"; waitlistId: string; message: string }
+    // Submitted, but held for a person to look at before it becomes a job.
+    // There is no status page to link to yet, so this gets its own state
+    // rather than a JOB success with a dead link.
+    | { kind: "PENDING_REVIEW"; message: string }
     | null
   >(null);
   const [error, setError] = useState<string | null>(null);
@@ -303,6 +308,17 @@ function BookForm() {
         return;
       }
 
+      if (data?.status === "PENDING_REVIEW") {
+        setSuccess({
+          kind: "PENDING_REVIEW",
+          message:
+            typeof data.message === "string"
+              ? data.message
+              : "Thanks — we\u2019ve received your request. We\u2019ll confirm your booking by email shortly.",
+        });
+        return;
+      }
+
       if (data?.status === "WAITLISTED" && data?.waitlistId) {
         setSuccess({
           kind: "WAITLIST",
@@ -338,6 +354,24 @@ function BookForm() {
   }
 
   if (success) {
+    if (success.kind === "PENDING_REVIEW") {
+      return (
+        <div className="mx-auto max-w-md space-y-4 rounded-xl border border-slate-100 bg-white p-6 shadow-sm">
+          <div className="text-center">
+            <span className="text-4xl" aria-hidden>
+              \u2713
+            </span>
+            <h2 className="mt-2 text-xl font-bold text-slate-900">Request submitted!</h2>
+            <p className="mt-1 text-slate-600">{success.message}</p>
+          </div>
+          <p className="text-center text-xs text-slate-500">
+            If you don&apos;t hear from us, give the shop a call and we&apos;ll sort it out.
+          </p>
+          {embed && <p className="text-center text-xs text-slate-500">You can close this window.</p>}
+        </div>
+      );
+    }
+
     if (success.kind === "WAITLIST") {
       return (
         <div className="mx-auto max-w-md space-y-4 rounded-xl border border-slate-100 bg-white p-6 shadow-sm">
@@ -710,6 +744,7 @@ function BookForm() {
             siteKey={TURNSTILE_SITE_KEY}
             onToken={setTurnstileToken}
             resetSignal={turnstileResetSignal}
+            action={TURNSTILE_BOOKING_ACTION}
           />
         ) : (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
