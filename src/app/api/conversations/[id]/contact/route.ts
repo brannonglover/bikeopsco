@@ -1,32 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { extractContactFromMessages } from "@/lib/contact-extraction";
+import {
+  buildConversationContext,
+  CONTEXT_CUSTOMER_SELECT,
+  toContactSuggestion,
+} from "@/lib/conversation-context";
 import {
   resolveStaffConversation,
   resolveStaffConversationForRead,
 } from "@/lib/conversation";
-import { coerceCustomerPhone, formatPhoneDisplay } from "@/lib/phone";
+import { coerceCustomerPhone } from "@/lib/phone";
 import { requireCurrentShop } from "@/lib/shop";
 
 export const dynamic = "force-dynamic";
 
-/**
- * Bounds how much history the extractor reads. People introduce themselves in
- * their opening texts, so the oldest messages are the ones that matter.
- */
-const SCAN_MESSAGE_LIMIT = 100;
-
-const customerSelect = {
-  id: true,
-  firstName: true,
-  lastName: true,
-  email: true,
-  phone: true,
-  address: true,
-  notes: true,
-  provisional: true,
-} as const;
+/** The same columns the conversation context reads, so one query serves both. */
+const customerSelect = CONTEXT_CUSTOMER_SELECT;
 
 /** Blank form fields arrive as "" and mean "not provided", not "set to empty". */
 const optionalText = z
@@ -51,8 +41,11 @@ const saveSchema = z.object({
 
 /**
  * Details for the inbox's "Create contact" form: the contact record behind the
- * thread plus whatever name, email and phone numbers the customer's own
- * messages give up.
+ * thread, plus who the conversation says this is.
+ *
+ * The name, email and numbers come from the shared conversation context rather
+ * than from anything worked out here, so the "Create job" action being built
+ * on the same thread starts from the same answer.
  */
 export async function GET(
   _request: NextRequest,
@@ -78,36 +71,15 @@ export async function GET(
       return NextResponse.json({ error: "Customer not found" }, { status: 404 });
     }
 
-    // The whole thread, both sides. The extractor decides for itself what it
-    // will read from a shop message — a salutation, and whether it had just
-    // asked the customer their name — and filtering to CUSTOMER here left it
-    // blind to both.
-    const messages = await prisma.message.findMany({
-      where: { conversationId: conversation.id },
-      orderBy: { createdAt: "asc" },
-      take: SCAN_MESSAGE_LIMIT,
-      select: { sender: true, body: true },
+    const context = await buildConversationContext({
+      conversationId: conversation.id,
+      customer,
     });
-
-    const suggestion = extractContactFromMessages(messages, {
-      excludePhone: customer.phone,
-    });
-
-    // A provisional contact's name is normally the formatted phone number
-    // standing in for one, which must never reach the form. But the AI
-    // assistant writes a real name there when a customer gives it, so fall back
-    // to the record when it holds something other than the placeholder.
-    const placeholder = customer.phone
-      ? formatPhoneDisplay(customer.phone) || customer.phone
-      : null;
-    const storedName =
-      customer.firstName && customer.firstName !== placeholder
-        ? customer.firstName
-        : null;
-    if (!suggestion.firstName && storedName) {
-      suggestion.firstName = storedName;
-      suggestion.lastName = customer.lastName ?? null;
-    }
+    const { identity } = context;
+    // `suggestion` is the flat shape staff apps already in the field read, and
+    // carries the merged values to them unchanged. Newer clients read
+    // `identity`, where each value still says which layer supplied it.
+    const suggestion = toContactSuggestion(identity);
 
     // A regular who texts from a new number also lands here, and saving would
     // quietly leave the shop with two records for one person. Surfacing the
@@ -124,7 +96,12 @@ export async function GET(
         })
       : null;
 
-    return NextResponse.json({ customer, suggestion, possibleDuplicate });
+    return NextResponse.json({
+      customer,
+      suggestion,
+      identity,
+      possibleDuplicate,
+    });
   } catch (error) {
     console.error("GET /api/conversations/[id]/contact error:", error);
     return NextResponse.json(

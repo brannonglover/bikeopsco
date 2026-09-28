@@ -1,11 +1,19 @@
 import "server-only";
 
-import type { AiAssistantState, MessageSender } from "@prisma/client";
+import type { AiAssistantState, MessageSender, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { publishChatEvent } from "@/lib/realtime/publish-chat-event";
 import { deliverStaffMessage } from "@/lib/chat/send-staff-message";
 import { sendPushToAllStaff } from "@/lib/push";
 import { ASSISTANT_MODEL, getAnthropicClient } from "@/lib/ai/client";
+import {
+  COLLECTED_CONTEXT_VERSION,
+  EMPTY_COLLECTED_CONTEXT,
+  mergeCollectedContext,
+  parseCollectedContext,
+  type CollectedBike,
+  type CollectedIdentity,
+} from "@/lib/conversation-context/ai-collected";
 import {
   ASSISTANT_OUTPUT_SCHEMA,
   buildSystemPrompt,
@@ -74,11 +82,13 @@ function stateForStatus(status: AssistantTurnStatus): AiAssistantState {
   }
 }
 
-function isValidEmail(value: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(value.trim());
-}
-
-/** Parses and sanity-checks the model's structured output. */
+/**
+ * Parses and sanity-checks the model's structured output.
+ *
+ * Everything it collected goes through the same reader that guards the stored
+ * JSON, so a model that returns a sentence where a name belongs is caught
+ * once, in the place that defines what the shape allows.
+ */
 function parseTurn(raw: string): AssistantTurn | null {
   let parsed: unknown;
   try {
@@ -99,34 +109,28 @@ function parseTurn(raw: string): AssistantTurn | null {
       ? value.status
       : "gathering";
 
-  const asName = (input: unknown): string | null => {
-    if (typeof input !== "string") return null;
-    const trimmed = input.trim();
-    // A name long enough to be a sentence is the model narrating, not a name.
-    return trimmed && trimmed.length <= 60 ? trimmed : null;
-  };
-
-  const email =
-    typeof value.email === "string" && isValidEmail(value.email)
-      ? value.email.trim().toLowerCase()
-      : null;
-
-  const services = Array.isArray(value.services)
-    ? value.services
-        .filter((item): item is string => typeof item === "string")
-        .map((item) => item.trim())
-        .filter(Boolean)
-        .slice(0, 10)
-    : [];
+  const collected =
+    parseCollectedContext({
+      version: COLLECTED_CONTEXT_VERSION,
+      identity: {
+        firstName: value.firstName,
+        lastName: value.lastName,
+        email: value.email,
+      },
+      bikes: value.bikes,
+      service: {
+        symptoms: value.symptoms,
+        customerSuspicions: value.customerSuspicions,
+        requestedServices: value.requestedServices,
+      },
+      scheduling: { availability: value.availability },
+    }) ?? EMPTY_COLLECTED_CONTEXT;
 
   return {
     reply,
-    firstName: asName(value.firstName),
-    lastName: asName(value.lastName),
-    email,
-    services,
     status,
     summary: typeof value.summary === "string" ? value.summary.trim() : "",
+    collected,
   };
 }
 
@@ -189,11 +193,17 @@ async function notifyStaffOfHandoff({
  * Only ever fills blanks. A name or email already on the record was put there
  * by a person or by the customer themselves, and is not overwritten by
  * something read out of a text message.
+ *
+ * The row is where the rest of the app looks — the inbox header, every job,
+ * every email — so these three columns are still written. It is not where the
+ * collection is *kept*: that is `Conversation.aiCollectedContext`, which
+ * remembers that this name came out of this conversation, and holds everything
+ * the row has no column for.
  */
 async function applyCollectedContact({
   shopId,
   customer,
-  turn,
+  identity,
 }: {
   shopId: string;
   customer: {
@@ -203,7 +213,7 @@ async function applyCollectedContact({
     email: string | null;
     provisional: boolean;
   };
-  turn: AssistantTurn;
+  identity: CollectedIdentity;
 }): Promise<void> {
   const data: { firstName?: string; lastName?: string; email?: string } = {};
 
@@ -214,11 +224,11 @@ async function applyCollectedContact({
   // The contact stays provisional either way. What the assistant read out of a
   // text message is a suggestion, and clearing the flag would retire the
   // "Create contact" step where staff confirm it.
-  if (turn.firstName && customer.provisional) {
-    data.firstName = turn.firstName;
+  if (identity.firstName && customer.provisional) {
+    data.firstName = identity.firstName;
   }
-  if (turn.lastName && !customer.lastName) data.lastName = turn.lastName;
-  if (turn.email && !customer.email) data.email = turn.email;
+  if (identity.lastName && !customer.lastName) data.lastName = identity.lastName;
+  if (identity.email && !customer.email) data.email = identity.email;
 
   if (Object.keys(data).length === 0) return;
 
@@ -227,13 +237,34 @@ async function applyCollectedContact({
     .catch((error) => console.error("[ai] contact update failed:", error));
 }
 
-/** Builds the staff-facing summary line stored on the conversation. */
+/** "2021 Trek Fuel EX 8", or whatever of that the customer actually said. */
+function describeBike(bike: CollectedBike | undefined): string | null {
+  if (!bike) return null;
+  const named = [bike.year, bike.make, bike.model].filter(Boolean).join(" ");
+  return named || bike.describedAs;
+}
+
+/**
+ * Builds the staff-facing summary line stored on the conversation.
+ *
+ * A line, not a record — the full collection is stored beside it, so this can
+ * stay short enough to read at a glance in the inbox. What the customer
+ * suspects is deliberately left out: staff are being told what is waiting for
+ * them, not what is wrong with the bike.
+ */
 function buildSummary(turn: AssistantTurn): string {
+  const { identity, bikes, service } = turn.collected;
   const parts: string[] = [];
-  const name = [turn.firstName, turn.lastName].filter(Boolean).join(" ");
+  const name = [identity.firstName, identity.lastName].filter(Boolean).join(" ");
   if (name) parts.push(name);
-  if (turn.email) parts.push(turn.email);
-  if (turn.services.length) parts.push(`wants: ${turn.services.join(", ")}`);
+  if (identity.email) parts.push(identity.email);
+  const bike = describeBike(bikes[0]);
+  if (bike) parts.push(bike);
+  if (service.requestedServices.length) {
+    parts.push(`wants: ${service.requestedServices.join(", ")}`);
+  } else if (service.symptoms.length) {
+    parts.push(`reports: ${service.symptoms.join(", ")}`);
+  }
   const collected = parts.join(" · ");
   if (turn.summary && collected) return `${turn.summary} (${collected})`;
   return turn.summary || collected || "Handed over to staff.";
@@ -274,6 +305,7 @@ export async function runAssistantTurn({
       select: {
         id: true,
         aiAssistantState: true,
+        aiCollectedContext: true,
         archived: true,
         customer: {
           select: {
@@ -390,6 +422,15 @@ export async function runAssistantTurn({
 
     const nextState = stateForStatus(turn.status);
     const reply = clampReply(turn.reply);
+    // What this turn understood, folded into what the conversation already
+    // held. The model re-reads the whole thread each turn, so this is its
+    // latest reading rather than an addition to an older one — but a turn
+    // spent answering a question says nothing about the bike, and silence
+    // must not erase what an earlier turn learned.
+    const collected = mergeCollectedContext(
+      parseCollectedContext(conversation.aiCollectedContext),
+      turn.collected
+    );
 
     const message = await prisma.message.create({
       data: {
@@ -412,6 +453,7 @@ export async function runAssistantTurn({
         aiAssistantState: nextState,
         aiAssistantSummary:
           nextState === "ACTIVE" ? null : buildSummary(turn),
+        aiCollectedContext: collected as unknown as Prisma.InputJsonObject,
       },
     });
 
@@ -421,10 +463,13 @@ export async function runAssistantTurn({
       messageId: message.id,
     });
 
+    // The merged collection, not just this turn's: a name given three messages
+    // ago still belongs on the record even if this turn was about something
+    // else.
     await applyCollectedContact({
       shopId,
       customer: conversation.customer,
-      turn,
+      identity: collected.identity,
     });
 
     await deliverStaffMessage({

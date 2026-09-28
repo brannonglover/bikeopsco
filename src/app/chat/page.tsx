@@ -14,6 +14,7 @@ import { ChatMessageBubble } from "@/components/chat/ChatMessageBubble";
 import { ConversationListRow } from "@/components/chat/ConversationListRow";
 import { AiAssistantBanner } from "@/components/chat/AiAssistantBanner";
 import { CreateContactModal } from "@/components/chat/CreateContactModal";
+import { CreateJobModal } from "@/components/chat/CreateJobModal";
 import { mergeChatMessagesWithServer } from "@/lib/chat-messages";
 import {
   clearChatPreviewMessage,
@@ -295,6 +296,7 @@ function ChatPageContent() {
   const [pendingImages, setPendingImages] = useState<{ id: string; url: string; filename: string; mimeType?: string }[]>([]);
   const [showNewConvModal, setShowNewConvModal] = useState(false);
   const [showCreateContact, setShowCreateContact] = useState(false);
+  const [showCreateJob, setShowCreateJob] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [archivedConvs, setArchivedConvs] = useState<Conversation[]>([]);
   const [archivedLoading, setArchivedLoading] = useState(false);
@@ -825,6 +827,14 @@ function ChatPageContent() {
     },
     [fetchConversations]
   );
+
+  // A job created from the thread opens straight away: staff almost always
+  // want to set a date or add parts next, and the job card is where that
+  // happens.
+  const handleJobCreated = useCallback((job: { id: string }) => {
+    setShowCreateJob(false);
+    window.location.href = `/calendar?openJob=${encodeURIComponent(job.id)}`;
+  }, []);
 
   const fetchArchived = useCallback(async () => {
     setArchivedLoading(true);
@@ -1493,6 +1503,20 @@ function ChatPageContent() {
                     Create contact
                   </button>
                 )}
+                {selectedConv && (
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateJob(true)}
+                    className="flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50"
+                    title="Start a job from what this conversation says"
+                  >
+                    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} aria-hidden>
+                      <rect x="3" y="4" width="18" height="16" rx="2" />
+                      <path d="M12 9v6M9 12h6" />
+                    </svg>
+                    Create job
+                  </button>
+                )}
                 {selectedConv?.customer.email && (
                   <InviteButton customerId={selectedConv.customerId} />
                 )}
@@ -1739,6 +1763,15 @@ function ChatPageContent() {
           conversationId={selectedId}
           onClose={() => setShowCreateContact(false)}
           onSaved={handleContactSaved}
+        />
+      )}
+
+      {/* Review what the thread says, then put it on the board */}
+      {showCreateJob && selectedId && (
+        <CreateJobModal
+          conversationId={selectedId}
+          onClose={() => setShowCreateJob(false)}
+          onCreated={handleJobCreated}
         />
       )}
 

@@ -5,7 +5,8 @@
     "moduleResolution": "node",
     "baseUrl": "..",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "server-only": ["./scripts/shims/server-only.ts"]
     },
     "noEmit": false
   }

@@ -1,11 +1,13 @@
 import { normalizePhone } from "@/lib/phone";
 
 /**
- * Best-effort contact details pulled out of a chat thread, for pre-filling the
- * "Create contact" form when a text arrives from a number that isn't on file.
+ * Contact details pulled out of a chat thread by rule, with no model involved.
  *
- * Everything here is a suggestion: staff confirm or correct each field before
- * it is saved, so the heuristics err toward returning null over guessing.
+ * This is the `conversation` layer of the context built in this directory: the
+ * strongest one, and the reason it is allowed to outrank the customer record
+ * is that it only speaks when a pattern is certain. Everything it returns is
+ * still a suggestion staff confirm, so the heuristics err toward returning
+ * null over guessing.
  */
 export type ExtractedContact = {
   firstName: string | null;

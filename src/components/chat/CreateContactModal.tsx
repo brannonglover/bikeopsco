@@ -2,18 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { Customer } from "@/lib/types";
+import { valueOf } from "@/lib/conversation-context/field";
+import type { CustomerIdentityContext } from "@/lib/conversation-context/types";
 import {
   formatPhoneDisplay,
   formatPhoneInputUS,
   phoneToInputValue,
 } from "@/lib/phone";
-
-type Suggestion = {
-  firstName: string | null;
-  lastName: string | null;
-  email: string | null;
-  mentionedPhones: string[];
-};
 
 type PossibleDuplicate = {
   id: string;
@@ -43,12 +38,12 @@ const EMPTY_FORM: FormState = {
 const FIELD_CLASS =
   "mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-base sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500";
 
-/** Names the fields the thread supplied, so staff know what to double-check. */
-function describeFound(suggestion: Suggestion): string | null {
+/** Names the fields that were filled in, so staff know what to double-check. */
+function describeFound(identity: CustomerIdentityContext): string | null {
   const found = [
-    suggestion.firstName ? "name" : null,
-    suggestion.email ? "email" : null,
-    suggestion.mentionedPhones.length > 0 ? "phone number" : null,
+    identity.firstName ? "name" : null,
+    identity.email ? "email" : null,
+    identity.mentionedPhones.length > 0 ? "phone number" : null,
   ].filter(Boolean) as string[];
   if (found.length === 0) return null;
   if (found.length === 1) return found[0];
@@ -56,8 +51,22 @@ function describeFound(suggestion: Suggestion): string | null {
 }
 
 /**
- * Fills in a contact auto-created to hold a text from an unknown number,
- * pre-filled with the name, email and any numbers found in the thread itself.
+ * Whether anything in the form came off the contact record rather than out of
+ * the thread. Worth saying, because "we read this in their text" and "this was
+ * already on file" are checked differently.
+ */
+function usesRecordDetails(identity: CustomerIdentityContext): boolean {
+  return [identity.firstName, identity.lastName, identity.email].some(
+    (field) => field?.source === "customer_record"
+  );
+}
+
+/**
+ * Fills in a contact auto-created to hold a text from an unknown number.
+ *
+ * Nothing is worked out here: the form is pre-filled from the conversation
+ * context, which merges what the thread says with what the assistant collected
+ * and what is already on the contact record, field by field.
  */
 export function CreateContactModal({
   conversationId,
@@ -72,7 +81,9 @@ export function CreateContactModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
-  const [suggestion, setSuggestion] = useState<Suggestion | null>(null);
+  const [identity, setIdentity] = useState<CustomerIdentityContext | null>(
+    null
+  );
   const [duplicate, setDuplicate] = useState<PossibleDuplicate | null>(null);
   const [initialPhone, setInitialPhone] = useState("");
 
@@ -86,20 +97,22 @@ export function CreateContactModal({
       })
       .then((data) => {
         if (cancelled) return;
-        const found: Suggestion = data.suggestion;
-        setSuggestion(found);
+        const found: CustomerIdentityContext = data.identity;
+        setIdentity(found);
         setDuplicate(data.possibleDuplicate ?? null);
         const phoneValue = phoneToInputValue(data.customer.phone);
         setInitialPhone(phoneValue);
+        // Every field is already merged: read from the thread where it could
+        // be, filled in from what the assistant collected or what is on the
+        // contact record where it could not. The placeholder name a
+        // provisional contact carries is excluded there, not here.
         setForm({
-          // The placeholder name is the phone number itself, so it is never
-          // carried into the form — only a real name found in the thread is.
-          firstName: found.firstName ?? "",
-          lastName: found.lastName ?? "",
-          email: found.email ?? data.customer.email ?? "",
+          firstName: valueOf(found.firstName) ?? "",
+          lastName: valueOf(found.lastName) ?? "",
+          email: valueOf(found.email) ?? "",
           phone: phoneValue,
-          address: data.customer.address ?? "",
-          notes: data.customer.notes ?? "",
+          address: valueOf(found.address) ?? "",
+          notes: valueOf(found.notes) ?? "",
         });
       })
       .catch((e: unknown) => {
@@ -164,7 +177,8 @@ export function CreateContactModal({
     }
   };
 
-  const foundLabel = suggestion ? describeFound(suggestion) : null;
+  const foundLabel = identity ? describeFound(identity) : null;
+  const fromRecord = identity !== null && usesRecordDetails(identity);
   const duplicateName = duplicate
     ? [duplicate.firstName, duplicate.lastName].filter(Boolean).join(" ")
     : null;
@@ -192,9 +206,11 @@ export function CreateContactModal({
           <p className="mt-1 text-sm text-slate-500">
             {loading
               ? "Reading the conversation…"
-              : foundLabel
-                ? `Found ${foundLabel} in this conversation — check before saving.`
-                : "Nothing to go on in this conversation yet — fill in what you know."}
+              : !foundLabel
+                ? "Nothing to go on in this conversation yet — fill in what you know."
+                : fromRecord
+                  ? `Found ${foundLabel} — some of it already on their contact record. Check before saving.`
+                  : `Found ${foundLabel} in this conversation — check before saving.`}
           </p>
         </div>
 
@@ -272,7 +288,7 @@ export function CreateContactModal({
               Texts are sent to this number — it is the one they messaged from.
             </p>
 
-            {suggestion?.mentionedPhones.map((phone) => (
+            {identity?.mentionedPhones.map((phone) => (
               <button
                 key={phone}
                 type="button"

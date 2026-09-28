@@ -39,6 +39,18 @@ export type BookingJobInput = {
   serviceIds: string[];
   bikes: BookingJobBike[];
   collectionServiceEnabled: boolean;
+  /**
+   * Where the job lands on the board. Defaults to `PENDING_APPROVAL`, which is
+   * right for a public booking nobody has looked at yet. Staff creating a job
+   * from a conversation have already reviewed it, so they pass `BOOKED_IN` and
+   * skip an approval step that would only ask them to confirm their own work.
+   */
+  stage?: Stage;
+  /**
+   * The chat thread staff built this job out of, when that is where it came
+   * from. Recorded so a job card can answer "why is this here?" months later.
+   */
+  createdFromConversationId?: string | null;
 };
 
 type TransactionClient = Prisma.TransactionClient;
@@ -55,6 +67,10 @@ export async function createBookingJob(
 ) {
   const { shopId } = input;
   const emailNormalized = input.email.trim().toLowerCase();
+  // A blank surname is "not given", not "set to empty" — a booking form left
+  // untouched and a chat contact that never had one both arrive as "", and
+  // storing that turns an absent surname into a present empty one.
+  const lastName = input.lastName?.trim() || null;
 
   let customer = null;
 
@@ -83,7 +99,7 @@ export async function createBookingJob(
       data: {
         shopId,
         firstName: input.firstName,
-        lastName: input.lastName ?? null,
+        lastName,
         email: input.email.trim(),
         phone: input.phone,
         ...consentUpdate,
@@ -95,7 +111,7 @@ export async function createBookingJob(
       where: { id: customer.id },
       data: {
         firstName: input.firstName,
-        lastName: input.lastName ?? null,
+        lastName,
         phone: input.phone,
         ...consentUpdate,
         address: input.address ?? customer.address,
@@ -115,7 +131,7 @@ export async function createBookingJob(
   const newJob = await tx.job.create({
     data: {
       shopId,
-      stage: Stage.PENDING_APPROVAL,
+      stage: input.stage ?? Stage.PENDING_APPROVAL,
       bikeMake: bikeMakeSummary,
       bikeModel: bikeModelSummary,
       customerId: customer.id,
@@ -126,6 +142,7 @@ export async function createBookingJob(
       collectionWindowStart: input.collectionWindowStart ?? null,
       collectionWindowEnd: input.collectionWindowEnd ?? null,
       customerNotes: input.customerNotes ?? null,
+      createdFromConversationId: input.createdFromConversationId ?? null,
     },
   });
 

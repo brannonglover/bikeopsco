@@ -22,6 +22,8 @@
     "catalog:seed": "node scripts/run-catalog-ts.js bike-catalog/seed.ts",
     "catalog:scrape": "node scripts/run-catalog-ts.js bike-catalog/scrapers/run.ts",
     "check:booking-spam": "TS_NODE_PROJECT=scripts/tsconfig.scripts.json ts-node -r tsconfig-paths/register scripts/check-booking-spam.ts",
+    "check:conversation-context": "TS_NODE_PROJECT=scripts/tsconfig.scripts.json ts-node -r tsconfig-paths/register scripts/check-conversation-context.ts",
+    "check:assistant-collection": "TS_NODE_PROJECT=scripts/tsconfig.scripts.json ts-node -r tsconfig-paths/register scripts/check-assistant-collection.ts",
     "build:gibberish-model": "node scripts/build-gibberish-model.js"
   },
   "dependencies": {

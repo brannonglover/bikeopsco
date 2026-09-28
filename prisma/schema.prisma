@@ -239,6 +239,13 @@ model Job {
   jobProducts                 JobProduct[]
   payments                    Payment[]
   conversations               Conversation[]
+  /// The conversation this job was created from, when staff built it out of a
+  /// chat thread. Deliberately NOT `Conversation.jobId`: a general thread is
+  /// identified by `jobId: null` everywhere, so pointing that at a job hides
+  /// the thread from the inbox and starts an empty replacement. This is a
+  /// separate link that answers "why is this job here?" without touching it.
+  createdFromConversationId   String?
+  createdFromConversation     Conversation?   @relation("JobCreatedFromConversation", fields: [createdFromConversationId], references: [id], onDelete: SetNull)
   reviewRequests              ReviewRequest[]
   promotedWaitlistEntries     WaitlistEntry[] @relation("WaitlistPromotedJob")
   createdAt                   DateTime        @default(now())
@@ -470,6 +477,9 @@ model Conversation {
   customer           Customer            @relation(fields: [customerId], references: [id], onDelete: Cascade)
   jobId              String?
   job                Job?                @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  /// Jobs staff created out of this thread. The inverse of
+  /// `Job.createdFromConversation`; unrelated to `jobId` above.
+  createdJobs        Job[]               @relation("JobCreatedFromConversation")
   messages           Message[]
   calls              Call[]
   chatReminderEmails ChatReminderEmail[]
@@ -485,6 +495,17 @@ model Conversation {
   /// What the assistant learned before it handed off, in one staff-facing line.
   /// Written only on the handoff turn, so its presence means "ready for you".
   aiAssistantSummary String?
+  /// Everything the assistant collected from this conversation, structured:
+  /// who the customer is, what they ride, what they say is wrong and what they
+  /// have asked for. See src/lib/conversation-context/ai-collected.ts.
+  ///
+  /// This is the record that a detail came from the conversation rather than
+  /// from the customer's file. Writing the name onto the customer row (which
+  /// still happens, because the inbox and every email read it) flattens that
+  /// away, and nothing else can reconstruct it: "the contact is provisional"
+  /// is a close-enough guess for a name and no guess at all for a symptom the
+  /// customer described.
+  aiCollectedContext Json?
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 
