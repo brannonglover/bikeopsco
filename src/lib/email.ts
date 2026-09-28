@@ -14,6 +14,7 @@ import {
   getEmailRedirectTo,
   getEmailSendingDisabledReason,
   getResendApiKey,
+  getUnredirectedEmailBlockReason,
   getShopAppUrl,
   getStaffChatOpenUrl,
   getStaffJobOpenUrl,
@@ -41,6 +42,17 @@ export async function sendResendEmail(
   }
 
   const redirectTo = getEmailRedirectTo();
+
+  // Fail closed. Callers blocked by the customer-notification guard return before
+  // reaching here, so anything arriving without a redirect outside Production is a
+  // guard-bypassing sender (magic links, staff/platform notifications) about to
+  // deliver to a real address from the staging database.
+  const unredirectedReason = getUnredirectedEmailBlockReason();
+  if (unredirectedReason) {
+    console.error(`[email] Refusing send: ${unredirectedReason}`, options.subject);
+    return { data: null, error: { message: unredirectedReason } };
+  }
+
   let payload = options;
   let redirectedFrom: string | undefined;
   if (redirectTo) {

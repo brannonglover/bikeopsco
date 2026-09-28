@@ -8,6 +8,7 @@ import {
   getEmailRedirectTo,
   getEmailSendingDisabledReason,
   getResendApiKey,
+  getUnredirectedEmailBlockReason,
   isLocalDevelopment,
   isProductionDeployment,
 } from "@/lib/env";
@@ -48,6 +49,7 @@ export async function GET() {
     isLocalDevelopment: isLocalDevelopment(),
     emailSendingDisabledReason: getEmailSendingDisabledReason(),
     emailRedirectTo: getEmailRedirectTo() ? "(set)" : null,
+    unredirectedEmailBlockReason: getUnredirectedEmailBlockReason(),
     shopNotifyCustomerEnabled: appSettings?.notifyCustomerEnabled ?? null,
     databaseUrlHostHint: getDatabaseUrlHostHint(),
     RESEND_API_KEY: {

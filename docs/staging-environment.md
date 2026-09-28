@@ -2,32 +2,84 @@
 
 Use this workflow to test changes (for example chat sign-in magic links) on a stable URL before merging to `main` and deploying production.
 
-## Audit summary (2026-06-29)
+## Audit summary (2026-09-28)
 
-**Preview still uses the production database.** `DATABASE_URL` and `DIRECT_URL` are now scoped separately (**Preview develop** vs **Production** only — fixed 2026-06-29), but both still point at the same Supabase project ref `nshrozsfixyeihthjxxi` on `aws-0-us-west-2.pooler.supabase.com`. That is why `dev.bikeops.co` shows real production customers and jobs.
+**Preview now has its own Supabase project.** Staging `DATABASE_URL` / `DIRECT_URL` point at project ref `fmqtkktfjtujyvgeepjq` (`aws-1-us-west-2.pooler.supabase.com`), which is **not** the production ref `nshrozsfixyeihthjxxi`. The isolation this document previously called for has been done; `dev.bikeops.co` no longer reads or writes production customers and jobs. Evidence is recorded under [Setup status](#setup-status-verified-2026-09-28) below.
 
-A build guard is in place: `PRODUCTION_SUPABASE_PROJECT_REF` is set on Preview (develop). After the next `develop` deploy that includes `scripts/check-preview-db-isolation.js`, Preview builds **fail** until staging `DATABASE_URL` / `DIRECT_URL` use a different Supabase project.
+Both directions are now guarded at build time, and both compare the **Supabase project ref** parsed from `DATABASE_URL` — not the pooler hostname, since two projects can share a host:
 
-After you provision a separate staging DB, confirm isolation:
+| Script | Runs on | Fails the build when |
+|--------|---------|----------------------|
+| `scripts/check-preview-db-isolation.js` | `VERCEL_ENV=preview` | Preview's ref **equals** `PRODUCTION_SUPABASE_PROJECT_REF` |
+| `scripts/check-production-env.js` | `VERCEL_ENV=production` | Production's ref **differs** from `PRODUCTION_SUPABASE_PROJECT_REF`, or `SUPABASE_JWT_SECRET` does not verify `NEXT_PUBLIC_SUPABASE_ANON_KEY` |
+
+Both need `PRODUCTION_SUPABASE_PROJECT_REF` set on the scope they guard (the ref is not secret). Each skips with a warning rather than failing when it cannot tell — an absent var, a non-legacy key format. Emergency bypasses: `SKIP_PREVIEW_DB_ISOLATION=true`, `SKIP_PRODUCTION_ENV_GUARD=true`.
+
+Spot-check a running deployment:
 
 ```bash
-vercel curl https://dev.bikeops.co/api/debug/env | jq '{databaseUrlHostHint, customerNotificationsEnabled}'
+vercel curl /api/debug/env --deployment bikeopsco-git-develop-brannonglovers-projects.vercel.app \
+  | sed -n 's/^[^{]*\({.*\)$/\1/p' \
+  | jq '{databaseUrlHostHint, customerNotificationsEnabled, customerNotificationBlockReason, emailRedirectTo}'
 ```
 
-The host hint must **not** match production (`aws-0-us-west-2.pooler.supabase.com` today).
+`vercel curl` takes a **relative** path plus `--deployment`; a full URL is rejected. Use the stable `…-git-develop-…` alias rather than `dev.bikeops.co`, which `--deployment` will not resolve. Plain `curl` returns a 302 to `vercel.com/sso-api` because the deployment is behind Vercel SSO protection, and the CLI prints progress lines before the JSON body — hence the `sed`.
 
-**Notification exposure on Preview (before code guard):**
+`databaseUrlHostHint` is a host, not a ref, so treat it as a smoke test; the build guards above are the authoritative check.
 
-| Service | Preview config | Risk |
-|---------|----------------|------|
-| **Postgres** | Same as Production | Reads/writes live customer data |
-| **Twilio** | Same account + auth token; different `TWILIO_PHONE_NUMBER` | Stage changes / chat could SMS real customers |
+Last run 2026-09-28 against `dev.bikeops.co`, after setting `EMAIL_REDIRECT_TO`:
+
+```json
+{
+  "databaseUrlHostHint": "aws-1-us-west-2.pooler.supabase.com:6543",
+  "customerNotificationsEnabled": false,
+  "customerNotificationBlockReason": "Customer notifications disabled on Vercel Preview (staging)",
+  "emailRedirectTo": "(set)"
+}
+```
+
+### Guard-bypassing email senders
+
+Ten senders in `src/lib/email.ts` deliberately skip `skipIfCustomerNotificationsBlocked` — chat magic links (so sign-in stays testable) plus the staff and platform notifications: `sendChatMagicLinkEmail`, `sendBookingRequestNotification`, `sendPaymentReceivedNotification`, `sendPlatformSignupNotification`, `sendSignupVerificationEmail`, `sendWaitlistRequestNotification`, `sendStaffNewChatMessageNotification`, `sendChatStaffReplyReminder`, `sendEmailTemplateTestEmail`, `sendCustomerBroadcastTestEmail`. On staging these would address rows from the staging database.
+
+Two things contain them:
+
+1. **`EMAIL_REDIRECT_TO`**, now set on **Preview (develop)** — rewrites every outbound `to` at the transport level.
+2. **A fail-closed runtime guard**: `getUnredirectedEmailBlockReason()` in `src/lib/env.ts`, enforced in `sendResendEmail()`. Outside Production, a send with no redirect configured is **refused**, not delivered. Callers blocked by the notification guard return before reaching that point, so anything arriving there unredirected is exactly a bypassing sender.
+
+That makes the redirect an enforced invariant rather than a configuration convention: removing `EMAIL_REDIRECT_TO` from Preview now breaks staging email loudly instead of silently reopening delivery. It is the runtime counterpart to `scripts/check-preview-db-isolation.js`. Escape hatch: `ALLOW_UNREDIRECTED_NONPROD_EMAIL=true`.
+
+Production is unaffected — the guard returns early on `isProductionDeployment()`. SMS needs no equivalent: every path in `src/lib/sms.ts` goes through `sendSms`, which honours the notification guard with no bypass.
+
+**Notification exposure on Preview:**
+
+| Service | Preview config | Status |
+|---------|----------------|--------|
+| **Postgres** | Separate staging project `fmqtkktfjtujyvgeepjq` | Isolated from production data |
+| **Twilio** | Same account + auth token; different `TWILIO_PHONE_NUMBER` | Live credentials — blocked only by the code guard below |
 | **Resend** | Not set on Preview | Customer emails mostly skipped already |
 | **Stripe** | Not set on Preview | Payments fail without keys (good) |
 
-**Code guard (develop branch):** Customer-facing email and SMS are blocked when `VERCEL_ENV=preview` or `NEXT_PUBLIC_APP_URL` contains `dev.bikeops.co`. Set `ALLOW_CUSTOMER_NOTIFICATIONS=true` on Preview only when using an **isolated staging DB** and test recipients. Chat magic-link emails are still allowed (for sign-in testing).
+**Code guard:** customer-facing email and SMS are blocked when `VERCEL_ENV=preview`, when `NEXT_PUBLIC_APP_URL` contains `dev.bikeops.co`, when `STAGING=true`, or in local development. Set `ALLOW_CUSTOMER_NOTIFICATIONS=true` only with test recipients. Chat magic-link emails and the staff/platform notifications deliberately **bypass** this guard so sign-in stays testable — see [Guard-bypassing email senders](#guard-bypassing-email-senders) above for what contains them instead.
 
-**You still need a separate staging database** — the guard prevents accidental notifications but Preview must not read/write production data.
+### Hazard: `VERCEL_ENV=production` in a local `.env.local`
+
+`getCustomerNotificationBlockReason()` returns early on `isProductionDeployment()` — *before* the local-development and Preview checks (`src/lib/env.ts`). A `.env.local` written by `vercel env pull --environment=production` carries `VERCEL_ENV="production"`, which therefore disables **every** notification guard on a developer's machine, and disables `EMAIL_REDIRECT_TO` with it. Pointed at the staging database, that sends real SMS and email to whatever contacts staging holds.
+
+Local `.env.local` should set:
+
+```bash
+VERCEL_ENV="preview"                        # not "production"; unset/"development" is not enough
+NEXT_PUBLIC_APP_URL="http://localhost:3000" # match NEXTAUTH_URL
+ALLOW_CUSTOMER_NOTIFICATIONS="false"        # highest-precedence block
+EMAIL_REDIRECT_TO="you@example.com"         # catches magic links, which skip the guard
+```
+
+`VERCEL_ENV` must be `preview` specifically. Leaving it unset or setting `development` only blocks while `NODE_ENV=development`: the local-dev check keys off `NODE_ENV` and the `NEXT_PUBLIC_APP_URL` host, so `npm run build` / `npm start` (which set `NODE_ENV=production`) fall through to sending unless `NEXT_PUBLIC_APP_URL` is a localhost URL. Only `preview` blocks in every combination.
+
+Re-running `vercel env pull` overwrites `.env.local` and reintroduces `VERCEL_ENV="production"`. Re-apply these overrides afterwards.
+
+*Previously (2026-06-29): Preview and Production shared the production Supabase project `nshrozsfixyeihthjxxi`; `DATABASE_URL` / `DIRECT_URL` had just been scoped separately in Vercel, and a separate staging database was still outstanding.*
 
 ---
 
@@ -263,17 +315,24 @@ After `develop` is deployed and the domain is active:
 
 ---
 
-## Blockers requiring your action
+## Setup status (verified 2026-09-28)
 
-| Blocker | Who |
-|---------|-----|
-| Vercel dashboard access (bikeops project) | You |
-| Add `dev.bikeops.co` domain + branch assignment | You |
-| DNS CNAME for `dev` | You (registrar or Vercel DNS) |
-| Preview environment variables | You — **separate DATABASE_URL required** |
-| Wire develop Supabase URLs + seed | You |
-| `git push origin develop` (if not pushed yet) | You — approve push |
-| Vercel CLI locally (`vercel login`) | Optional; dashboard is enough |
+The one-time setup above is complete. Each row below was checked, not assumed:
+
+| Item | Status | How it was verified |
+|------|--------|---------------------|
+| `develop` branch pushed | Done | `git ls-remote origin develop` → `70404fc` (2026-09-21) |
+| `dev.bikeops.co` domain + branch assignment | Done | Deployment `dpl_8XVrtHyU6ubDSobbsUYLK9a8wFSU` (target `preview`, Ready) is aliased to `dev.bikeops.co` and `…-git-develop-…` |
+| DNS for `dev` | Done | Resolves to Vercel (`216.150.16.129`, `216.150.1.1`) and serves over HTTPS |
+| Preview env vars scoped to `develop` | Done | `vercel env ls preview` shows `DATABASE_URL`, `DIRECT_URL`, `PRODUCTION_SUPABASE_PROJECT_REF`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET` scoped **Preview (develop)** |
+| Separate staging database | Done | See the proof below |
+| Vercel CLI locally | Done | `vercel whoami` → `brannonglover` |
+| `EMAIL_REDIRECT_TO` on Preview | Done (2026-09-28) | Added scoped to **Preview (develop)**; develop redeployed and `/api/debug/env` reports `emailRedirectTo: "(set)"` |
+| Seed staging data (`db:seed:staging`) | **Unverified** | Not checkable from outside; run it if `dev.bikeops.co` has no demo shop/job |
+
+**Proof that Preview is isolated, without decrypting anything:** `scripts/prisma.js` calls `checkPreviewDbIsolation({ exitOnFailure: true })` on `migrate deploy`, which `npm run build` runs on every deploy. `origin/develop` contains that guard, `PRODUCTION_SUPABASE_PROJECT_REF` is set on Preview (develop), and the 2026-09-21 develop deployment built **Ready**. The build would have aborted had `DATABASE_URL` carried the production ref. The live `databaseUrlHostHint` (`aws-1-us-west-2…`) corroborates it.
+
+No remaining configuration gaps. `EMAIL_REDIRECT_TO` was set on Preview (develop) on 2026-09-28 and is now backed by a fail-closed runtime guard — see the audit summary above.
 
 ---
 

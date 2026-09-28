@@ -157,6 +157,35 @@ export function getEmailRedirectTo(): string | null {
   return redirect || null;
 }
 
+/**
+ * Fail-closed guard for outbound email outside Production.
+ *
+ * Several senders deliberately bypass `getCustomerNotificationBlockReason()`:
+ * chat magic links (so sign-in stays testable on staging) plus the staff and
+ * platform notifications. Those would deliver to whatever real addresses the
+ * staging database happens to hold, so outside Production every send must land
+ * in an `EMAIL_REDIRECT_TO` inbox instead.
+ *
+ * This is the email mirror of `scripts/check-preview-db-isolation.js`: an unsafe
+ * configuration fails loudly rather than quietly working. Without it, dropping
+ * `EMAIL_REDIRECT_TO` from Preview silently reopens staging email delivery.
+ *
+ * Escape hatch: `ALLOW_UNREDIRECTED_NONPROD_EMAIL=true`.
+ */
+export function getUnredirectedEmailBlockReason(): string | null {
+  if (isProductionDeployment()) return null;
+  if (getEmailRedirectTo()) return null;
+
+  const override = process.env.ALLOW_UNREDIRECTED_NONPROD_EMAIL?.trim().toLowerCase();
+  if (override === "true") return null;
+
+  return (
+    "EMAIL_REDIRECT_TO is not set outside Production — refusing to send, because " +
+    "this address may be real data from the staging database. Set EMAIL_REDIRECT_TO " +
+    "to a test inbox, or ALLOW_UNREDIRECTED_NONPROD_EMAIL=true to override."
+  );
+}
+
 export function areCustomerNotificationsEnabled(): boolean {
   return getCustomerNotificationBlockReason() === null;
 }
