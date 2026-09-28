@@ -8,6 +8,40 @@ import { getShopAppUrl } from "./env";
 export const BLOB_ACCESS =
   (process.env.BLOB_ACCESS as "public" | "private") || "public";
 
+/**
+ * Version of Vercel Blob's HTTP API that our @vercel/blob release speaks.
+ *
+ * Every SDK request carries it, but the SDK doesn't export it, so callers that
+ * build the request by hand have to mirror it. Omitting it fails the upload
+ * with a 400 whose message ("Invalid pathname") points nowhere near the cause.
+ * Bump this when @vercel/blob is upgraded.
+ */
+const BLOB_API_VERSION = "12";
+
+/**
+ * The URL and headers a client needs to PUT a file straight to Blob storage.
+ *
+ * Native clients can't use the SDK's put() — it sends a stream body React
+ * Native's fetch won't produce — so they issue the request themselves. Handing
+ * them the headers keeps that request correct from the server side: a newly
+ * required header ships with a deploy instead of waiting on an app release.
+ */
+export function blobClientUploadRequest(
+  pathname: string,
+  clientToken: string,
+  contentType: string
+): { uploadUrl: string; uploadHeaders: Record<string, string> } {
+  return {
+    uploadUrl: `https://vercel.com/api/blob/?pathname=${encodeURIComponent(pathname)}`,
+    uploadHeaders: {
+      authorization: `Bearer ${clientToken}`,
+      "x-api-version": BLOB_API_VERSION,
+      "x-vercel-blob-access": BLOB_ACCESS,
+      "x-content-type": contentType,
+    },
+  };
+}
+
 /** Twilio MMS outbound limits (carrier-dependent; 10 is Twilio's API max). */
 export const MMS_OUTBOUND_MAX_COUNT = 10;
 

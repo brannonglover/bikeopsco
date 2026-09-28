@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { generateClientTokenFromReadWriteToken } from "@vercel/blob/client";
 import { z } from "zod";
-import { BLOB_ACCESS } from "@/lib/blob";
+import { BLOB_ACCESS, blobClientUploadRequest } from "@/lib/blob";
 import {
   CHAT_ALLOWED_VIDEO_TYPES,
   CHAT_MAX_VIDEO_UPLOAD_MB,
@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
       pathname,
       access: BLOB_ACCESS,
       maxSizeBytes: maxBytes,
-      uploadUrl: `https://vercel.com/api/blob/?pathname=${encodeURIComponent(pathname)}`,
+      ...blobClientUploadRequest(pathname, clientToken, parsed.mimeType),
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
