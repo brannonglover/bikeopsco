@@ -58,17 +58,31 @@ export async function PATCH(
           data: jobBikeUpdateData,
         });
 
+        const affectedJobBikes = await tx.jobBike.findMany({
+          where: { bikeId },
+          select: { jobId: true, sortOrder: true },
+        });
+        const jobIds = Array.from(new Set(affectedJobBikes.map((jb) => jb.jobId)));
+
+        /**
+         * Clients merge job payloads by Job.updatedAt and keep their own jobBikes when the
+         * incoming copy is not newer. Editing a profile bike rewrites JobBike rows without
+         * touching the parent job, so without this bump an open board keeps showing the old
+         * name and, worse, the stale bikeId — which made an already-attached bike look
+         * available in the "Add saved bike" list.
+         */
+        if (jobIds.length > 0) {
+          await tx.job.updateMany({
+            where: { id: { in: jobIds } },
+            data: { updatedAt: new Date() },
+          });
+        }
+
         if (
           data.make !== undefined ||
           data.model !== undefined ||
           data.bikeType !== undefined
         ) {
-          const affectedJobBikes = await tx.jobBike.findMany({
-            where: { bikeId },
-            select: { jobId: true, sortOrder: true },
-          });
-          const jobIds = Array.from(new Set(affectedJobBikes.map((jb) => jb.jobId)));
-
           for (const jobId of jobIds) {
             await syncCollectionJobService(tx, jobId);
           }
@@ -77,13 +91,6 @@ export async function PATCH(
         // Refresh Job.bikeMake / Job.bikeModel summary for jobs where this
         // bike is the first (lowest sortOrder) JobBike
         if (data.make !== undefined || data.model !== undefined) {
-          const affectedJobBikes = await tx.jobBike.findMany({
-            where: { bikeId },
-            select: { jobId: true, sortOrder: true },
-          });
-
-          const jobIds = Array.from(new Set(affectedJobBikes.map((jb) => jb.jobId)));
-
           for (const jobId of jobIds) {
             const firstJobBike = await tx.jobBike.findFirst({
               where: { jobId },

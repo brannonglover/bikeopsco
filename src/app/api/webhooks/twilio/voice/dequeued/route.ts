@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { authenticateVoiceWebhook, buildDequeuedTwiml, getVoiceWebhookBaseUrl } from "@/lib/voice";
+import { cancelStaffLegs } from "@/lib/voice-legs";
 
 export const runtime = "nodejs";
 
@@ -22,6 +23,29 @@ export async function POST(request: NextRequest) {
 
   const queueResult = params.QueueResult;
   const callSid = params.CallSid;
+
+  // The caller has left the queue, for whatever reason, so no device should
+  // still be ringing for them. This covers the three endings the staff legs
+  // themselves cannot see: the caller hung up while holding, the hold ran out,
+  // or a decline redirected them. `bridged` is already swept — the leg that won
+  // cancelled its siblings at the moment it claimed the call — and passing no
+  // exception here is harmless, because cancelStaffLegs only touches legs that
+  // are still live.
+  const call = callSid
+    ? await prisma.call.findUnique({
+        where: {
+          shopId_twilioParentCallSid: { shopId: shop.id, twilioParentCallSid: callSid },
+        },
+        select: { id: true },
+      })
+    : null;
+  if (call) {
+    await cancelStaffLegs(call.id).catch((error) => {
+      // Each leg carries its own ring-window timeout, so a sweep that fails
+      // still stops on its own rather than ringing indefinitely.
+      console.error("[voice] could not cancel staff legs on dequeue:", error);
+    });
+  }
 
   // "leave" and "redirected" are on their way to voicemail, which stamps its
   // own terminal state — closing them here would race that.

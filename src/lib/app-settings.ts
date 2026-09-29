@@ -18,6 +18,8 @@ export type AppFeatures = {
   notifyCustomerEnabled: boolean;
   chatEnabled: boolean;
   voiceEnabled: boolean;
+  /// Ring staff with real Twilio Client invites rather than repeated pushes.
+  voiceNativeRingEnabled: boolean;
   reviewsEnabled: boolean;
   rentalsEnabled: boolean;
   jobBoardFiltersEnabled: boolean;
@@ -55,6 +57,7 @@ const DEFAULT_FEATURES: AppFeatures = {
   notifyCustomerEnabled: true,
   chatEnabled: true,
   voiceEnabled: false,
+  voiceNativeRingEnabled: false,
   reviewsEnabled: true,
   rentalsEnabled: true,
   jobBoardFiltersEnabled: false,
@@ -121,6 +124,7 @@ async function loadAppFeaturesForShop(shopId: string): Promise<AppFeatures> {
       notifyCustomerEnabled: row.notifyCustomerEnabled,
       chatEnabled: row.chatEnabled,
       voiceEnabled: row.voiceEnabled,
+      voiceNativeRingEnabled: row.voiceNativeRingEnabled,
       reviewsEnabled: row.reviewsEnabled,
       rentalsEnabled: row.rentalsEnabled,
       jobBoardFiltersEnabled: row.jobBoardFiltersEnabled,
@@ -171,6 +175,7 @@ export async function upsertAppFeatures(
     notifyCustomerEnabled: updated.notifyCustomerEnabled,
     chatEnabled: updated.chatEnabled,
     voiceEnabled: updated.voiceEnabled,
+    voiceNativeRingEnabled: updated.voiceNativeRingEnabled,
     reviewsEnabled: updated.reviewsEnabled,
     rentalsEnabled: updated.rentalsEnabled,
     jobBoardFiltersEnabled: updated.jobBoardFiltersEnabled,

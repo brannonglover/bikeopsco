@@ -24,6 +24,7 @@
     "check:booking-spam": "TS_NODE_PROJECT=scripts/tsconfig.scripts.json ts-node -r tsconfig-paths/register scripts/check-booking-spam.ts",
     "check:conversation-context": "TS_NODE_PROJECT=scripts/tsconfig.scripts.json ts-node -r tsconfig-paths/register scripts/check-conversation-context.ts",
     "check:assistant-collection": "TS_NODE_PROJECT=scripts/tsconfig.scripts.json ts-node -r tsconfig-paths/register scripts/check-assistant-collection.ts",
+    "check:call-legs": "TS_NODE_PROJECT=scripts/tsconfig.scripts.json ts-node -r tsconfig-paths/register scripts/check-call-legs.ts",
     "build:gibberish-model": "node scripts/build-gibberish-model.js"
   },
   "dependencies": {

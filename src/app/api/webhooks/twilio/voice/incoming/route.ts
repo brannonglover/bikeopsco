@@ -10,6 +10,7 @@ import {
   getVoiceWebhookBaseUrl,
   ringStaffForCall,
 } from "@/lib/voice";
+import { fanOutStaffLegs, isNativeRingEnabled } from "@/lib/voice-legs";
 
 export const runtime = "nodejs";
 
@@ -47,7 +48,7 @@ export async function POST(request: NextRequest) {
     ? await findOrCreateGeneralConversation(shop.id, customerId)
     : null;
 
-  await prisma.call.upsert({
+  const call = await prisma.call.upsert({
     where: { shopId_twilioParentCallSid: { shopId: shop.id, twilioParentCallSid: callSid } },
     create: {
       shopId: shop.id,
@@ -61,18 +62,42 @@ export async function POST(request: NextRequest) {
       startedAt: new Date(),
     },
     update: {},
-  });
-
-  // The first ring. It has to go out before the TwiML response, or the caller
-  // starts holding before any device has been told to wake up; /wait keeps it
-  // ringing from there.
-  await ringStaffForCall(shop.id, callSid).catch((error) => {
-    // A push failure must not take the call down — the caller should still
-    // reach voicemail rather than hear an error.
-    console.error("[voice] staff push for incoming call failed:", error);
+    select: {
+      id: true,
+      customer: { select: { firstName: true, lastName: true } },
+    },
   });
 
   const base = getVoiceWebhookBaseUrl(request);
+
+  // Ringing has to start before the TwiML response, or the caller begins
+  // holding before any device has been told to wake up.
+  if (await isNativeRingEnabled(shop.id)) {
+    // One real Twilio invite per device: the OS rings it, continuously, until
+    // somebody acts. Nothing repeats it, and nothing here has to stop it —
+    // /staff-answer and /dequeued own cancellation between them.
+    const customerName = call.customer
+      ? [call.customer.firstName, call.customer.lastName].filter(Boolean).join(" ")
+      : null;
+    await fanOutStaffLegs({
+      shopId: shop.id,
+      callId: call.id,
+      baseUrl: base,
+      fromNumber: fromE164,
+      customerName,
+    }).catch((error) => {
+      // A fan-out failure must not take the call down — the caller should still
+      // reach voicemail rather than hear an error.
+      console.error("[voice] could not ring staff for incoming call:", error);
+    });
+  } else {
+    // The previous path: one notification now, repeated by /wait for as long as
+    // the caller holds. Kept as the rollback while the invite path is proven.
+    await ringStaffForCall(shop.id, callSid).catch((error) => {
+      console.error("[voice] staff push for incoming call failed:", error);
+    });
+  }
+
   const twiml = buildIncomingCallTwiml({
     queueName: buildQueueName(shop.id),
     waitUrl: `${base}/api/webhooks/twilio/voice/wait`,

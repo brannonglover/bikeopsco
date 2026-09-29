@@ -636,6 +636,15 @@ model Call {
   answeredAt          DateTime?
   endedAt             DateTime?
   durationSeconds     Int?
+  /// The staff leg that won the race to answer, when staff are rung with real
+  /// Twilio invites rather than a notification. Set by a conditional update, so
+  /// it is the claim itself: exactly one leg can ever bridge to the caller.
+  ///
+  /// Deliberately not `answeredAt`, which is stamped by /answered on the
+  /// *caller's* leg at the instant of bridging — far too late to arbitrate
+  /// between two devices that both picked up.
+  claimedByLegId      String?       @unique
+  legs                CallLeg[]
   /// When staff opened this call in the log. Drops the "New" badge from a call
   /// with no contact once seen; the call itself carries the flag because an
   /// unidentified caller has no customer record to hang it on.
@@ -660,6 +669,42 @@ model Call {
   @@index([shopId])
   @@index([shopId, twilioChildCallSid])
   @@index([conversationId])
+}
+
+/// One staff device being rung for an inbound call. A call fans out to every
+/// registered staff identity, so cancelling the others the moment one answers
+/// — and knowing which have already declined — needs a row per device.
+model CallLeg {
+  id        String        @id @default(cuid())
+  callId    String
+  call      Call          @relation(fields: [callId], references: [id], onDelete: Cascade)
+  /// Twilio Client identity this leg rings — buildStaffIdentity(shopId, userId).
+  identity  String
+  /// CallSid of the staff leg. Null between creating the row and Twilio
+  /// returning a SID, which is the one window in which a leg cannot be
+  /// cancelled; `timeout` on the leg itself covers it.
+  callSid   String?       @unique
+  status    CallLegStatus @default(PENDING)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([callId, status])
+}
+
+enum CallLegStatus {
+  /// Row created; the Twilio call does not exist yet.
+  PENDING
+  /// Twilio reports the device has the invite.
+  RINGING
+  /// Won the claim and bridged to the caller.
+  ANSWERED
+  /// The person on this device rejected it. Never cancelled afterwards —
+  /// a cancel with no matching invite crashes the iOS SDK (upstream #722).
+  DECLINED
+  /// We have decided to cancel it; the REST call may not have landed yet.
+  CANCELING
+  /// Terminal, whatever the reason.
+  ENDED
 }
 
 enum CallDirection {
@@ -791,6 +836,12 @@ model AppSettings {
   notifyCustomerEnabled    Boolean   @default(true)
   chatEnabled              Boolean   @default(true)
   voiceEnabled             Boolean   @default(false)
+  /// When true, inbound calls ring staff with real Twilio Client invites, so
+  /// the OS shows its own incoming-call screen and rings until answered. When
+  /// false, the previous behaviour: a repeated push notification per ring.
+  /// Off by default so the new path is opted into per shop and can be turned
+  /// back off without a redeploy.
+  voiceNativeRingEnabled   Boolean   @default(false)
   reviewsEnabled           Boolean   @default(true)
   /// When false: hide Rentals nav and block rental APIs.
   rentalsEnabled           Boolean   @default(true)

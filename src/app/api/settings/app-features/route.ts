@@ -25,6 +25,7 @@ const updateSchema = z.object({
   notifyCustomerEnabled: z.boolean().optional(),
   chatEnabled: z.boolean().optional(),
   voiceEnabled: z.boolean().optional(),
+  voiceNativeRingEnabled: z.boolean().optional(),
   reviewsEnabled: z.boolean().optional(),
   rentalsEnabled: z.boolean().optional(),
   jobBoardFiltersEnabled: z.boolean().optional(),

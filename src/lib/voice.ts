@@ -225,7 +225,12 @@ export async function authenticateVoiceWebhook(
   const params = Object.fromEntries(new URLSearchParams(rawBody)) as Record<string, string>;
 
   const signature = request.headers.get("X-Twilio-Signature");
-  const url = getTwilioInboundWebhookUrl(request);
+  // Twilio signs the full URL, query string included, and
+  // getTwilioInboundWebhookUrl builds from the pathname alone. Every voice
+  // route that existed before staff legs was query-free, so appending this
+  // changes nothing for them — but /staff-answer and /staff-leg carry the leg
+  // id there, and would fail validation on every request without it.
+  const url = `${getTwilioInboundWebhookUrl(request)}${request.nextUrl.search}`;
   if (!validateTwilioWebhook(authToken, signature, url, params)) {
     console.warn("Twilio Voice webhook: invalid signature", request.nextUrl.pathname);
     return new NextResponse("Forbidden", { status: 403 });

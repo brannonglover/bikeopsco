@@ -7,6 +7,7 @@ import {
   getVoiceWebhookBaseUrl,
   ringStaffForCall,
 } from "@/lib/voice";
+import { isNativeRingEnabled } from "@/lib/voice-legs";
 
 export const runtime = "nodejs";
 
@@ -41,7 +42,12 @@ export async function POST(request: NextRequest) {
   // Awaited rather than left dangling: the response is the caller's next
   // moment of hold audio, but an un-awaited push on a serverless function is
   // a push that may simply never be sent.
+  // Nothing to repeat when staff were rung with real invites: their phones are
+  // already ringing and stay ringing on their own. This is the whole point of
+  // the invite path — the ring is one event, not a push every six seconds.
+  const nativeRing = await isNativeRingEnabled(ctx.shop.id);
   const ringing =
+    !nativeRing &&
     Number.isFinite(queueTimeSeconds) &&
     queueTimeSeconds > 0 &&
     queueTimeSeconds < RING_SECONDS;
