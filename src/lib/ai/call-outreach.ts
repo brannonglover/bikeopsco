@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { CallStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { findOrCreateProvisionalCustomer } from "@/lib/chat-sms";
 import { findOrCreateGeneralConversation } from "@/lib/conversation";
@@ -22,6 +23,24 @@ import { runAssistantTurn, type AssistantTrigger } from "@/lib/ai/assistant";
 
 /** How long after a call we'll still open with "sorry we missed you". */
 const OUTREACH_WINDOW_MS = 60 * 60 * 1000;
+
+/**
+ * How long a finished call is left alone before the sweep below treats it as
+ * missed. Long enough for Twilio's recording and transcription callbacks,
+ * which arrive asynchronously and minutes apart — sweeping sooner would text a
+ * caller as a hang-up while their voicemail was still being processed.
+ */
+const SWEEP_GRACE_MS = 5 * 60 * 1000;
+
+/** Statuses that mean the call is over, however it ended. */
+const FINISHED_STATUSES: CallStatus[] = [
+  "COMPLETED",
+  "BUSY",
+  "FAILED",
+  "NO_ANSWER",
+  "CANCELED",
+  "VOICEMAIL",
+];
 
 export async function startAssistantCallOutreach({
   shopId,
@@ -127,4 +146,63 @@ export async function startAssistantCallOutreach({
       error: error instanceof Error ? error.message : String(error),
     });
   }
+}
+
+/**
+ * Catches every missed call the per-call callbacks didn't.
+ *
+ * The callbacks that trigger outreach are the ones that describe *what the
+ * caller did* — left a recording, left a transcript, rang off early — and a
+ * caller can end a call in a way that produces none of them. Hanging up during
+ * the voicemail greeting is the common one: Twilio writes no recording for
+ * zero-length audio, so neither /recording nor /transcription ever fires, and
+ * /status defers to them because the row already says VOICEMAIL.
+ *
+ * So this sweeps on time instead of on an event: any inbound call that is
+ * over, that nobody answered, and that still has no `aiOutreachAt` once the
+ * grace period is up. That makes it a backstop for a callback Twilio simply
+ * never delivered, too, and for a turn that failed transiently and released
+ * its claim — such a call is retried on each pass until the outreach window
+ * closes.
+ */
+export async function sweepMissedCallOutreach(): Promise<{ attempted: number }> {
+  const now = Date.now();
+
+  const enabled = await prisma.appSettings.findMany({
+    where: { aiAssistantEnabled: true },
+    select: { shopId: true },
+  });
+  if (enabled.length === 0) return { attempted: 0 };
+
+  const calls = await prisma.call.findMany({
+    where: {
+      shopId: { in: enabled.map((settings) => settings.shopId) },
+      direction: "INBOUND",
+      // The two things that mean this caller is no longer ours to answer: a
+      // person picked up, or someone has already been texted.
+      answeredAt: null,
+      aiOutreachAt: null,
+      status: { in: FINISHED_STATUSES },
+      createdAt: {
+        lt: new Date(now - SWEEP_GRACE_MS),
+        gt: new Date(now - OUTREACH_WINDOW_MS),
+      },
+    },
+    select: { id: true, shopId: true, recordingSid: true, transcriptionText: true },
+    orderBy: { createdAt: "asc" },
+  });
+
+  for (const call of calls) {
+    await startAssistantCallOutreach({
+      shopId: call.shopId,
+      callId: call.id,
+      // Audio or a transcript on the row means this caller did reach voicemail,
+      // whichever callback went missing — so they're answered as someone who
+      // left a message rather than someone who hung up, and the assistant's
+      // opening line matches what they actually did.
+      trigger: call.recordingSid || call.transcriptionText ? "voicemail" : "missed_call",
+    });
+  }
+
+  return { attempted: calls.length };
 }
