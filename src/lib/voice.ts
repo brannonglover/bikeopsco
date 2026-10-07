@@ -37,6 +37,65 @@ export function isVoicemailTranscriptionEnabled(): boolean {
 }
 
 /**
+ * How long a call is left on "in-progress" before its transcript is written
+ * off, measured from `endedAt`.
+ *
+ * Deliberately roomier than the missed-call sweep's grace, because `endedAt`
+ * is stamped when the *greeting* starts rather than when the caller hangs up.
+ * A caller using the full <Record maxLength> is still talking two minutes
+ * past it, and transcription only begins once that audio is processed — so
+ * the budget here is two minutes of recording plus eight of Twilio's own
+ * turnaround. Guessing short would flash "Transcript unavailable" on a
+ * voicemail that was about to arrive.
+ */
+const TRANSCRIPTION_STALL_MS = 10 * 60 * 1000;
+
+/**
+ * Clears the "Transcribing…" state off calls that will never get a transcript.
+ *
+ * /voicemail marks the row in-progress the moment the greeting starts, so the
+ * app can say "Transcribing…" instead of showing an empty gap. That bet only
+ * pays off if a transcribeCallback actually follows, and for a caller who hung
+ * up during the greeting one never does: Twilio writes no recording for
+ * zero-length audio, so it has nothing to transcribe and sends nothing. The
+ * row sat on "Transcribing…" forever.
+ *
+ * The two stalls are not the same thing, and they don't resolve the same way:
+ *
+ * - A row with a recording did get a voicemail, and the transcript is what
+ *   went missing. "failed" is the status Twilio itself would have sent, and
+ *   the app already reads it as "Transcript unavailable" beside working
+ *   playback.
+ * - A row with no recording never had a voicemail to transcribe. Null means
+ *   "never requested", which is the truth here, and leaves the app showing
+ *   nothing rather than a transcript error for a message that doesn't exist.
+ */
+export async function resolveStalledTranscriptions(): Promise<{
+  unavailable: number;
+  cleared: number;
+}> {
+  const cutoff = new Date(Date.now() - TRANSCRIPTION_STALL_MS);
+  const stalled = {
+    transcriptionStatus: "in-progress",
+    transcriptionText: null,
+    endedAt: { not: null, lt: cutoff },
+  } as const;
+
+  const [unavailable, cleared] = await Promise.all([
+    prisma.call.updateMany({
+      where: { ...stalled, recordingUrl: { not: null } },
+      data: { transcriptionStatus: "failed" },
+    }),
+    prisma.call.updateMany({
+      where: { ...stalled, recordingUrl: null },
+      data: { transcriptionStatus: null },
+    }),
+  ]);
+
+  return { unavailable: unavailable.count, cleared: cleared.count };
+}
+
+/**
  * Optional audio played to callers waiting in the queue. Unset means the
  * spoken hold in buildQueueWaitTwiml, which needs no hosted asset; point
  * VOICE_HOLD_MUSIC_URL at an mp3/wav to play real ringback instead.
@@ -159,6 +218,14 @@ export async function ringStaffForCall(shopId: string, callSid: string): Promise
     channelId: INCOMING_CALL_CHANNEL_ID,
     priority: "high",
     interruptionLevel: "time-sensitive",
+    // The ring repeats every few seconds for as long as the caller holds, and
+    // each repeat used to land as its own alert — one call left a stack of
+    // identical "Incoming call" rows to clear by hand. Keyed by call id, every
+    // repeat replaces the previous one, so a ringing call is a single
+    // notification that keeps refreshing itself. Per call rather than per
+    // shop: a second caller holding behind the first is ringing too, and
+    // their alert must not replace the one being answered.
+    collapseKey: `incoming-call:${call.id}`,
     data: {
       type: "incoming_call",
       callId: call.id,

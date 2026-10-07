@@ -65,8 +65,30 @@ function isAlreadyGone(error: unknown): boolean {
   return status === 404 || code === 20404 || code === 20009 || code === 21220;
 }
 
+/**
+ * Whether the staff app on the other end can be rung with Client invites.
+ *
+ * Off, and deliberately not a per-shop decision. Invites ring a device only if
+ * that device called voice.register(), and the staff app stopped doing so when
+ * inbound calls moved back to this app's own call screen: iOS forces a PushKit
+ * call onto the native CallKit UI, so registering is exactly what took the
+ * call out of BikeOps and put it in the system phone app.
+ *
+ * This being a constant rather than the shop flag is the point. A shop left on
+ * `voiceNativeRingEnabled` once the app no longer registers is the worst of
+ * both paths: fanOutStaffLegs dials one leg per staff user whether or not any
+ * device is listening, /wait sends no push because it believes the phones are
+ * already ringing, and the caller holds in silence until voicemail takes them
+ * — with nothing in the logs that looks like a failure.
+ *
+ * Going back to native ringing therefore takes two commits, not a settings
+ * toggle: flip this, and ship a staff build that registers again.
+ */
+const NATIVE_RING_SUPPORTED_BY_APP: boolean = false;
+
 /** Whether this shop rings staff with Client invites rather than a push. */
 export async function isNativeRingEnabled(shopId: string): Promise<boolean> {
+  if (!NATIVE_RING_SUPPORTED_BY_APP) return false;
   const settings = await prisma.appSettings.findUnique({
     where: { shopId },
     select: { voiceNativeRingEnabled: true },

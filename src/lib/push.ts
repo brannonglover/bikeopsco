@@ -29,6 +29,18 @@ interface ExpoPushMessage {
   priority?: "default" | "normal" | "high";
   /** iOS only — "time-sensitive" lets it through Focus modes. */
   interruptionLevel?: "active" | "critical" | "passive" | "time-sensitive";
+  /**
+   * Replaces an earlier notification instead of stacking beneath it.
+   *
+   * iOS maps this to `apns-collapse-id`, which both coalesces pushes in
+   * transit and swaps out the alert already on screen. Android maps it to
+   * FCM's `collapse_key`, which only dedupes in transit — a device that was
+   * offline gets the newest and drops the rest — so `tag` is needed as well
+   * to replace what is already in the shade.
+   */
+  collapseId?: string;
+  /** Android only — replaces the displayed notification carrying the same tag. */
+  tag?: string;
 }
 
 interface ExpoPushTicket {
@@ -112,6 +124,15 @@ export interface PushPayload {
   channelId?: string;
   priority?: "default" | "normal" | "high";
   interruptionLevel?: "active" | "critical" | "passive" | "time-sensitive";
+  /**
+   * Identifies the one notification this is, for anything sent more than once.
+   *
+   * A repeated alert is how an inbound call rings, and without this each
+   * repeat is a separate row in the shade: a single call leaves a stack of
+   * identical "Incoming call" alerts behind it. Set to the same value on
+   * every repeat and the device shows one notification that keeps refreshing.
+   */
+  collapseKey?: string;
 }
 
 /** The fields Expo sends, with the defaults every ordinary notification uses. */
@@ -125,6 +146,11 @@ function toExpoMessage(payload: PushPayload): Omit<ExpoPushMessage, "to"> {
     ...(payload.priority ? { priority: payload.priority } : {}),
     ...(payload.interruptionLevel
       ? { interruptionLevel: payload.interruptionLevel }
+      : {}),
+    // One key on the way in, both platforms' spellings on the way out —
+    // neither field alone replaces a notification on both.
+    ...(payload.collapseKey
+      ? { collapseId: payload.collapseKey, tag: payload.collapseKey }
       : {}),
   };
 }

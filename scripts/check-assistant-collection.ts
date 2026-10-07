@@ -88,6 +88,8 @@ async function runTurn(
       knowledge: KNOWLEDGE,
       knownName: null,
       knownEmail: null,
+      trigger: "inbound_sms",
+      opening: history.every((turn) => turn.role === "user"),
     }),
     messages: history,
     output_config: {

@@ -17,6 +17,7 @@ import {
 import {
   ASSISTANT_OUTPUT_SCHEMA,
   buildSystemPrompt,
+  type AssistantTrigger,
   type AssistantTurn,
   type AssistantTurnStatus,
 } from "@/lib/ai/prompt";
@@ -35,13 +36,7 @@ const HISTORY_LIMIT = 30;
 /** Hard ceiling on what goes out over SMS, whatever the model returns. */
 const MAX_REPLY_CHARS = 320;
 
-export type AssistantTrigger =
-  /** The customer left a voicemail. */
-  | "voicemail"
-  /** The customer called and hung up without leaving one. */
-  | "missed_call"
-  /** The customer sent a text. */
-  | "inbound_sms";
+export type { AssistantTrigger };
 
 type TurnOutcome =
   | { ok: true; state: AiAssistantState }
@@ -395,6 +390,8 @@ export async function runAssistantTurn({
         knowledge: settings.aiAssistantKnowledge,
         knownName,
         knownEmail: conversation.customer.email,
+        trigger,
+        opening: !turns.some((turn) => turn.role === "assistant"),
       }),
       messages,
       output_config: {
