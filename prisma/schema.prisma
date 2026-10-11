@@ -227,7 +227,10 @@ model Job {
   notes                       String?
   internalNotes               String?
   customerNotes               String?
+  /** Internal record of why the job was cancelled. Staff-only — never sent to customers. */
   cancellationReason          String?
+  /** Optional customer-facing explanation. The only cancellation text customers see. */
+  customerCancellationMessage String?
   completedAt                 DateTime?
   receivedAt                  DateTime?
   archivedAt                  DateTime?

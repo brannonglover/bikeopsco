@@ -217,7 +217,10 @@ export interface Job {
   notes: string | null;
   internalNotes: string | null;
   customerNotes: string | null;
+  /** Internal record, staff-only. Omitted from customer-link API responses. */
   cancellationReason?: string | null;
+  /** Customer-facing explanation shown on the status page and in the declined email. */
+  customerCancellationMessage?: string | null;
   completedAt: string | null;
   archivedAt?: string | null;
   columnSortOrder?: number | null;

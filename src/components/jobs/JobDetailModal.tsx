@@ -2857,6 +2857,7 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelReasonOther, setCancelReasonOther] = useState("");
+  const [cancelCustomerMessage, setCancelCustomerMessage] = useState("");
   const [job, setJob] = useState<Job | null>(jobProp);
   const [sendingReview, setSendingReview] = useState(false);
   const [accepting, setAccepting] = useState(false);
@@ -2961,6 +2962,7 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
     setShowCancelReason(true);
     setCancelReason("");
     setCancelReasonOther("");
+    setCancelCustomerMessage("");
   };
 
   const getCancellationReasonValue = () => {
@@ -2981,6 +2983,7 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
         body: JSON.stringify({
           stage: "CANCELLED",
           cancellationReason: value,
+          customerCancellationMessage: cancelCustomerMessage.trim() || null,
         }),
       });
       if (res.ok) {
@@ -2989,6 +2992,7 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
         setShowCancelReason(false);
         setCancelReason("");
         setCancelReasonOther("");
+        setCancelCustomerMessage("");
       }
     } finally {
       setCancelling(false);
@@ -2999,6 +3003,7 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
     setShowCancelReason(false);
     setCancelReason("");
     setCancelReasonOther("");
+    setCancelCustomerMessage("");
   };
 
   const handleRestoreJobClick = () => {
@@ -3058,6 +3063,7 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
         body: JSON.stringify({
           stage: "CANCELLED",
           cancellationReason: rejectReason.trim(),
+          customerCancellationMessage: rejectReason.trim(),
         }),
       });
       if (res.ok) {
@@ -3161,6 +3167,7 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
       setShowDeleteConfirm(false);
       setCancelReason("");
       setCancelReasonOther("");
+      setCancelCustomerMessage("");
       setReviewBanner(null);
       setShowRejectReason(false);
       setRejectReason("");
@@ -3224,14 +3231,17 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
       >
         {showCancelReason && (
           <div className="absolute inset-0 z-10 flex flex-col bg-white/95 rounded-xl p-6 overflow-hidden">
-            <h3 className="text-lg font-semibold text-slate-900 flex-shrink-0 mb-4">
+            <h3 className="text-lg font-semibold text-slate-900 flex-shrink-0 mb-1">
               Why is the job being cancelled?
             </h3>
+            <p className="text-sm text-slate-500 mb-3 flex-shrink-0">
+              Internal record — the customer never sees this.
+            </p>
             <div className="overflow-y-auto flex-1 min-h-0 space-y-2 -mx-1 px-1">
               {CANCELLATION_REASONS.map((reason) => (
                   <label
                     key={reason}
-                    className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors has-[:checked]:border-amber-500 has-[:checked]:bg-amber-50"
+                    className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors has-[:checked]:border-amber-500 has-[:checked]:bg-amber-50 dark:has-[:checked]:border-amber-600 dark:has-[:checked]:bg-amber-900/30"
                   >
                     <input
                       type="radio"
@@ -3239,23 +3249,44 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
                       value={reason}
                       checked={cancelReason === reason}
                       onChange={() => setCancelReason(reason)}
-                      className="w-4 h-4 text-amber-600 border-slate-300 focus:ring-amber-500"
+                      className="w-4 h-4 accent-amber-600 border-slate-300 focus:ring-amber-500 dark:[color-scheme:dark]"
                     />
                     <span className="text-sm font-medium text-slate-900">{reason}</span>
                   </label>
                 ))}
             </div>
             {cancelReason === "Other" && (
-                <input
-                  type="text"
+                <textarea
                   value={cancelReasonOther}
                   onChange={(e) => setCancelReasonOther(e.target.value)}
                   placeholder="Please specify"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent flex-shrink-0"
+                  rows={3}
+                  className="mt-3 w-full px-3 py-2 border border-slate-300 rounded-lg text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent flex-shrink-0 resize-y"
                   autoFocus
                 />
             )}
-            <div className="flex gap-2 justify-end pt-4 flex-shrink-0 border-t border-slate-200 mt-4 pt-4">
+            <div className="flex-shrink-0 border-t border-slate-200 mt-4 pt-4">
+              <label
+                htmlFor="cancel-customer-message"
+                className="block text-sm font-medium text-slate-700"
+              >
+                Message to the customer{" "}
+                <span className="font-normal text-slate-400">(optional)</span>
+              </label>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Shown on their status page. Leave blank and they only see that the
+                job was cancelled.
+              </p>
+              <textarea
+                id="cancel-customer-message"
+                value={cancelCustomerMessage}
+                onChange={(e) => setCancelCustomerMessage(e.target.value)}
+                rows={2}
+                placeholder="e.g. We could not source the part in time — nothing has been charged."
+                className="mt-2 w-full px-3 py-2 border border-slate-300 rounded-lg text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent resize-y"
+              />
+            </div>
+            <div className="flex gap-2 justify-end flex-shrink-0 border-t border-slate-200 mt-4 pt-4">
                 <button
                   onClick={handleCancelReasonClose}
                   className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
@@ -3285,7 +3316,7 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
               {RESTORE_STAGES.map((stage) => (
                 <label
                   key={stage}
-                  className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-50"
+                  className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-50 dark:has-[:checked]:border-emerald-600 dark:has-[:checked]:bg-emerald-900/30"
                 >
                   <input
                     type="radio"
@@ -3293,7 +3324,7 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
                     value={stage}
                     checked={restoreStage === stage}
                     onChange={() => setRestoreStage(stage)}
-                    className="w-4 h-4 text-emerald-600 border-slate-300 focus:ring-emerald-500"
+                    className="w-4 h-4 accent-emerald-600 border-slate-300 focus:ring-emerald-500 dark:[color-scheme:dark]"
                   />
                   <span className="text-sm font-medium text-slate-900">
                     {STAGE_LABELS[stage]}
@@ -3335,7 +3366,7 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
               autoFocus
               className="w-full flex-1 min-h-0 px-3 py-2 border border-slate-300 rounded-lg text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none"
             />
-            <div className="flex gap-2 justify-end pt-4 flex-shrink-0 border-t border-slate-200 mt-4">
+            <div className="flex gap-2 justify-end flex-shrink-0 border-t border-slate-200 mt-4 pt-4">
               <button
                 onClick={() => { setShowRejectReason(false); setRejectReason(""); }}
                 disabled={rejectSubmitting}
@@ -3712,14 +3743,23 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
             </div>
           )}
 
-          {(job.customerNotes || job.notes || (job.stage === "CANCELLED" && job.cancellationReason)) && (
+          {(job.customerNotes ||
+            job.notes ||
+            (job.stage === "CANCELLED" &&
+              (job.cancellationReason || job.customerCancellationMessage))) && (
             <div>
               <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">Notes</h3>
               <div className="space-y-3">
                 {job.stage === "CANCELLED" && job.cancellationReason && (
                   <div>
-                    <p className="text-xs font-medium text-slate-500">Cancellation reason</p>
+                    <p className="text-xs font-medium text-slate-500">Cancellation reason (internal)</p>
                     <p className="text-sm text-slate-700 whitespace-pre-wrap">{job.cancellationReason}</p>
+                  </div>
+                )}
+                {job.stage === "CANCELLED" && job.customerCancellationMessage && (
+                  <div>
+                    <p className="text-xs font-medium text-slate-500">Message shown to the customer</p>
+                    <p className="text-sm text-slate-700 whitespace-pre-wrap">{job.customerCancellationMessage}</p>
                   </div>
                 )}
                 {job.customerNotes && (

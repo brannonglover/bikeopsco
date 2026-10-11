@@ -230,6 +230,11 @@ function escapeHtml(str: string): string {
     .replace(/'/g, "&#39;");
 }
 
+/** Staff-typed text merged into an email template: escape markup, keep the line breaks. */
+function toTemplateHtmlText(text: string): string {
+  return escapeHtml(text).replace(/\r\n|\r|\n/g, "<br />");
+}
+
 function formatDeliveryTypeLabel(deliveryType: string): string {
   if (deliveryType === "DROP_OFF_AT_SHOP") return "Drop-off at shop";
   if (deliveryType === "COLLECTION_SERVICE") return "Collection service";
@@ -1605,7 +1610,8 @@ export async function sendBookingDeclinedEmail(
     shopId: string;
     bikeMake: string;
     bikeModel: string;
-    cancellationReason: string;
+    /** Customer-facing text only — never the internal cancellation reason. */
+    customerMessage: string;
     customer: { firstName: string; lastName: string | null } | null;
   }
 ): Promise<{ ok: boolean; error?: string }> {
@@ -1642,7 +1648,9 @@ export async function sendBookingDeclinedEmail(
     bikeMake: job.bikeMake,
     bikeModel: job.bikeModel,
     shopName,
-    rejectionReason: job.cancellationReason || "We're unable to accommodate this booking at this time.",
+    rejectionReason: toTemplateHtmlText(
+      job.customerMessage || "We're unable to accommodate this booking at this time."
+    ),
   };
 
   const subject = mergeTemplateVariables(template.subject, vars);

@@ -9,7 +9,7 @@ import { syncCollectionJobService } from "@/lib/collection-fee";
 import { getAppFeatures } from "@/lib/app-settings";
 import { computeJobSubtotal, computeTotalPaid, getJobPaymentSummary } from "@/lib/job-payments";
 import { getEffectiveEmailUpdatesConsent, getEffectiveSmsConsent } from "@/lib/sms-consent";
-import { hasJobReadAccess } from "@/lib/job-customer-access";
+import { hasJobReadAccess, hasStaffJobAccess } from "@/lib/job-customer-access";
 import { getShopForHost } from "@/lib/shop";
 import { mirrorJobStageToCustomerChat } from "@/lib/system-chat";
 import { resolveProfileBikeForJobBike } from "@/lib/resolve-profile-bike";
@@ -47,6 +47,9 @@ const updateJobSchema = z.object({
   /** When true, send stage notification even if one was already sent for this stage. */
   resendNotification: z.boolean().optional(),
   cancellationReason: z.string().min(1).optional(),
+  /** Optional customer-facing explanation. Empty means the customer sees only the
+   *  neutral cancelled state, never the internal reason. */
+  customerCancellationMessage: z.string().optional().nullable(),
   bikeMake: z.string().min(1).optional(),
   bikeModel: optionalTrimmedString,
   bikes: z.array(bikeSchema).optional(),
@@ -111,7 +114,8 @@ export async function GET(
       return NextResponse.json({ error: "Job not found" }, { status: 404 });
     }
 
-    if (!(await hasJobReadAccess(request, shop.id, id, job.customerId))) {
+    const isStaff = await hasStaffJobAccess(request, shop.id);
+    if (!isStaff && !(await hasJobReadAccess(request, shop.id, id, job.customerId))) {
       return NextResponse.json(
         {
           error: "access_required",
@@ -140,7 +144,19 @@ export async function GET(
             smsConsent: getEffectiveSmsConsent(job.customer),
           }
         : null;
-    const jobWithoutPayments = { ...job, payments: undefined };
+    /**
+     * Customer-link readers get the job minus staff-only fields. The cancellation
+     * reason is an internal record; customerCancellationMessage is the half meant
+     * for them.
+     */
+    const jobWithoutPayments = isStaff
+      ? { ...job, payments: undefined }
+      : {
+          ...job,
+          payments: undefined,
+          cancellationReason: undefined,
+          internalNotes: undefined,
+        };
     const queueInfo = await getJobQueueInfo(prisma, shop.id, job);
     const enrichedJobBikes = await enrichJobBikesWithCatalogThumbnails(job.jobBikes ?? []);
     const res = NextResponse.json({
@@ -255,6 +271,10 @@ export async function PATCH(
     if (data.stage !== undefined) updateData.stage = data.stage;
     if (data.archived !== undefined) updateData.archivedAt = data.archived ? new Date() : null;
     if (data.cancellationReason !== undefined) updateData.cancellationReason = data.cancellationReason;
+    if (data.customerCancellationMessage !== undefined) {
+      const customerMsg = data.customerCancellationMessage?.trim();
+      updateData.customerCancellationMessage = customerMsg ? customerMsg : null;
+    }
     if (data.bikeMake !== undefined) updateData.bikeMake = data.bikeMake;
     if (data.bikeModel !== undefined) updateData.bikeModel = data.bikeModel ?? "";
     if (data.customerId !== undefined) updateData.customerId = data.customerId;
@@ -366,6 +386,7 @@ export async function PATCH(
         data.stage !== "CANCELLED"
       ) {
         updateData.cancellationReason = null;
+        updateData.customerCancellationMessage = null;
         if (data.archived === undefined) {
           updateData.archivedAt = null;
         }
@@ -659,12 +680,17 @@ export async function PATCH(
       features.notifyCustomerEnabled &&
       data.notifyCustomer !== false
     ) {
-      const reason = (data.cancellationReason ?? job.cancellationReason ?? "").trim();
+      const customerMessage = (
+        data.customerCancellationMessage ??
+        job.customerCancellationMessage ??
+        ""
+      ).trim();
       sendBookingDeclinedEmail(job.customer.email, {
         shopId: job.shopId,
         bikeMake: job.bikeMake,
         bikeModel: job.bikeModel,
-        cancellationReason: reason || "We're unable to accommodate this booking at this time.",
+        customerMessage:
+          customerMessage || "We're unable to accommodate this booking at this time.",
         customer: job.customer,
       }).catch((e) => console.error("[Reject] Declined email failed:", e));
     }

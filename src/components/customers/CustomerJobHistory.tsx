@@ -194,7 +194,7 @@ function JobHistoryItem({ job }: { job: HistoryJob }) {
             </p>
           )}
           {job.cancellationReason && (
-            <p className="text-xs text-red-500 border-t border-slate-100 pt-2">
+            <p className="text-xs text-red-500 whitespace-pre-line border-t border-slate-100 pt-2">
               Cancelled: {job.cancellationReason}
             </p>
           )}

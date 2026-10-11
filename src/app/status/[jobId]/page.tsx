@@ -169,7 +169,8 @@ type StatusJob = {
   pickupDate: string | null;
   paymentStatus: string;
   totalPaid?: number;
-  cancellationReason?: string | null;
+  /** Staff-only internal reason is never sent to this page; this is the customer half. */
+  customerCancellationMessage?: string | null;
   jobServices: StatusJobService[];
   jobProducts?: { quantity: number; unitPrice: string | number }[];
 };
@@ -427,10 +428,10 @@ export default function StatusPage() {
               {stageDesc}
             </p>
             {job.stage === "CANCELLED" &&
-              job.cancellationReason &&
-              job.cancellationReason.trim() && (
-                <p className="mt-2 text-sm text-red-700">
-                  {job.cancellationReason}
+              job.customerCancellationMessage &&
+              job.customerCancellationMessage.trim() && (
+                <p className="mt-2 text-sm text-red-700 whitespace-pre-line">
+                  {job.customerCancellationMessage}
                 </p>
               )}
             {job.queueInfo && <QueuePositionBanner queueInfo={job.queueInfo} />}

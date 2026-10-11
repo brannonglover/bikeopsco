@@ -367,9 +367,12 @@ export function KanbanBoard({ initialJobs }: { initialJobs?: Job[] }) {
   const handleRejectConfirm = useCallback(
     async (jobId: string, reason: string) => {
       try {
+        // The reject modal's text is written for the customer, so it fills both the
+        // internal record and the customer-facing message.
         const body: Record<string, unknown> = {
           stage: "CANCELLED",
           cancellationReason: reason.trim(),
+          customerCancellationMessage: reason.trim(),
         };
         if (!features.notifyCustomerEnabled || jobsSkippingCustomerNotify.has(jobId)) {
           body.notifyCustomer = false;
