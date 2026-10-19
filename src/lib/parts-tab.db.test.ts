@@ -157,11 +157,12 @@ describe("Parts tab route", { skip: !ENABLED && "set RUN_CATALOG_DB_TESTS=1" }, 
     loadTestEnv();
     const { PrismaClient } = await import("@prisma/client");
     const { PrismaClient: CatalogPrismaClient } = await import("../../bike-catalog/generated/client");
-    const { normalizeDatabaseUrlForPrisma } = await import("./db-url");
-    const datasource = (url: string | undefined): { datasources?: { db: { url: string } } } =>
-      url ? { datasources: { db: { url } } } : {};
-    brokenApp = new PrismaClient({ ...datasource(UNREACHABLE), log: [] });
-    brokenCatalog = new CatalogPrismaClient({ ...datasource(UNREACHABLE), log: [] });
+    const { DEFAULT_CONNECTION_LIMIT, normalizeDatabaseUrlForPrisma } = await import("./db-url");
+    // Through the same driver switch as the app (DATABASE_DRIVER), so a failure
+    // looks like it would with that driver.
+    const { prismaDriverOptions } = await import("./db-driver");
+    brokenApp = new PrismaClient({ ...prismaDriverOptions(UNREACHABLE, 1), log: [] });
+    brokenCatalog = new CatalogPrismaClient({ ...prismaDriverOptions(UNREACHABLE, 1), log: [] });
     // Clients installed before the tests (e.g. by a preload trying another
     // driver) are the real ones; otherwise the app's usual clients.
     const g = globalThis as unknown as { prisma?: unknown; catalogPrisma?: unknown };
@@ -169,7 +170,7 @@ describe("Parts tab route", { skip: !ENABLED && "set RUN_CATALOG_DB_TESTS=1" }, 
     const realApp =
       (g.prisma as AppClient | undefined) ??
       new PrismaClient({
-        ...datasource(normalizeDatabaseUrlForPrisma(process.env.DATABASE_URL)),
+        ...prismaDriverOptions(normalizeDatabaseUrlForPrisma(process.env.DATABASE_URL), DEFAULT_CONNECTION_LIMIT.app),
       });
     // The catalog client is made by its module, loaded after the stand-ins.
     const real: { catalog?: CatalogClient } = {};
