@@ -818,18 +818,34 @@ enum CallStatus {
 }
 
 model User {
-  id           String      @id @default(cuid())
-  shopId       String
-  shop         Shop        @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  email        String
-  passwordHash String
-  name         String?
-  pushTokens   PushToken[]
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  id                  String               @id @default(cuid())
+  shopId              String
+  shop                Shop                 @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  email               String
+  passwordHash        String
+  name                String?
+  pushTokens          PushToken[]
+  passwordResetTokens PasswordResetToken[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
 
   @@unique([shopId, email])
   @@index([shopId])
+}
+
+/// One-time "forgot password" link. Only a SHA-256 of the token is stored, so a
+/// leaked database row can't be turned back into a working link.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model PendingSignup {

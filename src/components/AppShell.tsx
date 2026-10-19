@@ -118,7 +118,8 @@ export function AppShell({
 function AppShellContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const isLoginPage = pathname === "/login";
+  // Includes /login/forgot and /login/reset, which signed-out users must reach.
+  const isLoginPage = pathname === "/login" || pathname?.startsWith("/login/");
   const isSignupPage = pathname === "/signup" || pathname === "/signup/verify";
   const isAdminPage = pathname?.startsWith("/admin");
   const isWidgetPage = pathname?.startsWith("/widget");

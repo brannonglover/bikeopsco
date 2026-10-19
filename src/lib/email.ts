@@ -278,6 +278,10 @@ const PLATFORM_SIGNUP_EMAIL_DISCLAIMER =
   "You received this email because you started signing up for Bike Ops. If you didn't create an account, you can ignore this message.";
 const PLATFORM_SIGNUP_READ_ONLY_NOTICE =
   "This inbox is not monitored. Please do not reply to this email — use the confirmation link above to finish setting up your workspace.";
+const PLATFORM_PASSWORD_RESET_EMAIL_DISCLAIMER =
+  "You received this email because someone asked to reset the password for your Bike Ops account. If that wasn't you, you can ignore this message — your password won't change.";
+const PLATFORM_PASSWORD_RESET_READ_ONLY_NOTICE =
+  "This inbox is not monitored. Please do not reply to this email — use the link above to choose a new password.";
 
 function bikeOpsEmailShopSubtitle(): string | null {
   const shop = process.env.SHOP_NAME?.trim();
@@ -1272,6 +1276,57 @@ ${buildCustomerEmailCtaButton(details.verificationUrl, "Confirm email and create
     const { error } = await sendResendEmail(resend, {
       from: getFromEmail(),
       to: details.ownerEmail,
+      subject,
+      html,
+      ...(attachments && { attachments }),
+    });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (e) {
+    const err = e instanceof Error ? e.message : "Unknown error";
+    return { ok: false, error: err };
+  }
+}
+
+export async function sendPasswordResetEmail(details: {
+  userName: string | null;
+  userEmail: string;
+  shopName: string;
+  resetUrl: string;
+  expiresInMinutes: number;
+}): Promise<{ ok: boolean; error?: string }> {
+  const resend = getResend();
+  if (!resend) {
+    console.warn("RESEND_API_KEY not set, skipping password reset email");
+    return { ok: false, error: "Email not configured" };
+  }
+
+  const subject = "Reset your Bike Ops password";
+  const greeting = details.userName?.trim() ? `Hi ${escapeHtml(details.userName.trim())},` : "Hi,";
+  const innerHtml = `
+<p style="margin:0 0 16px">${greeting}</p>
+<p style="margin:0 0 16px">We got a request to reset your password for <strong>${escapeHtml(details.shopName)}</strong> on Bike Ops. Use the button below to choose a new one.</p>
+<p style="margin:0 0 16px">This link expires in ${details.expiresInMinutes} minutes and can only be used once. If you did not request this, you can ignore this email.</p>
+${buildCustomerEmailCtaButton(details.resetUrl, "Choose a new password")}
+<p class="email-muted" style="margin:24px 0 0;font-size:12px;color:#64748b;word-break:break-all">Or copy this link: <a href="${escapeHtml(details.resetUrl)}" style="color:#4f46e5;text-decoration:underline">${escapeHtml(details.resetUrl)}</a></p>
+`.trim();
+
+  const branding = await getCustomerEmailBrandingAssets();
+  const html = buildReadOnlyCustomerEmailHtml({
+    innerHtml,
+    headerLogoSrc: branding.headerLogoSrc,
+    heading: "Reset your password",
+    footerSecondary: null,
+    footerTagline: PLATFORM_EMAIL_FOOTER_TAGLINE,
+    footerDisclaimer: PLATFORM_PASSWORD_RESET_EMAIL_DISCLAIMER,
+    readOnlyNotice: PLATFORM_PASSWORD_RESET_READ_ONLY_NOTICE,
+  });
+  const attachments = customerEmailBrandingAttachments(branding);
+
+  try {
+    const { error } = await sendResendEmail(resend, {
+      from: getFromEmail(),
+      to: details.userEmail,
       subject,
       html,
       ...(attachments && { attachments }),
