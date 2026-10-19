@@ -45,6 +45,7 @@ export async function POST(request: NextRequest) {
         name: user.name,
         shopId: shop.id,
         shopSubdomain: shop.subdomain,
+        sessionVersion: user.sessionVersion,
       },
       secret: process.env.NEXTAUTH_SECRET!,
       maxAge: 30 * 24 * 60 * 60,

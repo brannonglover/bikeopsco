@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { getShopForHost } from "@/lib/shop";
 import { BLOB_HOST_SUFFIX, verifyBlobSignature } from "@/lib/blob-signing";
 import { requestHost } from "@/lib/request-host";
+import { isSessionCurrent } from "@/lib/session-version";
 
 export { blobSignatureQuery, normalizeBlobPathname, signBlobUrl, verifyBlobSignature } from "@/lib/blob-signing";
 
@@ -167,11 +168,12 @@ export type BlobAccess =
   | { ok: true; via: "signature" | "public" | "staff" | "customer"; owner: BlobOwner | null; expiresAt?: number }
   | { ok: false };
 
-/** Staff shop from the session JWT (cookie or Bearer); null when absent or unreadable. */
+/** Staff shop from the session JWT (cookie or Bearer); null when absent, unreadable or revoked. */
 async function staffShopId(request: NextRequest): Promise<string | null> {
   try {
     const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-    return typeof token?.shopId === "string" && typeof token?.id === "string" ? token.shopId : null;
+    if (typeof token?.shopId !== "string" || typeof token?.id !== "string") return null;
+    return (await isSessionCurrent(token)) ? token.shopId : null;
   } catch {
     return null;
   }

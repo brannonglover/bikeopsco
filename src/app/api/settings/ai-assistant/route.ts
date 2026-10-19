@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getToken } from "next-auth/jwt";
+import { getStaffToken } from "@/lib/api-auth";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 
@@ -27,7 +27,7 @@ const updateSchema = z.object({
 });
 
 export async function GET(request: NextRequest) {
-  const token = await getToken({ req: request });
+  const token = await getStaffToken(request);
   if (!token?.shopId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  const token = await getToken({ req: request });
+  const token = await getStaffToken(request);
   if (!token?.shopId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

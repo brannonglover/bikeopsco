@@ -88,7 +88,11 @@ export async function resetPasswordWithToken(
     });
     if (count !== 1) return false;
 
-    await tx.user.update({ where: { id: row.userId }, data: { passwordHash } });
+    // Bumping the session version signs out every existing web and mobile login.
+    await tx.user.update({
+      where: { id: row.userId },
+      data: { passwordHash, sessionVersion: { increment: 1 } },
+    });
     // Any other outstanding links for this account stop working too.
     await tx.passwordResetToken.deleteMany({ where: { userId: row.userId, id: { not: row.id } } });
     return true;

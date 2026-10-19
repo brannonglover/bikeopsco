@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getToken } from "next-auth/jwt";
+import { getStaffToken } from "@/lib/api-auth";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { getShopForHost } from "@/lib/shop";
@@ -94,7 +94,7 @@ function lastNMonthKeys(count: number, now = new Date()): string[] {
 type Period = "day" | "week" | "month" | "year";
 
 async function getAuthorizedShopId(request: NextRequest): Promise<string | null> {
-  const token = await getToken({ req: request });
+  const token = await getStaffToken(request);
   if (!token?.shopId || typeof token.shopId !== "string") return null;
 
   const hostHeader =

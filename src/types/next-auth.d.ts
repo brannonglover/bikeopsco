@@ -16,6 +16,7 @@ declare module "next-auth" {
   interface User {
     shopId: string;
     shopSubdomain: string;
+    sessionVersion: number;
   }
 }
 
@@ -25,5 +26,7 @@ declare module "next-auth/jwt" {
     email?: string;
     shopId?: string;
     shopSubdomain?: string;
+    /** User.sessionVersion at sign-in; absent on tokens issued before it existed. */
+    sessionVersion?: number;
   }
 }

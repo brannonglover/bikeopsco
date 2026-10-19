@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getToken } from "next-auth/jwt";
+import { getStaffToken } from "@/lib/api-auth";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { getShopForHost } from "@/lib/shop";
 import { requestHost } from "@/lib/request-host";
 
 async function getAuthorizedShopId(request: NextRequest): Promise<string | null> {
-  const token = await getToken({ req: request });
+  const token = await getStaffToken(request);
   if (!token?.shopId) return null;
 
   const hostHeader =

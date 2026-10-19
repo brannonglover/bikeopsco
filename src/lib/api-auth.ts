@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { getToken } from "next-auth/jwt";
+import { getToken, type JWT } from "next-auth/jwt";
 import { authOptions } from "@/lib/auth";
 import { getShopForHost, type CurrentShop } from "@/lib/shop";
 import { requestHost } from "@/lib/request-host";
+import { isSessionCurrent } from "@/lib/session-version";
 
 export type StaffShopAuth =
   | { ok: true; shop: CurrentShop; shopId: string; userId: string }
@@ -15,6 +16,17 @@ export async function getRequestShop(request: NextRequest): Promise<CurrentShop 
   return getShopForHost(hostHeader);
 }
 
+/**
+ * The staff session JWT (cookie or mobile Bearer), or null when there is none
+ * or it was issued before the user's last password reset. Use this, never a
+ * bare getToken, wherever a token authorizes anything.
+ */
+export async function getStaffToken(request: NextRequest): Promise<JWT | null> {
+  const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+  if (!token) return null;
+  return (await isSessionCurrent(token)) ? token : null;
+}
+
 /** Resolve staff shopId + userId from JWT cookie and/or NextAuth session (browser fallback). */
 export async function resolveStaffShopId(
   request: NextRequest,
@@ -22,6 +34,8 @@ export async function resolveStaffShopId(
   const secret = process.env.NEXTAUTH_SECRET;
   const token = await getToken({ req: request, secret });
   if (typeof token?.shopId === "string" && typeof token?.id === "string") {
+    // A revoked token is "no session": the fallback below would read the same cookie.
+    if (!(await isSessionCurrent(token))) return null;
     return { shopId: token.shopId, userId: token.id };
   }
 

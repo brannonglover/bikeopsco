@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getToken } from "next-auth/jwt";
 import { z } from "zod";
 import {
   DEFAULT_BRANDING,
@@ -8,7 +7,7 @@ import {
   updateAppBranding,
 } from "@/lib/app-settings";
 import { getShopForHost } from "@/lib/shop";
-import { requireStaffShop } from "@/lib/api-auth";
+import { getStaffToken, requireStaffShop } from "@/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +25,7 @@ const updateSchema = z.object({
 });
 
 export async function GET(request: NextRequest) {
-  const token = await getToken({ req: request });
+  const token = await getStaffToken(request);
   const shopId = typeof token?.shopId === "string" ? token.shopId : null;
   if (shopId) return NextResponse.json(await getAppBranding(shopId));
 

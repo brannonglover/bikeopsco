@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { getToken } from "next-auth/jwt";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { authOptions } from "@/lib/auth";
 import { getCustomerFromSession } from "@/lib/chat-session";
 import { getShopForHost } from "@/lib/shop";
 import { requestHost } from "@/lib/request-host";
+import { getStaffToken } from "@/lib/api-auth";
 
 const registerSchema = z.object({
   token: z.string().min(1),
@@ -26,9 +26,9 @@ async function resolveIdentity(
   | { kind: "customer"; customerId: string; shopId: string }
   | null
 > {
-  // Try getToken first: it accepts both the plain and __Secure- cookie variants,
+  // Try the JWT first: getToken accepts both the plain and __Secure- cookie variants,
   // which makes it compatible with the mobile app regardless of which name it stored.
-  const jwtToken = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+  const jwtToken = await getStaffToken(req);
   if (jwtToken?.id && jwtToken.shopId) {
     return { kind: "staff", userId: jwtToken.id as string, shopId: jwtToken.shopId as string };
   }

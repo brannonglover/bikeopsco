@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { getShopForHost } from "@/lib/shop";
 import { resolveRequestHost } from "@/lib/request-host";
+import { isSessionCurrent } from "@/lib/session-version";
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -45,6 +46,7 @@ export const authOptions: NextAuthOptions = {
           name: user.name ?? undefined,
           shopId: shop.id,
           shopSubdomain: shop.subdomain,
+          sessionVersion: user.sessionVersion,
         };
       },
     }),
@@ -58,7 +60,21 @@ export const authOptions: NextAuthOptions = {
         token.email = user.email ?? undefined;
         token.shopId = user.shopId;
         token.shopSubdomain = user.shopSubdomain;
+        token.sessionVersion = user.sessionVersion;
+        return token;
       }
+      // Every later read (getServerSession, /api/auth/session) re-checks the
+      // version, so a password reset signs this browser out: throwing here
+      // makes NextAuth clear the cookie, and AppShell sends the page to /login.
+      // A database error keeps the session rather than signing everyone out on
+      // a blip; API routes make the same check themselves and fail closed.
+      let current = true;
+      try {
+        current = await isSessionCurrent(token);
+      } catch (error) {
+        console.error("[auth] Session version check failed:", error);
+      }
+      if (!current) throw new Error("Session revoked");
       return token;
     },
     async session({ session, token }) {
