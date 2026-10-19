@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireStaffShop } from "@/lib/api-auth";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import {
@@ -7,7 +8,6 @@ import {
   extractYelpAlias,
 } from "@/lib/reviews";
 import { getAppFeatures } from "@/lib/app-settings";
-import { requireCurrentShop } from "@/lib/shop";
 
 export const dynamic = "force-dynamic";
 
@@ -41,9 +41,11 @@ function serializeSettings(settings: {
   };
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const shop = await requireCurrentShop();
+    const auth = await requireStaffShop(request);
+    if (!auth.ok) return auth.response;
+    const shop = auth.shop;
     const features = await getAppFeatures(shop.id);
     if (!features.reviewsEnabled) {
       return NextResponse.json({ error: "Reviews are disabled" }, { status: 404 });
@@ -72,7 +74,9 @@ export async function GET() {
 
 export async function PUT(request: NextRequest) {
   try {
-    const shop = await requireCurrentShop();
+    const auth = await requireStaffShop(request);
+    if (!auth.ok) return auth.response;
+    const shop = auth.shop;
     const features = await getAppFeatures(shop.id);
     if (!features.reviewsEnabled) {
       return NextResponse.json({ error: "Reviews are disabled" }, { status: 404 });

@@ -13,12 +13,22 @@ import {
   isProductionDeployment,
 } from "@/lib/env";
 
+export const dynamic = "force-dynamic";
+
 /**
  * Debug endpoint to check which env vars the serverless function can see.
- * Does NOT expose secret values. Remove this file in production if desired.
+ * Does NOT expose secret values, but it lists every variable name and hints
+ * at the database and email setup, so it answers only off production (staging
+ * and previews, where docs/staging-environment.md uses it) and, like every
+ * staff API, only with a signed-in session. Dynamic, so it reports the running
+ * function rather than a snapshot taken at build time.
  * GET /api/debug/env
  */
 export async function GET() {
+  if (isProductionDeployment()) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   const key = process.env.RESEND_API_KEY;
   const altKey = process.env.BIKEOPS_RESEND_API_KEY;
   const trimmed = key?.trim();

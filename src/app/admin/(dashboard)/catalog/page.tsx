@@ -1,4 +1,5 @@
 import { AdminCatalogListClient } from "./AdminCatalogListClient";
+import { AdminLookupSpendPanel } from "./AdminLookupSpendPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,7 @@ export default function PlatformAdminCatalogPage() {
         </p>
       </header>
 
+      <AdminLookupSpendPanel />
       <AdminCatalogListClient />
     </>
   );

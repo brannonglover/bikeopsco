@@ -2,77 +2,43 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireStaffShop } from "@/lib/api-auth";
 import { z } from "zod";
-import {
-  fetchSpecsForJobBike,
-  isCatalogConfigured,
-  type BikeSpecsPayload,
-} from "@/lib/bike-catalog-client";
-import type { ComponentConfirmation } from "@prisma/client";
+import { reconcileInstalledComponentsSafely } from "@/lib/bike-installed-components";
+import { staffDisplayName } from "@/lib/customer-bike-build";
+import { loadPartsTab, readPartsTab } from "@/lib/parts-tab";
 
 export const dynamic = "force-dynamic";
+// Catalog lookups scheduled here keep running after the response
+// (LOOKUP_TIME_BUDGET_MS fits inside this).
+export const maxDuration = 300;
+
+/** The Parts tab — see src/lib/parts-tab.ts. */
 
 const postSchema = z.object({
   jobBikeId: z.string().min(1),
   refresh: z.boolean().optional(),
+  /** The mechanic picked this build from the possible matches. */
   catalogBikeId: z.string().optional(),
+  /** The mechanic confirmed the automatically matched build is this bike. */
+  confirm: z.boolean().optional(),
 });
 
 const overrideSchema = z.object({
   jobBikeId: z.string().min(1),
   slot: z.string().min(1),
-  confirmation: z.enum(["UNREVIEWED", "MATCHES_CATALOG", "CUSTOMIZED"]),
+  /** What's on the bike now, as the mechanic sees it. */
+  confirmation: z.enum(["UNREVIEWED", "MATCHES_CATALOG", "CUSTOMIZED"]).optional(),
   customValue: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
+  /** Work on this job: PLANNED (proposed / ordered) or INSTALLED (fitted). */
+  replacement: z
+    .object({
+      state: z.enum(["NONE", "PLANNED", "INSTALLED"]),
+      value: z.string().optional().nullable(),
+    })
+    .optional(),
 });
 
-type OverrideRow = {
-  slot: string;
-  confirmation: ComponentConfirmation;
-  customValue: string | null;
-  notes: string | null;
-};
-
-function applyOverridesToSpecs(specs: BikeSpecsPayload, overrides: OverrideRow[]): BikeSpecsPayload {
-  const bySlot = new Map(overrides.map((o) => [o.slot, o]));
-  return {
-    ...specs,
-    groups: specs.groups.map((group) => ({
-      ...group,
-      items: group.items.map((item) => {
-        const override = bySlot.get(item.slot);
-        if (!override) {
-          return { ...item, confirmation: "UNREVIEWED" as const };
-        }
-        if (override.confirmation === "CUSTOMIZED" && override.customValue?.trim()) {
-          return {
-            ...item,
-            value: override.customValue.trim(),
-            detail: override.notes ?? item.detail,
-            confirmation: "CUSTOMIZED" as const,
-            catalogValue: item.value,
-          };
-        }
-        return {
-          ...item,
-          confirmation: override.confirmation,
-          catalogValue: item.value,
-        };
-      }),
-    })),
-  };
-}
-
-async function loadOverrides(jobBikeId: string, shopId: string) {
-  return prisma.jobBikeComponentOverride.findMany({
-    where: { jobBikeId, shopId },
-    select: { slot: true, confirmation: true, customValue: true, notes: true },
-  });
-}
-
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   const auth = await requireStaffShop(request);
   if (!auth.ok) return auth.response;
 
@@ -80,71 +46,11 @@ export async function GET(
   if (!jobBikeId) {
     return NextResponse.json({ error: "jobBikeId is required" }, { status: 400 });
   }
-
-  const jobBike = await prisma.jobBike.findFirst({
-    where: { id: jobBikeId, jobId: params.id, shopId: auth.shopId },
-    select: {
-      id: true,
-      make: true,
-      model: true,
-      year: true,
-      catalogBikeId: true,
-      catalogMatchedAt: true,
-    },
-  });
-  if (!jobBike) {
-    return NextResponse.json({ error: "Job bike not found" }, { status: 404 });
-  }
-
-  if (!jobBike.catalogBikeId) {
-    return NextResponse.json({
-      configured: isCatalogConfigured(),
-      jobBikeId: jobBike.id,
-      status: "not_fetched" as const,
-      catalogBikeId: null,
-      specs: null,
-      fetchedAt: null,
-      overrides: [],
-    });
-  }
-
-  const result = await fetchSpecsForJobBike(
-    jobBike.make,
-    jobBike.model,
-    jobBike.year,
-    jobBike.catalogBikeId
-  );
-
-  if (!result.ok) {
-    return NextResponse.json({
-      configured: isCatalogConfigured(),
-      jobBikeId: jobBike.id,
-      status: result.reason,
-      catalogBikeId: jobBike.catalogBikeId,
-      specs: null,
-      fetchedAt: jobBike.catalogMatchedAt?.toISOString() ?? null,
-      error: result.message,
-      candidates: result.candidates ?? [],
-      overrides: [],
-    });
-  }
-
-  const overrides = await loadOverrides(jobBike.id, auth.shopId);
-  return NextResponse.json({
-    configured: true,
-    jobBikeId: jobBike.id,
-    status: "cached" as const,
-    catalogBikeId: result.catalogBikeId,
-    specs: applyOverridesToSpecs(result.specs, overrides),
-    fetchedAt: jobBike.catalogMatchedAt?.toISOString() ?? null,
-    overrides,
-  });
+  const { httpStatus, body } = await readPartsTab({ jobId: params.id, jobBikeId, shopId: auth.shopId });
+  return NextResponse.json(body, { status: httpStatus });
 }
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const auth = await requireStaffShop(request);
   if (!auth.ok) return auth.response;
 
@@ -155,109 +61,24 @@ export async function POST(
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const jobBike = await prisma.jobBike.findFirst({
-    where: { id: body.jobBikeId, jobId: params.id, shopId: auth.shopId },
-    select: {
-      id: true,
-      make: true,
-      model: true,
-      year: true,
-      catalogBikeId: true,
-      catalogMatchedAt: true,
-    },
+  const result = await loadPartsTab({
+    jobId: params.id,
+    jobBikeId: body.jobBikeId,
+    shopId: auth.shopId,
+    userId: auth.userId,
+    refresh: body.refresh,
+    catalogBikeId: body.catalogBikeId,
+    confirm: body.confirm,
   });
-  if (!jobBike) {
-    return NextResponse.json({ error: "Job bike not found" }, { status: 404 });
-  }
-
-  if (!isCatalogConfigured()) {
-    return NextResponse.json(
-      {
-        configured: false,
-        jobBikeId: jobBike.id,
-        status: "not_configured" as const,
-        error: "Bike catalog database is not configured",
-      },
-      { status: 503 }
-    );
-  }
-
-  const useCached =
-    !body.refresh &&
-    !body.catalogBikeId &&
-    jobBike.catalogBikeId &&
-    jobBike.catalogMatchedAt;
-
-  if (useCached) {
-    const result = await fetchSpecsForJobBike(
-      jobBike.make,
-      jobBike.model,
-      jobBike.year,
-      jobBike.catalogBikeId
-    );
-    if (result.ok) {
-      const overrides = await loadOverrides(jobBike.id, auth.shopId);
-      return NextResponse.json({
-        configured: true,
-        jobBikeId: jobBike.id,
-        status: "cached" as const,
-        catalogBikeId: result.catalogBikeId,
-        specs: applyOverridesToSpecs(result.specs, overrides),
-        fetchedAt: jobBike.catalogMatchedAt?.toISOString() ?? null,
-        overrides,
-      });
-    }
-  }
-
-  const existingId = body.catalogBikeId ?? (body.refresh ? null : jobBike.catalogBikeId);
-  const result = await fetchSpecsForJobBike(jobBike.make, jobBike.model, jobBike.year, existingId);
-
-  if (!result.ok) {
-    // Clear a previously sticky wrong-year match so Refresh keeps failing closed.
-    if (jobBike.catalogBikeId) {
-      await prisma.jobBike.update({
-        where: { id: jobBike.id },
-        data: { catalogBikeId: null, catalogMatchedAt: null },
-      });
-    }
-    return NextResponse.json(
-      {
-        configured: true,
-        jobBikeId: jobBike.id,
-        status: result.reason,
-        error: result.message ?? "Could not fetch bike specs",
-        candidates: result.candidates ?? [],
-      },
-      { status: result.reason === "not_configured" ? 503 : 404 }
-    );
-  }
-
-  const now = new Date();
-  await prisma.jobBike.update({
-    where: { id: jobBike.id },
-    data: {
-      catalogBikeId: result.catalogBikeId,
-      catalogMatchedAt: now,
-    },
-  });
-
-  const overrides = await loadOverrides(jobBike.id, auth.shopId);
-  return NextResponse.json({
-    configured: true,
-    jobBikeId: jobBike.id,
-    status: "fetched" as const,
-    catalogBikeId: result.catalogBikeId,
-    specs: applyOverridesToSpecs(result.specs, overrides),
-    fetchedAt: now.toISOString(),
-    overrides,
-  });
+  return NextResponse.json(result.body, { status: result.httpStatus });
 }
 
-/** Upsert a per-slot confirmation / customization for this job bike. */
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+/**
+ * Record what the mechanic sees on one part, or work on it in this job.
+ * Nothing here reaches the customer's bike record until the work is done —
+ * see bike-installed-components.ts.
+ */
+export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   const auth = await requireStaffShop(request);
   if (!auth.ok) return auth.response;
 
@@ -266,6 +87,9 @@ export async function PATCH(
     body = overrideSchema.parse(await request.json());
   } catch {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+  }
+  if (!body.confirmation && !body.replacement && body.notes === undefined) {
+    return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }
 
   const jobBike = await prisma.jobBike.findFirst({
@@ -276,34 +100,68 @@ export async function PATCH(
     return NextResponse.json({ error: "Job bike not found" }, { status: 404 });
   }
 
-  const customValue =
-    body.confirmation === "CUSTOMIZED" ? body.customValue?.trim() || null : null;
+  const existing = await prisma.jobBikeComponentOverride.findUnique({
+    where: { jobBikeId_slot: { jobBikeId: jobBike.id, slot: body.slot } },
+  });
 
-  if (body.confirmation === "CUSTOMIZED" && !customValue) {
-    return NextResponse.json(
-      { error: "customValue is required when marking a part as customized" },
-      { status: 400 }
-    );
+  const data: {
+    confirmation?: "UNREVIEWED" | "MATCHES_CATALOG" | "CUSTOMIZED";
+    customValue?: string | null;
+    notes?: string | null;
+    replacementState?: "NONE" | "PLANNED" | "INSTALLED";
+    replacementValue?: string | null;
+    replacementInstalledAt?: Date | null;
+  } = {};
+
+  if (body.confirmation) {
+    const customValue =
+      body.confirmation === "CUSTOMIZED" ? body.customValue?.trim() || null : null;
+    if (body.confirmation === "CUSTOMIZED" && !customValue) {
+      return NextResponse.json(
+        { error: "Say which part is on the bike" },
+        { status: 400 }
+      );
+    }
+    data.confirmation = body.confirmation;
+    data.customValue = customValue;
+  }
+  if (body.notes !== undefined) data.notes = body.notes;
+
+  if (body.replacement) {
+    const state = body.replacement.state;
+    const value =
+      state === "NONE"
+        ? null
+        : body.replacement.value?.trim() || existing?.replacementValue?.trim() || null;
+    if (state !== "NONE" && !value) {
+      return NextResponse.json({ error: "Say which part is going on" }, { status: 400 });
+    }
+    data.replacementState = state;
+    data.replacementValue = value;
+    data.replacementInstalledAt =
+      state === "INSTALLED"
+        ? existing?.replacementState === "INSTALLED" && existing.replacementInstalledAt
+          ? existing.replacementInstalledAt
+          : new Date()
+        : null;
   }
 
+  const updatedBy = await staffDisplayName(auth.userId);
   const override = await prisma.jobBikeComponentOverride.upsert({
-    where: {
-      jobBikeId_slot: { jobBikeId: jobBike.id, slot: body.slot },
-    },
+    where: { jobBikeId_slot: { jobBikeId: jobBike.id, slot: body.slot } },
     create: {
       shopId: auth.shopId,
       jobBikeId: jobBike.id,
       slot: body.slot,
-      confirmation: body.confirmation,
-      customValue,
-      notes: body.notes ?? null,
+      ...data,
+      updatedBy,
     },
-    update: {
-      confirmation: body.confirmation,
-      customValue,
-      notes: body.notes ?? null,
-    },
+    update: { ...data, updatedBy },
   });
+
+  // If the work is already done (e.g. noted after the bike was marked done),
+  // this reaches — or leaves — the customer's bike record now.
+  await reconcileInstalledComponentsSafely(params.id);
 
   return NextResponse.json({ override });
 }

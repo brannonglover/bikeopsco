@@ -22,19 +22,11 @@ function clampYear(year: number): number {
   return Math.min(SEED_YEAR_MAX, Math.max(SEED_YEAR_MIN, year));
 }
 
-function withSharedDetail(
-  components: UpsertComponentInput[],
-  yearStart: number,
-  yearEnd: number
-): UpsertComponentInput[] {
-  const note = `Shared build sheet for ${yearStart}–${yearEnd}`;
-  return components.map((c) => ({
-    ...c,
-    detail: c.detail ? `${c.detail}; ${note}` : note,
-  }));
-}
-
-/** Expand generation templates into one CatalogBike upsert per year (clamped to 1990–2026). */
+/**
+ * One CatalogBike upsert per generation template, covering its whole year span
+ * (clamped to 1990–2026). The build sheet does not change year to year inside a
+ * generation, so it is stored once and matched by range.
+ */
 export function expandGenerations(templates: GenerationTemplate[]): UpsertBikeInput[] {
   const bikes: UpsertBikeInput[] = [];
 
@@ -43,23 +35,20 @@ export function expandGenerations(templates: GenerationTemplate[]): UpsertBikeIn
     const end = clampYear(template.yearEnd);
     if (end < start) continue;
 
-    const components = withSharedDetail(template.components, start, end);
-
-    for (let year = start; year <= end; year++) {
-      bikes.push({
-        brandName: template.brandName,
-        brandAliases: template.brandAliases,
-        scraperKey: template.scraperKey,
-        model: template.model,
-        family: template.family ?? null,
-        year,
-        category: template.category ?? null,
-        subcategory: template.subcategory ?? null,
-        sourceUrl: template.sourceUrl ?? null,
-        confidence: template.confidence ?? 0.65,
-        components,
-      });
-    }
+    bikes.push({
+      brandName: template.brandName,
+      brandAliases: template.brandAliases,
+      scraperKey: template.scraperKey,
+      model: template.model,
+      family: template.family ?? null,
+      yearStart: start,
+      yearEnd: end,
+      category: template.category ?? null,
+      subcategory: template.subcategory ?? null,
+      sourceUrl: template.sourceUrl ?? null,
+      confidence: template.confidence ?? 0.65,
+      components: template.components,
+    });
   }
 
   return bikes;

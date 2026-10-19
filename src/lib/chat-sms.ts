@@ -4,12 +4,14 @@ import { put } from "@vercel/blob";
 import type { Prisma } from "@prisma/client";
 import Twilio from "twilio";
 import { BLOB_ACCESS, blobDisplayUrl } from "@/lib/blob";
+import { registerBlobAsset } from "@/lib/blob-access";
 import { prisma } from "@/lib/db";
 import { formatPhoneDisplay, normalizePhone } from "@/lib/phone";
 import {
   buildSmsConsentUpdate,
   SMS_CONSENT_SOURCES,
 } from "@/lib/sms-consent";
+import { requestOrigin } from "@/lib/request-host";
 
 type Db = Prisma.TransactionClient;
 
@@ -44,12 +46,8 @@ export type TwilioInboundMedia = {
 export function getTwilioInboundWebhookUrl(request: NextRequest): string {
   const override = process.env.TWILIO_WEBHOOK_URL?.trim();
   if (override) return override;
-  const proto =
-    request.headers.get("x-forwarded-proto") ??
-    request.nextUrl.protocol.replace(":", "");
-  const host =
-    request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "";
-  return `${proto}://${host}${request.nextUrl.pathname}`;
+  // No trusted host → a URL Twilio never signed, so validation fails closed.
+  return `${requestOrigin(request.headers) ?? "https://invalid.invalid"}${request.nextUrl.pathname}`;
 }
 
 export function validateTwilioWebhook(
@@ -159,6 +157,15 @@ export function parseTwilioInboundMedia(
   return items;
 }
 
+function isTwilioMediaUrl(raw: string): boolean {
+  try {
+    const url = new URL(raw);
+    return url.protocol === "https:" && url.hostname === "api.twilio.com" && !url.port;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Download Twilio-hosted MMS media (URLs expire) and store in Blob as chat attachments.
  */
@@ -197,6 +204,13 @@ export async function importTwilioInboundMedia(
       continue;
     }
 
+    // The webhook is signature-checked, but these are our Twilio credentials:
+    // only ever send them to Twilio's own API host.
+    if (!isTwilioMediaUrl(url)) {
+      console.warn("Twilio MMS: refusing media URL outside api.twilio.com");
+      continue;
+    }
+
     try {
       const res = await fetch(url, {
         headers: { Authorization: `Basic ${auth}` },
@@ -221,6 +235,9 @@ export async function importTwilioInboundMedia(
         contentType,
         addRandomSuffix: false,
       });
+      // The sender isn't resolved yet; the customer reaches it through the
+      // conversation the attachment ends up in.
+      await registerBlobAsset({ pathname: blob.pathname, shopId, kind: "chat" });
       const displayUrl = blobDisplayUrl(blob.url, blob.pathname);
       const attachment = await prisma.messageAttachment.create({
         data: {

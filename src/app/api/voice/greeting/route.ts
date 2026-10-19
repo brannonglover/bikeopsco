@@ -4,6 +4,7 @@ import { put, del } from "@vercel/blob";
 import { requireStaffShop } from "@/lib/api-auth";
 import { getAppFeatures } from "@/lib/app-settings";
 import { BLOB_ACCESS, blobDisplayUrl, sniffAudioContainer } from "@/lib/blob";
+import { registerBlobAsset } from "@/lib/blob-access";
 import { prisma } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -108,6 +109,7 @@ export async function POST(request: NextRequest) {
       { access: BLOB_ACCESS, addRandomSuffix: false, contentType: sniffed.contentType }
     );
 
+    await registerBlobAsset({ pathname: blob.pathname, shopId: auth.shopId, kind: "voicemail-greeting" });
     const url = blobDisplayUrl(blob.url, blob.pathname);
     await prisma.appSettings.update({
       where: { shopId: auth.shopId },

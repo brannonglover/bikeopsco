@@ -15,12 +15,15 @@ const patchSchema = z.object({
   brandName: z.string().min(1).optional(),
   model: z.string().min(1).optional(),
   family: z.string().optional().nullable(),
-  year: z.number().int().min(1970).max(2100).optional().nullable(),
+  yearStart: z.number().int().min(1970).max(2100).optional().nullable(),
+  yearEnd: z.number().int().min(1970).max(2100).optional().nullable(),
   category: z.string().optional().nullable(),
   subcategory: z.string().optional().nullable(),
   sourceUrl: z.string().optional().nullable(),
   thumbnailUrl: z.string().optional().nullable(),
   confidence: z.number().min(0).max(1).optional(),
+  // VERIFIED is recorded through /verify, with who and against what.
+  specStatus: z.enum(["APPROXIMATE", "SOURCED"]).optional(),
   components: z
     .array(
       z.object({
@@ -79,12 +82,14 @@ export async function PATCH(
     brandName: body.brandName,
     model: body.model,
     family: body.family,
-    year: body.year,
+    yearStart: body.yearStart,
+    yearEnd: body.yearEnd,
     category: body.category,
     subcategory: body.subcategory,
     sourceUrl: body.sourceUrl?.trim() || null,
     thumbnailUrl: body.thumbnailUrl,
     confidence: body.confidence,
+    specStatus: body.specStatus,
   });
   if (!updated) {
     return NextResponse.json({ error: "Bike not found" }, { status: 404 });

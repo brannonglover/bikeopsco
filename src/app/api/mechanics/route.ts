@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
-import { requireCurrentShop } from "@/lib/shop";
+import { requireStaffShop } from "@/lib/api-auth";
 
 const createMechanicSchema = z.object({
   fullName: z.string().trim().min(1, "Full name is required"),
@@ -47,9 +47,11 @@ function serializeMechanic(mechanic: {
   };
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const shop = await requireCurrentShop();
+    const auth = await requireStaffShop(request);
+    if (!auth.ok) return auth.response;
+    const shop = auth.shop;
     const mechanics = await prisma.mechanic.findMany({
       where: { shopId: shop.id },
       orderBy: { fullName: "asc" },
@@ -68,7 +70,9 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const shop = await requireCurrentShop();
+    const auth = await requireStaffShop(request);
+    if (!auth.ok) return auth.response;
+    const shop = auth.shop;
     const body = await request.json();
     const normalized = {
       ...body,

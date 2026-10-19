@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireStaffShop } from "@/lib/api-auth";
 import { prisma } from "@/lib/db";
 import { publishChatEvent } from "@/lib/realtime/publish-chat-event";
 import { z } from "zod";
 import { getAppFeatures } from "@/lib/app-settings";
-import { requireCurrentShop } from "@/lib/shop";
 
 export const dynamic = "force-dynamic";
 
@@ -14,8 +14,8 @@ export const dynamic = "force-dynamic";
  * middleware only guarantees that the signed-in session matches the request
  * host — it says nothing about the *resource* being asked for, so a route that
  * finds a message by id alone would let one shop's staff edit another shop's
- * message given its ids. `requireCurrentShop()` resolves the shop from the
- * host, which is the value the session was already checked against.
+ * message given its ids. `requireStaffShop()` resolves the shop from the
+ * host and checks the signed-in session belongs to it.
  */
 const patchSchema = z.object({
   body: z.string().optional().nullable(),
@@ -26,7 +26,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string; messageId: string }> }
 ) {
   try {
-    const shop = await requireCurrentShop();
+    const auth = await requireStaffShop(request);
+    if (!auth.ok) return auth.response;
+    const shop = auth.shop;
     const features = await getAppFeatures(shop.id);
     if (!features.chatEnabled) {
       return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
@@ -90,11 +92,13 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string; messageId: string }> }
 ) {
   try {
-    const shop = await requireCurrentShop();
+    const auth = await requireStaffShop(request);
+    if (!auth.ok) return auth.response;
+    const shop = auth.shop;
     const { id: conversationId, messageId } = await params;
 
     const message = await prisma.message.findFirst({

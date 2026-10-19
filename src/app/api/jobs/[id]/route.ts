@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
-import { getToken } from "next-auth/jwt";
 import { requireStaffShop } from "@/lib/api-auth";
 import { sendBikeReadyInvoiceEmail, sendJobEmail, getTemplateForStage, sendBookingDeclinedEmail } from "@/lib/email";
 import { sendJobSms, getTemplateSlugForStage } from "@/lib/sms";
@@ -11,6 +10,7 @@ import { computeJobSubtotal, computeTotalPaid, getJobPaymentSummary } from "@/li
 import { getEffectiveEmailUpdatesConsent, getEffectiveSmsConsent } from "@/lib/sms-consent";
 import { hasJobReadAccess, hasStaffJobAccess } from "@/lib/job-customer-access";
 import { getShopForHost } from "@/lib/shop";
+import { SIGNED_TTL, signBlobUrl } from "@/lib/blob-signing";
 import { mirrorJobStageToCustomerChat } from "@/lib/system-chat";
 import { resolveProfileBikeForJobBike } from "@/lib/resolve-profile-bike";
 import {
@@ -23,12 +23,25 @@ import { optionalTrimmedString } from "@/lib/zod-helpers";
 import { getJobQueueInfo } from "@/lib/job-queue-position";
 import { customerHasPushTokens, sendPushToCustomer } from "@/lib/push";
 import { publishJobEvent } from "@/lib/realtime/publish-job-event";
+import { scheduleCatalogLookup } from "@/lib/bike-catalog-lookup";
+import {
+  assertNoRepairHistory,
+  reconcileInstalledComponentsSafely,
+} from "@/lib/bike-installed-components";
+import { planJobBikeReplacement, RepairHistoryConflictError } from "@/lib/job-bike-replacement";
 import {
   enrichJobBikesWithCatalogThumbnails,
   matchCatalogFieldsForJobBike,
 } from "@/lib/bike-catalog-client";
+import { requestHost } from "@/lib/request-host";
+
+// Catalog lookups scheduled here keep running after the response
+// (LOOKUP_TIME_BUDGET_MS fits inside this).
+export const maxDuration = 300;
 
 const bikeSchema = z.object({
+  /** The job bike this row edits. Kept so edits update it in place (see job-bike-replacement.ts). */
+  id: z.string().optional().nullable(),
   make: z.string().min(1),
   model: optionalTrimmedString,
   year: z.number().int().min(1980).max(2100).optional().nullable(),
@@ -93,7 +106,7 @@ export async function GET(
   try {
     const { id } = params;
     const hostHeader =
-      request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+      requestHost(request.headers);
     const shop = await getShopForHost(hostHeader);
     if (!shop) {
       return NextResponse.json({ error: "Shop not found" }, { status: 404 });
@@ -159,10 +172,24 @@ export async function GET(
         };
     const queueInfo = await getJobQueueInfo(prisma, shop.id, job);
     const enrichedJobBikes = await enrichJobBikesWithCatalogThumbnails(job.jobBikes ?? []);
+    // A tracking-link reader has no session for /api/blob, so their bike
+    // photos come back as short-lived signed URLs.
+    const image = <T extends string | null | undefined>(url: T): T =>
+      (url && !isStaff ? signBlobUrl(url, SIGNED_TTL.trackingPage) : url) as T;
     const res = NextResponse.json({
       ...jobWithoutPayments,
-      jobBikes: enrichedJobBikes,
-      customer,
+      jobBikes: enrichedJobBikes.map((b) => ({
+        ...b,
+        imageUrl: image(b.imageUrl),
+        bike: b.bike ? { ...b.bike, imageUrl: image(b.bike.imageUrl) } : b.bike,
+      })),
+      customer: customer
+        ? {
+            ...customer,
+            imageUrl: image(customer.imageUrl),
+            bikes: customer.bikes.map((b) => ({ ...b, imageUrl: image(b.imageUrl) })),
+          }
+        : customer,
       paymentStatus: paymentSummary.paymentStatus,
       totalPaid,
       queueInfo,
@@ -210,7 +237,18 @@ export async function PATCH(
       where: { id, shopId: shop.id },
       include: {
         customer: true,
-        jobBikes: { select: { id: true, completedAt: true, waitingOnPartsAt: true, bikeId: true, make: true, model: true } },
+        jobBikes: {
+          select: {
+            id: true,
+            completedAt: true,
+            waitingOnPartsAt: true,
+            bikeId: true,
+            make: true,
+            model: true,
+            year: true,
+            sortOrder: true,
+          },
+        },
       },
     });
     if (!existingJob) {
@@ -221,6 +259,17 @@ export async function PATCH(
       const target = (existingJob.jobBikes ?? []).find((b) => b.id === data.removeJobBikeId);
       if (!target) {
         return NextResponse.json({ error: "Bike not found on this job" }, { status: 400 });
+      }
+    }
+
+    // A job can only be assigned to this shop's customer.
+    if (data.customerId) {
+      const customer = await prisma.customer.findFirst({
+        where: { id: data.customerId, shopId: shop.id },
+        select: { id: true },
+      });
+      if (!customer) {
+        return NextResponse.json({ error: "Customer not found" }, { status: 400 });
       }
     }
 
@@ -455,22 +504,39 @@ export async function PATCH(
         });
       }
       if (data.bikes !== undefined) {
-        await tx.jobBike.deleteMany({ where: { jobId: id, shopId: shop.id } });
         const bikes =
           data.bikes.length > 0
             ? data.bikes
             : [{ make: existingJob.bikeMake, model: existingJob.bikeModel }];
+        const existingBikes = existingJob.jobBikes ?? [];
+
+        // Update matched bikes in place so each keeps its id, done state,
+        // services, part notes and repair history; create the rest; remove
+        // only bikes nobody sent — never one with recorded history.
+        const plan = planJobBikeReplacement(existingBikes, bikes);
+        await assertNoRepairHistory(
+          tx,
+          { jobBikeId: { in: plan.removedIds } },
+          "Parts were recorded on the customer’s bike from a bike you’re removing from this job. Un-mark that bike as done (or reopen the job) first, so its recorded parts are withdrawn deliberately."
+        );
 
         // Determine the effective customerId (may be changing in this same PATCH).
         const effectiveCustomerId =
           data.customerId !== undefined ? data.customerId : existingJob.customerId;
 
         // For each bike without a bikeId, find or create a Bike record on the customer's profile.
-        const resolvedBikes: Array<(typeof bikes)[number] & { bikeId: string | null }> = [];
         // One profile bike per bike on the job: two same-make/model bikes are two bikes.
-        const claimedBikeIds = new Set<string>();
-        for (const b of bikes) {
-          let bikeId: string | null = ("bikeId" in b ? b.bikeId : null) ?? null;
+        const existingById = new Map(existingBikes.map((b) => [b.id, b]));
+        const claimedBikeIds = new Set<string>(
+          plan.matches
+            .map((m) => (m ? existingById.get(m)?.bikeId : null))
+            .filter((b): b is string => Boolean(b))
+        );
+        const resolvedBikes: Array<(typeof bikes)[number] & { bikeId: string | null }> = [];
+        for (const [i, b] of bikes.entries()) {
+          const matched = plan.matches[i] ? existingById.get(plan.matches[i]!) : undefined;
+          let bikeId: string | null =
+            ("bikeId" in b ? b.bikeId : null) ?? matched?.bikeId ?? null;
           if (!bikeId && effectiveCustomerId) {
             bikeId = await resolveProfileBikeForJobBike({
               tx,
@@ -484,32 +550,48 @@ export async function PATCH(
           resolvedBikes.push({ ...b, bikeId });
         }
 
-        const catalogMatches = await Promise.all(
-          resolvedBikes.map((b) =>
-            matchCatalogFieldsForJobBike(
-              b.make,
-              b.model,
-              ("year" in b ? b.year : null) ?? null
-            )
-          )
-        );
+        if (plan.removedIds.length > 0) {
+          await tx.jobBike.deleteMany({
+            where: { id: { in: plan.removedIds }, jobId: id, shopId: shop.id },
+          });
+        }
 
-        await tx.jobBike.createMany({
-          data: resolvedBikes.map((b, i) => ({
-            shopId: shop.id,
-            jobId: id,
+        for (const [i, b] of resolvedBikes.entries()) {
+          const matched = plan.matches[i] ? existingById.get(plan.matches[i]!) : undefined;
+          // A bike row that doesn't send its year keeps it (older clients omit it).
+          const year = "year" in b && b.year !== undefined ? b.year ?? null : matched?.year ?? null;
+          const identityChanged =
+            !matched ||
+            matched.make !== b.make ||
+            (matched.model ?? null) !== (b.model ?? null) ||
+            (matched.year ?? null) !== year;
+          const catalogMatch = identityChanged
+            ? await matchCatalogFieldsForJobBike(b.make, b.model, year)
+            : null;
+          const fields = {
             make: b.make,
             model: b.model,
-            year: b.year ?? null,
-            nickname: b.nickname ?? null,
-            imageUrl: b.imageUrl ?? null,
+            year,
+            nickname: ("nickname" in b ? b.nickname : null) ?? null,
+            imageUrl: ("imageUrl" in b ? b.imageUrl : null) ?? null,
             bikeId: b.bikeId,
-            bikeType: b.bikeType ?? null,
+            bikeType: ("bikeType" in b ? b.bikeType : null) ?? null,
             sortOrder: i,
-            catalogBikeId: catalogMatches[i]?.catalogBikeId ?? null,
-            catalogMatchedAt: catalogMatches[i]?.catalogMatchedAt ?? null,
-          })),
-        });
+            // A re-described bike gets a fresh catalog match and lookup.
+            ...(identityChanged
+              ? {
+                  catalogBikeId: catalogMatch?.catalogBikeId ?? null,
+                  catalogMatchedAt: catalogMatch?.catalogMatchedAt ?? null,
+                  catalogLookupAt: null,
+                }
+              : {}),
+          };
+          if (matched) {
+            await tx.jobBike.update({ where: { id: matched.id }, data: fields });
+          } else {
+            await tx.jobBike.create({ data: { ...fields, shopId: shop.id, jobId: id } });
+          }
+        }
       }
       if (data.addBike !== undefined) {
         const b = data.addBike;
@@ -552,6 +634,11 @@ export async function PATCH(
       }
 
       if (data.removeJobBikeId !== undefined) {
+        await assertNoRepairHistory(
+          tx,
+          { jobBikeId: data.removeJobBikeId },
+          "Parts were recorded on the customer’s bike from this bike. Un-mark it as done (or reopen the job) first, so its recorded parts are withdrawn deliberately."
+        );
         await tx.jobBike.deleteMany({
           where: { id: data.removeJobBikeId, jobId: id, shopId: shop.id },
         });
@@ -884,6 +971,27 @@ export async function PATCH(
       { jobId: job.id, shopId: shop.id }
     );
 
+    // Parts a mechanic confirmed installed reach the customer's bike record
+    // only once the work is done — and leave it again if the job is cancelled
+    // or the bike is un-marked done.
+    if (
+      stageChanged ||
+      jobBikeIdToComplete ||
+      data.uncompleteJobBikeId ||
+      data.bikes !== undefined ||
+      data.removeJobBikeId !== undefined
+    ) {
+      await reconcileInstalledComponentsSafely(job.id);
+    }
+
+    if (data.bikes !== undefined || data.addBike !== undefined) {
+      // New bike rows got a quick catalog match above; the web search for any
+      // the catalog doesn't know yet runs after the response.
+      scheduleCatalogLookup(
+        (job.jobBikes ?? []).filter((b) => b.catalogLookupAt == null).map((b) => b.id)
+      );
+    }
+
     const subtotal = computeJobSubtotal({
       jobServices: job.jobServices,
       jobProducts: job.jobProducts,
@@ -919,6 +1027,9 @@ export async function PATCH(
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.flatten() }, { status: 400 });
     }
+    if (error instanceof RepairHistoryConflictError) {
+      return NextResponse.json({ error: error.message, code: "repair_history" }, { status: 409 });
+    }
     console.error("PATCH /api/jobs/[id] error:", error);
     return NextResponse.json(
       { error: "Failed to update job" },
@@ -931,21 +1042,28 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const token = await getToken({ req: request });
-  if (!token) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requireStaffShop(request);
+  if (!auth.ok) return auth.response;
 
   try {
     const { id } = params;
 
-    const existingJob = await prisma.job.findUnique({ where: { id } });
+    // Only this shop's job; another shop's id is simply "not found".
+    const existingJob = await prisma.job.findFirst({ where: { id, shopId: auth.shopId } });
     if (!existingJob) {
       return NextResponse.json({ error: "Job not found" }, { status: 404 });
     }
 
-    await prisma.job.delete({
-      where: { id },
+    // Deleting a job that recorded parts on a customer's bike would leave
+    // history pointing at nothing. Cancel it (which withdraws them) or
+    // archive it (which keeps them) instead.
+    await prisma.$transaction(async (tx) => {
+      await assertNoRepairHistory(
+        tx,
+        { jobId: id },
+        "This job recorded parts on a customer’s bike. Cancel the job first to withdraw them from the bike’s history, or archive it to keep them."
+      );
+      await tx.job.delete({ where: { id } });
     });
 
     await publishJobEvent("job:deleted", {
@@ -955,6 +1073,9 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    if (error instanceof RepairHistoryConflictError) {
+      return NextResponse.json({ error: error.message, code: "repair_history" }, { status: 409 });
+    }
     console.error("DELETE /api/jobs/[id] error:", error);
     return NextResponse.json(
       { error: "Failed to delete job" },

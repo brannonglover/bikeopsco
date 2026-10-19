@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireStaffShop } from "@/lib/api-auth";
 import { prisma } from "@/lib/db";
 import { publishChatEvent } from "@/lib/realtime/publish-chat-event";
 import { getAppFeatures } from "@/lib/app-settings";
-import { requireCurrentShop } from "@/lib/shop";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
  * message route: matching on ids alone would reach across tenants.
  */
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   {
     params,
   }: {
@@ -22,7 +22,9 @@ export async function DELETE(
   }
 ) {
   try {
-    const shop = await requireCurrentShop();
+    const auth = await requireStaffShop(request);
+    if (!auth.ok) return auth.response;
+    const shop = auth.shop;
     const features = await getAppFeatures(shop.id);
     if (!features.chatEnabled) {
       return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });

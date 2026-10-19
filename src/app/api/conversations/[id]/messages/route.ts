@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireStaffShop } from "@/lib/api-auth";
 import { prisma } from "@/lib/db";
+import { attachmentsAreAttachable } from "@/lib/chat-attachments";
 import { publishChatEvent } from "@/lib/realtime/publish-chat-event";
 import { sendPushToAllStaff } from "@/lib/push";
 import { sendStaffNewChatMessageNotification } from "@/lib/email";
@@ -12,7 +14,7 @@ import {
   resolveStaffConversation,
   resolveStaffConversationForRead,
 } from "@/lib/conversation";
-import { requireCurrentShop } from "@/lib/shop";
+
 import { attachmentNotificationLabel } from "@/lib/chat-media";
 
 export const dynamic = "force-dynamic";
@@ -29,7 +31,9 @@ export async function GET(
 ) {
   let conversationId: string | null = null;
   try {
-    const shop = await requireCurrentShop();
+    const auth = await requireStaffShop(request);
+    if (!auth.ok) return auth.response;
+    const shop = auth.shop;
     if (!(await isChatEnabled(shop.id))) {
       return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
     }
@@ -67,7 +71,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const shop = await requireCurrentShop();
+    const auth = await requireStaffShop(request);
+    if (!auth.ok) return auth.response;
+    const shop = auth.shop;
     if (!(await isChatEnabled(shop.id))) {
       return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
     }
@@ -100,6 +106,10 @@ export async function POST(
         { error: "Message must have body text or at least one attachment" },
         { status: 400 }
       );
+    }
+
+    if (attachmentIds.length && !(await attachmentsAreAttachable(shop.id, attachmentIds))) {
+      return NextResponse.json({ error: "Attachment not found" }, { status: 400 });
     }
 
     const targetConversationId = conversation.id;

@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireStaffShop } from "@/lib/api-auth";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
-import { requireCurrentShop } from "@/lib/shop";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const shop = await requireCurrentShop();
+    const auth = await requireStaffShop(request);
+    if (!auth.ok) return auth.response;
+    const shop = auth.shop;
     const templates = await prisma.emailTemplate.findMany({
       where: { shopId: shop.id },
       orderBy: { slug: "asc" },
@@ -28,7 +30,9 @@ const updateSchema = z.object({
 
 export async function PATCH(request: NextRequest) {
   try {
-    const shop = await requireCurrentShop();
+    const auth = await requireStaffShop(request);
+    if (!auth.ok) return auth.response;
+    const shop = auth.shop;
     const body = await request.json();
     const data = updateSchema.parse(body);
 

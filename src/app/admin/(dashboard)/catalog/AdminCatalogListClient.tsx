@@ -17,10 +17,12 @@ type CatalogBikeRow = {
   brandName: string;
   model: string;
   family: string | null;
-  year: number | null;
+  yearStart: number | null;
+  yearEnd: number | null;
   category: string | null;
   componentCount: number;
   confidence: number;
+  specStatus: "APPROXIMATE" | "SOURCED" | "VERIFIED";
   updatedAt: string;
   thumbnailUrl: string | null;
 };
@@ -97,7 +99,7 @@ export function AdminCatalogListClient() {
         body: JSON.stringify({
           brandName: newBrand.trim(),
           model: newModel.trim(),
-          year: Number.isFinite(yearNum) ? yearNum : null,
+          yearStart: Number.isFinite(yearNum) ? yearNum : null,
           components: [],
         }),
       });
@@ -190,7 +192,7 @@ export function AdminCatalogListClient() {
             <input
               value={newYear}
               onChange={(e) => setNewYear(e.target.value)}
-              placeholder="Year"
+              placeholder="First year"
               className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-500"
             />
           </div>
@@ -219,7 +221,8 @@ export function AdminCatalogListClient() {
             <thead className="bg-slate-50 text-left text-slate-600">
               <tr>
                 <th className="px-4 py-2.5 font-medium">Bike</th>
-                <th className="px-4 py-2.5 font-medium">Year</th>
+                <th className="px-4 py-2.5 font-medium">Years</th>
+                <th className="px-4 py-2.5 font-medium">Status</th>
                 <th className="px-4 py-2.5 font-medium">Parts</th>
                 <th className="px-4 py-2.5 font-medium">Updated</th>
               </tr>
@@ -254,7 +257,19 @@ export function AdminCatalogListClient() {
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-2.5 text-slate-700">{bike.year ?? "—"}</td>
+                  <td className="px-4 py-2.5 text-slate-700">{bike.yearStart == null
+                      ? "—"
+                      : bike.yearEnd != null && bike.yearEnd !== bike.yearStart
+                        ? `${bike.yearStart}–${bike.yearEnd}`
+                        : bike.yearStart}
+                  </td>
+                  <td className="px-4 py-2.5 text-slate-700">
+                    {bike.specStatus === "VERIFIED"
+                      ? "Verified"
+                      : bike.specStatus === "SOURCED"
+                        ? "Sourced"
+                        : "Approximate"}
+                  </td>
                   <td className="px-4 py-2.5 text-slate-700">{bike.componentCount}</td>
                   <td className="px-4 py-2.5 text-slate-500">
                     {new Date(bike.updatedAt).toLocaleDateString()}
@@ -263,7 +278,7 @@ export function AdminCatalogListClient() {
               ))}
               {bikes.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-slate-500">
+                  <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
                     No catalog bikes match these filters.
                   </td>
                 </tr>

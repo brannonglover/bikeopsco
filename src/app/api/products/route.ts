@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
-import { requireCurrentShop } from "@/lib/shop";
+import { requireStaffShop } from "@/lib/api-auth";
 
 const createProductSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -14,7 +14,9 @@ const createProductSchema = z.object({
 
 export async function GET(request: NextRequest) {
   try {
-    const shop = await requireCurrentShop();
+    const auth = await requireStaffShop(request);
+    if (!auth.ok) return auth.response;
+    const shop = auth.shop;
     const { searchParams } = new URL(request.url);
     const q = searchParams.get("q") ?? "";
 
@@ -45,7 +47,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const shop = await requireCurrentShop();
+    const auth = await requireStaffShop(request);
+    if (!auth.ok) return auth.response;
+    const shop = auth.shop;
     const body = await request.json();
     const data = createProductSchema.parse(body);
 

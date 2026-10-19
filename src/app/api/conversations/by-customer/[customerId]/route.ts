@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireStaffShop } from "@/lib/api-auth";
 import { prisma } from "@/lib/db";
 import { getAppFeatures } from "@/lib/app-settings";
 import { resolveGeneralConversation } from "@/lib/conversation";
-import { requireCurrentShop } from "@/lib/shop";
 
 export const dynamic = "force-dynamic";
 
@@ -81,7 +81,9 @@ export async function GET(
   let customerId: string | null = null;
   let conversationId: string | null = null;
   try {
-    const shop = await requireCurrentShop();
+    const auth = await requireStaffShop(request);
+    if (!auth.ok) return auth.response;
+    const shop = auth.shop;
     const features = await getAppFeatures(shop.id);
     if (!features.chatEnabled) {
       return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });

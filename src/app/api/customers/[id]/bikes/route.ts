@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
-import { requireCurrentShop } from "@/lib/shop";
+import { requireStaffShop } from "@/lib/api-auth";
 
 const createBikeSchema = z.object({
   make: z.string().min(1, "Make is required"),
@@ -12,11 +12,13 @@ const createBikeSchema = z.object({
 });
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const shop = await requireCurrentShop();
+    const auth = await requireStaffShop(request);
+    if (!auth.ok) return auth.response;
+    const shop = auth.shop;
     const { id } = await params;
     const bikes = await prisma.bike.findMany({
       where: { shopId: shop.id, customerId: id },
@@ -37,10 +39,18 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const shop = await requireCurrentShop();
+    const auth = await requireStaffShop(request);
+    if (!auth.ok) return auth.response;
+    const shop = auth.shop;
     const { id } = await params;
     const body = await request.json();
     const data = createBikeSchema.parse(body);
+
+    // Only on this shop's customer.
+    const customer = await prisma.customer.findFirst({ where: { id, shopId: shop.id }, select: { id: true } });
+    if (!customer) {
+      return NextResponse.json({ error: "Customer not found" }, { status: 404 });
+    }
 
     const bike = await prisma.bike.create({
       data: {

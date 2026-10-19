@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireStaffShop } from "@/lib/api-auth";
 import { prisma } from "@/lib/db";
 import { findOrCreateProvisionalCustomer } from "@/lib/chat-sms";
 import { findOrCreateGeneralConversation } from "@/lib/conversation";
 import { normalizePhone } from "@/lib/phone";
-import { requireCurrentShop } from "@/lib/shop";
+
 import {
   buildSmsConsentUpdate,
   SMS_CONSENT_NEVER_SET,
@@ -39,11 +40,13 @@ const customerSelect = {
  * call resolves to its existing thread.
  */
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const shop = await requireCurrentShop();
+    const auth = await requireStaffShop(request);
+    if (!auth.ok) return auth.response;
+    const shop = auth.shop;
     const { id } = await params;
 
     const call = await prisma.call.findFirst({

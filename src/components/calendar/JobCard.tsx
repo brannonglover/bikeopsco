@@ -11,7 +11,12 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { DeliveryType, Job, Stage } from "@/lib/types";
 import { applyOptimisticDeliveryType } from "@/lib/optimistic-job-patch";
-import { getJobCardBikeTitle, getDisplayPartsForJobBikeRow, getJobServiceSummary } from "@/lib/job-display";
+import {
+  getJobCardBikeTitle,
+  getDisplayPartsForJobBikeRow,
+  getJobServiceSummary,
+  getPrimaryJobBikeDisplayParts,
+} from "@/lib/job-display";
 import { useUnreadChatCustomerIds } from "@/contexts/StaffChatAttentionContext";
 import { useAppFeatures } from "@/contexts/AppFeaturesContext";
 import {
@@ -75,6 +80,27 @@ function isNestedInteractiveTarget(target: EventTarget | null): boolean {
   return (
     target instanceof Element &&
     !!target.closest("a, button, input, select, textarea, label")
+  );
+}
+
+/**
+ * The customer's bike on the card: their own photo when one was added, else the
+ * stock image from the catalog match. Renders nothing when neither exists.
+ */
+function JobCardBikeImage({ url }: { url: string | null }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [url]);
+  if (!url || failed) return null;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={url}
+      alt=""
+      loading="lazy"
+      draggable={false}
+      onError={() => setFailed(true)}
+      className="h-12 w-12 flex-shrink-0 rounded-lg border border-slate-100 bg-white object-contain dark:border-slate-700"
+    />
   );
 }
 
@@ -245,6 +271,7 @@ export function JobCardContent({
       : "group relative min-w-0 w-full overflow-hidden rounded-2xl border border-black/[0.04] bg-[#ffffff] p-4 shadow-job-card transition-shadow hover:shadow-job-card-lg dark:border-slate-700/60 dark:bg-slate-800/95 dark:shadow-none dark:hover:shadow-soft";
 
   const bikeTitle = getJobCardBikeTitle(job);
+  const bikeImageUrl = getPrimaryJobBikeDisplayParts(job).imageUrl;
   const serviceSummary = getJobServiceSummary(job);
 
   return (
@@ -267,30 +294,35 @@ export function JobCardContent({
             )}
           </div>
 
-          <div className="flex min-w-0 items-center gap-2">
-            <h3 className="min-w-0 flex-1 truncate text-[15px] font-semibold leading-snug text-slate-900 dark:text-white">
-              {bikeTitle}
-            </h3>
-            {job.paymentStatus === "PAID" ? (
-              <span className="flex-shrink-0 whitespace-nowrap rounded-lg bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
-                Paid
-              </span>
-            ) : job.paymentStatus === "PENDING" ? (
-              <span className="flex-shrink-0 whitespace-nowrap rounded-lg bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
-                Partially paid
-              </span>
-            ) : null}
+          <div className="flex min-w-0 items-start gap-3">
+            <JobCardBikeImage url={bikeImageUrl} />
+            <div className="min-w-0 flex-1">
+              <div className="flex min-w-0 items-center gap-2">
+                <h3 className="min-w-0 flex-1 truncate text-[15px] font-semibold leading-snug text-slate-900 dark:text-white">
+                  {bikeTitle}
+                </h3>
+                {job.paymentStatus === "PAID" ? (
+                  <span className="flex-shrink-0 whitespace-nowrap rounded-lg bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
+                    Paid
+                  </span>
+                ) : job.paymentStatus === "PENDING" ? (
+                  <span className="flex-shrink-0 whitespace-nowrap rounded-lg bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                    Partially paid
+                  </span>
+                ) : null}
+              </div>
+              {serviceSummary && (
+                <p className="mt-0.5 line-clamp-1 text-xs text-slate-500 dark:text-slate-400">
+                  {serviceSummary}
+                </p>
+              )}
+              {job.mechanic?.fullName && (
+                <p className="mt-0.5 line-clamp-1 text-xs text-slate-500 dark:text-slate-400">
+                  Mechanic: {job.mechanic.fullName}
+                </p>
+              )}
+            </div>
           </div>
-          {serviceSummary && (
-            <p className="mt-0.5 line-clamp-1 text-xs text-slate-500 dark:text-slate-400">
-              {serviceSummary}
-            </p>
-          )}
-          {job.mechanic?.fullName && (
-            <p className="mt-0.5 line-clamp-1 text-xs text-slate-500 dark:text-slate-400">
-              Mechanic: {job.mechanic.fullName}
-            </p>
-          )}
       {(() => {
         if (job.stage === "COMPLETED" || job.stage === "CANCELLED") {
           return null;

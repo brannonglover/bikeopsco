@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { syncCollectionJobService } from "@/lib/collection-fee";
+import { requireStaffShop } from "@/lib/api-auth";
+import { RepairHistoryConflictError } from "@/lib/job-bike-replacement";
+import {
+  assertNoRepairHistory,
+  logRepairHistoryDeletion,
+  readRepairHistoryOverride,
+} from "@/lib/bike-installed-components";
 
 const updateBikeSchema = z.object({
   make: z.string().min(1).optional(),
@@ -15,13 +22,16 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; bikeId: string }> }
 ) {
+  const auth = await requireStaffShop(request);
+  if (!auth.ok) return auth.response;
+
   try {
     const { id: customerId, bikeId } = await params;
     const body = await request.json();
     const data = updateBikeSchema.parse(body);
 
     const bike = await prisma.bike.findFirst({
-      where: { id: bikeId, customerId },
+      where: { id: bikeId, customerId, shopId: auth.shopId },
     });
     if (!bike) {
       return NextResponse.json({ error: "Bike not found" }, { status: 404 });
@@ -136,22 +146,58 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string; bikeId: string }> }
 ) {
+  const auth = await requireStaffShop(request);
+  if (!auth.ok) return auth.response;
+
   try {
     const { id: customerId, bikeId } = await params;
 
     const bike = await prisma.bike.findFirst({
-      where: { id: bikeId, customerId },
+      where: { id: bikeId, customerId, shopId: auth.shopId },
     });
     if (!bike) {
       return NextResponse.json({ error: "Bike not found" }, { status: 404 });
     }
 
-    await prisma.bike.delete({ where: { id: bikeId } });
+    // Deleting the bike deletes the repair history recorded on it. Refuse
+    // unless the caller deliberately confirms (e.g. a privacy request).
+    const override = readRepairHistoryOverride(request.nextUrl.searchParams);
+    if ("error" in override) {
+      return NextResponse.json({ error: override.error }, { status: 400 });
+    }
+    const erased = await prisma.$transaction(async (tx) => {
+      if (!override.confirmed) {
+        await assertNoRepairHistory(
+          tx,
+          { bikeId },
+          "This bike has repair history (parts fitted on completed jobs). Deleting it would erase that history, so it wasn't deleted."
+        );
+      }
+      const count = await tx.bikeInstalledComponent.count({ where: { bikeId } });
+      await tx.bike.delete({ where: { id: bikeId } });
+      return count;
+    });
+    if (override.confirmed && erased > 0) {
+      logRepairHistoryDeletion({
+        shopId: auth.shopId,
+        userId: auth.userId,
+        entity: "bike",
+        entityId: bikeId,
+        recordCount: erased,
+        reason: override.reason,
+      });
+    }
     return NextResponse.json({ success: true });
   } catch (error) {
+    if (error instanceof RepairHistoryConflictError) {
+      return NextResponse.json(
+        { error: error.message, code: "repair_history", recordCount: error.recordCount },
+        { status: 409 }
+      );
+    }
     console.error("DELETE /api/customers/[id]/bikes/[bikeId] error:", error);
     return NextResponse.json(
       { error: "Failed to delete bike" },

@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireStaffShop } from "@/lib/api-auth";
 import { prisma } from "@/lib/db";
 import { sendReviewRequestEmail } from "@/lib/email";
 import { getAppUrl } from "@/lib/env";
 import { z } from "zod";
-import { requireCurrentShop } from "@/lib/shop";
+import { requestOrigin } from "@/lib/request-host";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const shop = await requireCurrentShop();
+    const auth = await requireStaffShop(request);
+    if (!auth.ok) return auth.response;
+    const shop = auth.shop;
     const requests = await prisma.reviewRequest.findMany({
       where: { shopId: shop.id },
       orderBy: { sentAt: "desc" },
@@ -36,7 +39,9 @@ const sendSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const shop = await requireCurrentShop();
+    const auth = await requireStaffShop(request);
+    if (!auth.ok) return auth.response;
+    const shop = auth.shop;
     const body = await request.json();
     const data = sendSchema.parse(body);
 
@@ -67,10 +72,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    const host =
-      request.headers.get("x-forwarded-host") ?? request.headers.get("host");
-    const proto = request.headers.get("x-forwarded-proto") ?? "https";
-    const appUrl = host ? `${proto}://${host}` : getAppUrl();
+    const appUrl = requestOrigin(request.headers) ?? getAppUrl();
     const base = `${appUrl}/api/review-requests/${reviewRequest.token}/redirect`;
     const googleTrackUrl = googleReviewUrl ? `${base}?platform=google` : null;
     const yelpTrackUrl = yelpReviewUrl ? `${base}?platform=yelp` : null;

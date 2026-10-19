@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BikeImageSearch } from "@/components/bikes/BikeImageSearch";
 import { FormSectionSkeleton } from "@/components/ui/Skeleton";
+import { AdminCatalogVerifyPanel } from "./AdminCatalogVerifyPanel";
 
 type SlotOption = {
   slot: string;
@@ -25,12 +26,14 @@ type BikePayload = {
   id: string;
   model: string;
   family: string | null;
-  year: number | null;
+  yearStart: number | null;
+  yearEnd: number | null;
   category: string | null;
   subcategory: string | null;
   sourceUrl: string | null;
   thumbnailUrl: string | null;
   confidence: number;
+  specStatus: SpecStatus;
   brand: { name: string };
   components: Array<{
     slot: string;
@@ -52,12 +55,15 @@ export function AdminCatalogEditClient({ bikeId }: { bikeId: string }) {
   const [brandName, setBrandName] = useState("");
   const [model, setModel] = useState("");
   const [family, setFamily] = useState("");
-  const [year, setYear] = useState("");
+  const [yearStart, setYearStart] = useState("");
+  const [yearEnd, setYearEnd] = useState("");
   const [category, setCategory] = useState("");
   const [subcategory, setSubcategory] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
   const [thumbnailUrl, setThumbnailUrl] = useState("");
   const [confidence, setConfidence] = useState("1");
+  const [specStatus, setSpecStatus] = useState<SpecStatus>("APPROXIMATE");
+  const [verifyReloadKey, setVerifyReloadKey] = useState(0);
   const [components, setComponents] = useState<ComponentRow[]>([emptyRow()]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -101,12 +107,14 @@ export function AdminCatalogEditClient({ bikeId }: { bikeId: string }) {
       setBrandName(bike.brand.name);
       setModel(bike.model);
       setFamily(bike.family ?? "");
-      setYear(bike.year != null ? String(bike.year) : "");
+      setYearStart(bike.yearStart != null ? String(bike.yearStart) : "");
+      setYearEnd(bike.yearEnd != null ? String(bike.yearEnd) : "");
       setCategory(bike.category ?? "");
       setSubcategory(bike.subcategory ?? "");
       setSourceUrl(bike.sourceUrl ?? "");
       setThumbnailUrl(bike.thumbnailUrl ?? "");
       setConfidence(String(bike.confidence ?? 1));
+      setSpecStatus(bike.specStatus ?? "APPROXIMATE");
       setComponents(
         bike.components.length > 0
           ? bike.components.map((c) => ({
@@ -154,7 +162,8 @@ export function AdminCatalogEditClient({ bikeId }: { bikeId: string }) {
     setError(null);
     setSavedAt(null);
     try {
-      const yearNum = year.trim() ? Number(year) : null;
+      const yearStartNum = yearStart.trim() ? Number(yearStart) : null;
+      const yearEndNum = yearEnd.trim() ? Number(yearEnd) : null;
       const confidenceNum = Number(confidence);
       const res = await fetch(`/api/platform/catalog/bikes/${bikeId}`, {
         method: "PATCH",
@@ -163,12 +172,14 @@ export function AdminCatalogEditClient({ bikeId }: { bikeId: string }) {
           brandName: brandName.trim(),
           model: model.trim(),
           family: family.trim() || null,
-          year: Number.isFinite(yearNum as number) ? yearNum : null,
+          yearStart: Number.isFinite(yearStartNum as number) ? yearStartNum : null,
+          yearEnd: Number.isFinite(yearEndNum as number) ? yearEndNum : null,
           category: category.trim() || null,
           subcategory: subcategory.trim() || null,
           sourceUrl: sourceUrl.trim() || null,
           thumbnailUrl: thumbnailUrl.trim() || null,
           confidence: Number.isFinite(confidenceNum) ? confidenceNum : 1,
+          ...(specStatus !== "VERIFIED" ? { specStatus } : {}),
           components: components
             .filter((c) => c.slot && c.value.trim())
             .map((c) => ({
@@ -187,6 +198,7 @@ export function AdminCatalogEditClient({ bikeId }: { bikeId: string }) {
       }
       setSavedAt(new Date().toLocaleTimeString());
       await load();
+      setVerifyReloadKey((k) => k + 1);
     } catch {
       setError("Could not save");
     } finally {
@@ -292,7 +304,7 @@ export function AdminCatalogEditClient({ bikeId }: { bikeId: string }) {
               <BikeImageSearch
                 make={brandName}
                 model={model}
-                year={year}
+                year={yearStart}
                 autoSearch={false}
                 disabled={uploading || !brandName.trim() || !model.trim()}
                 onSelect={(url) => setThumbnailUrl(url)}
@@ -323,11 +335,29 @@ export function AdminCatalogEditClient({ bikeId }: { bikeId: string }) {
           <Field label="Brand" value={brandName} onChange={setBrandName} />
           <Field label="Model" value={model} onChange={setModel} />
           <Field label="Family" value={family} onChange={setFamily} />
-          <Field label="Year" value={year} onChange={setYear} />
+          <Field label="First model year" value={yearStart} onChange={setYearStart} />
+          <Field label="Last model year" value={yearEnd} onChange={setYearEnd} />
           <Field label="Category" value={category} onChange={setCategory} />
           <Field label="Subcategory" value={subcategory} onChange={setSubcategory} />
           <Field label="Source URL" value={sourceUrl} onChange={setSourceUrl} className="sm:col-span-2" />
           <Field label="Confidence (0–1)" value={confidence} onChange={setConfidence} />
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs font-medium text-slate-500">Build sheet status</span>
+            {specStatus === "VERIFIED" ? (
+              <span className="block rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                Verified — see Verification below
+              </span>
+            ) : (
+              <select
+                value={specStatus}
+                onChange={(e) => setSpecStatus(e.target.value as SpecStatus)}
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500"
+              >
+                <option value="APPROXIMATE">Approximate — generation guide, never auto-matched</option>
+                <option value="SOURCED">Sourced — from cited pages, not yet checked</option>
+              </select>
+            )}
+          </label>
         </div>
       </section>
 
@@ -461,9 +491,17 @@ export function AdminCatalogEditClient({ bikeId }: { bikeId: string }) {
           ))}
         </div>
       </section>
+
+      <AdminCatalogVerifyPanel
+        bikeId={bikeId}
+        reloadKey={verifyReloadKey}
+        onChanged={() => void load()}
+      />
     </div>
   );
 }
+
+type SpecStatus = "APPROXIMATE" | "SOURCED" | "VERIFIED";
 
 function Field({
   label,

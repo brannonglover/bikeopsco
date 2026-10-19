@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
+import { requireStaffShop } from "@/lib/api-auth";
 
 const updateProductSchema = z.object({
   name: z.string().min(1).optional(),
@@ -15,10 +16,17 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireStaffShop(request);
+  if (!auth.ok) return auth.response;
+
   try {
     const { id } = await params;
     const body = await request.json();
     const data = updateProductSchema.parse(body);
+    const existing = await prisma.product.findFirst({ where: { id, shopId: auth.shopId }, select: { id: true } });
+    if (!existing) {
+      return NextResponse.json({ error: "Product not found" }, { status: 404 });
+    }
     const imageUrl =
       data.imageUrl !== undefined ? (data.imageUrl?.trim() || null) : undefined;
     const supplier =
@@ -50,12 +58,18 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireStaffShop(request);
+  if (!auth.ok) return auth.response;
+
   try {
     const { id } = await params;
-    await prisma.product.delete({ where: { id } });
+    const { count } = await prisma.product.deleteMany({ where: { id, shopId: auth.shopId } });
+    if (count === 0) {
+      return NextResponse.json({ error: "Product not found" }, { status: 404 });
+    }
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("DELETE /api/products/[id] error:", error);

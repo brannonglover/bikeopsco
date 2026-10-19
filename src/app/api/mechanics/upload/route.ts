@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { put } from "@vercel/blob";
 import { BLOB_ACCESS, blobDisplayUrl } from "@/lib/blob";
+import { requireStaffShop } from "@/lib/api-auth";
+import { registerBlobAsset } from "@/lib/blob-access";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -30,6 +32,9 @@ function isAllowedImage(file: File): boolean {
 }
 
 export async function POST(request: NextRequest) {
+  const auth = await requireStaffShop(request);
+  if (!auth.ok) return auth.response;
+
   if (!process.env.BLOB_READ_WRITE_TOKEN) {
     return NextResponse.json(
       {
@@ -108,6 +113,7 @@ export async function POST(request: NextRequest) {
       contentType,
     });
 
+    await registerBlobAsset({ pathname: blob.pathname, shopId: auth.shopId, kind: "mechanic" });
     const url = blobDisplayUrl(blob.url, blob.pathname);
     return NextResponse.json(
       { url },

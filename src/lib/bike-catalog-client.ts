@@ -6,7 +6,9 @@ import { catalogPrisma, isCatalogConfigured } from "../../bike-catalog/lib/db";
 import {
   getCatalogBikeById,
   matchCatalogBike,
+  matchCatalogRow,
   isYearCompatible,
+  type CatalogMatch,
   type MatchResult,
 } from "../../bike-catalog/lib/match";
 import {
@@ -23,6 +25,7 @@ export type {
   MatchedCatalogBike,
   BikeSpecGroup,
   BikeSpecItem,
+  CatalogMatch,
   MatchResult,
 };
 
@@ -50,7 +53,7 @@ export async function matchCatalogFieldsForJobBike(
   const trimmedMake = make?.trim();
   if (!trimmedMake) return null;
   try {
-    const match = await matchCatalogBike(trimmedMake, model ?? null, year ?? null);
+    const match = await matchCatalogRow(trimmedMake, model ?? null, year ?? null);
     if (!match.ok) return null;
     return { catalogBikeId: match.bike.id, catalogMatchedAt: new Date() };
   } catch {
@@ -142,20 +145,25 @@ export async function enrichJobsWithCatalogThumbnails<
   });
 }
 
+export type SpecsResult =
+  | { ok: true; catalogBikeId: string; specs: BikeSpecsPayload }
+  | {
+      ok: false;
+      /**
+       * catalog_unavailable: the catalog couldn't be read, so nothing is known
+       * about this bike — never treat it as a miss.
+       */
+      reason: "not_configured" | "no_match" | "low_confidence" | "ambiguous" | "catalog_unavailable";
+      candidates?: MatchedCatalogBike[];
+      message?: string;
+    };
+
 export async function fetchSpecsForJobBike(
   make: string,
   model: string | null,
   year: number | null,
   existingCatalogBikeId?: string | null
-): Promise<
-  | { ok: true; catalogBikeId: string; specs: BikeSpecsPayload }
-  | {
-      ok: false;
-      reason: "not_configured" | "no_match" | "low_confidence";
-      candidates?: MatchedCatalogBike[];
-      message?: string;
-    }
-> {
+): Promise<SpecsResult> {
   if (!isCatalogConfigured()) {
     return {
       ok: false,
@@ -169,7 +177,7 @@ export async function fetchSpecsForJobBike(
       const bike = await getCatalogBikeById(existingCatalogBikeId);
       // Only reuse a sticky match when the year still lines up — never serve a 2024
       // catalog row for a 2005 job bike just because we matched earlier.
-      if (bike && isYearCompatible(year, bike.year)) {
+      if (bike && isYearCompatible(year, bike)) {
         return { ok: true, catalogBikeId: bike.id, specs: toSpecsPayload(bike) };
       }
     }
@@ -178,12 +186,7 @@ export async function fetchSpecsForJobBike(
     if (!match.ok) {
       return {
         ok: false,
-        reason:
-          match.reason === "not_configured"
-            ? "not_configured"
-            : match.reason === "no_results"
-              ? "no_match"
-              : "low_confidence",
+        reason: match.reason === "no_results" ? "no_match" : match.reason,
         candidates: match.candidates?.map(toMatchedCatalogBike),
         message: match.message,
       };
@@ -195,7 +198,14 @@ export async function fetchSpecsForJobBike(
       specs: toSpecsPayload(match.bike),
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to fetch bike specs";
-    return { ok: false, reason: "no_match", message };
+    // A failed read says nothing about whether the bike is in the catalog.
+    // Reporting it as a miss would unlink a correct build and start a paid
+    // web lookup, so it gets its own reason.
+    console.error("[bike-catalog] catalog read failed:", error instanceof Error ? error.message : error);
+    return {
+      ok: false,
+      reason: "catalog_unavailable",
+      message: "The parts catalog couldn’t be reached. Try again in a moment.",
+    };
   }
 }

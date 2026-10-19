@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireStaffShop } from "@/lib/api-auth";
 import { z } from "zod";
 import { isChatEnabled } from "@/lib/app-settings";
 import {
@@ -7,7 +8,6 @@ import {
 import { loadStaffConversations } from "@/lib/chat/staff-conversations";
 import { getEffectiveSmsConsent } from "@/lib/sms-consent";
 import { prisma } from "@/lib/db";
-import { requireCurrentShop } from "@/lib/shop";
 
 const conversationInclude = {
   customer: true,
@@ -28,7 +28,9 @@ const createSchema = z.object({
 
 export async function GET(request: NextRequest) {
   try {
-    const shop = await requireCurrentShop();
+    const auth = await requireStaffShop(request);
+    if (!auth.ok) return auth.response;
+    const shop = auth.shop;
     if (!(await isChatEnabled(shop.id))) {
       return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
     }
@@ -115,7 +117,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const shop = await requireCurrentShop();
+    const auth = await requireStaffShop(request);
+    if (!auth.ok) return auth.response;
+    const shop = auth.shop;
     if (!(await isChatEnabled(shop.id))) {
       return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
     }

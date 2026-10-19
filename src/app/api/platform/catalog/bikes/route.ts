@@ -14,11 +14,14 @@ const createSchema = z.object({
   brandName: z.string().min(1),
   model: z.string().min(1),
   family: z.string().optional().nullable(),
-  year: z.number().int().min(1970).max(2100).optional().nullable(),
+  yearStart: z.number().int().min(1970).max(2100).optional().nullable(),
+  yearEnd: z.number().int().min(1970).max(2100).optional().nullable(),
   category: z.string().optional().nullable(),
   subcategory: z.string().optional().nullable(),
   sourceUrl: z.string().optional().nullable(),
   confidence: z.number().min(0).max(1).optional(),
+  // VERIFIED is recorded through /verify, with who and against what.
+  specStatus: z.enum(["APPROXIMATE", "SOURCED"]).optional(),
   components: z
     .array(
       z.object({
@@ -60,14 +63,20 @@ export async function GET(request: NextRequest) {
             }
           : {},
         brand ? { brand: { name: { equals: brand, mode: "insensitive" } } } : {},
-        year != null && Number.isFinite(year) ? { year } : {},
+        // A year filter finds every row whose span covers that year.
+        year != null && Number.isFinite(year)
+          ? {
+              yearStart: { lte: year },
+              OR: [{ yearEnd: { gte: year } }, { yearEnd: null, yearStart: year }],
+            }
+          : {},
       ],
     },
     include: {
       brand: true,
       _count: { select: { components: true } },
     },
-    orderBy: [{ brand: { name: "asc" } }, { year: "desc" }, { model: "asc" }],
+    orderBy: [{ brand: { name: "asc" } }, { yearStart: "desc" }, { model: "asc" }],
     take: 200,
   });
 
@@ -82,11 +91,13 @@ export async function GET(request: NextRequest) {
       brandName: b.brand.name,
       model: b.model,
       family: b.family,
-      year: b.year,
+      yearStart: b.yearStart,
+      yearEnd: b.yearEnd ?? b.yearStart,
       category: b.category,
       subcategory: b.subcategory,
       sourceUrl: b.sourceUrl,
       confidence: b.confidence,
+      specStatus: b.specStatus,
       componentCount: b._count.components,
       updatedAt: b.updatedAt.toISOString(),
       thumbnailUrl: b.thumbnailUrl,
@@ -115,11 +126,13 @@ export async function POST(request: NextRequest) {
     brandName: body.brandName.trim(),
     model: body.model.trim(),
     family: body.family?.trim() || null,
-    year: body.year ?? null,
+    yearStart: body.yearStart ?? null,
+    yearEnd: body.yearEnd ?? null,
     category: body.category?.trim() || null,
     subcategory: body.subcategory?.trim() || null,
     sourceUrl: body.sourceUrl?.trim() || null,
     confidence: body.confidence ?? 1,
+    specStatus: body.specStatus ?? "APPROXIMATE",
     components: body.components.map((c) => ({
       slot: c.slot as never,
       value: c.value,

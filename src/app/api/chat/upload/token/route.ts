@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { generateClientTokenFromReadWriteToken } from "@vercel/blob/client";
 import { z } from "zod";
 import { BLOB_ACCESS, blobClientUploadRequest } from "@/lib/blob";
+import { chatUploader, registerBlobAsset } from "@/lib/blob-access";
 import {
   CHAT_ALLOWED_VIDEO_TYPES,
   CHAT_MAX_VIDEO_UPLOAD_MB,
@@ -31,6 +32,10 @@ export async function POST(request: NextRequest) {
   const features = await getAppFeatures(shop.id);
   if (!features.chatEnabled) {
     return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
+  }
+  const uploader = await chatUploader(request, shop.id);
+  if (!uploader) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   if (!process.env.BLOB_READ_WRITE_TOKEN) {
     return NextResponse.json(
@@ -79,6 +84,14 @@ export async function POST(request: NextRequest) {
       maximumSizeInBytes: maxBytes,
       addRandomSuffix: false,
       validUntil: Date.now() + TOKEN_TTL_MS,
+    });
+    // Claimed now, before the client uploads: /complete accepts only a
+    // pathname this shop was issued, for this uploader.
+    await registerBlobAsset({
+      pathname,
+      shopId: shop.id,
+      kind: "chat",
+      customerId: uploader.kind === "customer" ? uploader.customerId : null,
     });
 
     return NextResponse.json({

@@ -4,6 +4,7 @@ import {
   resolveAttributionUrl,
   titleFromReiUrl,
 } from "@/lib/link-preview-url";
+import { assertFetchableUrl, safeFetch } from "@/lib/safe-fetch";
 
 export async function GET(req: NextRequest) {
   const rawUrl = req.nextUrl.searchParams.get("url");
@@ -14,21 +15,13 @@ export async function GET(req: NextRequest) {
 
   const url = resolveAttributionUrl(rawUrl);
 
-  // Block private/internal addresses
+  // Anyone can call this (it's outside the staff middleware), so the URL must
+  // never reach our own network: safeFetch refuses private addresses at
+  // connect time and re-checks redirects. This only pre-screens the obvious.
   try {
-    const parsed = new URL(url);
-    const hostname = parsed.hostname.toLowerCase();
-    if (
-      hostname === "localhost" ||
-      hostname === "127.0.0.1" ||
-      hostname.startsWith("192.168.") ||
-      hostname.startsWith("10.") ||
-      hostname.endsWith(".local")
-    ) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    assertFetchableUrl(url);
   } catch {
-    return NextResponse.json({ error: "Invalid URL" }, { status: 400 });
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   // Amazon blocks server-side scraping from cloud IPs with bot-detection. Instead,
@@ -44,7 +37,8 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const response = await fetch(url, {
+    // Read up to 200KB — Amazon puts JSON-LD deeper in the page than just the <head>
+    const response = await safeFetch(url, {
       headers: {
         // Use a realistic browser UA — bot-detection UAs get served a captcha/logo page
         "User-Agent":
@@ -52,41 +46,27 @@ export async function GET(req: NextRequest) {
         Accept:
           "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
-        "Accept-Encoding": "gzip, deflate, br",
         "Cache-Control": "no-cache",
         "Sec-Fetch-Dest": "document",
         "Sec-Fetch-Mode": "navigate",
         "Sec-Fetch-Site": "none",
         "Upgrade-Insecure-Requests": "1",
       },
-      redirect: "follow",
-      signal: AbortSignal.timeout(8000),
+      maxBytes: 200_000,
+      truncate: true,
+      timeoutMs: 8000,
     });
 
-    if (!response.ok) {
+    if (response.status < 200 || response.status >= 300) {
       return NextResponse.json({ imageUrl: null, title: null });
     }
 
-    const contentType = response.headers.get("content-type") ?? "";
+    const contentType = String(response.headers["content-type"] ?? "");
     if (!contentType.includes("text/html")) {
       return NextResponse.json({ imageUrl: null, title: null });
     }
 
-    // Read up to 200KB — Amazon puts JSON-LD deeper in the page than just the <head>
-    const reader = response.body?.getReader();
-    if (!reader) return NextResponse.json({ imageUrl: null, title: null });
-
-    let html = "";
-    let bytesRead = 0;
-    const MAX_BYTES = 200_000;
-
-    while (bytesRead < MAX_BYTES) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      html += new TextDecoder().decode(value);
-      bytesRead += value.byteLength;
-    }
-    reader.cancel();
+    const html = response.body.toString("utf8");
 
     // Priority order: og:image → twitter:image → JSON-LD product image → first large img
     const imageUrl =

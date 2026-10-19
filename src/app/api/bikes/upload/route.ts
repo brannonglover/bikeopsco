@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { put } from "@vercel/blob";
 import { BLOB_ACCESS, blobDisplayUrl } from "@/lib/blob";
+import { requireStaffShop } from "@/lib/api-auth";
+import { registerBlobAsset } from "@/lib/blob-access";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +11,9 @@ const MAX_SIZE_MB = 5;
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
 
 export async function POST(request: NextRequest) {
+  const auth = await requireStaffShop(request);
+  if (!auth.ok) return auth.response;
+
   if (!process.env.BLOB_READ_WRITE_TOKEN) {
     return NextResponse.json(
       {
@@ -52,6 +57,7 @@ export async function POST(request: NextRequest) {
       addRandomSuffix: false,
     });
 
+    await registerBlobAsset({ pathname: blob.pathname, shopId: auth.shopId, kind: "bike" });
     const url = blobDisplayUrl(blob.url, blob.pathname);
     return NextResponse.json({ url }, {
       headers: { "Cache-Control": "no-store" },

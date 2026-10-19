@@ -8,6 +8,7 @@ import { sendStaffNewChatMessageNotification } from "@/lib/email";
 import { z } from "zod";
 import { isChatEnabled } from "@/lib/app-settings";
 import { prisma } from "@/lib/db";
+import { attachmentsAreAttachable } from "@/lib/chat-attachments";
 import { publishChatEvent } from "@/lib/realtime/publish-chat-event";
 import { requireCurrentShop } from "@/lib/shop";
 import { attachmentNotificationLabel } from "@/lib/chat-media";
@@ -81,6 +82,10 @@ export async function POST(request: NextRequest) {
       { error: "Message must have body text or at least one attachment" },
       { status: 400 }
     );
+  }
+
+  if (attachmentIds.length && !(await attachmentsAreAttachable(shop.id, attachmentIds, { uploadedBy: customerId }))) {
+    return NextResponse.json({ error: "Attachment not found" }, { status: 400 });
   }
 
   const [message, customer] = await Promise.all([

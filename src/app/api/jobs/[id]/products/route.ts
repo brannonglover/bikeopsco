@@ -24,9 +24,16 @@ export async function POST(
     const body = await request.json();
     const data = addProductSchema.parse(body);
 
-    const product = await prisma.product.findFirst({
-      where: { id: data.productId, shopId },
-    });
+    const [job, product, jobBike] = await Promise.all([
+      prisma.job.findFirst({ where: { id: jobId, shopId }, select: { id: true } }),
+      prisma.product.findFirst({ where: { id: data.productId, shopId } }),
+      data.jobBikeId
+        ? prisma.jobBike.findFirst({ where: { id: data.jobBikeId, jobId, shopId }, select: { id: true } })
+        : Promise.resolve(null),
+    ]);
+    if (!job || (data.jobBikeId && !jobBike)) {
+      return NextResponse.json({ error: "Job not found" }, { status: 404 });
+    }
 
     if (!product) {
       return NextResponse.json(

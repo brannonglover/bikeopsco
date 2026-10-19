@@ -3,6 +3,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { getShopForHost } from "@/lib/shop";
+import { resolveRequestHost } from "@/lib/request-host";
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -15,12 +16,12 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials, req) {
         if (!credentials?.email || !credentials?.password) return null;
 
-        const hostHeader =
+        const hostHeader = resolveRequestHost(
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          ((req?.headers as any)?.["x-forwarded-host"] as string | undefined) ??
+          (req?.headers as any)?.host as string | undefined,
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          ((req?.headers as any)?.host as string | undefined) ??
-          null;
+          (req?.headers as any)?.["x-forwarded-host"] as string | undefined
+        );
 
         const shop = await getShopForHost(hostHeader);
         if (!shop) return null;

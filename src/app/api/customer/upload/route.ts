@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { put } from "@vercel/blob";
 import { BLOB_ACCESS, blobDisplayUrl } from "@/lib/blob";
+import { registerBlobAsset } from "@/lib/blob-access";
 import { getCustomerFromSession } from "@/lib/chat-session";
 import { getAppFeatures } from "@/lib/app-settings";
 import { requireCurrentShop } from "@/lib/shop";
@@ -69,6 +70,7 @@ export async function POST(request: NextRequest) {
       access: BLOB_ACCESS,
       addRandomSuffix: false,
     });
+    await registerBlobAsset({ pathname: blob.pathname, shopId: shop.id, kind: "customer-upload", customerId });
 
     const url = blobDisplayUrl(blob.url, blob.pathname);
     return NextResponse.json(

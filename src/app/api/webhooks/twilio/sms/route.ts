@@ -20,6 +20,7 @@ import {
 import { sendPushToAllStaff } from "@/lib/push";
 import { publishChatEvent } from "@/lib/realtime/publish-chat-event";
 import { getShopForHost } from "@/lib/shop";
+import { requestHost } from "@/lib/request-host";
 
 export const runtime = "nodejs";
 
@@ -68,7 +69,7 @@ export async function POST(request: NextRequest) {
   }
 
   const hostHeader =
-    request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+    requestHost(request.headers);
   const shop = await getShopForHost(hostHeader);
   if (!shop) {
     console.warn("Twilio SMS webhook: shop not found for host", hostHeader);

@@ -936,6 +936,9 @@ export function CustomerDetailModal({
                                   prev.filter((b) => b.id !== bike.id)
                                 );
                                 broadcastJobsRefresh({ reason: "customer-bike-removed" });
+                              } else {
+                                const err = (await res.json().catch(() => ({}))) as { error?: string };
+                                alert(err.error || "Failed to remove bike");
                               }
                             }}
                             className="text-slate-500 hover:text-red-600 text-sm px-2 py-1"

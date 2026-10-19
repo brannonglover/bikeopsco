@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
-import { requireCurrentShop } from "@/lib/shop";
+import { requireStaffShop } from "@/lib/api-auth";
 
 const updateMechanicSchema = z.object({
   fullName: z.string().trim().min(1).optional(),
@@ -48,11 +48,13 @@ function serializeMechanic(mechanic: {
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const shop = await requireCurrentShop();
+    const auth = await requireStaffShop(request);
+    if (!auth.ok) return auth.response;
+    const shop = auth.shop;
     const { id } = await params;
     const mechanic = await prisma.mechanic.findFirst({
       where: { id, shopId: shop.id },
@@ -75,7 +77,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const shop = await requireCurrentShop();
+    const auth = await requireStaffShop(request);
+    if (!auth.ok) return auth.response;
+    const shop = auth.shop;
     const { id } = await params;
     const body = await request.json();
     const normalized = {
@@ -134,11 +138,13 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const shop = await requireCurrentShop();
+    const auth = await requireStaffShop(request);
+    if (!auth.ok) return auth.response;
+    const shop = auth.shop;
     const { id } = await params;
     const existing = await prisma.mechanic.findFirst({
       where: { id, shopId: shop.id },

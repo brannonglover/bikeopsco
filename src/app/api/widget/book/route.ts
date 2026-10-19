@@ -25,6 +25,7 @@ import {
 } from "@/lib/turnstile";
 import { assessBookingForSpam } from "@/lib/booking-spam";
 import { createBookingJob } from "@/lib/create-booking-job";
+import { requestHost } from "@/lib/request-host";
 
 export const dynamic = "force-dynamic";
 
@@ -130,7 +131,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const hostHeader =
-      request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+      requestHost(request.headers);
     const shop = await getShopForHost(hostHeader);
     if (!shop) {
       const res = NextResponse.json({ error: "Shop not found" }, { status: 404 });

@@ -3,6 +3,7 @@ import { getToken } from "next-auth/jwt";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { getShopForHost } from "@/lib/shop";
+import { requestHost } from "@/lib/request-host";
 
 export const dynamic = "force-dynamic";
 
@@ -97,7 +98,7 @@ async function getAuthorizedShopId(request: NextRequest): Promise<string | null>
   if (!token?.shopId || typeof token.shopId !== "string") return null;
 
   const hostHeader =
-    request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+    requestHost(request.headers);
   const shop = await getShopForHost(hostHeader);
   if (!shop || shop.id !== token.shopId) return null;
 

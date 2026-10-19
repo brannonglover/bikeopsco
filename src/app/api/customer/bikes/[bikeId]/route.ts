@@ -5,6 +5,8 @@ import { getCustomerFromSession } from "@/lib/chat-session";
 import { getAppFeatures } from "@/lib/app-settings";
 import { requireCurrentShop } from "@/lib/shop";
 import { syncCollectionJobService } from "@/lib/collection-fee";
+import { RepairHistoryConflictError } from "@/lib/job-bike-replacement";
+import { assertNoRepairHistory } from "@/lib/bike-installed-components";
 
 export const dynamic = "force-dynamic";
 
@@ -181,9 +183,20 @@ export async function DELETE(
       return NextResponse.json({ error: "Bike not found" }, { status: 404 });
     }
 
-    await prisma.bike.delete({ where: { id: bikeId } });
+    // The shop's repair history for this bike isn't the customer's to erase.
+    await prisma.$transaction(async (tx) => {
+      await assertNoRepairHistory(
+        tx,
+        { bikeId },
+        "This bike has service history with the shop, so it can’t be removed here. Ask the shop if you’d like it removed."
+      );
+      await tx.bike.delete({ where: { id: bikeId } });
+    });
     return NextResponse.json({ success: true });
   } catch (error) {
+    if (error instanceof RepairHistoryConflictError) {
+      return NextResponse.json({ error: error.message, code: "repair_history" }, { status: 409 });
+    }
     console.error("DELETE /api/customer/bikes/[bikeId] error:", error);
     return NextResponse.json(
       { error: "Failed to delete bike" },

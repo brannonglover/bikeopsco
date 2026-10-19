@@ -8,6 +8,7 @@ import {
   updateAppBranding,
 } from "@/lib/app-settings";
 import { getShopForHost } from "@/lib/shop";
+import { requireStaffShop } from "@/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -36,10 +37,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  const token = await getToken({ req: request });
-  if (!token?.shopId || typeof token.shopId !== "string") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requireStaffShop(request);
+  if (!auth.ok) return auth.response;
 
   try {
     const body = await request.json();
@@ -69,7 +68,7 @@ export async function PUT(request: NextRequest) {
     }
 
     return NextResponse.json(
-      await updateAppBranding(token.shopId, {
+      await updateAppBranding(auth.shopId, {
         ...(data.logoUrl !== undefined ? { logoUrl: data.logoUrl } : {}),
         ...(shopPhone !== undefined ? { shopPhone } : {}),
         ...(data.address !== undefined ? { address: data.address } : {}),

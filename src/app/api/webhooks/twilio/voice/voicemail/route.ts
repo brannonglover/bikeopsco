@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { resolvePublicMediaUrl } from "@/lib/blob";
+import { SIGNED_TTL, signBlobUrl } from "@/lib/blob-signing";
 import {
   authenticateVoiceWebhook,
   buildVoicemailTwiml,
@@ -46,10 +47,12 @@ export async function POST(request: NextRequest) {
     select: { voicemailGreetingUrl: true },
   });
   const storedGreeting = settings?.voicemailGreetingUrl ?? null;
+  // A private greeting is behind /api/blob, which Twilio can only fetch with
+  // a signed link (it has no session).
   const greetingAudioUrl = storedGreeting
     ? storedGreeting.startsWith("/")
-      ? `${base}${storedGreeting}`
-      : resolvePublicMediaUrl(storedGreeting)
+      ? signBlobUrl(`${base}${storedGreeting}`, SIGNED_TTL.voicemailGreeting)
+      : resolvePublicMediaUrl(storedGreeting, undefined, SIGNED_TTL.voicemailGreeting)
     : null;
 
   const twiml = buildVoicemailTwiml({

@@ -6,7 +6,7 @@ import {
   applyMapping,
   type ColumnMapping,
 } from "@/lib/import-parser";
-import { requireCurrentShop } from "@/lib/shop";
+import { requireStaffShop } from "@/lib/api-auth";
 
 export const runtime = "nodejs";
 
@@ -51,7 +51,9 @@ function excelToParseResult(
 
 export async function POST(request: NextRequest) {
   try {
-    const shop = await requireCurrentShop();
+    const auth = await requireStaffShop(request);
+    if (!auth.ok) return auth.response;
+    const shop = auth.shop;
     const formData = await request.formData();
     const file = formData.get("file");
     const mappingStr = formData.get("mapping") as string | null;

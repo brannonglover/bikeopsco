@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { authOptions } from "@/lib/auth";
 import { getCustomerFromSession } from "@/lib/chat-session";
 import { getShopForHost } from "@/lib/shop";
+import { requestHost } from "@/lib/request-host";
 
 const registerSchema = z.object({
   token: z.string().min(1),
@@ -40,7 +41,7 @@ async function resolveIdentity(
 
   const customerId = await getCustomerFromSession();
   if (customerId) {
-    const shop = await getShopForHost(req.headers.get("x-forwarded-host") ?? req.headers.get("host"));
+    const shop = await getShopForHost(requestHost(req.headers));
     if (!shop) return null;
     return { kind: "customer", customerId, shopId: shop.id };
   }
@@ -52,7 +53,11 @@ async function resolveIdentity(
 export async function POST(request: NextRequest) {
   const identity = await resolveIdentity(request);
   if (!identity) {
-    console.warn("[push-tokens] POST — resolveIdentity returned null. Cookie header:", request.headers.get("cookie")?.slice(0, 60), "Auth header:", request.headers.get("authorization")?.slice(0, 30));
+    // Never log the cookie or Authorization values: they carry session tokens.
+    console.warn("[push-tokens] POST — no staff or customer session", {
+      hasCookie: Boolean(request.headers.get("cookie")),
+      hasAuthorization: Boolean(request.headers.get("authorization")),
+    });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   console.log("[push-tokens] POST — identity resolved:", identity.kind, identity.kind === "staff" ? identity.userId : identity.customerId);
@@ -99,7 +104,14 @@ export async function POST(request: NextRequest) {
   }
 }
 
-/** DELETE /api/push-tokens?token=... — unregister a push token. */
+/**
+ * DELETE /api/push-tokens?token=... — unregister a push token.
+ *
+ * Only the caller's own registration is removed. If the device has since been
+ * registered to someone else (sign-out, then sign-in as another account), the
+ * old owner's delete is a no-op rather than unsubscribing the new owner. The
+ * reply is the same either way, so it says nothing about other tokens.
+ */
 export async function DELETE(request: NextRequest) {
   const identity = await resolveIdentity(request);
   if (!identity) {
@@ -112,7 +124,15 @@ export async function DELETE(request: NextRequest) {
   }
 
   try {
-    await prisma.pushToken.deleteMany({ where: { token } });
+    await prisma.pushToken.deleteMany({
+      where: {
+        token,
+        shopId: identity.shopId,
+        ...(identity.kind === "staff"
+          ? { userId: identity.userId }
+          : { customerId: identity.customerId }),
+      },
+    });
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("DELETE /api/push-tokens error:", err);

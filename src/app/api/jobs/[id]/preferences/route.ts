@@ -21,9 +21,10 @@ const updatePreferencesSchema = z
 
 export const dynamic = "force-dynamic";
 
-async function getCustomerForJob(jobId: string) {
-  const job = await prisma.job.findUnique({
-    where: { id: jobId },
+/** The job's customer — only for a job in this shop, so a link or session for one shop can't read another's. */
+async function getCustomerForJob(jobId: string, shopId: string) {
+  const job = await prisma.job.findFirst({
+    where: { id: jobId, shopId },
     select: {
       customerId: true,
       customer: {
@@ -57,7 +58,7 @@ export async function GET(
       return NextResponse.json({ error: "Shop not found" }, { status: 404 });
     }
 
-    const customer = await getCustomerForJob(params.id);
+    const customer = await getCustomerForJob(params.id, shop.id);
     if (
       !customer ||
       !(await hasJobReadAccess(request, shop.id, params.id, customer.id))
@@ -91,7 +92,7 @@ export async function PATCH(
 
     const body = await request.json();
     const data = updatePreferencesSchema.parse(body);
-    const customer = await getCustomerForJob(params.id);
+    const customer = await getCustomerForJob(params.id, shop.id);
     if (
       !customer ||
       !(await hasJobReadAccess(request, shop.id, params.id, customer.id))

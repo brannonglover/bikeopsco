@@ -1,4 +1,5 @@
 import "server-only";
+import { safeFetch } from "@/lib/safe-fetch";
 
 /**
  * Imports a shop's website into plain text for the AI assistant to read.
@@ -14,6 +15,8 @@ const MAX_KNOWLEDGE_CHARS = 24_000;
 /** Pages beyond the entry point that are followed, if they look service-related. */
 const MAX_LINKED_PAGES = 4;
 const FETCH_TIMEOUT_MS = 10_000;
+/** Plenty for the text of a page; a bigger body is cut off, not loaded whole. */
+const MAX_PAGE_BYTES = 2_000_000;
 
 /** Link text or paths worth following: where a bike shop lists what it does. */
 const RELEVANT_LINK_RE =
@@ -55,9 +58,13 @@ export function normalizeWebsiteUrl(input: string): URL {
 
 async function fetchPage(url: URL): Promise<string | null> {
   try {
-    const response = await fetch(url.toString(), {
-      redirect: "follow",
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    // safeFetch refuses private addresses at connect time and re-checks every
+    // redirect — the hostname screen in normalizeWebsiteUrl can't see where a
+    // public name resolves or redirects to.
+    const response = await safeFetch(url, {
+      maxBytes: MAX_PAGE_BYTES,
+      truncate: true,
+      timeoutMs: FETCH_TIMEOUT_MS,
       headers: {
         // Some hosts serve a bot-check page to an unidentified agent; say who
         // we are and what we accept rather than looking like a scraper.
@@ -65,10 +72,10 @@ async function fetchPage(url: URL): Promise<string | null> {
         Accept: "text/html,application/xhtml+xml",
       },
     });
-    if (!response.ok) return null;
-    const contentType = response.headers.get("content-type") ?? "";
+    if (response.status < 200 || response.status >= 300) return null;
+    const contentType = String(response.headers["content-type"] ?? "");
     if (!contentType.includes("html")) return null;
-    return await response.text();
+    return response.body.toString("utf8");
   } catch {
     return null;
   }

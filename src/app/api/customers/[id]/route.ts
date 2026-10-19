@@ -3,7 +3,13 @@ import { prisma } from "@/lib/db";
 import { sendMissedBookingConfirmationEmails } from "@/lib/email";
 import { coerceCustomerPhone } from "@/lib/phone";
 import { z } from "zod";
-import { resolveStaffShopId } from "@/lib/api-auth";
+import { requireStaffShop, resolveStaffShopId } from "@/lib/api-auth";
+import { RepairHistoryConflictError } from "@/lib/job-bike-replacement";
+import {
+  assertNoRepairHistory,
+  logRepairHistoryDeletion,
+  readRepairHistoryOverride,
+} from "@/lib/bike-installed-components";
 import {
   buildSmsConsentUpdate,
   buildStaffVerbalSmsConsentUpdate,
@@ -22,12 +28,15 @@ const updateCustomerSchema = z.object({
 });
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireStaffShop(request);
+  if (!auth.ok) return auth.response;
+
   try {
     const { id } = await params;
-    const customer = await prisma.customer.findUnique({ where: { id } });
+    const customer = await prisma.customer.findFirst({ where: { id, shopId: auth.shopId } });
     if (!customer) {
       return NextResponse.json({ error: "Customer not found" }, { status: 404 });
     }
@@ -45,12 +54,15 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireStaffShop(request);
+  if (!auth.ok) return auth.response;
+
   try {
     const { id } = await params;
     const body = await request.json();
     const data = updateCustomerSchema.parse(body);
 
-    const existing = await prisma.customer.findUnique({ where: { id } });
+    const existing = await prisma.customer.findFirst({ where: { id, shopId: auth.shopId } });
     if (!existing) {
       return NextResponse.json({ error: "Customer not found" }, { status: 404 });
     }
@@ -117,14 +129,56 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireStaffShop(request);
+  if (!auth.ok) return auth.response;
+
   try {
     const { id } = await params;
-    await prisma.customer.delete({ where: { id } });
+    const existing = await prisma.customer.findFirst({ where: { id, shopId: auth.shopId }, select: { id: true } });
+    if (!existing) {
+      return NextResponse.json({ error: "Customer not found" }, { status: 404 });
+    }
+
+    // Deleting a customer deletes their bikes and the repair history recorded
+    // on them. Refuse unless the caller deliberately confirms (e.g. a privacy
+    // request). Their jobs are kept either way.
+    const override = readRepairHistoryOverride(request.nextUrl.searchParams);
+    if ("error" in override) {
+      return NextResponse.json({ error: override.error }, { status: 400 });
+    }
+    const erased = await prisma.$transaction(async (tx) => {
+      if (!override.confirmed) {
+        await assertNoRepairHistory(
+          tx,
+          { bike: { customerId: id } },
+          "This customer’s bikes have repair history (parts fitted on completed jobs). Deleting the customer would erase it, so they weren’t deleted."
+        );
+      }
+      const count = await tx.bikeInstalledComponent.count({ where: { bike: { customerId: id } } });
+      await tx.customer.delete({ where: { id } });
+      return count;
+    });
+    if (override.confirmed && erased > 0) {
+      logRepairHistoryDeletion({
+        shopId: auth.shopId,
+        userId: auth.userId,
+        entity: "customer",
+        entityId: id,
+        recordCount: erased,
+        reason: override.reason,
+      });
+    }
     return NextResponse.json({ success: true });
   } catch (error) {
+    if (error instanceof RepairHistoryConflictError) {
+      return NextResponse.json(
+        { error: error.message, code: "repair_history", recordCount: error.recordCount },
+        { status: 409 }
+      );
+    }
     console.error("DELETE /api/customers/[id] error:", error);
     return NextResponse.json(
       { error: "Failed to delete customer" },

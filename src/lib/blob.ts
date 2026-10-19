@@ -1,4 +1,5 @@
 import { getShopAppUrl } from "./env";
+import { SIGNED_TTL, signBlobUrl } from "./blob-signing";
 
 /**
  * Vercel Blob access mode.
@@ -133,13 +134,14 @@ export function sniffAudioContainer(bytes: Buffer): SniffedAudio {
 
 /**
  * Resolve a stored media URL to an absolute HTTPS URL Twilio can fetch.
- * Public blobs use direct Vercel URLs; private blobs use the unauthenticated
- * /api/blob proxy. Shared by MMS attachments and voicemail greetings — both
+ * Public blobs use direct Vercel URLs; private blobs use the /api/blob proxy
+ * with a signed, expiring URL. Shared by MMS attachments and voicemail greetings — both
  * need a URL Twilio's servers can reach without our session cookie.
  */
 export function resolvePublicMediaUrl(
   attachmentUrl: string,
-  shopSubdomain?: string | null
+  shopSubdomain: string | null | undefined,
+  ttlSeconds: number
 ): string | null {
   const trimmed = attachmentUrl.trim();
   if (!trimmed) return null;
@@ -163,7 +165,9 @@ export function resolvePublicMediaUrl(
   if (trimmed.startsWith("/api/blob")) {
     const base = getShopAppUrl(shopSubdomain);
     if (!base) return null;
-    return `${base}${trimmed}`;
+    // Twilio fetches without a session, so the URL carries its own
+    // short-lived permission for this one file.
+    return signBlobUrl(`${base}${trimmed}`, ttlSeconds);
   }
 
   return null;
@@ -174,7 +178,7 @@ export function resolveMmsMediaUrl(
   attachmentUrl: string,
   shopSubdomain?: string | null
 ): string | null {
-  return resolvePublicMediaUrl(attachmentUrl, shopSubdomain);
+  return resolvePublicMediaUrl(attachmentUrl, shopSubdomain, SIGNED_TTL.mms);
 }
 
 /** Filter attachments to Twilio-compatible types and resolve publicly fetchable URLs. */

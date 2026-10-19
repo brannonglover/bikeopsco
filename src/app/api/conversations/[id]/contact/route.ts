@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireStaffShop } from "@/lib/api-auth";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import {
@@ -11,7 +12,6 @@ import {
   resolveStaffConversationForRead,
 } from "@/lib/conversation";
 import { coerceCustomerPhone } from "@/lib/phone";
-import { requireCurrentShop } from "@/lib/shop";
 
 export const dynamic = "force-dynamic";
 
@@ -48,11 +48,13 @@ const saveSchema = z.object({
  * on the same thread starts from the same answer.
  */
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const shop = await requireCurrentShop();
+    const auth = await requireStaffShop(request);
+    if (!auth.ok) return auth.response;
+    const shop = auth.shop;
     const { id } = await params;
 
     const conversation = await resolveStaffConversationForRead(shop.id, id);
@@ -120,7 +122,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const shop = await requireCurrentShop();
+    const auth = await requireStaffShop(request);
+    if (!auth.ok) return auth.response;
+    const shop = auth.shop;
     const { id } = await params;
     const data = saveSchema.parse(await request.json());
 

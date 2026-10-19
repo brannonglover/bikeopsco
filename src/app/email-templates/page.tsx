@@ -229,7 +229,8 @@ export default function EmailTemplatesPage() {
                       <input
                         type="email"
                         autoComplete="email"
-                        placeholder="you@example.com"
+                        placeholder="Your staff email"
+                        title="Test emails go to a staff email address for this shop"
                         value={testToEmail}
                         onChange={(e) => setTestToEmail(e.target.value)}
                         onBlur={persistTestToEmail}

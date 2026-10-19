@@ -1,5 +1,7 @@
-import type { CatalogBikeWithRelations } from "./match";
+import type { CatalogBikeWithBrand, CatalogBikeWithRelations } from "./match";
 import { SLOT_META, type SpecGroupId } from "./slots";
+import { formatYearSpan } from "./years";
+import { fitCheck } from "./fit";
 
 export type BikeSpecItem = {
   slot: string;
@@ -7,6 +9,16 @@ export type BikeSpecItem = {
   value: string;
   detail?: string;
   visibility: "VISUAL" | "INTERNAL" | "STANDARD";
+  /** Where the factory part came from — see ComponentSource. */
+  source: "MANUFACTURER" | "THIRD_PARTY" | "ADMIN" | "APPROXIMATE";
+  sourceUrl: string | null;
+  /** An admin checked this factory value against `against` (see verify.ts). */
+  verified: { at: string; by: string | null; against: string | null } | null;
+  /** A replacement must match a standard here (see fit.ts). */
+  fitCritical: boolean;
+  fitNote: string | null;
+  /** Fit-critical and the factory value isn't verified: confirm on the bike before ordering. */
+  checkBeforeOrdering: boolean;
 };
 
 export type BikeSpecGroup = {
@@ -20,11 +32,17 @@ export type MatchedCatalogBike = {
   maker: string;
   model: string;
   family: string | null;
-  year: number | null;
+  yearStart: number | null;
+  yearEnd: number | null;
+  /** "2019" or "2017–2020" */
+  yearLabel: string | null;
   category: string | null;
   subcategory: string | null;
   url: string | null;
   thumbnailUrl: string | null;
+  /** APPROXIMATE, SOURCED (web sources, unchecked) or VERIFIED (identity checked by an admin). */
+  specStatus: "APPROXIMATE" | "SOURCED" | "VERIFIED";
+  identityVerified: { at: string; by: string | null; note: string | null } | null;
 };
 
 export type BikeSpecsPayload = {
@@ -43,17 +61,24 @@ const GROUP_TITLES: Record<SpecGroupId, string> = {
 
 const GROUP_ORDER: SpecGroupId[] = ["drivetrain", "wheels", "brakes", "frame", "cockpit", "standards"];
 
-export function toMatchedCatalogBike(bike: CatalogBikeWithRelations): MatchedCatalogBike {
+export function toMatchedCatalogBike(bike: CatalogBikeWithBrand): MatchedCatalogBike {
   return {
     id: bike.id,
     maker: bike.brand.name,
     model: bike.model,
     family: bike.family,
-    year: bike.year,
+    yearStart: bike.yearStart,
+    yearEnd: bike.yearEnd ?? bike.yearStart,
+    yearLabel: formatYearSpan(bike),
     category: bike.category,
     subcategory: bike.subcategory,
     url: bike.sourceUrl,
     thumbnailUrl: bike.thumbnailUrl,
+    specStatus: bike.specStatus,
+    identityVerified:
+      bike.specStatus === "VERIFIED" && bike.verifiedAt
+        ? { at: bike.verifiedAt.toISOString(), by: bike.verifiedBy, note: bike.verificationNote }
+        : null,
   };
 }
 
@@ -70,6 +95,12 @@ export function buildSpecGroups(bike: CatalogBikeWithRelations): BikeSpecGroup[]
       value: component.value,
       detail: component.detail ?? (component.standard ? `Standard: ${component.standard}` : undefined),
       visibility: component.visibility,
+      source: component.source,
+      sourceUrl: component.sourceUrl,
+      verified: component.verifiedAt
+        ? { at: component.verifiedAt.toISOString(), by: component.verifiedBy, against: component.verifiedAgainst }
+        : null,
+      ...fitCheck(component.slot, component.verifiedAt != null),
     });
     byGroup.set(meta.group, items);
   }

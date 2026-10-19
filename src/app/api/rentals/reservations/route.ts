@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
-import { requireCurrentShop } from "@/lib/shop";
+import { requireStaffShop } from "@/lib/api-auth";
 import { logRentalActivity } from "@/lib/rentals/activity";
 import { rentalsDisabledResponse } from "@/lib/rentals/guard";
 import { resolveRentalPrice } from "@/lib/rentals/pricing";
@@ -28,7 +28,9 @@ const createSchema = z.object({
 
 export async function GET(request: NextRequest) {
   try {
-    const shop = await requireCurrentShop();
+    const auth = await requireStaffShop(request);
+    if (!auth.ok) return auth.response;
+    const shop = auth.shop;
     const disabled = await rentalsDisabledResponse(shop.id);
     if (disabled) return disabled;
     const { searchParams } = new URL(request.url);
@@ -68,7 +70,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const shop = await requireCurrentShop();
+    const auth = await requireStaffShop(request);
+    if (!auth.ok) return auth.response;
+    const shop = auth.shop;
     const disabled = await rentalsDisabledResponse(shop.id);
     if (disabled) return disabled;
     const body = await request.json();
@@ -78,6 +82,16 @@ export async function POST(request: NextRequest) {
     const endDate = parseDateOnly(data.endDate);
     if (endDate < startDate) {
       return NextResponse.json({ error: "End date must be on or after start date" }, { status: 400 });
+    }
+
+    if (data.customerId) {
+      const customer = await prisma.customer.findFirst({
+        where: { id: data.customerId, shopId: shop.id },
+        select: { id: true },
+      });
+      if (!customer) {
+        return NextResponse.json({ error: "Customer not found" }, { status: 400 });
+      }
     }
 
     const bike = await prisma.rentalBike.findFirst({

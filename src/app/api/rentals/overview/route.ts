@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireCurrentShop } from "@/lib/shop";
+import { requireStaffShop } from "@/lib/api-auth";
 import { rentalsDisabledResponse } from "@/lib/rentals/guard";
 import { RENTAL_CATEGORIES, toNumber } from "@/lib/rentals/types";
 
@@ -12,9 +12,11 @@ function addUtcDays(d: Date, days: number) {
   return new Date(d.getTime() + days * 86_400_000);
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const shop = await requireCurrentShop();
+    const auth = await requireStaffShop(request);
+    if (!auth.ok) return auth.response;
+    const shop = auth.shop;
     const disabled = await rentalsDisabledResponse(shop.id);
     if (disabled) return disabled;
     const today = startOfUtcDay();

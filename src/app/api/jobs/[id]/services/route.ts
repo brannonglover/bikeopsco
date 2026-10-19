@@ -3,13 +3,14 @@ import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { getShopForHost } from "@/lib/shop";
+import { requestHost } from "@/lib/request-host";
 
 async function getAuthorizedShopId(request: NextRequest): Promise<string | null> {
   const token = await getToken({ req: request });
   if (!token?.shopId) return null;
 
   const hostHeader =
-    request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+    requestHost(request.headers);
   const shop = await getShopForHost(hostHeader);
   if (!shop || shop.id !== token.shopId) return null;
 

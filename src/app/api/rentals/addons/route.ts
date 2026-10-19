@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
-import { requireCurrentShop } from "@/lib/shop";
+import { requireStaffShop } from "@/lib/api-auth";
 import { rentalsDisabledResponse } from "@/lib/rentals/guard";
 
 const createSchema = z.object({
@@ -12,9 +12,11 @@ const createSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const shop = await requireCurrentShop();
+    const auth = await requireStaffShop(request);
+    if (!auth.ok) return auth.response;
+    const shop = auth.shop;
     const disabled = await rentalsDisabledResponse(shop.id);
     if (disabled) return disabled;
     const addons = await prisma.rentalAddon.findMany({
@@ -30,7 +32,9 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const shop = await requireCurrentShop();
+    const auth = await requireStaffShop(request);
+    if (!auth.ok) return auth.response;
+    const shop = auth.shop;
     const disabled = await rentalsDisabledResponse(shop.id);
     if (disabled) return disabled;
     const body = await request.json();

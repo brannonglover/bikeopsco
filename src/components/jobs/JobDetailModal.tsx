@@ -191,9 +191,10 @@ function jobBikeToFormValue(b: JobBike): BikeTypeForm {
 }
 
 function toPatchBikeRow(
-  b: Pick<JobBike, "make" | "model" | "nickname" | "imageUrl" | "bikeId">,
+  b: Pick<JobBike, "make" | "model" | "nickname" | "imageUrl" | "bikeId"> & { id?: string },
   bikeType: BikeTypeForm
 ): {
+  id?: string;
   make: string;
   model: string | null;
   nickname: string | null;
@@ -202,6 +203,8 @@ function toPatchBikeRow(
   bikeType?: "REGULAR" | "E_BIKE";
 } {
   const base = {
+    // The job bike being edited, so it's updated in place (keeps its history).
+    ...(b.id ? { id: b.id } : {}),
     make: b.make,
     model: b.model,
     nickname: b.nickname ?? null,
@@ -820,6 +823,8 @@ function JobBikeSection({
   const [addingBike, setAddingBike] = useState(false);
   const [addBikeSelectValue, setAddBikeSelectValue] = useState("");
   const [showAddNewBikeForm, setShowAddNewBikeForm] = useState(false);
+  /** Why the last bike change was refused (e.g. it would erase repair history). */
+  const [bikeActionError, setBikeActionError] = useState<string | null>(null);
   const [newBikeMake, setNewBikeMake] = useState("");
   const [newBikeModel, setNewBikeModel] = useState("");
   const [newBikeType, setNewBikeType] = useState<BikeTypeForm>("AUTO");
@@ -832,6 +837,7 @@ function JobBikeSection({
     ) => {
       if (!onJobUpdated) return;
       const snapshot = job;
+      setBikeActionError(null);
       onJobUpdated(optimistic);
       void (async () => {
         try {
@@ -849,6 +855,10 @@ function JobBikeSection({
             }
           } else {
             onJobUpdated(snapshot);
+            if (res.status === 409) {
+              const err = (await res.json().catch(() => ({}))) as { error?: string };
+              setBikeActionError(err.error ?? "That change wasn’t saved.");
+            }
           }
         } catch {
           onJobUpdated(snapshot);
@@ -1420,6 +1430,11 @@ function JobBikeSection({
             </button>
           )}
         </div>
+      )}
+      {bikeActionError && (
+        <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900" role="alert">
+          {bikeActionError}
+        </p>
       )}
       {onJobUpdated && showAddNewBikeForm && (
         <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50/50 p-4 space-y-3">
@@ -2853,6 +2868,7 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
   const [activeTab, setActiveTab] = useState<Tab>("details");
   const [cancelling, setCancelling] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [showCancelReason, setShowCancelReason] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
@@ -3083,6 +3099,7 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
     (cancelReason !== "Other" || cancelReasonOther.trim().length > 0);
 
   const handleDeleteJobClick = () => {
+    setDeleteError(null);
     setShowDeleteConfirm(true);
   };
 
@@ -3095,7 +3112,12 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
         onJobDeleted?.(job.id);
         setShowDeleteConfirm(false);
         onClose();
+      } else {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        setDeleteError(err.error ?? "This job couldn’t be deleted.");
       }
+    } catch {
+      setDeleteError("This job couldn’t be deleted.");
     } finally {
       setDeleting(false);
     }
@@ -3867,6 +3889,11 @@ export function JobDetailModal({ job: jobProp, isOpen, onClose, onJobUpdated, on
               <p className="text-sm text-slate-600 mt-0.5">
                 Permanently delete this job? This cannot be undone.
               </p>
+              {deleteError && (
+                <p className="mt-2 text-sm text-red-700" role="alert">
+                  {deleteError}
+                </p>
+              )}
             </div>
           </div>
           <div className="flex gap-3 justify-end">

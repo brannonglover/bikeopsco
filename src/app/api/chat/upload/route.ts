@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { put } from "@vercel/blob";
 import { BLOB_ACCESS, blobDisplayUrl } from "@/lib/blob";
+import { chatUploader, registerBlobAsset } from "@/lib/blob-access";
 import {
   CHAT_ALLOWED_IMAGE_TYPES,
   CHAT_MAX_IMAGE_UPLOAD_MB,
@@ -24,6 +25,10 @@ export async function POST(request: NextRequest) {
   const features = await getAppFeatures(shop.id);
   if (!features.chatEnabled) {
     return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
+  }
+  const uploader = await chatUploader(request, shop.id);
+  if (!uploader) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   if (!process.env.BLOB_READ_WRITE_TOKEN) {
     return NextResponse.json(
@@ -67,6 +72,12 @@ export async function POST(request: NextRequest) {
     const path = `chat/${randomUUID()}.${ext}`;
 
     const blob = await put(path, file, { access: BLOB_ACCESS, addRandomSuffix: false });
+    await registerBlobAsset({
+      pathname: blob.pathname,
+      shopId: shop.id,
+      kind: "chat",
+      customerId: uploader.kind === "customer" ? uploader.customerId : null,
+    });
     const url = blobDisplayUrl(blob.url, blob.pathname);
 
     const attachment = await prisma.messageAttachment.create({

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { blobDisplayUrl } from "@/lib/blob";
+import { chatUploader, normalizeBlobPathname } from "@/lib/blob-access";
 import {
   CHAT_ALLOWED_VIDEO_TYPES,
   isChatVideoMime,
@@ -40,6 +41,10 @@ export async function POST(request: NextRequest) {
   if (!features.chatEnabled) {
     return NextResponse.json({ error: "Chat is disabled" }, { status: 404 });
   }
+  const uploader = await chatUploader(request, shop.id);
+  if (!uploader) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   try {
     const parsed = bodySchema.parse(await request.json());
@@ -50,6 +55,25 @@ export async function POST(request: NextRequest) {
 
     if (!isAllowedBlobUrl(parsed.url)) {
       return NextResponse.json({ error: "Invalid blob URL" }, { status: 400 });
+    }
+
+    // The file must be one /token issued to this shop and this uploader, and
+    // the URL must name that same file — otherwise an attachment could point
+    // at someone else's upload.
+    const pathname = normalizeBlobPathname(parsed.pathname);
+    const issued = pathname
+      ? await prisma.blobAsset.findUnique({ where: { pathname }, select: { shopId: true, kind: true, customerId: true } })
+      : null;
+    const expectedCustomerId = uploader.kind === "customer" ? uploader.customerId : null;
+    if (
+      !pathname ||
+      !issued ||
+      issued.shopId !== shop.id ||
+      issued.kind !== "chat" ||
+      issued.customerId !== expectedCustomerId ||
+      normalizeBlobPathname(parsed.url) !== pathname
+    ) {
+      return NextResponse.json({ error: "Invalid pathname" }, { status: 400 });
     }
 
     if (

@@ -33,22 +33,33 @@ model CatalogBike {
   brand        CatalogBrand       @relation(fields: [brandId], references: [id], onDelete: Cascade)
   model        String
   family       String?
-  year         Int?
+  /// First model year this build sheet covers. Maps to the original single-year column.
+  yearStart    Int?               @map("year")
+  /// Last model year this build sheet covers. Null = same as yearStart.
+  yearEnd      Int?
   category     String?
   subcategory  String?
   sourceUrl    String?
   thumbnailUrl String?
   externalKey  String
   confidence   Float              @default(1)
+  /// How far this build sheet can be trusted — see CatalogSpecStatus.
+  specStatus       CatalogSpecStatus  @default(APPROXIMATE)
+  /// specStatus VERIFIED: who confirmed this row's identity (brand, model,
+  /// trim, years) and against what. Says nothing about any part — each part
+  /// carries its own verification.
+  verifiedAt       DateTime?
+  verifiedBy       String?
+  verificationNote String?
   components   CatalogComponent[]
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
 
   @@unique([brandId, externalKey])
   @@index([brandId])
-  @@index([year])
+  @@index([yearStart])
   @@index([model])
-  @@index([brandId, model, year])
+  @@index([brandId, model, yearStart])
   @@schema("bike_catalog")
 }
 
@@ -63,6 +74,17 @@ model CatalogComponent {
   model       String?
   standard    String?
   detail      String?
+  /// Where this factory part came from. A component row is always the factory
+  /// spec; what a customer's bike has now lives in the app DB, and compatible
+  /// replacements (later) get their own table keyed by bike + slot.
+  source      ComponentSource        @default(APPROXIMATE)
+  sourceUrl   String?
+  /// An admin compared this exact value (and standard) with a cited source for
+  /// this build and year and confirmed it. Cleared when the value changes.
+  /// Confirms the factory part only — never which replacements fit.
+  verifiedAt  DateTime?
+  verifiedBy  String?
+  verifiedAgainst String?
   visibility  ComponentVisibility    @default(VISUAL)
   sortOrder   Int                    @default(0)
   createdAt   DateTime               @default(now())
@@ -89,6 +111,93 @@ model ScrapeRun {
 
   @@index([scraperKey])
   @@index([startedAt])
+  @@schema("bike_catalog")
+}
+
+/// One row per make/model/year we have searched the web for, so a bike nobody
+/// could find is not searched again on every job, and two jobs for the same
+/// bike share one search.
+model CatalogLookup {
+  id                     String              @id @default(cuid())
+  /// normalized "make|model|year"
+  key                    String              @unique
+  make                   String
+  model                  String
+  year                   Int
+  status                 CatalogLookupStatus
+  /// Every build the search found under this model name for this year.
+  catalogBikeIds         String[]            @default([])
+  /// catalogBikeIds are every build sold under this name that year, confirmed
+  /// by a manufacturer page listing the lineup (lineupSourceUrl). Only then may
+  /// a single result be linked without asking a mechanic.
+  configurationsComplete Boolean             @default(false)
+  /// The manufacturer page that lists the model's builds for the year.
+  lineupSourceUrl        String?
+  /// Paid attempts made (failed, interrupted, or successful).
+  attempts               Int                 @default(0)
+  /// FAILED only: don't retry before this.
+  nextAttemptAt          DateTime?
+  message                String?
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+
+  @@index([status])
+  @@schema("bike_catalog")
+}
+
+/// One row per paid Claude call made by the lookup, for the daily budget and
+/// for seeing what the catalog costs to grow.
+model CatalogLookupSpend {
+  id               String   @id @default(cuid())
+  lookupKey        String
+  model            String
+  inputTokens      Int      @default(0)
+  outputTokens     Int      @default(0)
+  cacheReadTokens  Int      @default(0)
+  cacheWriteTokens Int      @default(0)
+  webSearches      Int      @default(0)
+  webFetches       Int      @default(0)
+  costUsd          Float
+  /// The call failed before reporting usage; costUsd is a conservative guess.
+  estimated        Boolean  @default(false)
+  createdAt        DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([lookupKey])
+  @@schema("bike_catalog")
+}
+
+enum CatalogLookupStatus {
+  SEARCHING
+  FOUND
+  NOT_FOUND
+  FAILED
+
+  @@schema("bike_catalog")
+}
+
+enum CatalogSpecStatus {
+  /// Hand-entered, generation-level guide ("varies by trim"). Offered as a
+  /// possible match only; never auto-matched and never blocks a web lookup.
+  APPROXIMATE
+  /// Built by the web lookup from cited sources; not yet checked by a person.
+  SOURCED
+  /// Checked by a platform admin.
+  VERIFIED
+
+  @@schema("bike_catalog")
+}
+
+enum ComponentSource {
+  /// The manufacturer's own spec page for this model and year.
+  MANUFACTURER
+  /// A retailer, review or other site that isn't the manufacturer.
+  THIRD_PARTY
+  /// Entered or corrected by a platform admin.
+  ADMIN
+  /// Hand-entered approximation with no specific source.
+  APPROXIMATE
+
   @@schema("bike_catalog")
 }
 

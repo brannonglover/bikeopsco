@@ -12,19 +12,25 @@ import {
   getEmailSendingDisabledReason,
   getResendApiKey,
 } from "@/lib/env";
+import { requirePlatformAdmin } from "@/lib/platform-admin";
 
 /**
- * Test endpoint to verify Resend email config.
- * GET /api/email/test?to=your@email.com
- * Uses RESEND_API_KEY or BIKEOPS_RESEND_API_KEY.
+ * Platform-admin diagnostic: send one test email to check the Resend setup.
+ * POST /api/platform/email-test { "to": "you@example.com" } on the admin host.
+ *
+ * It sends from our domain to any address, so it is not a shop endpoint (shop
+ * sign-up is open) and it is a POST, so a link can't trigger it.
  */
-export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const to = searchParams.get("to");
+export async function POST(request: NextRequest) {
+  const admin = await requirePlatformAdmin(request);
+  if (!admin.ok) return admin.response;
+
+  const body = (await request.json().catch(() => null)) as { to?: unknown } | null;
+  const to = typeof body?.to === "string" ? body.to.trim() : "";
 
   if (!to || !to.includes("@")) {
     return NextResponse.json(
-      { error: "Add ?to=your@email.com to test" },
+      { error: 'Send { "to": "your@email.com" } to test' },
       { status: 400 }
     );
   }

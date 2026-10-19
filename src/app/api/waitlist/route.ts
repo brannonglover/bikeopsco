@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
       serviceIdList.length > 0
         ? await withPrismaRetry(() =>
             prisma.service.findMany({
-              where: { id: { in: serviceIdList } },
+              where: { shopId, id: { in: serviceIdList } },
               select: { id: true, name: true },
             })
           )

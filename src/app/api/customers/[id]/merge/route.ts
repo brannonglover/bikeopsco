@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { mergeSmsConsentFields } from "@/lib/sms-consent";
 import { z } from "zod";
+import { requireStaffShop } from "@/lib/api-auth";
 
 const mergeSchema = z.object({
   sourceCustomerId: z.string().min(1),
@@ -11,6 +12,10 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireStaffShop(request);
+  if (!auth.ok) return auth.response;
+  const { shopId } = auth;
+
   try {
     const { id: targetId } = await params;
     const body = await request.json();
@@ -24,8 +29,9 @@ export async function POST(
     }
 
     const [target, source] = await Promise.all([
-      prisma.customer.findUnique({ where: { id: targetId } }),
-      prisma.customer.findUnique({ where: { id: sourceCustomerId } }),
+      // Both must be this shop's customers; another shop's id is "not found".
+      prisma.customer.findFirst({ where: { id: targetId, shopId } }),
+      prisma.customer.findFirst({ where: { id: sourceCustomerId, shopId } }),
     ]);
 
     if (!target) {
@@ -51,17 +57,17 @@ export async function POST(
       }
 
       await tx.bike.updateMany({
-        where: { customerId: sourceCustomerId },
+        where: { customerId: sourceCustomerId, shopId },
         data: { customerId: targetId },
       });
 
       await tx.job.updateMany({
-        where: { customerId: sourceCustomerId },
+        where: { customerId: sourceCustomerId, shopId },
         data: { customerId: targetId },
       });
 
       await tx.conversation.updateMany({
-        where: { customerId: sourceCustomerId },
+        where: { customerId: sourceCustomerId, shopId },
         data: { customerId: targetId },
       });
 

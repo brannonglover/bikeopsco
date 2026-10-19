@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { getToken } from "next-auth/jwt";
 import { authOptions } from "@/lib/auth";
 import { getShopForHost, type CurrentShop } from "@/lib/shop";
+import { requestHost } from "@/lib/request-host";
 
 export type StaffShopAuth =
   | { ok: true; shop: CurrentShop; shopId: string; userId: string }
@@ -10,7 +11,7 @@ export type StaffShopAuth =
 
 export async function getRequestShop(request: NextRequest): Promise<CurrentShop | null> {
   const hostHeader =
-    request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+    requestHost(request.headers);
   return getShopForHost(hostHeader);
 }
 
@@ -24,7 +25,9 @@ export async function resolveStaffShopId(
     return { shopId: token.shopId, userId: token.id };
   }
 
-  const session = await getServerSession(authOptions);
+  // Fails closed: anything that stops the session being read (including a
+  // call outside a request scope) is "no session", never an error to retry.
+  const session = await getServerSession(authOptions).catch(() => null);
   if (typeof session?.user?.shopId === "string" && typeof session?.user?.id === "string") {
     return { shopId: session.user.shopId, userId: session.user.id };
   }

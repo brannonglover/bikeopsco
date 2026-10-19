@@ -6,7 +6,8 @@ import { buildCustomerMagicLinkUrl } from "@/lib/customer-magic-link";
 import { sendChatMagicLinkEmail } from "@/lib/email";
 import { z } from "zod";
 import { getAppFeatures } from "@/lib/app-settings";
-import { getShopForHost } from "@/lib/shop";
+import { requireStaffShop } from "@/lib/api-auth";
+import { requestOrigin } from "@/lib/request-host";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,10 +20,12 @@ const schema = z.object({ customerId: z.string().min(1) });
  */
 export async function POST(request: NextRequest) {
   try {
-    const shop = await getShopForHost(request.headers.get("host"));
-    if (!shop) {
-      return NextResponse.json({ error: "Shop not found" }, { status: 404 });
-    }
+    // Outside the staff middleware (it lives under /api/chat), so the check
+    // is here: only this shop's staff may email its customers a sign-in link,
+    // and the link's host is the one just verified to be theirs.
+    const auth = await requireStaffShop(request);
+    if (!auth.ok) return auth.response;
+    const shop = auth.shop;
 
     const features = await getAppFeatures(shop.id);
     if (!features.chatEnabled) {
@@ -56,10 +59,7 @@ export async function POST(request: NextRequest) {
       data: { shopId: shop.id, token, customerId: customer.id, expiresAt },
     });
 
-    const host =
-      request.headers.get("x-forwarded-host") ?? request.headers.get("host");
-    const proto = request.headers.get("x-forwarded-proto") ?? "https";
-    const baseUrl = host ? `${proto}://${host}` : getAppUrl();
+    const baseUrl = requestOrigin(request.headers) ?? getAppUrl();
     const magicLinkUrl = buildCustomerMagicLinkUrl(baseUrl, token, "chat");
 
     const apiKey = getResendApiKey();

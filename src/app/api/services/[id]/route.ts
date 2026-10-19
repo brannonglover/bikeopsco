@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
+import { requireStaffShop } from "@/lib/api-auth";
 
 const updateServiceSchema = z.object({
   name: z.string().min(1).optional(),
@@ -13,10 +14,18 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const auth = await requireStaffShop(request);
+  if (!auth.ok) return auth.response;
+
   try {
     const { id } = params;
     const body = await request.json();
     const data = updateServiceSchema.parse(body);
+
+    const existing = await prisma.service.findFirst({ where: { id, shopId: auth.shopId }, select: { id: true } });
+    if (!existing) {
+      return NextResponse.json({ error: "Service not found" }, { status: 404 });
+    }
 
     const service = await prisma.service.update({
       where: { id },
@@ -42,13 +51,19 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const auth = await requireStaffShop(request);
+  if (!auth.ok) return auth.response;
+
   try {
     const { id } = params;
-    const existing = await prisma.service.findUnique({ where: { id } });
-    if (existing?.isSystem) {
+    const existing = await prisma.service.findFirst({ where: { id, shopId: auth.shopId } });
+    if (!existing) {
+      return NextResponse.json({ error: "Service not found" }, { status: 404 });
+    }
+    if (existing.isSystem) {
       return NextResponse.json(
         { error: "System services cannot be deleted." },
         { status: 400 }

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { buildSmsConsentUpdate, getEffectiveSmsConsent } from "@/lib/sms-consent";
+import { hasJobReadAccess } from "@/lib/job-customer-access";
+import { getShopForHost } from "@/lib/shop";
 
 const updateSmsConsentSchema = z.object({
   smsConsent: z.boolean(),
@@ -15,11 +17,17 @@ export async function PATCH(
 ) {
   try {
     const { id } = params;
+    const shop = await getShopForHost(request.headers.get("host"));
+    if (!shop) {
+      return NextResponse.json({ error: "Shop not found" }, { status: 404 });
+    }
     const body = await request.json();
     const data = updateSmsConsentSchema.parse(body);
 
-    const job = await prisma.job.findUnique({
-      where: { id },
+    // Only this shop's job, and only for staff, the job's tracking link, or
+    // the customer who owns it — the same rule as the preferences route.
+    const job = await prisma.job.findFirst({
+      where: { id, shopId: shop.id },
       select: {
         customerId: true,
         customer: {
@@ -34,7 +42,11 @@ export async function PATCH(
       },
     });
 
-    if (!job?.customerId || !job.customer) {
+    if (
+      !job?.customerId ||
+      !job.customer ||
+      !(await hasJobReadAccess(request, shop.id, id, job.customerId))
+    ) {
       return NextResponse.json(
         { error: "Customer not found for this job" },
         { status: 404 }

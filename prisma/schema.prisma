@@ -37,6 +37,7 @@ model Shop {
   jobs                        Job[]
   jobBikes                    JobBike[]
   jobBikeComponentOverrides   JobBikeComponentOverride[]
+  bikeInstalledComponents     BikeInstalledComponent[]
   payments                    Payment[]
   services                    Service[]
   jobServices                 JobService[]
@@ -52,6 +53,7 @@ model Shop {
   messageReactions            MessageReaction[]
   chatReminders               ChatReminderEmail[]
   messageAttachments          MessageAttachment[]
+  blobAssets                  BlobAsset[]
   users                       User[]
   pushTokens                  PushToken[]
   magicLinkTokens             MagicLinkToken[]
@@ -128,8 +130,13 @@ model Bike {
   bikeType      BikeType?
   nickname      String?
   imageUrl      String?
-  /// Matched row in the separate bike-catalog database
-  catalogBikeId String?
+  /// The catalog build sheet for this bike. Set only when a mechanic confirms
+  /// the build (model + trim) on a job; reused on every later visit.
+  catalogBikeId         String?
+  catalogConfirmedAt    DateTime?
+  catalogConfirmedBy    String?
+  catalogConfirmedJobId String?
+  installedComponents   BikeInstalledComponent[]
   customerId    String
   customer      Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
   jobBikes      JobBike[]
@@ -162,6 +169,13 @@ model JobBike {
   /// Matched row in the separate bike-catalog database
   catalogBikeId      String?
   catalogMatchedAt   DateTime?
+  /// When the background catalog lookup (local match, then web search) reached
+  /// an outcome for this bike. Null = still owed one; the cron sweep picks it up.
+  catalogLookupAt       DateTime?
+  /// Lookups for this bike that errored; the sweep stops after a few.
+  catalogLookupAttempts Int                     @default(0)
+  /// Owed lookups wait until this time (backoff, budget reset, another search).
+  catalogLookupNextAt   DateTime?
   createdAt          DateTime                   @default(now())
   workingOnJob       Job?                       @relation("WorkingOnBike")
   jobEmails          JobEmail[]
@@ -175,7 +189,10 @@ model JobBike {
   @@index([catalogBikeId])
 }
 
-/// Per-job overrides / confirmations for catalog component slots (does not mutate global catalog).
+/// Per-job notes on one factory part slot (does not mutate the global catalog).
+/// `confirmation` is what the mechanic saw on the bike; `replacement*` is work
+/// on this job. Neither reaches the customer's bike record until the work is
+/// complete — see BikeInstalledComponent.
 model JobBikeComponentOverride {
   id           String                @id @default(cuid())
   shopId       String
@@ -188,12 +205,64 @@ model JobBikeComponentOverride {
   /// When confirmation is CUSTOMIZED, the part actually on this bike
   customValue  String?
   notes        String?
+  /// PLANNED: proposed, quoted or ordered — not on the bike. INSTALLED: the
+  /// mechanic confirmed it's fitted.
+  replacementState       ComponentReplacementState @default(NONE)
+  replacementValue       String?
+  replacementInstalledAt DateTime?
+  /// Staff user (name or email) who last changed this row
+  updatedBy    String?
   createdAt    DateTime              @default(now())
   updatedAt    DateTime              @updatedAt
 
   @@unique([jobBikeId, slot])
   @@index([shopId])
   @@index([jobBikeId])
+}
+
+enum ComponentReplacementState {
+  NONE
+  PLANNED
+  INSTALLED
+}
+
+/// What is on a customer's bike, as confirmed on completed jobs. One row per
+/// confirmation (history); the newest per slot is what's on the bike now.
+/// Written only from a job bike whose work is complete on a job that isn't
+/// cancelled or awaiting approval; withdrawn if that stops being true.
+/// Separate from the catalog's factory spec, which it never changes.
+model BikeInstalledComponent {
+  id          String                  @id @default(cuid())
+  shopId      String
+  shop        Shop                    @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  bikeId      String
+  bike        Bike                    @relation(fields: [bikeId], references: [id], onDelete: Cascade)
+  slot        String
+  value       String
+  kind        BikeComponentRecordKind
+  notes       String?
+  jobId       String?
+  job         Job?                    @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  jobBikeId   String?
+  /// The JobBikeComponentOverride this came from — one record per override,
+  /// so applying is idempotent and withdrawing is exact.
+  overrideId  String                  @unique
+  confirmedBy String?
+  /// When the work was confirmed complete
+  recordedAt  DateTime
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+
+  @@index([bikeId, slot])
+  @@index([shopId])
+  @@index([jobId])
+}
+
+enum BikeComponentRecordKind {
+  /// Fitted by the shop on this job
+  INSTALLED
+  /// Already on the bike when it came in (not factory)
+  OBSERVED
 }
 
 enum ComponentConfirmation {
@@ -209,6 +278,7 @@ model Job {
   bikeMake                    String // Legacy / summary – first bike or "Multiple"
   bikeModel                   String // Legacy / summary
   jobBikes                    JobBike[]
+  installedComponents         BikeInstalledComponent[]
   workingOnJobBikeId          String?         @unique
   workingOnJobBike            JobBike?        @relation("WorkingOnBike", fields: [workingOnJobBikeId], references: [id], onDelete: SetNull)
   stage                       Stage           @default(BOOKED_IN)
@@ -596,6 +666,26 @@ model MessageAttachment {
 
   @@index([shopId])
   @@index([messageId])
+}
+
+/// Who owns a file in the private Blob store. /api/blob authorizes against
+/// this row, never against the pathname, so a guessed or copied path is
+/// useless outside the owning shop. Written at upload from the server-side
+/// identity; legacy files are registered the first time they're requested.
+model BlobAsset {
+  id         String   @id @default(cuid())
+  pathname   String   @unique
+  shopId     String
+  shop       Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  /// bike, customer-upload, chat, product, mechanic, logo, voicemail-greeting
+  kind       String
+  /// Set when the file belongs to one customer: they may fetch it too.
+  customerId String?
+  /// Explicitly public (logo, mechanic headshot, product photo).
+  isPublic   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([shopId])
 }
 
 enum MessageSender {

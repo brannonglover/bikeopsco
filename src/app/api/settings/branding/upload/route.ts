@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
-import { getToken } from "next-auth/jwt";
 import { put } from "@vercel/blob";
 import { BLOB_ACCESS, blobDisplayUrl } from "@/lib/blob";
+import { requireStaffShop } from "@/lib/api-auth";
+import { registerBlobAsset } from "@/lib/blob-access";
 
 export const dynamic = "force-dynamic";
 
@@ -10,10 +11,8 @@ const MAX_SIZE_MB = 5;
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp", "image/svg+xml"];
 
 export async function POST(request: NextRequest) {
-  const token = await getToken({ req: request });
-  if (!token?.shopId || typeof token.shopId !== "string") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requireStaffShop(request);
+  if (!auth.ok) return auth.response;
 
   if (!process.env.BLOB_READ_WRITE_TOKEN) {
     return NextResponse.json(
@@ -45,10 +44,11 @@ export async function POST(request: NextRequest) {
     }
 
     const ext = (file.name.split(".").pop() || "png").toLowerCase();
-    const blob = await put(`branding/${token.shopId}/${randomUUID()}.${ext}`, file, {
+    const blob = await put(`branding/${auth.shopId}/${randomUUID()}.${ext}`, file, {
       access: BLOB_ACCESS,
       addRandomSuffix: false,
     });
+    await registerBlobAsset({ pathname: blob.pathname, shopId: auth.shopId, kind: "logo" });
 
     return NextResponse.json(
       { url: blobDisplayUrl(blob.url, blob.pathname) },

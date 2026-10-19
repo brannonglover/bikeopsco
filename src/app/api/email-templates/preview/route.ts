@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireStaffShop } from "@/lib/api-auth";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { buildCustomerEmailPreviewDocument } from "@/lib/email";
-import { requireCurrentShop } from "@/lib/shop";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +22,9 @@ function htmlResponse(html: string) {
  */
 export async function GET(request: NextRequest) {
   try {
-    const shop = await requireCurrentShop();
+    const auth = await requireStaffShop(request);
+    if (!auth.ok) return auth.response;
+    const shop = auth.shop;
     const slug = request.nextUrl.searchParams.get("slug");
     if (!slug?.trim()) {
       return NextResponse.json({ error: "Missing slug" }, { status: 400 });
@@ -51,7 +53,9 @@ const postSchema = z.object({
  */
 export async function POST(request: NextRequest) {
   try {
-    const shop = await requireCurrentShop();
+    const auth = await requireStaffShop(request);
+    if (!auth.ok) return auth.response;
+    const shop = auth.shop;
     const json = await request.json();
     const { bodyHtml } = postSchema.parse(json);
     return htmlResponse(await buildCustomerEmailPreviewDocument(bodyHtml, shop.id));

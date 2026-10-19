@@ -9,6 +9,7 @@ import { sendJobEmail, getTemplateForStage } from "@/lib/email";
 import { getTemplateSlugForStage } from "@/lib/sms";
 import { syncCollectionJobService } from "@/lib/collection-fee";
 import { sendPushToAllStaff } from "@/lib/push";
+import { scheduleCatalogLookup } from "@/lib/bike-catalog-lookup";
 import { publishJobEvent } from "@/lib/realtime/publish-job-event";
 import { getAppFeatures } from "@/lib/app-settings";
 import { mirrorJobStageToCustomerChat } from "@/lib/system-chat";
@@ -20,10 +21,12 @@ import { optionalTrimmedString } from "@/lib/zod-helpers";
 import {
   enrichJobsWithCatalogThumbnails,
   enrichJobBikesWithCatalogThumbnails,
-  matchCatalogFieldsForJobBike,
 } from "@/lib/bike-catalog-client";
 
 export const dynamic = "force-dynamic";
+// Catalog lookups scheduled here keep running after the response
+// (LOOKUP_TIME_BUDGET_MS fits inside this).
+export const maxDuration = 300;
 
 const bikeSchema = z.object({
   make: z.string().min(1),
@@ -340,25 +343,9 @@ export async function POST(request: NextRequest) {
       });
     }, { timeout: 15000 });
 
-    // Run catalog matching in the background — update jobBike records after
-    // the job is created so it never blocks the response.
-    if (job?.jobBikes?.length) {
-      const jobBikes = job.jobBikes;
-      Promise.all(
-        jobBikes.map(async (jb) => {
-          const match = await matchCatalogFieldsForJobBike(jb.make, jb.model, jb.year ?? null);
-          if (match) {
-            await prisma.jobBike.update({
-              where: { id: jb.id },
-              data: {
-                catalogBikeId: match.catalogBikeId,
-                catalogMatchedAt: match.catalogMatchedAt,
-              },
-            });
-          }
-        })
-      ).catch((e) => console.error("[Job created] Background catalog matching failed:", e));
-    }
+    // Match each bike to the catalog (searching the web for bikes it doesn't
+    // know yet) after the response is sent, so it never slows job creation.
+    scheduleCatalogLookup(job?.jobBikes?.map((jb) => jb.id) ?? []);
 
     if (!job) {
       return NextResponse.json({ error: "Failed to create job" }, { status: 500 });

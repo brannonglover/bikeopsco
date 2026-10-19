@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { addWidgetCorsHeaders } from "@/lib/widget-cors";
 import { getShopForHost } from "@/lib/shop";
+import { requestHost } from "@/lib/request-host";
 
 export async function OPTIONS(request: NextRequest) {
   const origin = request.headers.get("origin");
@@ -17,7 +18,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const hostHeader =
-      request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+      requestHost(request.headers);
     const shop = await getShopForHost(hostHeader);
     if (!shop) {
       const res = NextResponse.json({ error: "Shop not found" }, { status: 404 });

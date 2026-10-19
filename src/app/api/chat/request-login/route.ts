@@ -7,6 +7,7 @@ import { sendChatMagicLinkEmail } from "@/lib/email";
 import { z } from "zod";
 import { getAppFeatures } from "@/lib/app-settings";
 import { getShopForHost } from "@/lib/shop";
+import { requestOrigin } from "@/lib/request-host";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,10 +34,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Always return success - don't reveal if email exists
-    const host =
-      request.headers.get("x-forwarded-host") ?? request.headers.get("host");
-    const proto = request.headers.get("x-forwarded-proto") ?? "https";
-    const baseUrl = host ? `${proto}://${host}` : getAppUrl();
+    const baseUrl = requestOrigin(request.headers) ?? getAppUrl();
 
     if (!customer) {
       return NextResponse.json({

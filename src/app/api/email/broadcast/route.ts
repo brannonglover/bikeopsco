@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireStaffShop } from "@/lib/api-auth";
 import { z } from "zod";
 import {
   getBroadcastRecipients,
@@ -6,7 +7,6 @@ import {
   sendCustomerBroadcastEmails,
   sendCustomerBroadcastTestEmail,
 } from "@/lib/email";
-import { requireCurrentShop } from "@/lib/shop";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -29,9 +29,11 @@ const postSchema = z.discriminatedUnion("mode", [
 /**
  * GET — eligible recipient count + recent broadcast history.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const shop = await requireCurrentShop();
+    const auth = await requireStaffShop(request);
+    if (!auth.ok) return auth.response;
+    const shop = auth.shop;
     const [recipients, history] = await Promise.all([
       getBroadcastRecipients(shop.id),
       listEmailBroadcastHistory(shop.id),
@@ -57,7 +59,9 @@ export async function GET() {
  */
 export async function POST(request: NextRequest) {
   try {
-    const shop = await requireCurrentShop();
+    const auth = await requireStaffShop(request);
+    if (!auth.ok) return auth.response;
+    const shop = auth.shop;
     const json = await request.json();
     const data = postSchema.parse(json);
 

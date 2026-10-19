@@ -25,7 +25,7 @@ async function upsertWithRetry(bike: UpsertBikeInput, attempts = 4) {
       lastError = error;
       if (!isRetriableDbError(error) || attempt === attempts) throw error;
       console.warn(
-        `DB connection issue on ${bike.brandName} ${bike.year} ${bike.model} (attempt ${attempt}/${attempts}); retrying…`
+        `DB connection issue on ${bike.brandName} ${bike.yearStart}–${bike.yearEnd} ${bike.model} (attempt ${attempt}/${attempts}); retrying…`
       );
       try {
         await catalogPrisma.$disconnect();
@@ -46,7 +46,7 @@ async function main() {
 
   const seedBikes = expandGenerations(seedGenerations);
   console.log(
-    `Expanding ${seedGenerations.length} generations → ${seedBikes.length} year rows (${SEED_YEAR_MIN}–${SEED_YEAR_MAX})`
+    `Seeding ${seedBikes.length} generation rows (${SEED_YEAR_MIN}–${SEED_YEAR_MAX})`
   );
 
   let bikes = 0;

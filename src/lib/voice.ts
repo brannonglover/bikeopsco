@@ -13,6 +13,7 @@ import {
 // Also re-exported at the foot of this file; imported here because the ring
 // push has to tell the app when the window closes.
 import { ringDeadline } from "@/lib/voice-twiml";
+import { requestHost, requestOrigin } from "@/lib/request-host";
 
 export type VoicePlatform = "ios" | "android";
 
@@ -262,10 +263,7 @@ export async function sendQueuedCallerToVoicemail(
 
 /** Scheme + host only, for building sibling webhook URLs to embed in TwiML. */
 export function getVoiceWebhookBaseUrl(request: NextRequest): string {
-  const proto =
-    request.headers.get("x-forwarded-proto") ?? request.nextUrl.protocol.replace(":", "");
-  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "";
-  return `${proto}://${host}`;
+  return requestOrigin(request.headers) ?? "";
 }
 
 export type VoiceWebhookContext = {
@@ -303,7 +301,7 @@ export async function authenticateVoiceWebhook(
     return new NextResponse("Forbidden", { status: 403 });
   }
 
-  const hostHeader = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  const hostHeader = requestHost(request.headers);
   const shop = await getShopForHost(hostHeader);
   if (!shop) {
     console.warn("Twilio Voice webhook: shop not found for host", hostHeader);

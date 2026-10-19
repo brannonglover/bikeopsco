@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
 import { z } from "zod";
-import { authOptions } from "@/lib/auth";
+import { requireStaffShop } from "@/lib/api-auth";
+import { prisma } from "@/lib/db";
 import { sendEmailTemplateTestEmail } from "@/lib/email";
 
 const bodySchema = z.object({
@@ -11,18 +11,28 @@ const bodySchema = z.object({
 
 /**
  * POST { slug, to } — send a test customer email for a template (preview merge data + full shell).
- * Staff session required.
+ * Staff of this shop only, and only to a staff address of this shop: shop
+ * sign-up is open, so an arbitrary recipient would make this a way to send
+ * mail from our domain to anyone.
  */
 export async function POST(request: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.email || !session.user.shopId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requireStaffShop(request);
+  if (!auth.ok) return auth.response;
 
   try {
     const json = await request.json();
     const { slug, to } = bodySchema.parse(json);
-    const result = await sendEmailTemplateTestEmail(session.user.shopId, slug, to);
+    const staff = await prisma.user.findFirst({
+      where: { shopId: auth.shopId, email: { equals: to.trim(), mode: "insensitive" } },
+      select: { id: true },
+    });
+    if (!staff) {
+      return NextResponse.json(
+        { error: "Test emails can only be sent to a staff email address for this shop." },
+        { status: 400 }
+      );
+    }
+    const result = await sendEmailTemplateTestEmail(auth.shopId, slug, to);
     if (!result.ok) {
       return NextResponse.json({ error: result.error ?? "Send failed" }, { status: 400 });
     }

@@ -109,7 +109,7 @@ export async function customerHasSmsChatAccess(
   return customerHasOpenChatConversation(shopId, customerId);
 }
 
-async function customerHasExtendedChatSessionAccess(
+export async function customerHasExtendedChatSessionAccess(
   shopId: string,
   customerId: string
 ): Promise<boolean> {
