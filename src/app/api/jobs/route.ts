@@ -224,7 +224,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const features = await getAppFeatures();
+    const features = await getAppFeatures(shopId);
     let body: unknown;
     try {
       body = await request.json();
@@ -295,6 +295,28 @@ export async function POST(request: NextRequest) {
         }
         if (bikeId) claimedBikeIds.add(bikeId);
         resolvedBikes.push({ ...b, bikeId });
+      }
+
+      // Years flow both ways between the job and the customer's saved bike: a
+      // job without one (the phone app has no year field) takes the saved
+      // bike's, so it can be looked up; a year given on the job fills in a
+      // saved bike that has none — never overwriting one already there.
+      const profileYears = new Map(
+        (
+          await tx.bike.findMany({
+            where: { shopId, id: { in: resolvedBikes.flatMap((b) => (b.bikeId ? [b.bikeId] : [])) } },
+            select: { id: true, year: true },
+          })
+        ).map((p) => [p.id, p.year])
+      );
+      for (const b of resolvedBikes) {
+        if (!b.bikeId) continue;
+        const saved = profileYears.get(b.bikeId) ?? null;
+        if (b.year == null && saved != null) {
+          b.year = saved;
+        } else if (b.year != null && saved == null) {
+          await tx.bike.updateMany({ where: { id: b.bikeId, shopId, year: null }, data: { year: b.year } });
+        }
       }
 
       await tx.jobBike.createMany({

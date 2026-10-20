@@ -21,11 +21,22 @@ interface Bike {
   id: string;
   make: string;
   model: string;
+  year: number | null;
   bikeType: "REGULAR" | "E_BIKE" | null;
   nickname: string | null;
   imageUrl: string | null;
   customerId: string;
 }
+
+/** The year box's text as a model year, or null; "invalid" when it isn't one. */
+function parseBikeYear(value: string): number | null | "invalid" {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const year = Number(trimmed);
+  return Number.isInteger(year) && year >= 1980 && year <= 2100 ? year : "invalid";
+}
+
+const YEAR_HINT = "Enter a model year between 1980 and 2100, or leave it blank.";
 
 interface Customer {
   id: string;
@@ -109,6 +120,7 @@ function AddBikeForm({
 }) {
   const [make, setMake] = useState("");
   const [model, setModel] = useState("");
+  const [year, setYear] = useState("");
   const [nickname, setNickname] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [bikeType, setBikeType] = useState<"AUTO" | "REGULAR" | "E_BIKE">("AUTO");
@@ -139,6 +151,11 @@ function AddBikeForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!make.trim()) return;
+    const parsedYear = parseBikeYear(year);
+    if (parsedYear === "invalid") {
+      alert(YEAR_HINT);
+      return;
+    }
     setSaving(true);
     try {
       const res = await fetch(`/api/customers/${customerId}/bikes`, {
@@ -147,6 +164,7 @@ function AddBikeForm({
         body: JSON.stringify({
           make: make.trim(),
           model: model.trim() || null,
+          year: parsedYear,
           bikeType: bikeType === "AUTO" ? null : bikeType,
           nickname: nickname.trim() || null,
           imageUrl: imageUrl.trim() || null,
@@ -227,6 +245,17 @@ function AddBikeForm({
             className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
           />
           <input
+            type="number"
+            inputMode="numeric"
+            min={1980}
+            max={2100}
+            value={year}
+            onChange={(e) => setYear(e.target.value)}
+            placeholder="Year (optional, e.g. 2021)"
+            aria-label="Model year"
+            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+          />
+          <input
             type="text"
             value={nickname}
             onChange={(e) => setNickname(e.target.value)}
@@ -278,6 +307,7 @@ function EditBikeForm({
 }) {
   const [make, setMake] = useState(bike.make);
   const [model, setModel] = useState(bike.model ?? "");
+  const [year, setYear] = useState(bike.year != null ? String(bike.year) : "");
   const [nickname, setNickname] = useState(bike.nickname ?? "");
   const [imageUrl, setImageUrl] = useState(bike.imageUrl ?? "");
   const [bikeType, setBikeType] = useState<"AUTO" | "REGULAR" | "E_BIKE">(
@@ -310,6 +340,11 @@ function EditBikeForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!make.trim()) return;
+    const parsedYear = parseBikeYear(year);
+    if (parsedYear === "invalid") {
+      alert(YEAR_HINT);
+      return;
+    }
     setSaving(true);
     try {
       const res = await fetch(
@@ -320,6 +355,7 @@ function EditBikeForm({
           body: JSON.stringify({
             make: make.trim(),
             model: model.trim() || null,
+            year: parsedYear,
             bikeType: bikeType === "AUTO" ? null : bikeType,
             nickname: nickname.trim() || null,
             imageUrl: imageUrl.trim() || null,
@@ -400,6 +436,17 @@ function EditBikeForm({
             value={model}
             onChange={(e) => setModel(e.target.value)}
             placeholder="Model (optional)"
+            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+          />
+          <input
+            type="number"
+            inputMode="numeric"
+            min={1980}
+            max={2100}
+            value={year}
+            onChange={(e) => setYear(e.target.value)}
+            placeholder="Year (optional, e.g. 2021)"
+            aria-label="Model year"
             className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
           />
           <input
@@ -904,10 +951,10 @@ export function CustomerDetailModal({
                         <span className="font-medium text-slate-900 flex-1 min-w-0">
                           {bike.nickname
                             ? `${bike.nickname}`
-                            : [bike.make, bike.model].filter(Boolean).join(" ")}
+                            : [bike.year, bike.make, bike.model].filter(Boolean).join(" ")}
                           {bike.nickname && (
                             <span className="text-slate-500 font-normal ml-1">
-                              ({[bike.make, bike.model].filter(Boolean).join(" ")})
+                              ({[bike.year, bike.make, bike.model].filter(Boolean).join(" ")})
                             </span>
                           )}
                         </span>

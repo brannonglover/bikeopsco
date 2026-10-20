@@ -3,6 +3,8 @@ import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { syncCollectionJobService } from "@/lib/collection-fee";
 import { requireStaffShop } from "@/lib/api-auth";
+import { matchCatalogFieldsForJobBike } from "@/lib/bike-catalog-client";
+import { scheduleCatalogLookup } from "@/lib/bike-catalog-lookup";
 import { RepairHistoryConflictError } from "@/lib/job-bike-replacement";
 import {
   assertNoRepairHistory,
@@ -13,6 +15,7 @@ import {
 const updateBikeSchema = z.object({
   make: z.string().min(1).optional(),
   model: z.string().min(1).optional().nullable(),
+  year: z.number().int().min(1980).max(2100).optional().nullable(),
   bikeType: z.enum(["REGULAR", "E_BIKE"]).optional().nullable(),
   nickname: z.string().optional().nullable(),
   imageUrl: z.string().optional().nullable(),
@@ -37,12 +40,26 @@ export async function PATCH(
       return NextResponse.json({ error: "Bike not found" }, { status: 404 });
     }
 
+    // A new year changes which build sheet the bike is: its open jobs get the
+    // year, a fresh catalog match and a lookup. Matched once, up front, with
+    // the bike's final make/model.
+    const yearChanged = data.year !== undefined && (data.year ?? null) !== (bike.year ?? null);
+    const yearMatch = yearChanged
+      ? await matchCatalogFieldsForJobBike(
+          data.make?.trim() ?? bike.make,
+          data.model !== undefined ? data.model?.trim() ?? null : bike.model,
+          data.year ?? null
+        )
+      : null;
+    let relookupJobBikeIds: string[] = [];
+
     const updated = await prisma.$transaction(async (tx) => {
       const updatedBike = await tx.bike.update({
         where: { id: bikeId },
         data: {
           ...(data.make !== undefined && { make: data.make.trim() }),
           ...(data.model !== undefined && { model: data.model?.trim() ?? null }),
+          ...(data.year !== undefined && { year: data.year ?? null }),
           ...(data.bikeType !== undefined && { bikeType: data.bikeType }),
           ...(data.nickname !== undefined && {
             nickname: data.nickname?.trim() || null,
@@ -121,8 +138,37 @@ export async function PATCH(
         }
       }
 
+      if (yearChanged) {
+        // Open jobs only: a completed or cancelled visit keeps what it recorded.
+        const open = await tx.jobBike.findMany({
+          where: { bikeId, shopId: auth.shopId, job: { stage: { notIn: ["COMPLETED", "CANCELLED"] } } },
+          select: { id: true, jobId: true },
+        });
+        if (open.length > 0) {
+          await tx.jobBike.updateMany({
+            where: { id: { in: open.map((jb) => jb.id) } },
+            data: {
+              year: updatedBike.year,
+              catalogBikeId: yearMatch?.catalogBikeId ?? null,
+              catalogMatchedAt: yearMatch?.catalogMatchedAt ?? null,
+              catalogLookupAt: null,
+              catalogLookupAttempts: 0,
+              catalogLookupNextAt: null,
+            },
+          });
+          await tx.job.updateMany({
+            where: { id: { in: [...new Set(open.map((jb) => jb.jobId))] } },
+            data: { updatedAt: new Date() },
+          });
+          relookupJobBikeIds = open.map((jb) => jb.id);
+        }
+      }
+
       return updatedBike;
     });
+
+    // Bikes the catalog still doesn't know get their web lookup after the response.
+    scheduleCatalogLookup(relookupJobBikeIds);
 
     return NextResponse.json(updated);
   } catch (error) {
