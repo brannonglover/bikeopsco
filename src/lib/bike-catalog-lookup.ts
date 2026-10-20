@@ -294,15 +294,19 @@ export async function searchWebOnce(
       case "FOUND": {
         const stillThere = await catalogPrisma.catalogBike.findMany({
           where: { id: { in: existing.catalogBikeIds } },
-          select: { id: true },
+          select: { id: true, mergedIntoId: true },
         });
         if (stillThere.length > 0) {
-          const ids = existing.catalogBikeIds.filter((id) => stillThere.some((r) => r.id === id));
+          // A row merged since the lookup resolves to the row that now covers it.
+          const resolved = new Map(stillThere.map((r) => [r.id, r.mergedIntoId ?? r.id]));
+          const ids = [...new Set(existing.catalogBikeIds.flatMap((id) => (resolved.has(id) ? [resolved.get(id)!] : [])))];
           return {
             status: "found",
             catalogBikeIds: ids,
+            // Complete only if every build it found still exists (merged ones
+            // count — they resolve to their survivor above).
             configurationsComplete:
-              existing.configurationsComplete && ids.length === existing.catalogBikeIds.length,
+              existing.configurationsComplete && stillThere.length === new Set(existing.catalogBikeIds).size,
           };
         }
         break; // Every build it found was deleted — search again.
@@ -421,6 +425,7 @@ async function saveLookupResult(result: LookupResult, makeAsEntered: string, yea
     const existing = await catalogPrisma.catalogBike.findMany({
       where: {
         brandId: brand.id,
+        mergedIntoId: null,
         specStatus: { not: "APPROXIMATE" },
         yearStart: { lte: year },
         OR: [{ yearEnd: { gte: year } }, { yearEnd: null, yearStart: year }],

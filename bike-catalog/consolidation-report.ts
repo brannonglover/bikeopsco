@@ -5,7 +5,8 @@
  *   npm run catalog:report                      # writes bike-catalog/reports/…md and …json
  *   npm run catalog:report -- --out /some/dir
  *
- * Reads the catalog (bike_catalog schema) and the shop references to it (job
+ * Rows already merged by catalog:merge are left out, so a re-run after a merge
+ * proposes only what's left. Reads the catalog (bike_catalog schema) and the shop references to it (job
  * bikes, customer bikes) inside READ ONLY transactions — Postgres itself
  * rejects any write — and writes a Markdown review and a JSON plan to disk.
  * It never merges, deletes or updates anything. Which database it reads comes
@@ -16,6 +17,7 @@ import path from "path";
 import { PrismaClient } from "@prisma/client";
 import { catalogPrisma, isCatalogConfigured } from "./lib/db";
 import { analyzeConsolidation, type ConsolidationRow } from "./lib/consolidation";
+import { loadConsolidationRows } from "./lib/consolidation-rows";
 import { buildConsolidationReport, type ReportMeta, type RowReferences } from "./lib/consolidation-report";
 
 /** Documented in .env.example; the env var wins when set. */
@@ -58,37 +60,7 @@ export async function runConsolidationReport(options: { outDir: string; quiet?: 
     const rows: ConsolidationRow[] = await catalogPrisma.$transaction(
       async (tx) => {
         await tx.$executeRawUnsafe("SET TRANSACTION READ ONLY");
-        const bikes = await tx.catalogBike.findMany({
-          include: { brand: { select: { name: true } }, components: true },
-          orderBy: [{ brandId: "asc" }, { model: "asc" }, { yearStart: "asc" }],
-        });
-        return bikes.map((b) => ({
-          id: b.id,
-          brandId: b.brandId,
-          brandName: b.brand.name,
-          model: b.model,
-          family: b.family,
-          category: b.category,
-          subcategory: b.subcategory,
-          yearStart: b.yearStart,
-          yearEnd: b.yearEnd,
-          specStatus: b.specStatus,
-          verifiedAt: b.verifiedAt,
-          verifiedBy: b.verifiedBy,
-          sourceUrl: b.sourceUrl,
-          externalKey: b.externalKey,
-          updatedAt: b.updatedAt,
-          components: b.components.map((c) => ({
-            slot: c.slot,
-            value: c.value,
-            standard: c.standard,
-            detail: c.detail,
-            source: c.source,
-            sourceUrl: c.sourceUrl,
-            verifiedAt: c.verifiedAt,
-            verifiedBy: c.verifiedBy,
-          })),
-        }));
+        return loadConsolidationRows(tx);
       },
       { timeout: READ_TIMEOUT_MS, maxWait: 20_000 }
     );

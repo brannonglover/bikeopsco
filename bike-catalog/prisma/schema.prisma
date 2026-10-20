@@ -52,14 +52,40 @@ model CatalogBike {
   verifiedBy       String?
   verificationNote String?
   components   CatalogComponent[]
+  /// Soft merge: this row's years are now covered by the row it was merged
+  /// into. It's kept intact (parts, sources, verification) so every existing
+  /// link still works and a revert restores it exactly; matching and lists
+  /// skip it. Set and cleared only by the merge tool (catalog:merge).
+  mergedIntoId String?
+  mergedInto   CatalogBike?       @relation("CatalogBikeMerge", fields: [mergedIntoId], references: [id], onDelete: Restrict)
+  mergedRows   CatalogBike[]      @relation("CatalogBikeMerge")
+  mergedAt     DateTime?
+  mergeBatchId String?
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
 
   @@unique([brandId, externalKey])
+  @@index([mergedIntoId])
   @@index([brandId])
   @@index([yearStart])
   @@index([model])
   @@index([brandId, model, yearStart])
+  @@schema("bike_catalog")
+}
+
+/// One applied consolidation plan: who approved it, its fingerprint, and the
+/// exact prior state of every row it touched, so it can be reverted exactly.
+model CatalogMergeBatch {
+  id         String    @id @default(cuid())
+  /// The consolidation report's plan fingerprint this batch applied.
+  planHash   String
+  approvedBy String
+  appliedAt  DateTime  @default(now())
+  revertedAt DateTime?
+  revertedBy String?
+  /// [{ survivorId, memberIds, toYearEnd, prior: { [rowId]: { yearStart, yearEnd, updatedAt } } }]
+  groups     Json
+
   @@schema("bike_catalog")
 }
 

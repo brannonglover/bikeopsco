@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requirePlatformAdmin } from "@/lib/platform-admin";
+import { catalogMergeConflict } from "@/lib/catalog-merge-guard";
 import {
   catalogPrisma,
   isCatalogConfigured,
@@ -71,6 +72,9 @@ export async function PATCH(
     return NextResponse.json({ error: "Catalog database is not configured" }, { status: 503 });
   }
 
+  const merged = await catalogMergeConflict(params.id, "edit");
+  if (merged) return merged;
+
   let body: z.infer<typeof patchSchema>;
   try {
     body = patchSchema.parse(await request.json());
@@ -127,6 +131,9 @@ export async function DELETE(
   if (!isCatalogConfigured()) {
     return NextResponse.json({ error: "Catalog database is not configured" }, { status: 503 });
   }
+
+  const merged = await catalogMergeConflict(params.id, "delete");
+  if (merged) return merged;
 
   try {
     await deleteCatalogBike(params.id);

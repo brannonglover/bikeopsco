@@ -53,6 +53,8 @@ export async function GET(request: NextRequest) {
   const bikes = await catalogPrisma.catalogBike.findMany({
     where: {
       AND: [
+        // Soft-merged rows are covered by their survivor's span.
+        { mergedIntoId: null },
         q
           ? {
               OR: [

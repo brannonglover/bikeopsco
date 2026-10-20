@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requirePlatformAdmin } from "@/lib/platform-admin";
+import { catalogMergeConflict } from "@/lib/catalog-merge-guard";
 import {
   isCatalogConfigured,
   recordCatalogVerification,
@@ -46,6 +47,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     );
   }
   const body = parsed.data;
+  const merged = await catalogMergeConflict(params.id, "verify");
+  if (merged) return merged;
   if (!body.identity && body.slots.length === 0) {
     return NextResponse.json({ error: "Nothing selected" }, { status: 400 });
   }

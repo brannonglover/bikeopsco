@@ -249,9 +249,10 @@ export async function matchCatalogRow(
     orFilters.push({ family: { contains: modelTrimmed, mode: "insensitive" } });
   }
 
-  // Scoring never looks at parts, so the pool is read without them.
+  // Scoring never looks at parts, so the pool is read without them. Soft-merged
+  // rows are left out: their survivor's span covers their years.
   const pool = await catalogPrisma.catalogBike.findMany({
-    where: { OR: orFilters },
+    where: { OR: orFilters, mergedIntoId: null },
     include: { brand: true },
     take: 100,
   });
