@@ -11,6 +11,7 @@ import {
   resolveStaffConversationForRead,
 } from "@/lib/conversation";
 import { createBookingJob } from "@/lib/create-booking-job";
+import { scheduleCatalogLookup } from "@/lib/bike-catalog-lookup";
 
 export const dynamic = "force-dynamic";
 
@@ -63,7 +64,7 @@ export async function GET(
       // make, and picking the bike they already own beats retyping it.
       prisma.bike.findMany({
         where: { shopId: shop.id, customerId: customer.id },
-        select: { id: true, make: true, model: true, bikeType: true },
+        select: { id: true, make: true, model: true, year: true, bikeType: true },
         orderBy: { createdAt: "desc" },
       }),
       // Jobs already built from this thread. Staff see them before creating a
@@ -114,6 +115,7 @@ export async function GET(
 const bikeSchema = z.object({
   make: z.string().trim().min(1, "Bike make is required"),
   model: z.string().trim().optional().nullable(),
+  year: z.number().int().min(1980).max(2100).nullable().optional(),
   bikeType: z.enum(["REGULAR", "E_BIKE"]).nullable().optional(),
 });
 
@@ -220,6 +222,7 @@ export async function POST(
         bikes: data.bikes.map((bike) => ({
           make: bike.make,
           model: bike.model ?? null,
+          year: bike.year ?? null,
           bikeType: bike.bikeType ?? null,
         })),
         // Drop-off only from here, so no collection fee applies.
@@ -237,6 +240,10 @@ export async function POST(
         { status: 500 }
       );
     }
+
+    // Staff reviewed this job, so match its bikes now (searching the web for
+    // any the catalog doesn't know) rather than waiting for the sweep.
+    scheduleCatalogLookup(job.jobBikes.map((jb) => jb.id));
 
     return NextResponse.json({ id: job.id, stage: job.stage });
   } catch (error) {

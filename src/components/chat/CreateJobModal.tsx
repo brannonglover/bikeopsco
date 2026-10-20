@@ -18,6 +18,7 @@ type CustomerBike = {
   id: string;
   make: string;
   model: string | null;
+  year: number | null;
   bikeType: "REGULAR" | "E_BIKE" | null;
 };
 type ExistingJob = { id: string; stage: string; createdAt: string };
@@ -42,6 +43,7 @@ const SECTION_LABEL =
 const EMPTY_BIKE: JobDraftBike = {
   make: "",
   model: "",
+  year: "",
   bikeType: null,
   describedAs: null,
 };
@@ -145,7 +147,7 @@ export function CreateJobModal({
   }, []);
 
   const updateBike = useCallback(
-    (index: number, key: "make" | "model", value: string) =>
+    (index: number, key: "make" | "model" | "year", value: string) =>
       setBikes((prev) =>
         prev.map((bike, i) => (i === index ? { ...bike, [key]: value } : bike))
       ),
@@ -159,6 +161,8 @@ export function CreateJobModal({
           ? {
               make: bike.make,
               model: bike.model ?? "",
+              // The bike on file's year, unless one was already filled in.
+              year: bike.year != null ? String(bike.year) : existing.year,
               bikeType: bike.bikeType,
               describedAs: existing.describedAs,
             }
@@ -196,6 +200,11 @@ export function CreateJobModal({
       setError("Add the bike's make before creating the job");
       return;
     }
+    const years = filledBikes.map((bike) => (bike.year.trim() ? Number(bike.year.trim()) : null));
+    if (years.some((y) => y !== null && !(Number.isInteger(y) && y >= 1980 && y <= 2100))) {
+      setError("Enter a model year between 1980 and 2100, or leave it blank");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -203,9 +212,10 @@ export function CreateJobModal({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          bikes: filledBikes.map((bike) => ({
+          bikes: filledBikes.map((bike, i) => ({
             make: bike.make.trim(),
             model: bike.model.trim() || null,
+            year: years[i],
             bikeType: bike.bikeType,
           })),
           serviceIds,
@@ -298,7 +308,7 @@ export function CreateJobModal({
                       They called it &ldquo;{bike.describedAs}&rdquo;
                     </p>
                   )}
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                     <label className="block text-sm font-medium text-slate-700">
                       Make
                       <span className="text-rose-600"> *</span>
@@ -320,6 +330,20 @@ export function CreateJobModal({
                         className={FIELD_CLASS}
                       />
                     </label>
+                    <label className="block text-sm font-medium text-slate-700">
+                      Year
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min={1980}
+                        max={2100}
+                        placeholder="e.g. 2021"
+                        value={bike.year}
+                        onChange={(e) => updateBike(index, "year", e.target.value)}
+                        disabled={loading}
+                        className={FIELD_CLASS}
+                      />
+                    </label>
                   </div>
                   {(data?.customerBikes.length ?? 0) > 0 && (
                     <div className="flex flex-wrap gap-1.5">
@@ -330,7 +354,7 @@ export function CreateJobModal({
                           onClick={() => applyCustomerBike(index, owned)}
                           className="rounded-full border border-slate-300 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
                         >
-                          On file: {[owned.make, owned.model].filter(Boolean).join(" ")}
+                          On file: {[owned.year, owned.make, owned.model].filter(Boolean).join(" ")}
                         </button>
                       ))}
                     </div>

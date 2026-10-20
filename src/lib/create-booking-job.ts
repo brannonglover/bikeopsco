@@ -15,6 +15,8 @@ import { syncCollectionJobService } from "@/lib/collection-fee";
 export type BookingJobBike = {
   make: string;
   model?: string | null;
+  /** Model year if given; otherwise the saved bike's, so the bike can be looked up. */
+  year?: number | null;
   bikeType?: "REGULAR" | "E_BIKE" | null;
 };
 
@@ -170,9 +172,14 @@ export async function createBookingJob(
           customerId: customer.id,
           make: makeNormalized,
           model: modelNormalized,
+          year: b.year ?? null,
           bikeType: b.bikeType ?? null,
         },
       });
+    } else if (b.year != null && bike.year == null) {
+      // A year given here fills in a saved bike that has none — never
+      // overwriting one already on file.
+      bike = await tx.bike.update({ where: { id: bike.id }, data: { year: b.year } });
     }
 
     await tx.jobBike.create({
@@ -181,6 +188,9 @@ export async function createBookingJob(
         jobId: newJob.id,
         make: makeNormalized,
         model: modelNormalized,
+        // The job's year, or the saved bike's: without one the catalog
+        // lookup can't run.
+        year: b.year ?? bike.year ?? null,
         sortOrder: i,
         bikeType: b.bikeType ?? null,
         bikeId: bike.id,

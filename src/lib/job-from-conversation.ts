@@ -42,6 +42,8 @@ export type JobSource = Pick<
 export type JobDraftBike = {
   make: string;
   model: string;
+  /** Model year as typed ("" when nobody said); the catalog lookup needs one. */
+  year: string;
   /** Null when nobody said, which the job reads as "infer it from the make". */
   bikeType: "REGULAR" | "E_BIKE" | null;
   /** Their own words for it, shown beside the fields but never written as one. */
@@ -70,6 +72,7 @@ function toDraftBike(bike: BikeContext): JobDraftBike {
   return {
     make: valueOf(bike.make) ?? "",
     model: valueOf(bike.model) ?? "",
+    year: valueOf(bike.year) != null ? String(valueOf(bike.year)) : "",
     bikeType: electric === null ? null : electric ? "E_BIKE" : "REGULAR",
     describedAs: valueOf(bike.describedAs),
   };

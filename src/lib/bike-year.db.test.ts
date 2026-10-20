@@ -20,6 +20,7 @@ let R: {
   bikes: typeof import("@/app/api/customers/[id]/bikes/route");
   bike: typeof import("@/app/api/customers/[id]/bikes/[bikeId]/route");
   jobs: typeof import("@/app/api/jobs/route");
+  chatJob: typeof import("@/app/api/conversations/[id]/job/route");
 };
 let A: TestShop;
 let B: TestShop;
@@ -37,6 +38,7 @@ describe("bike model year", { skip: !ENABLED && "set RUN_CATALOG_DB_TESTS=1" }, 
       bikes: await import("@/app/api/customers/[id]/bikes/route"),
       bike: await import("@/app/api/customers/[id]/bikes/[bikeId]/route"),
       jobs: await import("@/app/api/jobs/route"),
+      chatJob: await import("@/app/api/conversations/[id]/job/route"),
     };
     A = await createTestShop(prisma, `zzyr-${RUN}`);
     B = await createTestShop(prisma, `zzyrb-${RUN}`);
@@ -107,5 +109,32 @@ describe("bike model year", { skip: !ENABLED && "set RUN_CATALOG_DB_TESTS=1" }, 
     // A different year on the job never overwrites the saved bike's.
     await create([{ make: "GT", model: "Avalanche", bikeId: withYear.id, year: 2001 }]);
     assert.equal((await prisma.bike.findUniqueOrThrow({ where: { id: withYear.id } })).year, 1996);
+  });
+
+  it("a job created from a chat thread carries the year, or the saved bike's", async () => {
+    const chatCustomer = await prisma.customer.create({ data: { shopId: A.id, firstName: `Chat ${RUN}` } });
+    const conversation = await prisma.conversation.create({ data: { shopId: A.id, customerId: chatCustomer.id } });
+    const saved = await prisma.bike.create({ data: { shopId: A.id, customerId: chatCustomer.id, make: "GT", model: "Zaskar", year: 1998 } });
+    const blank = await prisma.bike.create({ data: { shopId: A.id, customerId: chatCustomer.id, make: "GT", model: "Outback" } });
+    const create = (bikes: unknown[]) =>
+      R.chatJob.POST(
+        request("POST", `/api/conversations/${conversation.id}/job`, { host: A.host, as: A, body: { bikes } }),
+        { params: Promise.resolve({ id: conversation.id }) }
+      );
+
+    const res = await create([
+      { make: "GT", model: "Zaskar" }, // no year typed: takes the saved bike's
+      { make: "GT", model: "Outback", year: 1994 }, // typed: fills in the blank saved bike
+      { make: "GT", model: "Talera", year: 2019 }, // new bike: saved with its year
+    ]);
+    assert.ok(res.status === 200 || res.status === 201, `status ${res.status} ${await res.clone().text()}`);
+    const job = await prisma.job.findFirstOrThrow({ where: { createdFromConversationId: conversation.id }, include: { jobBikes: { orderBy: { sortOrder: "asc" } } } });
+    assert.deepEqual(job.jobBikes.map((b) => b.year), [1998, 1994, 2019]);
+    assert.equal((await prisma.bike.findUniqueOrThrow({ where: { id: blank.id } })).year, 1994);
+    assert.equal((await prisma.bike.findFirstOrThrow({ where: { customerId: chatCustomer.id, model: "Talera" } })).year, 2019);
+
+    const bad = await create([{ make: "GT", model: "Zaskar", year: 1950 }]);
+    assert.equal(bad.status, 400, "a year outside 1980-2100 is refused");
+    assert.equal((await prisma.bike.findUniqueOrThrow({ where: { id: saved.id } })).year, 1998, "saved year untouched");
   });
 });
