@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
+import { isPrivateFileUrl } from "@/lib/image-src";
 import { formatCustomerName } from "@/lib/customer";
 import { broadcastJobsRefresh } from "@/lib/jobs-refresh";
 import { BikeImageSearch } from "@/components/bikes/BikeImageSearch";
@@ -170,7 +171,7 @@ function AddBikeForm({
           {imageUrl ? (
             <div className="relative">
               <Image
-                src={imageUrl}
+                src={imageUrl} unoptimized={isPrivateFileUrl(imageUrl)}
                 alt="Bike"
                 width={80}
                 height={80}
@@ -345,7 +346,7 @@ function EditBikeForm({
           {imageUrl ? (
             <div className="relative">
               <Image
-                src={imageUrl}
+                src={imageUrl} unoptimized={isPrivateFileUrl(imageUrl)}
                 alt="Bike"
                 width={80}
                 height={80}
@@ -889,7 +890,7 @@ export function CustomerDetailModal({
                       >
                         {bike.imageUrl ? (
                           <Image
-                            src={bike.imageUrl}
+                            src={bike.imageUrl} unoptimized={isPrivateFileUrl(bike.imageUrl)}
                             alt={[bike.make, bike.model].filter(Boolean).join(" ")}
                             width={48}
                             height={48}

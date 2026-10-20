@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { isPrivateFileUrl } from "@/lib/image-src";
 import { useCallback, useEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import type { Bike, DeliveryType, Job, JobBike, JobProduct, JobService, Stage } from "@/lib/types";
@@ -727,7 +728,7 @@ function JobBikePhotoControl({
   if (!canEdit) {
     return imageUrl ? (
       <div className={`${sizeClass} flex-shrink-0 relative rounded-lg overflow-hidden border border-slate-100`}>
-        <Image src={imageUrl} alt="" fill className="object-cover" />
+        <Image src={imageUrl} unoptimized={isPrivateFileUrl(imageUrl)} alt="" fill className="object-cover" />
       </div>
     ) : (
       <div className={`${sizeClass} flex-shrink-0 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center`}>
@@ -747,7 +748,7 @@ function JobBikePhotoControl({
         className={`group/photo relative ${sizeClass} overflow-hidden rounded-lg border border-slate-200 bg-slate-50 transition-colors hover:border-indigo-300 hover:bg-indigo-50/40 disabled:opacity-60`}
       >
         {imageUrl ? (
-          <Image src={imageUrl} alt="" fill className="object-cover" sizes="96px" />
+          <Image src={imageUrl} unoptimized={isPrivateFileUrl(imageUrl)} alt="" fill className="object-cover" sizes="96px" />
         ) : (
           <div className="flex h-full w-full items-center justify-center">
             <BikePlaceholderIcon className="w-8 h-8 text-slate-400" />
@@ -766,7 +767,7 @@ function JobBikePhotoControl({
           </p>
           {imageUrl ? (
             <div className="relative mb-2 h-20 w-full overflow-hidden rounded-lg border border-slate-100">
-              <Image src={imageUrl} alt="" fill className="object-cover" sizes="256px" />
+              <Image src={imageUrl} unoptimized={isPrivateFileUrl(imageUrl)} alt="" fill className="object-cover" sizes="256px" />
             </div>
           ) : null}
           <div className="space-y-2">
@@ -4643,7 +4644,7 @@ function InvoiceTab({ job, onJobUpdated }: { job: Job; onJobUpdated?: (job: Job)
                   </span>
                   {group.bike && (
                     bikeImageUrl ? (
-                      <Image src={bikeImageUrl} alt="" width={32} height={32} className="w-8 h-8 object-cover rounded border border-slate-200 flex-shrink-0" />
+                      <Image src={bikeImageUrl} unoptimized={isPrivateFileUrl(bikeImageUrl)} alt="" width={32} height={32} className="w-8 h-8 object-cover rounded border border-slate-200 flex-shrink-0" />
                     ) : (
                       <div className="w-8 h-8 rounded bg-slate-200 flex items-center justify-center flex-shrink-0">
                         <BikePlaceholderIcon className="w-4 h-4 text-slate-500" />

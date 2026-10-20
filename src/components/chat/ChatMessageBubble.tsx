@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { isPrivateFileUrl } from "@/lib/image-src";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import type { ChatMessage, MessageSender } from "@/lib/types";
@@ -210,7 +211,7 @@ export function ChatMessageBubble({
             className="block w-full cursor-zoom-in"
           >
             <Image
-              src={att.url}
+              src={att.url} unoptimized={isPrivateFileUrl(att.url)}
               alt={att.filename}
               width={1600}
               height={1200}

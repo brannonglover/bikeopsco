@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { jobAccessApiSuffix, readJobAccessParam, withJobAccessQuery } from "@/lib/job-access-url";
 import Link from "next/link";
 import Image from "next/image";
+import { isPrivateFileUrl } from "@/lib/image-src";
 import { Price } from "@/components/ui/Price";
 import { BikePlaceholderIcon } from "@/components/ui/BikePlaceholderIcon";
 import { computeJobSubtotal, getJobPaymentSummary } from "@/lib/job-payments";
@@ -472,7 +473,7 @@ export default function StatusPage() {
                     >
                       {imageUrl ? (
                         <Image
-                          src={imageUrl}
+                          src={imageUrl} unoptimized={isPrivateFileUrl(imageUrl)}
                           alt={name}
                           width={56}
                           height={56}

@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { isPrivateFileUrl } from "@/lib/image-src";
 import Link from "next/link";
 import { useState, useEffect, useRef, useCallback, useLayoutEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -1647,7 +1648,7 @@ function ChatPageContent() {
                           </div>
                         ) : (
                           <Image
-                            src={p.url}
+                            src={p.url} unoptimized={isPrivateFileUrl(p.url)}
                             alt={p.filename}
                             width={80}
                             height={80}
