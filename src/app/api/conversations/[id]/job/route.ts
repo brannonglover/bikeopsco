@@ -57,7 +57,7 @@ export async function GET(
       // hidden ones are off the menu, so neither is offered or matched against.
       prisma.service.findMany({
         where: { shopId: shop.id, isSystem: false, isHidden: false },
-        select: { id: true, name: true, price: true },
+        select: { id: true, name: true, description: true, price: true },
         orderBy: { name: "asc" },
       }),
       // Bikes already on file. A customer who says "my commuter" gave us no
@@ -98,6 +98,7 @@ export async function GET(
       services: services.map((service) => ({
         id: service.id,
         name: service.name,
+        description: service.description,
         price: Number(service.price),
       })),
       customerBikes,

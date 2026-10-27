@@ -12,8 +12,14 @@ import {
   buildJobDraft,
   type JobDraftBike,
 } from "@/lib/job-from-conversation";
+import { Price } from "@/components/ui/Price";
 
-type ShopService = { id: string; name: string; price: number };
+type ShopService = {
+  id: string;
+  name: string;
+  description: string | null;
+  price: number;
+};
 type CustomerBike = {
   id: string;
   make: string;
@@ -94,6 +100,7 @@ export function CreateJobModal({
 
   const [bikes, setBikes] = useState<JobDraftBike[]>([EMPTY_BIKE]);
   const [serviceIds, setServiceIds] = useState<string[]>([]);
+  const [serviceSearch, setServiceSearch] = useState("");
   const [notes, setNotes] = useState("");
   const [dropOffDate, setDropOffDate] = useState("");
 
@@ -181,16 +188,51 @@ export function CreateJobModal({
   const symptoms = data ? (valueOf(data.service.symptoms) ?? []) : [];
   const suspicions = data ? (valueOf(data.service.customerSuspicions) ?? []) : [];
   const availability = data ? (valueOf(data.scheduling.availability) ?? []) : [];
-  const matches: ServiceMatch[] = data?.service.serviceMatches ?? [];
+  const matches: ServiceMatch[] = useMemo(
+    () => data?.service.serviceMatches ?? [],
+    [data]
+  );
 
-  // Services the shop sells that no request pointed at. Offered after the
-  // matched ones so staff can add the obvious thing nobody thought to say.
-  const suggestedIds = new Set(
-    matches.map((match) => match.serviceId).filter(Boolean) as string[]
-  );
-  const otherServices = (data?.services ?? []).filter(
-    (service) => !suggestedIds.has(service.id)
-  );
+  // What the customer said that pointed at each service, so the row can show
+  // why it was ticked. Requests with no match stay out of the list; they only
+  // reach the job as notes.
+  const requestsByService = useMemo(() => {
+    const byService = new Map<string, ServiceMatch[]>();
+    for (const match of matches) {
+      if (!match.serviceId) continue;
+      byService.set(match.serviceId, [...(byService.get(match.serviceId) ?? []), match]);
+    }
+    return byService;
+  }, [matches]);
+  const unmatchedRequests = matches.filter((match) => !match.serviceId);
+
+  // The same searchable list as the website's job form. With no search, the
+  // services the customer asked for come first so they are not lost among the
+  // rest of the price list.
+  const filteredServices = useMemo(() => {
+    const all = data?.services ?? [];
+    const q = serviceSearch.trim().toLowerCase();
+    if (q) {
+      return all.filter(
+        (service) =>
+          service.name.toLowerCase().includes(q) ||
+          (service.description?.toLowerCase().includes(q) ?? false)
+      );
+    }
+    return [
+      ...all.filter((service) => requestsByService.has(service.id)),
+      ...all.filter((service) => !requestsByService.has(service.id)),
+    ];
+  }, [data, serviceSearch, requestsByService]);
+
+  const serviceListSummary = [
+    serviceSearch.trim() && filteredServices.length > 0
+      ? `${filteredServices.length} matching service${filteredServices.length === 1 ? "" : "s"}`
+      : null,
+    serviceIds.length > 0 ? `${serviceIds.length} selected` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -381,69 +423,92 @@ export function CreateJobModal({
 
             <section>
               <h4 className={SECTION_LABEL}>Requested work</h4>
-              {matches.length === 0 && (
-                <p className="mt-1 text-sm text-slate-500">
-                  They did not ask for anything specific.
-                </p>
+              <p className="mt-1 text-xs text-slate-500">
+                {data && matches.length === 0
+                  ? "They did not ask for anything specific. Select the services being done on this bike."
+                  : "Select the services being done on this bike"}
+              </p>
+              {unmatchedRequests.length > 0 && (
+                <ul className="mt-1.5 space-y-0.5">
+                  {unmatchedRequests.map((match) => (
+                    <li key={match.requested} className="text-sm text-slate-700">
+                      &ldquo;{match.requested}&rdquo;
+                      <span className="text-slate-500">
+                        {" "}
+                        &rarr; nothing on the price list matches; kept in the notes
+                      </span>
+                    </li>
+                  ))}
+                </ul>
               )}
-              <div className="mt-1 space-y-1.5">
-                {matches.map((match) => (
-                  <div key={match.requested}>
-                    {match.serviceId ? (
-                      <label className="flex items-start gap-2 text-sm text-slate-800">
-                        <input
-                          type="checkbox"
-                          checked={serviceIds.includes(match.serviceId)}
-                          onChange={() => toggleService(match.serviceId as string)}
-                          className="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-                        />
-                        <span>
-                          &ldquo;{match.requested}&rdquo;
-                          <span className="text-slate-500">
-                            {" "}
-                            &rarr; {match.serviceName}
-                            {match.confidence === "weak" && " (not sure — check this)"}
+
+              {loading ? (
+                <p className="py-2 text-sm text-slate-500">Loading services…</p>
+              ) : (data?.services.length ?? 0) === 0 ? (
+                <p className="py-2 text-sm text-slate-500">
+                  No services defined yet.{" "}
+                  <a href="/services" className="text-emerald-700 hover:underline">
+                    Add services
+                  </a>{" "}
+                  first.
+                </p>
+              ) : (
+                <>
+                  <input
+                    type="text"
+                    value={serviceSearch}
+                    onChange={(e) => setServiceSearch(e.target.value)}
+                    placeholder="Search services..."
+                    aria-label="Search services"
+                    className="mt-2 mb-2 w-full min-w-0 rounded-xl border border-slate-200 px-3 py-2 text-base text-slate-900 placeholder:text-slate-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-emerald-500/30 sm:text-sm"
+                  />
+                  {serviceListSummary && (
+                    <p className="mb-2 text-xs text-slate-500">{serviceListSummary}</p>
+                  )}
+                  <div className="max-h-72 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2">
+                    {filteredServices.map((service) => {
+                      const requests = requestsByService.get(service.id) ?? [];
+                      return (
+                        <label
+                          key={service.id}
+                          className="flex cursor-pointer items-center gap-3 rounded p-2 hover:bg-slate-50"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={serviceIds.includes(service.id)}
+                            onChange={() => toggleService(service.id)}
+                            className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-sm font-medium text-slate-800">
+                              {service.name}
+                            </span>
+                            {requests.map((match) => (
+                              <span
+                                key={match.requested}
+                                className="block text-xs text-slate-500"
+                              >
+                                They asked: &ldquo;{match.requested}&rdquo;
+                                {match.confidence === "weak" && (
+                                  <span className="text-amber-700">
+                                    {" "}
+                                    (not sure — check this)
+                                  </span>
+                                )}
+                              </span>
+                            ))}
                           </span>
-                        </span>
-                      </label>
-                    ) : (
-                      <p className="text-sm text-slate-700">
-                        &ldquo;{match.requested}&rdquo;
-                        <span className="text-slate-500">
-                          {" "}
-                          &rarr; nothing on the price list matches; kept in the notes
-                        </span>
+                          <Price amount={service.price} variant="inline" className="text-sm" />
+                        </label>
+                      );
+                    })}
+                    {serviceSearch.trim() && filteredServices.length === 0 && (
+                      <p className="p-2 text-sm text-slate-500">
+                        No services match your search
                       </p>
                     )}
                   </div>
-                ))}
-              </div>
-
-              {otherServices.length > 0 && (
-                <details className="mt-2">
-                  <summary className="cursor-pointer text-xs font-medium text-slate-600">
-                    Add another service
-                  </summary>
-                  <div className="mt-1.5 space-y-1">
-                    {otherServices.map((service) => (
-                      <label
-                        key={service.id}
-                        className="flex items-center gap-2 text-sm text-slate-800"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={serviceIds.includes(service.id)}
-                          onChange={() => toggleService(service.id)}
-                          className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-                        />
-                        {service.name}
-                        <span className="text-slate-500">
-                          ${service.price.toFixed(2)}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                </details>
+                </>
               )}
             </section>
 
