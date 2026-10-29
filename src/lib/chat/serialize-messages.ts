@@ -1,9 +1,16 @@
 import type { ChatMessage, MessageAttachment, MessageReaction } from "@/lib/types";
+import { SIGNED_TTL, signBlobUrl } from "@/lib/blob-signing";
 
 function toIso(value: Date | string): string {
   return value instanceof Date ? value.toISOString() : value;
 }
 
+/**
+ * Attachment URLs go out signed. The mobile apps load images with a bare
+ * <Image source={{ uri }}>, which carries neither their Bearer token nor a
+ * session cookie, so an unsigned /api/blob link is refused and the photo never
+ * appears. Only callers that already authorized the thread serialize it.
+ */
 function serializeAttachment(attachment: {
   id: string;
   url: string;
@@ -13,7 +20,7 @@ function serializeAttachment(attachment: {
 }): MessageAttachment {
   return {
     id: attachment.id,
-    url: attachment.url,
+    url: signBlobUrl(attachment.url, SIGNED_TTL.chatThread),
     filename: attachment.filename,
     mimeType: attachment.mimeType,
     createdAt: toIso(attachment.createdAt),

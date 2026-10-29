@@ -63,6 +63,8 @@ export const SIGNED_TTL = {
   mms: 6 * 60 * 60,
   /** A tracking-page visit; the page gets fresh links whenever it reloads the job. */
   trackingPage: 2 * 60 * 60,
+  /** An open chat thread; it polls every few seconds, so its links are always fresh. */
+  chatThread: 2 * 60 * 60,
 } as const;
 
 const DEFAULT_SIGNED_TTL_SECONDS = 60 * 60;
