@@ -51,6 +51,7 @@ import {
   applyOptimisticUnwaitOnly,
   applyOptimisticWaitForParts,
   applyOptimisticWorkingOnToggle,
+  completingBikeMakesJobReady,
   hasWorkableBikeBesides,
 } from "@/lib/optimistic-job-patch";
 import { ServiceName } from "@/components/ui/ServiceName";
@@ -1059,9 +1060,14 @@ function JobBikeSection({
 
   const handleToggleComplete = (bikeId: string, isCompleted: boolean) => {
     if (!onJobUpdated) return;
-    const body = isCompleted
+    const body: Record<string, unknown> = isCompleted
       ? { uncompleteJobBikeId: bikeId }
       : { completeJobBikeId: bikeId };
+    // Same as the mobile app: once every bike is done, the card moves to Bike Ready.
+    if (!isCompleted && completingBikeMakesJobReady(job, bikeId)) {
+      body.stage = "BIKE_READY";
+      body.workingOnJobBikeId = null;
+    }
     patchJobInBackground(
       applyOptimisticCompleteBike(job, bikeId, isCompleted),
       body

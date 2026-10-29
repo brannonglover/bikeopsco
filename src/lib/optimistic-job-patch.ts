@@ -10,6 +10,19 @@ export function hasWorkableBikeBesides(
   );
 }
 
+/** True when marking this bike done finishes the job's last open bike and the card should move to Bike Ready. */
+export function completingBikeMakesJobReady(job: Job, bikeId: string): boolean {
+  if (
+    job.stage === "PENDING_APPROVAL" ||
+    job.stage === "BIKE_READY" ||
+    job.stage === "COMPLETED" ||
+    job.stage === "CANCELLED"
+  ) {
+    return false;
+  }
+  return (job.jobBikes ?? []).every((b) => b.id === bikeId || !!b.completedAt);
+}
+
 /**
  * Match PATCH semantics so UI does not snap when server JSON arrives.
  *
@@ -114,6 +127,11 @@ export function applyOptimisticCompleteBike(
   let next: Job = { ...job, jobBikes };
   if (!undo && job.workingOnJobBikeId === bikeId) {
     next = { ...next, workingOnJobBikeId: null };
+  }
+  if (!undo && completingBikeMakesJobReady(job, bikeId)) {
+    next = withOptimisticStageChange(next, "BIKE_READY", {
+      clearPartsHolds: false,
+    });
   }
   return next;
 }
