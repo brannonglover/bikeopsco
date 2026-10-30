@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { TableSkeleton } from "@/components/ui/Skeleton";
+import { useAdminRefreshLoader } from "../AdminRefresh";
 
 type SlotOption = {
   slot: string;
@@ -83,6 +84,8 @@ export function AdminCatalogListClient() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useAdminRefreshLoader(load);
 
   async function createBike() {
     if (!newBrand.trim() || !newModel.trim()) {

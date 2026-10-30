@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { listPlatformShops } from "@/lib/platform-shops";
 import { AdminDeleteShopButton } from "./AdminDeleteShopButton";
+import { AdminRefreshButton } from "./AdminRefresh";
 
 export const dynamic = "force-dynamic";
 
@@ -110,15 +111,18 @@ export default async function PlatformAdminPage() {
 
   return (
     <>
-      <header className="mb-6">
-        <h2 className="text-xl font-semibold text-slate-900">Trial signups</h2>
-        <p className="mt-2 max-w-2xl text-sm text-slate-600">
-          Shops that registered through{" "}
-          <Link href="https://app.bikeops.co/signup" className="font-medium text-slate-900 hover:underline">
-            app.bikeops.co/signup
-          </Link>
-          . Newest first.
-        </p>
+      <header className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-semibold text-slate-900">Trial signups</h2>
+          <p className="mt-2 max-w-2xl text-sm text-slate-600">
+            Shops that registered through{" "}
+            <Link href="https://app.bikeops.co/signup" className="font-medium text-slate-900 hover:underline">
+              app.bikeops.co/signup
+            </Link>
+            . Newest first.
+          </p>
+        </div>
+        <AdminRefreshButton />
       </header>
 
       <div className="mb-4 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm">

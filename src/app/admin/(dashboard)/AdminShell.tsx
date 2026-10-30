@@ -1,9 +1,10 @@
 import { AdminLogoutButton } from "./AdminLogoutButton";
 import { AdminNav } from "./AdminNav";
+import { AdminRefreshProvider } from "./AdminRefresh";
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-mesh">
+    <div className="min-h-screen w-full min-w-0 bg-mesh">
       <div className="w-full min-w-0 px-4 py-8 sm:px-6">
         <header className="mb-6 flex items-start justify-between gap-4">
           <div>
@@ -17,7 +18,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <AdminNav />
         </div>
 
-        {children}
+        <AdminRefreshProvider>{children}</AdminRefreshProvider>
       </div>
     </div>
   );

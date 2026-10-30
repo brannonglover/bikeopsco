@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { ListSkeleton } from "@/components/ui/Skeleton";
+import { useAdminRefreshLoader } from "../AdminRefresh";
 
 type ReleaseRow = {
   id: string;
@@ -48,7 +49,6 @@ export function AdminReleasesClient() {
       } | null;
       if (!response.ok) {
         setError(data?.error ?? "Could not load releases");
-        setReleases([]);
         return;
       }
       const list = data?.releases ?? [];
@@ -68,15 +68,17 @@ export function AdminReleasesClient() {
     void load();
   }, [load]);
 
+  useAdminRefreshLoader(load);
+
+  const selectedKey = selected?.id;
+  const savedTitle = selected?.title ?? "";
+  const savedBullets = selected?.bullets.join("\n") ?? "";
+
+  // Keyed on saved values, not the row object, so a refresh keeps unsaved edits.
   useEffect(() => {
-    if (!selected) {
-      setTitle("");
-      setBulletsText("");
-      return;
-    }
-    setTitle(selected.title ?? "");
-    setBulletsText(selected.bullets.join("\n"));
-  }, [selected]);
+    setTitle(savedTitle);
+    setBulletsText(savedBullets);
+  }, [selectedKey, savedTitle, savedBullets]);
 
   const save = async (status?: ReleaseRow["status"]) => {
     if (!selected) return;

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useAdminRefreshLoader } from "../AdminRefresh";
 
 type DailySpend = {
   day: string;
@@ -48,21 +49,26 @@ export function AdminLookupSpendPanel() {
   const [data, setData] = useState<Payload | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    void (async () => {
-      try {
-        const res = await fetch("/api/platform/catalog/lookups", { cache: "no-store" });
-        const body = (await res.json().catch(() => null)) as (Payload & { error?: string }) | null;
-        if (!res.ok || !body) {
-          setError(body?.error ?? "Failed to load lookup spend");
-          return;
-        }
-        setData(body);
-      } catch {
-        setError("Failed to load lookup spend");
+  const load = useCallback(async () => {
+    setError(null);
+    try {
+      const res = await fetch("/api/platform/catalog/lookups", { cache: "no-store" });
+      const body = (await res.json().catch(() => null)) as (Payload & { error?: string }) | null;
+      if (!res.ok || !body) {
+        setError(body?.error ?? "Failed to load lookup spend");
+        return;
       }
-    })();
+      setData(body);
+    } catch {
+      setError("Failed to load lookup spend");
+    }
   }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  useAdminRefreshLoader(load);
 
   if (error) {
     return <p className="mb-6 text-sm text-red-600">{error}</p>;
