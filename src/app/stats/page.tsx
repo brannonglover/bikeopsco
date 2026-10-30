@@ -57,6 +57,18 @@ interface Stats {
     returningCustomers: number;
     retentionRate: number;
   }[];
+  retentionYearOverYear?: {
+    periodEnd: string;
+    current: RetentionYear;
+    previous: RetentionYear;
+  };
+}
+
+interface RetentionYear {
+  calendarYear: number;
+  newCustomers: number;
+  returningCustomers: number;
+  retentionRate: number;
 }
 
 const PERIODS = [
@@ -65,6 +77,73 @@ const PERIODS = [
   { key: "month" as const, label: "This Month" },
   { key: "year" as const, label: "This Year" },
 ] as const;
+
+function RetentionYearComparison({
+  periodEnd,
+  current,
+  previous,
+}: {
+  periodEnd: string;
+  current: RetentionYear;
+  previous: RetentionYear;
+}) {
+  const hasPrevious = previous.newCustomers + previous.returningCustomers > 0;
+  const change =
+    Math.round((current.retentionRate - previous.retentionRate) * 10) / 10;
+  const endLabel = new Date(periodEnd).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+
+  return (
+    <div className="mt-5 border-t border-slate-100 pt-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
+        <p className="text-sm font-medium text-slate-700">
+          {current.calendarYear} vs {previous.calendarYear}, Jan 1 – {endLabel}
+        </p>
+        {hasPrevious && (
+          <p
+            className={`text-sm font-medium tabular-nums ${
+              change > 0
+                ? "text-emerald-700"
+                : change < 0
+                  ? "text-red-600"
+                  : "text-slate-500"
+            }`}
+          >
+            {change > 0 ? "+" : ""}
+            {change} pts
+          </p>
+        )}
+      </div>
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-sm">
+          <thead>
+            <tr className="text-slate-500">
+              <th className="py-1 pr-4 text-left font-medium">Year</th>
+              <th className="py-1 px-4 text-right font-medium">Returning</th>
+              <th className="py-1 px-4 text-right font-medium">First-time</th>
+              <th className="py-1 pl-4 text-right font-medium">Returning %</th>
+            </tr>
+          </thead>
+          <tbody className="tabular-nums text-slate-800">
+            {[current, previous].map((year) => (
+              <tr key={year.calendarYear}>
+                <td className="py-1 pr-4 text-left font-medium">
+                  {year.calendarYear}
+                </td>
+                <td className="py-1 px-4 text-right">{year.returningCustomers}</td>
+                <td className="py-1 px-4 text-right">{year.newCustomers}</td>
+                <td className="py-1 pl-4 text-right">{year.retentionRate}%</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
 
 function RevenueBreakdown({
   stripe,
@@ -234,6 +313,9 @@ export default function StatsPage() {
             Paying customers each month: returning vs first-time.
           </p>
           <RetentionChart data={stats.retention ?? []} />
+          {stats.retentionYearOverYear && (
+            <RetentionYearComparison {...stats.retentionYearOverYear} />
+          )}
         </div>
       </section>
     ),
@@ -241,10 +323,10 @@ export default function StatsPage() {
     topServices: (
       <section>
         <h2 className="text-lg font-semibold text-slate-900 mb-4">
-          Top 5 Services
+          Top 5 Services This Year
         </h2>
         {stats.topServices.length === 0 ? (
-          <p className="text-slate-500 py-6">No paid services yet.</p>
+          <p className="text-slate-500 py-6">No paid services this year.</p>
         ) : (
           <div className="rounded-xl border border-slate-200 bg-white overflow-x-auto shadow-sm">
             <table className="min-w-full">
@@ -294,7 +376,7 @@ export default function StatsPage() {
     import: (
       <section className="pt-2 border-t border-slate-200">
         <h2 className="text-lg font-semibold text-slate-900 mb-2">
-          Historical Square (or other) revenue
+          Historical revenue
         </h2>
         <p className="text-slate-600 text-sm mb-4 max-w-2xl">
           If you processed payments in Square before this app, export your transactions from the

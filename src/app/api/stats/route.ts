@@ -141,6 +141,7 @@ export async function GET(request: NextRequest) {
     const y = now.getUTCFullYear();
     const lastYearStart = new Date(Date.UTC(y - 1, 0, 1, 0, 0, 0));
     const lastYearEnd = new Date(Date.UTC(y, 0, 1, 0, 0, 0) - 1);
+    const calendarYearStart = new Date(Date.UTC(y, 0, 1, 0, 0, 0));
     const monthKeys = lastNMonthKeys(12, now);
     const seriesStart = new Date(
       Date.UTC(
@@ -404,14 +405,53 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    const paidJobIds = [...firstPaymentByJob.keys()];
+    // Top services: jobs first paid in the current calendar year. Uses the strict
+    // Jan 1 start, not ranges.year, which can reach back into late December.
+    // Year-over-year retention: distinct paying customers in a window, returning
+    // if they were counted as returning in any month of the monthly series above.
+    const retentionForWindow = (start: Date, end: Date) => {
+      const customers = new Set<string>();
+      const returning = new Set<string>();
+      for (const jobInfo of firstPaymentByJob.values()) {
+        if (!jobInfo.customerId || !inRange(jobInfo.paidAt, start, end)) continue;
+        customers.add(jobInfo.customerId);
+        const first = firstPaidAtByCustomer.get(jobInfo.customerId);
+        if (first && monthKey(first) !== monthKey(jobInfo.paidAt)) {
+          returning.add(jobInfo.customerId);
+        }
+      }
+      return {
+        newCustomers: customers.size - returning.size,
+        returningCustomers: returning.size,
+        retentionRate:
+          customers.size > 0
+            ? Math.round((returning.size / customers.size) * 1000) / 10
+            : 0,
+      };
+    };
+
+    // Compares year-to-date against the same dates last year, not all of last year.
+    const sameTimeLastYear = new Date(now);
+    sameTimeLastYear.setUTCFullYear(y - 1);
+    const retentionYearOverYear = {
+      periodEnd: now.toISOString(),
+      current: { calendarYear: y, ...retentionForWindow(calendarYearStart, now) },
+      previous: {
+        calendarYear: y - 1,
+        ...retentionForWindow(lastYearStart, sameTimeLastYear),
+      },
+    };
+
+    const paidJobIdsThisYear = [...firstPaymentByJob]
+      .filter(([, jobInfo]) => jobInfo.paidAt >= calendarYearStart)
+      .map(([jobId]) => jobId);
     const jobServicesWithService =
-      paidJobIds.length === 0
+      paidJobIdsThisYear.length === 0
         ? []
         : await prisma.jobService.findMany({
             where: {
               shopId,
-              jobId: { in: paidJobIds },
+              jobId: { in: paidJobIdsThisYear },
             },
             include: { service: true },
           });
@@ -453,6 +493,7 @@ export async function GET(request: NextRequest) {
       monthlyRevenue,
       turnaround,
       retention,
+      retentionYearOverYear,
     });
   } catch (error) {
     console.error("GET /api/stats error:", error);
