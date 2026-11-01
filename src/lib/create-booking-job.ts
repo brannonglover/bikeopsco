@@ -11,6 +11,7 @@ import type { Prisma } from "@prisma/client";
 import { Stage } from "@prisma/client";
 import { buildSmsConsentOptInUpdate } from "@/lib/sms-consent";
 import { syncCollectionJobService } from "@/lib/collection-fee";
+import { resolveProfileBikeForJobBike } from "@/lib/resolve-profile-bike";
 
 export type BookingJobBike = {
   make: string;
@@ -149,34 +150,25 @@ export async function createBookingJob(
   });
 
   // Find-or-create the customer's Bike record per submitted bike, then attach a
-  // JobBike to this job.
+  // JobBike to this job. One profile bike per bike on the job: two
+  // same-make/model bikes are two bikes.
+  const claimedBikeIds = new Set<string>();
   for (let i = 0; i < input.bikes.length; i++) {
     const b = input.bikes[i];
     const makeNormalized = b.make.trim();
     const modelNormalized = b.model?.trim() || null;
 
-    let bike = await tx.bike.findFirst({
-      where: {
-        shopId,
-        customerId: customer.id,
-        make: { equals: makeNormalized, mode: "insensitive" },
-        model: modelNormalized
-          ? { equals: modelNormalized, mode: "insensitive" }
-          : null,
-      },
+    const bikeId = await resolveProfileBikeForJobBike({
+      tx,
+      shopId,
+      customerId: customer.id,
+      bike: { ...b, make: makeNormalized, model: modelNormalized },
+      claimedBikeIds,
     });
-    if (!bike) {
-      bike = await tx.bike.create({
-        data: {
-          shopId,
-          customerId: customer.id,
-          make: makeNormalized,
-          model: modelNormalized,
-          year: b.year ?? null,
-          bikeType: b.bikeType ?? null,
-        },
-      });
-    } else if (b.year != null && bike.year == null) {
+    claimedBikeIds.add(bikeId);
+
+    let bike = await tx.bike.findUniqueOrThrow({ where: { id: bikeId } });
+    if (b.year != null && bike.year == null) {
       // A year given here fills in a saved bike that has none — never
       // overwriting one already on file.
       bike = await tx.bike.update({ where: { id: bike.id }, data: { year: b.year } });

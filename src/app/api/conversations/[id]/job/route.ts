@@ -197,42 +197,44 @@ export async function POST(
       );
     }
 
-    const job = await prisma.$transaction((tx) =>
-      createBookingJob(tx, {
-        shopId: shop.id,
-        // Passing the id is what keeps this off the email-matching path, which
-        // matters because a chat contact often has no email at all and an empty
-        // one would match the wrong person.
-        customerId: customer.id,
-        // The customer's own details, unchanged. Editing the contact is what
-        // "Create contact" is for; creating a job must not quietly rewrite the
-        // name, and passing the stored phone back keeps SMS replies working.
-        firstName: customer.firstName,
-        lastName: customer.lastName ?? "",
-        email: customer.email ?? "",
-        phone: customer.phone,
-        address: customer.address,
-        // Consent is not granted by staff on a customer's behalf. Passing false
-        // leaves whatever the customer has already agreed to untouched.
-        smsConsent: false,
-        deliveryType: "DROP_OFF_AT_SHOP",
-        dropOffDate: data.dropOffDate ? new Date(data.dropOffDate) : null,
-        pickupDate: null,
-        customerNotes: data.customerNotes ?? null,
-        serviceIds: data.serviceIds,
-        bikes: data.bikes.map((bike) => ({
-          make: bike.make,
-          model: bike.model ?? null,
-          year: bike.year ?? null,
-          bikeType: bike.bikeType ?? null,
-        })),
-        // Drop-off only from here, so no collection fee applies.
-        collectionServiceEnabled: false,
-        // Staff reviewed this on the way in; sending it to the approval queue
-        // would only ask them to approve their own work.
-        stage: "BOOKED_IN",
-        createdFromConversationId: conversation.id,
-      })
+    const job = await prisma.$transaction(
+      (tx) =>
+        createBookingJob(tx, {
+          shopId: shop.id,
+          // Passing the id is what keeps this off the email-matching path, which
+          // matters because a chat contact often has no email at all and an empty
+          // one would match the wrong person.
+          customerId: customer.id,
+          // The customer's own details, unchanged. Editing the contact is what
+          // "Create contact" is for; creating a job must not quietly rewrite the
+          // name, and passing the stored phone back keeps SMS replies working.
+          firstName: customer.firstName,
+          lastName: customer.lastName ?? "",
+          email: customer.email ?? "",
+          phone: customer.phone,
+          address: customer.address,
+          // Consent is not granted by staff on a customer's behalf. Passing false
+          // leaves whatever the customer has already agreed to untouched.
+          smsConsent: false,
+          deliveryType: "DROP_OFF_AT_SHOP",
+          dropOffDate: data.dropOffDate ? new Date(data.dropOffDate) : null,
+          pickupDate: null,
+          customerNotes: data.customerNotes ?? null,
+          serviceIds: data.serviceIds,
+          bikes: data.bikes.map((bike) => ({
+            make: bike.make,
+            model: bike.model ?? null,
+            year: bike.year ?? null,
+            bikeType: bike.bikeType ?? null,
+          })),
+          // Drop-off only from here, so no collection fee applies.
+          collectionServiceEnabled: false,
+          // Staff reviewed this on the way in; sending it to the approval queue
+          // would only ask them to approve their own work.
+          stage: "BOOKED_IN",
+          createdFromConversationId: conversation.id,
+        }),
+      { timeout: 15000 }
     );
 
     if (!job) {

@@ -10,6 +10,7 @@ import { mirrorJobStageToCustomerChat } from "@/lib/system-chat";
 import { getEffectiveEmailUpdatesConsent, getEffectiveSmsConsent } from "@/lib/sms-consent";
 import { customerHasPushTokens, sendPushToCustomer } from "@/lib/push";
 import { publishJobEvent } from "@/lib/realtime/publish-job-event";
+import { resolveProfileBikeForJobBike } from "@/lib/resolve-profile-bike";
 
 function safeServiceIds(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
@@ -97,30 +98,21 @@ export async function POST(
         },
       });
 
+      // One profile bike per bike on the job: two same-make/model bikes are two bikes.
+      const claimedBikeIds = new Set<string>();
       for (let i = 0; i < entry.bikes.length; i++) {
         const b = entry.bikes[i];
         const makeNormalized = b.make.trim();
         const modelNormalized = b.model?.trim() || null;
 
-        let bike = await tx.bike.findFirst({
-          where: {
-            shopId,
-            customerId: customer.id,
-            make: { equals: makeNormalized, mode: "insensitive" },
-            model: modelNormalized ? { equals: modelNormalized, mode: "insensitive" } : null,
-          },
+        const bikeId = await resolveProfileBikeForJobBike({
+          tx,
+          shopId,
+          customerId: customer.id,
+          bike: { make: makeNormalized, model: modelNormalized, bikeType: b.bikeType },
+          claimedBikeIds,
         });
-        if (!bike) {
-          bike = await tx.bike.create({
-            data: {
-              shopId,
-              customerId: customer.id,
-              make: makeNormalized,
-              model: modelNormalized,
-              bikeType: b.bikeType ?? null,
-            },
-          });
-        }
+        claimedBikeIds.add(bikeId);
 
         await tx.jobBike.create({
           data: {
@@ -130,7 +122,7 @@ export async function POST(
             model: modelNormalized,
             sortOrder: i,
             bikeType: b.bikeType ?? null,
-            bikeId: bike.id,
+            bikeId,
           },
         });
       }

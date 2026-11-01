@@ -115,17 +115,17 @@ export async function PATCH(
           }
         }
 
-        // Refresh Job.bikeMake / Job.bikeModel summary for jobs where this
-        // bike is the first (lowest sortOrder) JobBike
+        // Refresh Job.bikeMake / Job.bikeModel summary for jobs where this is
+        // the only bike. A job with more keeps its "Multiple" / "N bikes" summary.
         if (data.make !== undefined || data.model !== undefined) {
           for (const jobId of jobIds) {
-            const firstJobBike = await tx.jobBike.findFirst({
+            const jobBikes = await tx.jobBike.findMany({
               where: { jobId },
-              orderBy: { sortOrder: "asc" },
-              select: { bikeId: true, make: true, model: true },
+              select: { bikeId: true },
+              take: 2,
             });
 
-            if (firstJobBike?.bikeId === bikeId) {
+            if (jobBikes.length === 1) {
               await tx.job.update({
                 where: { id: jobId },
                 data: {
