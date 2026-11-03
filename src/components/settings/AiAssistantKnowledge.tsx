@@ -15,6 +15,8 @@ type AiAssistantSettings = {
   websiteUrl: string | null;
   knowledge: string | null;
   knowledgeUpdatedAt: string | null;
+  voiceName: string | null;
+  voiceAgentConfigured: boolean;
 };
 
 const MAX_KNOWLEDGE_CHARS = 24_000;
@@ -22,6 +24,8 @@ const MAX_KNOWLEDGE_CHARS = 24_000;
 export function AiAssistantKnowledge({ disabled }: { disabled?: boolean }) {
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [knowledge, setKnowledge] = useState("");
+  const [voiceName, setVoiceName] = useState("");
+  const [voiceAgentConfigured, setVoiceAgentConfigured] = useState(true);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
@@ -39,6 +43,8 @@ export function AiAssistantKnowledge({ disabled }: { disabled?: boolean }) {
       setWebsiteUrl(data.websiteUrl ?? "");
       setKnowledge(data.knowledge ?? "");
       setUpdatedAt(data.knowledgeUpdatedAt);
+      setVoiceName(data.voiceName ?? "");
+      setVoiceAgentConfigured(data.voiceAgentConfigured);
       setDirty(false);
     } catch {
       setError("Couldn't load the assistant's service description.");
@@ -104,6 +110,7 @@ export function AiAssistantKnowledge({ disabled }: { disabled?: boolean }) {
         body: JSON.stringify({
           websiteUrl: websiteUrl.trim() || null,
           knowledge: knowledge.trim() || null,
+          voiceName: voiceName.trim() || null,
         }),
       });
       const data = await res.json();
@@ -132,8 +139,37 @@ export function AiAssistantKnowledge({ disabled }: { disabled?: boolean }) {
         </p>
         <p className="mt-0.5 text-sm text-text-secondary">
           The assistant answers service and price questions from this text and
-          nothing else. Import it from your website, then edit it freely — it is
-          never re-imported on its own.
+          nothing else — by text and on the phone. Include your opening hours so
+          it can tell callers. Import it from your website, then edit it freely
+          — it is never re-imported on its own.
+        </p>
+      </div>
+
+      <div>
+        <label
+          htmlFor="ai-voice-name"
+          className="text-sm font-medium text-foreground"
+        >
+          Name on the phone
+        </label>
+        <input
+          id="ai-voice-name"
+          type="text"
+          value={voiceName}
+          maxLength={40}
+          onChange={(e) => {
+            setVoiceName(e.target.value);
+            setDirty(true);
+          }}
+          disabled={busy}
+          placeholder="e.g. Maya"
+          className="mt-1 w-full rounded-lg border border-surface-border bg-surface px-3 py-2 text-sm text-foreground disabled:opacity-50 sm:max-w-xs"
+        />
+        <p className="mt-1 text-xs text-text-muted">
+          What the phone assistant calls itself when it answers. Leave blank for
+          no name.
+          {!voiceAgentConfigured &&
+            " Phone answering isn't connected on this server yet, so calls ring your phones as usual."}
         </p>
       </div>
 

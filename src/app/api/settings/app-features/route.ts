@@ -30,6 +30,7 @@ const updateSchema = z.object({
   rentalsEnabled: z.boolean().optional(),
   jobBoardFiltersEnabled: z.boolean().optional(),
   aiAssistantEnabled: z.boolean().optional(),
+  aiVoiceEnabled: z.boolean().optional(),
   timezone: z
     .string()
     .trim()

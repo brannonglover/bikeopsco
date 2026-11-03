@@ -195,7 +195,7 @@ async function notifyStaffOfHandoff({
  * remembers that this name came out of this conversation, and holds everything
  * the row has no column for.
  */
-async function applyCollectedContact({
+export async function applyCollectedContact({
   shopId,
   customer,
   identity,

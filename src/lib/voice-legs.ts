@@ -6,6 +6,7 @@ import { formatPhoneDisplay } from "@/lib/phone";
 import {
   RING_SECONDS,
   buildStaffIdentity,
+  ringStaffForCall,
   sendQueuedCallerToVoicemail,
   TWILIO_VOICE_NUMBER,
 } from "@/lib/voice";
@@ -94,6 +95,41 @@ export async function isNativeRingEnabled(shopId: string): Promise<boolean> {
     select: { voiceNativeRingEnabled: true },
   });
   return settings?.voiceNativeRingEnabled ?? false;
+}
+
+/**
+ * Starts ringing staff for a caller who is about to be parked in the queue,
+ * whichever way this shop rings. Has to run before the <Enqueue> TwiML is
+ * returned, or the caller begins holding before any device has been told.
+ *
+ * Never throws: a ring that fails must not take the call down — the caller
+ * should still reach voicemail rather than hear an error.
+ */
+export async function ringStaffForHeldCaller(opts: {
+  shopId: string;
+  callId: string;
+  callSid: string;
+  baseUrl: string;
+  fromNumber: string;
+  customerName: string | null;
+}): Promise<void> {
+  const { shopId, callId, callSid, baseUrl, fromNumber, customerName } = opts;
+  if (await isNativeRingEnabled(shopId)) {
+    // One real Twilio invite per device: the OS rings it, continuously, until
+    // somebody acts. Nothing repeats it, and nothing here has to stop it —
+    // /staff-answer and /dequeued own cancellation between them.
+    await fanOutStaffLegs({ shopId, callId, baseUrl, fromNumber, customerName }).catch(
+      (error) => {
+        console.error("[voice] could not ring staff for incoming call:", error);
+      }
+    );
+  } else {
+    // The previous path: one notification now, repeated by /wait for as long as
+    // the caller holds. Kept as the rollback while the invite path is proven.
+    await ringStaffForCall(shopId, callSid).catch((error) => {
+      console.error("[voice] staff push for incoming call failed:", error);
+    });
+  }
 }
 
 /**

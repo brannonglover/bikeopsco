@@ -24,6 +24,8 @@ export type AppFeatures = {
   rentalsEnabled: boolean;
   jobBoardFiltersEnabled: boolean;
   aiAssistantEnabled: boolean;
+  /// The AI assistant answers inbound calls by voice.
+  aiVoiceEnabled: boolean;
   timezone: string;
   staffNotifyEmail: string | null;
 };
@@ -62,6 +64,7 @@ const DEFAULT_FEATURES: AppFeatures = {
   rentalsEnabled: true,
   jobBoardFiltersEnabled: false,
   aiAssistantEnabled: false,
+  aiVoiceEnabled: false,
   timezone: DEFAULT_SHOP_TIMEZONE,
   staffNotifyEmail: null,
 };
@@ -129,6 +132,7 @@ async function loadAppFeaturesForShop(shopId: string): Promise<AppFeatures> {
       rentalsEnabled: row.rentalsEnabled,
       jobBoardFiltersEnabled: row.jobBoardFiltersEnabled,
       aiAssistantEnabled: row.aiAssistantEnabled,
+      aiVoiceEnabled: row.aiVoiceEnabled,
       timezone: normalizeIANATimezone(row.timezone),
       staffNotifyEmail,
     };
@@ -180,6 +184,7 @@ export async function upsertAppFeatures(
     rentalsEnabled: updated.rentalsEnabled,
     jobBoardFiltersEnabled: updated.jobBoardFiltersEnabled,
     aiAssistantEnabled: updated.aiAssistantEnabled,
+    aiVoiceEnabled: updated.aiVoiceEnabled,
     timezone: normalizeIANATimezone(updated.timezone),
     staffNotifyEmail,
   };

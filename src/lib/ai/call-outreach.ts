@@ -66,6 +66,7 @@ export async function startAssistantCallOutreach({
         customerId: true,
         fromNumber: true,
         answeredAt: true,
+        aiAnsweredAt: true,
         aiOutreachAt: true,
         createdAt: true,
         transcriptionText: true,
@@ -75,6 +76,10 @@ export async function startAssistantCallOutreach({
     if (call.direction !== "INBOUND") return;
     // Someone picked up. Whatever the caller wanted, they said it to a person.
     if (call.answeredAt) return;
+    // The phone assistant spoke with them, and what they said is filed from
+    // that conversation — texting "sorry we missed your call" now would be
+    // telling them about a call they just had.
+    if (call.aiAnsweredAt) return;
     if (call.aiOutreachAt) return;
     if (Date.now() - call.createdAt.getTime() > OUTREACH_WINDOW_MS) return;
     if (!call.fromNumber) return;
@@ -178,9 +183,11 @@ export async function sweepMissedCallOutreach(): Promise<{ attempted: number }> 
     where: {
       shopId: { in: enabled.map((settings) => settings.shopId) },
       direction: "INBOUND",
-      // The two things that mean this caller is no longer ours to answer: a
-      // person picked up, or someone has already been texted.
+      // The things that mean this caller is no longer ours to answer: a
+      // person or the phone assistant picked up, or someone has already been
+      // texted.
       answeredAt: null,
+      aiAnsweredAt: null,
       aiOutreachAt: null,
       status: { in: FINISHED_STATUSES },
       createdAt: {

@@ -21,6 +21,7 @@ type AppFeatures = {
   rentalsEnabled: boolean;
   jobBoardFiltersEnabled: boolean;
   aiAssistantEnabled: boolean;
+  aiVoiceEnabled: boolean;
   timezone: string;
   staffNotifyEmail: string | null;
 };
@@ -39,7 +40,8 @@ type FeatureFlagKey =
   | "reviewsEnabled"
   | "rentalsEnabled"
   | "jobBoardFiltersEnabled"
-  | "aiAssistantEnabled";
+  | "aiAssistantEnabled"
+  | "aiVoiceEnabled";
 
 const DEFAULT_FEATURES: AppFeatures = {
   bookingsEnabled: true,
@@ -56,6 +58,7 @@ const DEFAULT_FEATURES: AppFeatures = {
   rentalsEnabled: true,
   jobBoardFiltersEnabled: false,
   aiAssistantEnabled: false,
+  aiVoiceEnabled: false,
   timezone: "America/New_York",
   staffNotifyEmail: null,
 };
@@ -632,6 +635,13 @@ export default function FeatureSettingsPage() {
                 Chat back on to resume it.
               </p>
             )}
+            <ToggleRow
+              title="AI answers the phone"
+              description="The assistant picks up every inbound call, answers questions about the shop and callers' repairs, and takes messages. If a caller asks for a person it rings your phones, and takes a message if nobody picks up. You get a summary of every call."
+              checked={features.aiVoiceEnabled}
+              disabled={featuresSaving}
+              onChange={(v) => setFeatureFlag("aiVoiceEnabled", v)}
+            />
             <AiAssistantKnowledge disabled={featuresSaving} />
           </div>
 

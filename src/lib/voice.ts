@@ -253,12 +253,34 @@ export async function sendQueuedCallerToVoicemail(
   callSid: string,
   voicemailUrl: string
 ): Promise<void> {
+  await redirectLiveCall(callSid, voicemailUrl);
+}
+
+/**
+ * Points a live call at new TwiML. Whatever the caller was doing — holding,
+ * or talking to the AI assistant over a media stream — stops, and the
+ * document at `url` runs next.
+ */
+export async function redirectLiveCall(callSid: string, url: string): Promise<void> {
   if (!accountSid || !authToken) {
     throw new Error("Twilio is not configured");
   }
-  await Twilio(accountSid, authToken)
-    .calls(callSid)
-    .update({ url: voicemailUrl, method: "POST" });
+  await Twilio(accountSid, authToken).calls(callSid).update({ url, method: "POST" });
+}
+
+/**
+ * Where a caller goes when nobody picks up. Ordinarily voicemail; a caller the
+ * AI assistant handed to staff goes back to the assistant instead, which takes
+ * the message itself — they have already been talking to it, and a beep would
+ * make them start over with a machine.
+ */
+export function unansweredCallerUrl(
+  base: string,
+  call: { aiAnsweredAt: Date | null } | null
+): string {
+  return call?.aiAnsweredAt
+    ? `${base}/api/webhooks/twilio/voice/ai-message`
+    : `${base}/api/webhooks/twilio/voice/voicemail`;
 }
 
 /** Scheme + host only, for building sibling webhook URLs to embed in TwiML. */

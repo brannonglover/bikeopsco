@@ -98,7 +98,8 @@ export async function findCustomerIdBySmsFrom(
 export async function findOrCreateProvisionalCustomer(
   shopId: string,
   phoneE164: string,
-  consentSource: string
+  /** Null records no consent at all — for a caller the shop isn't texting. */
+  consentSource: string | null
 ): Promise<{ customerId: string; created: boolean }> {
   const existing = await findCustomerIdBySmsFrom(shopId, phoneE164);
   if (existing) return { customerId: existing, created: false };
@@ -119,7 +120,7 @@ export async function findOrCreateProvisionalCustomer(
         phone: phoneE164,
         // Staff fill in the real details from the thread with "Create contact".
         provisional: true,
-        ...buildSmsConsentUpdate(true, consentSource),
+        ...(consentSource ? buildSmsConsentUpdate(true, consentSource) : {}),
       },
       select: { id: true },
     });

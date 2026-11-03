@@ -755,6 +755,21 @@ model Call {
   /// before sending: voicemail, recording, and status callbacks can all land
   /// for one missed call, and the caller must only be texted once.
   aiOutreachAt        DateTime?
+  /// When the AI phone assistant picked this call up. Set on the caller's
+  /// first moment with it, and never cleared: a call the assistant spoke on is
+  /// never a missed call, whatever happened after.
+  aiAnsweredAt        DateTime?
+  /// Set while a caller the assistant handed off is holding for staff, and
+  /// cleared when they come back to it. Outside that window an AI-answered call
+  /// is mid-conversation, and nothing that answers or declines a held caller
+  /// may touch it.
+  aiHandoffAt         DateTime?
+  /// ElevenLabs conversation id of the latest stretch with the assistant.
+  aiConversationId    String?
+  /// Staff-facing summary of what the caller told the assistant.
+  aiSummary           String?
+  /// Plain-text transcript of the assistant's side of the call, one line per turn.
+  aiTranscript        String?
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
 
@@ -980,6 +995,12 @@ model AppSettings {
   /// own, so nothing a site edit introduces reaches a customer unreviewed.
   aiAssistantKnowledge     String?
   aiAssistantKnowledgeAt   DateTime?
+  /// When true, the AI assistant answers inbound calls by voice (through an
+  /// ElevenLabs agent) and rings staff only when the caller asks for a person.
+  /// Off by default, and inert until the ElevenLabs env vars are set.
+  aiVoiceEnabled           Boolean   @default(false)
+  /// The name the phone assistant introduces itself with. Null: no name.
+  aiVoiceName              String?
   createdAt                DateTime  @default(now())
   updatedAt                DateTime  @updatedAt
 

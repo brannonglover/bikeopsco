@@ -14,6 +14,7 @@ import {
   ringWindowCutoff,
   sendQueuedCallerToVoicemail,
   TWILIO_VOICE_NUMBER,
+  unansweredCallerUrl,
 } from "@/lib/voice";
 
 /** Call states that mean the caller could still be holding in the queue. */
@@ -86,6 +87,10 @@ export async function POST(request: NextRequest) {
       status: { in: [...LIVE_STATUSES] },
       endedAt: null,
       answeredAt: null,
+      // A call the AI assistant is talking to is live and unanswered by staff,
+      // but it is not holding — nobody was rung for it. Only one it has handed
+      // over (aiHandoffAt) is waiting to be picked up.
+      NOT: { aiAnsweredAt: { not: null }, aiHandoffAt: null },
       ...(params.CallId ? { id: params.CallId } : {}),
     };
     // Oldest first because <Queue> bridges the longest-waiting caller: that is
@@ -126,6 +131,7 @@ export async function POST(request: NextRequest) {
           startedAt: true,
           createdAt: true,
           twilioParentCallSid: true,
+          aiAnsweredAt: true,
         },
       });
       if (!expired || !hasRungOut(expired.startedAt ?? expired.createdAt, now)) {
@@ -150,7 +156,7 @@ export async function POST(request: NextRequest) {
       if (claimed.count > 0) {
         await sendQueuedCallerToVoicemail(
           expired.twilioParentCallSid,
-          `${base}/api/webhooks/twilio/voice/voicemail`
+          unansweredCallerUrl(base, expired)
         ).catch((error) => {
           // The caller may have hung up, or /dequeued may have redirected them
           // a moment earlier. Either way the row is closed out above, and

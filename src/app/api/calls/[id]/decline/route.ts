@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireStaffShop } from "@/lib/api-auth";
 import { prisma } from "@/lib/db";
-import { sendQueuedCallerToVoicemail } from "@/lib/voice";
+import { sendQueuedCallerToVoicemail, unansweredCallerUrl } from "@/lib/voice";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +20,14 @@ export async function POST(
     const { id } = await params;
     const call = await prisma.call.findFirst({
       where: { shopId: auth.shopId, id, direction: "INBOUND" },
-      select: { id: true, twilioParentCallSid: true, endedAt: true, answeredAt: true },
+      select: {
+        id: true,
+        twilioParentCallSid: true,
+        endedAt: true,
+        answeredAt: true,
+        aiAnsweredAt: true,
+        aiHandoffAt: true,
+      },
     });
     if (!call) {
       return NextResponse.json({ error: "Call not found" }, { status: 404 });
@@ -33,14 +40,19 @@ export async function POST(
     // call. Redirecting then would pull a live conversation into voicemail
     // mid-sentence, which is why a call someone already took is left alone
     // rather than declined.
-    if (call.endedAt || call.answeredAt) {
+    //
+    // A call the AI assistant is talking to is not ringing anyone, so there is
+    // nothing to decline — only a caller it handed over and who is holding
+    // for staff (aiHandoffAt) is. A stale notification must not cut that
+    // conversation off.
+    if (call.endedAt || call.answeredAt || (call.aiAnsweredAt && !call.aiHandoffAt)) {
       return NextResponse.json({ ok: true, alreadyEnded: true });
     }
 
     const origin = request.nextUrl.origin;
     await sendQueuedCallerToVoicemail(
       call.twilioParentCallSid,
-      `${origin}/api/webhooks/twilio/voice/voicemail`
+      unansweredCallerUrl(origin, call)
     );
 
     return NextResponse.json({ ok: true });

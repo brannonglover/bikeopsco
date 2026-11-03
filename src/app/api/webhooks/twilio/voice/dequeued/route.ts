@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { authenticateVoiceWebhook, buildDequeuedTwiml, getVoiceWebhookBaseUrl } from "@/lib/voice";
+import {
+  authenticateVoiceWebhook,
+  buildDequeuedTwiml,
+  getVoiceWebhookBaseUrl,
+  unansweredCallerUrl,
+} from "@/lib/voice";
 import { cancelStaffLegs } from "@/lib/voice-legs";
 
 export const runtime = "nodejs";
@@ -36,7 +41,7 @@ export async function POST(request: NextRequest) {
         where: {
           shopId_twilioParentCallSid: { shopId: shop.id, twilioParentCallSid: callSid },
         },
-        select: { id: true },
+        select: { id: true, aiAnsweredAt: true },
       })
     : null;
   if (call) {
@@ -68,7 +73,9 @@ export async function POST(request: NextRequest) {
   const base = getVoiceWebhookBaseUrl(request);
   const twiml = buildDequeuedTwiml({
     queueResult,
-    voicemailUrl: `${base}/api/webhooks/twilio/voice/voicemail`,
+    // A caller the AI assistant handed over goes back to it to leave a
+    // message, rather than to a voicemail beep.
+    voicemailUrl: unansweredCallerUrl(base, call),
   });
 
   return new NextResponse(twiml, {

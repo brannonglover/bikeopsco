@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getStaffToken } from "@/lib/api-auth";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
+import { isVoiceAgentConfigured } from "@/lib/ai/voice-agent";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,10 @@ const updateSchema = z.object({
     .union([z.string().max(MAX_KNOWLEDGE_CHARS), z.null()])
     .optional()
     .transform((value) => (value?.trim() ? value.trim() : null)),
+  voiceName: z
+    .union([z.string().max(40), z.null()])
+    .optional()
+    .transform((value) => (value?.trim() ? value.trim() : null)),
 });
 
 export async function GET(request: NextRequest) {
@@ -38,6 +43,7 @@ export async function GET(request: NextRequest) {
       aiAssistantWebsiteUrl: true,
       aiAssistantKnowledge: true,
       aiAssistantKnowledgeAt: true,
+      aiVoiceName: true,
     },
   });
 
@@ -45,6 +51,8 @@ export async function GET(request: NextRequest) {
     websiteUrl: settings?.aiAssistantWebsiteUrl ?? null,
     knowledge: settings?.aiAssistantKnowledge ?? null,
     knowledgeUpdatedAt: settings?.aiAssistantKnowledgeAt?.toISOString() ?? null,
+    voiceName: settings?.aiVoiceName ?? null,
+    voiceAgentConfigured: isVoiceAgentConfigured(),
   });
 }
 
@@ -55,13 +63,14 @@ export async function PUT(request: NextRequest) {
   }
 
   try {
-    const { websiteUrl, knowledge } = updateSchema.parse(await request.json());
+    const { websiteUrl, knowledge, voiceName } = updateSchema.parse(await request.json());
 
     const data = {
       ...(websiteUrl !== undefined ? { aiAssistantWebsiteUrl: websiteUrl } : {}),
       ...(knowledge !== undefined
         ? { aiAssistantKnowledge: knowledge, aiAssistantKnowledgeAt: new Date() }
         : {}),
+      ...(voiceName !== undefined ? { aiVoiceName: voiceName } : {}),
     };
 
     const updated = await prisma.appSettings.upsert({
@@ -72,6 +81,7 @@ export async function PUT(request: NextRequest) {
         aiAssistantWebsiteUrl: true,
         aiAssistantKnowledge: true,
         aiAssistantKnowledgeAt: true,
+        aiVoiceName: true,
       },
     });
 
@@ -79,6 +89,8 @@ export async function PUT(request: NextRequest) {
       websiteUrl: updated.aiAssistantWebsiteUrl,
       knowledge: updated.aiAssistantKnowledge,
       knowledgeUpdatedAt: updated.aiAssistantKnowledgeAt?.toISOString() ?? null,
+      voiceName: updated.aiVoiceName,
+      voiceAgentConfigured: isVoiceAgentConfigured(),
     });
   } catch (error) {
     if (error instanceof z.ZodError) {

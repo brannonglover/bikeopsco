@@ -8,9 +8,9 @@ import {
   buildIncomingCallTwiml,
   buildQueueName,
   getVoiceWebhookBaseUrl,
-  ringStaffForCall,
 } from "@/lib/voice";
-import { fanOutStaffLegs, isNativeRingEnabled } from "@/lib/voice-legs";
+import { ringStaffForHeldCaller } from "@/lib/voice-legs";
+import { connectCallToVoiceAgent, isAiVoiceAnswering } from "@/lib/ai/voice-agent";
 
 export const runtime = "nodejs";
 
@@ -22,9 +22,11 @@ function xmlResponse(xml: string): NextResponse {
  * Twilio inbound Voice webhook — configure on the shop's Twilio number:
  * Voice → "A call comes in" → POST https://YOUR_SHOP.bikeops.co/api/webhooks/twilio/voice/incoming
  *
- * The caller is parked in the shop queue and staff are alerted with an
- * ordinary push notification; tapping it dials them into the queue. See
- * buildIncomingCallTwiml for why this no longer dials <Client> directly.
+ * With the AI phone assistant on, the call is handed to it. Otherwise — or if
+ * the assistant can't be reached — the caller is parked in the shop queue and
+ * staff are alerted with an ordinary push notification; tapping it dials them
+ * into the queue. See buildIncomingCallTwiml for why this no longer dials
+ * <Client> directly.
  */
 export async function POST(request: NextRequest) {
   const ctx = await authenticateVoiceWebhook(request);
@@ -70,33 +72,46 @@ export async function POST(request: NextRequest) {
 
   const base = getVoiceWebhookBaseUrl(request);
 
-  // Ringing has to start before the TwiML response, or the caller begins
-  // holding before any device has been told to wake up.
-  if (await isNativeRingEnabled(shop.id)) {
-    // One real Twilio invite per device: the OS rings it, continuously, until
-    // somebody acts. Nothing repeats it, and nothing here has to stop it —
-    // /staff-answer and /dequeued own cancellation between them.
-    const customerName = call.customer
-      ? [call.customer.firstName, call.customer.lastName].filter(Boolean).join(" ")
-      : null;
-    await fanOutStaffLegs({
+  // The AI assistant picks up first when the shop has it on. Staff are only
+  // rung if the caller asks for a person (see /ai-handoff), or right here if
+  // the assistant can't be reached — a caller must never get dead air because
+  // ElevenLabs was slow.
+  if (await isAiVoiceAnswering(shop.id)) {
+    const agentTwiml = await connectCallToVoiceAgent({
       shopId: shop.id,
       callId: call.id,
-      baseUrl: base,
+      customerId,
+      base,
       fromNumber: fromE164,
-      customerName,
-    }).catch((error) => {
-      // A fan-out failure must not take the call down — the caller should still
-      // reach voicemail rather than hear an error.
-      console.error("[voice] could not ring staff for incoming call:", error);
+      toNumber: toE164,
+      mode: "answer",
     });
-  } else {
-    // The previous path: one notification now, repeated by /wait for as long as
-    // the caller holds. Kept as the rollback while the invite path is proven.
-    await ringStaffForCall(shop.id, callSid).catch((error) => {
-      console.error("[voice] staff push for incoming call failed:", error);
-    });
+    if (agentTwiml) {
+      await prisma.call
+        .update({
+          where: { id: call.id },
+          data: { status: "IN_PROGRESS", aiAnsweredAt: new Date() },
+        })
+        .catch((error) => {
+          // The call is answered either way; a missing stamp only costs the log.
+          console.error("[voice] could not mark call as AI-answered:", error);
+        });
+      return xmlResponse(agentTwiml);
+    }
   }
+
+  // Ringing has to start before the TwiML response, or the caller begins
+  // holding before any device has been told to wake up.
+  await ringStaffForHeldCaller({
+    shopId: shop.id,
+    callId: call.id,
+    callSid,
+    baseUrl: base,
+    fromNumber: fromE164,
+    customerName: call.customer
+      ? [call.customer.firstName, call.customer.lastName].filter(Boolean).join(" ")
+      : null,
+  });
 
   const twiml = buildIncomingCallTwiml({
     queueName: buildQueueName(shop.id),
