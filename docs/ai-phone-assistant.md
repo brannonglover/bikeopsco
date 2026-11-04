@@ -36,10 +36,14 @@ One agent serves every shop. Everything shop-specific is sent with each call.
   large, and a smaller one keeps the gap between turns short.
 - **Conversation:** leave interruptions on. Set turn eagerness to normal or
   eager.
-- **System prompt / first message:** leave a one-line placeholder. Every call
-  replaces both.
-- **Security → Overrides:** enable **System prompt** and **First message**.
-  Register-call rejects the per-call prompt without these.
+- **System prompt:** leave a one-line placeholder. Every call replaces it.
+- **First message:** set it to exactly `{{bikeops_first_message}}`. Each call
+  sends the greeting in that variable. ElevenLabs rejects a first-message
+  override on Twilio calls even when that override is enabled.
+- **Audio:** set both the TTS output format and the user input format to
+  **μ-law 8000 Hz**, which is what Twilio sends and expects.
+- **Security → Overrides:** enable **System prompt**. Register-call rejects
+  the per-call prompt without it.
 - **Tools → System tools:** enable **End call**.
 
 ### 2. Add the transfer tool (Tools → Add tool → Webhook)
@@ -50,7 +54,9 @@ One agent serves every shop. Everything shop-specific is sent with each call.
 - Headers:
   - `X-BikeOps-Tool-Secret`: type **Secret**, with the value of `VOICE_AGENT_TOOL_SECRET`
   - `X-BikeOps-Call`: type **Dynamic variable**, set to `bikeops_call_ref`
-- No body parameters.
+- Body: one string property, `reason`, filled in by the LLM. The dashboard
+  insists on a body for POST tools, and the endpoint ignores it.
+- Once it's created, check that the tool is also added to the agent.
 
 ### 3. Add the post-call webhook (Settings → Webhooks)
 

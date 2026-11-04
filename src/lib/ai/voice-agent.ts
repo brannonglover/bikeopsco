@@ -471,10 +471,14 @@ export async function connectCallToVoiceAgent({
             bikeops_mode: mode,
             shop_name: context.shopName,
             caller_name: context.callerFirstName ?? "",
+            // The agent's first message is "{{bikeops_first_message}}".
+            // ElevenLabs refuses a first_message override on Twilio calls
+            // even with that override enabled, so the greeting rides in as a
+            // variable instead.
+            bikeops_first_message: context.firstMessage,
           },
           conversation_config_override: {
             agent: {
-              first_message: context.firstMessage,
               prompt: { prompt: context.prompt },
             },
           },
