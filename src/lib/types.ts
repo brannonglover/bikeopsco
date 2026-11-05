@@ -136,6 +136,44 @@ export interface ChatMessage {
   clientDeliveryState?: "SENDING" | "DELIVERED" | "FAILED";
 }
 
+/**
+ * A phone call as shown in a staff chat thread, interleaved with its messages
+ * by `createdAt`. Sent with the first page of GET /api/conversations/[id]/messages.
+ */
+export interface ThreadCall {
+  id: string;
+  direction: "INBOUND" | "OUTBOUND";
+  status:
+    | "QUEUED"
+    | "RINGING"
+    | "IN_PROGRESS"
+    | "COMPLETED"
+    | "BUSY"
+    | "FAILED"
+    | "NO_ANSWER"
+    | "CANCELED"
+    | "VOICEMAIL";
+  fromNumber: string;
+  toNumber: string;
+  startedAt: string | null;
+  answeredAt: string | null;
+  endedAt: string | null;
+  durationSeconds: number | null;
+  /** A voicemail exists; the audio streams from GET /api/calls/[id]/recording. */
+  hasRecording: boolean;
+  /** "completed" once Twilio has processed the recording and it will play. */
+  recordingStatus: string | null;
+  transcriptionText: string | null;
+  transcriptionStatus: string | null;
+  /** The AI phone assistant picked this call up. */
+  aiAnswered: boolean;
+  /** The assistant's write-up for staff, filed once the caller hangs up. */
+  aiSummary: string | null;
+  /** "Caller: …" / "Assistant: …" lines, one per turn. */
+  aiTranscript: string | null;
+  createdAt: string;
+}
+
 export interface Conversation {
   id: string;
   customerId: string;

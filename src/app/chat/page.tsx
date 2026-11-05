@@ -3,9 +3,9 @@
 import Image from "next/image";
 import { isPrivateFileUrl } from "@/lib/image-src";
 import Link from "next/link";
-import { useState, useEffect, useRef, useCallback, useLayoutEffect, Suspense } from "react";
+import { useState, useEffect, useRef, useCallback, useLayoutEffect, useMemo, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import type { Conversation, ChatMessage, Customer } from "@/lib/types";
+import type { Conversation, ChatMessage, Customer, ThreadCall } from "@/lib/types";
 import { useChatNotifications, CHAT_PAGE_CONVERSATIONS_POLL_MS } from "@/hooks/useChatNotifications";
 import { useChatEventSource } from "@/hooks/useChatEventSource";
 import { useChatRealtime } from "@/hooks/useChatRealtime";
@@ -14,6 +14,7 @@ import type { StaffConversationMessagesPayload } from "@/lib/chat/staff-conversa
 import { ChatMessageBubble } from "@/components/chat/ChatMessageBubble";
 import { ConversationListRow } from "@/components/chat/ConversationListRow";
 import { AiAssistantBanner } from "@/components/chat/AiAssistantBanner";
+import { ThreadCallCard } from "@/components/chat/ThreadCallCard";
 import { CreateContactModal } from "@/components/chat/CreateContactModal";
 import { CreateJobModal } from "@/components/chat/CreateJobModal";
 import { mergeChatMessagesWithServer } from "@/lib/chat-messages";
@@ -291,6 +292,7 @@ function ChatPageContent() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [threadCalls, setThreadCalls] = useState<ThreadCall[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [inputText, setInputText] = useState("");
@@ -361,6 +363,24 @@ function ChatPageContent() {
   const loadingOlderRef = useRef(false);
   const hasMoreMessagesRef = useRef(false);
   hasMoreMessagesRef.current = hasMoreMessages;
+
+  // Calls sit in the thread at the moment they happened. While older messages
+  // are still unloaded, a call from before the oldest loaded one is held back
+  // until scrolling up reaches it, so it never floats above a gap.
+  const timeline = useMemo(() => {
+    type Entry = { kind: "message"; msg: ChatMessage } | { kind: "call"; call: ThreadCall };
+    const entries: Entry[] = messages.map((msg) => ({ kind: "message", msg }));
+    if (threadCalls.length === 0) return entries;
+    const oldestLoaded = messages[0] ? new Date(messages[0].createdAt).getTime() : null;
+    const at = (entry: Entry) =>
+      new Date(entry.kind === "message" ? entry.msg.createdAt : entry.call.createdAt).getTime();
+    for (const call of threadCalls) {
+      const callAt = new Date(call.createdAt).getTime();
+      if (hasMoreMessages && oldestLoaded !== null && callAt < oldestLoaded) continue;
+      entries.push({ kind: "call", call });
+    }
+    return entries.sort((a, b) => at(a) - at(b));
+  }, [messages, threadCalls, hasMoreMessages]);
   const selectedIdRef = useRef<string | null>(null);
   const conversationsRef = useRef(conversations);
   conversationsRef.current = conversations;
@@ -472,6 +492,7 @@ function ChatPageContent() {
     (data: StaffConversationMessagesPayload, convId: string) => {
       if (selectedIdRef.current !== convId) return;
       mergeServerMessages(data.messages);
+      if (Array.isArray(data.calls)) setThreadCalls(data.calls);
       if (typeof data.hasMore === "boolean") setHasMoreMessages(data.hasMore);
       setCustomerTypingAt(data.customerTypingAt ?? null);
       setCustomerLastReadAt(data.customerLastReadAt ?? null);
@@ -624,6 +645,7 @@ function ChatPageContent() {
 
   useEffect(() => {
     const currentId = selectedId;
+    setThreadCalls([]);
     if (!currentId) {
       setMessages([]);
       setCustomerTypingAt(null);
@@ -1567,7 +1589,11 @@ function ChatPageContent() {
                         <SkeletonPulse className="h-12 w-2/5 max-w-xs rounded-2xl" />
                       </div>
                     ) : null}
-                    {messages.map((msg) => {
+                    {timeline.map((entry) => {
+                      if (entry.kind === "call") {
+                        return <ThreadCallCard key={`call:${entry.call.id}`} call={entry.call} />;
+                      }
+                      const msg = entry.msg;
                       const isSystem = msg.sender === "SYSTEM";
                       return (
                         <ChatMessageBubble

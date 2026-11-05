@@ -777,6 +777,7 @@ model Call {
   @@index([shopId])
   @@index([shopId, twilioChildCallSid])
   @@index([conversationId])
+  @@index([shopId, customerId])
 }
 
 /// One staff device being rung for an inbound call. A call fans out to every

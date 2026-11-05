@@ -5,8 +5,9 @@ up every inbound call. It answers questions about the shop and the caller's
 open repairs, takes messages, and rings staff when a caller asks for a person.
 If nobody picks up, the caller goes back to the assistant to leave a message
 instead of hearing a voicemail beep. After every call, staff get a push with a
-summary. Calls that need a reply also show up as a handoff note in the
-caller's chat thread.
+summary. Every call also appears as a card in the caller's chat thread, with
+the summary and the full transcript, on web and in the app. Calls that need a
+reply also leave a handoff note there.
 
 The live conversation runs on an **ElevenLabs agent**. Vercel functions can't
 hold a call's audio stream, so Twilio streams it straight to ElevenLabs. BikeOps

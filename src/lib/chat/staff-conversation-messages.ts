@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
-import type { ChatMessage } from "@/lib/types";
+import type { ChatMessage, ThreadCall } from "@/lib/types";
 import { serializeChatMessages } from "@/lib/chat/serialize-messages";
+import { getThreadCallsFingerprint, loadThreadCalls } from "@/lib/chat/thread-calls";
 import type { MessagePageOptions } from "@/lib/chat/message-page";
 import type { ReadConversation } from "@/lib/conversation";
 
@@ -10,15 +11,20 @@ export type StaffConversationMessagesPayload = {
   staffLastReadAt: string | null;
   customerLastReadAt: string | null;
   hasMore?: boolean;
+  /**
+   * The contact's recent phone calls, oldest first. Only on the newest page
+   * (no beforeId); clients interleave them with the messages by createdAt.
+   */
+  calls?: ThreadCall[];
 };
 
 export async function getStaffConversationMessagesFingerprint(
   shopId: string,
   conversationId: string
 ): Promise<string> {
-  // Runs every 3s per open stream — issue the three reads concurrently so the
-  // tick costs one round trip instead of three.
-  const [conversation, messageStats, reactionStats] = await Promise.all([
+  // Runs every 3s per open stream — issue the reads concurrently so the tick
+  // costs one round trip instead of several.
+  const [conversation, messageStats, reactionStats, callStats] = await Promise.all([
     prisma.conversation.findFirst({
       where: { id: conversationId, shopId },
       select: {
@@ -38,6 +44,7 @@ export async function getStaffConversationMessagesFingerprint(
       _count: { _all: true },
       _max: { createdAt: true },
     }),
+    getThreadCallsFingerprint(shopId, conversationId),
   ]);
   if (!conversation) return "missing";
 
@@ -48,6 +55,7 @@ export async function getStaffConversationMessagesFingerprint(
     lastEditedAt: messageStats._max.editedAt,
     reactionCount: reactionStats._count._all,
     lastReactionAt: reactionStats._max.createdAt,
+    ...callStats,
   });
 }
 
@@ -152,6 +160,7 @@ export async function loadStaffConversationMessages(
           where: { id: target, shopId },
           select: {
             id: true,
+            customerId: true,
             updatedAt: true,
             customerTypingAt: true,
             customerLastReadAt: true,
@@ -165,11 +174,21 @@ export async function loadStaffConversationMessages(
   const conversationId = resolved.id;
   const conversation = resolved;
 
-  const { messages, hasMore } = await loadMessagesForConversation(
-    shopId,
-    conversationId,
-    options
-  );
+  // Calls belong with the newest page only: older pages are fetched by
+  // scrolling up, and the client already has the calls by then.
+  const [{ messages, hasMore }, calls] = await Promise.all([
+    loadMessagesForConversation(shopId, conversationId, options),
+    options.beforeId
+      ? Promise.resolve(undefined)
+      : loadThreadCalls(shopId, conversationId, conversation.customerId).catch((e) => {
+          // A thread still opens without its calls.
+          console.warn("[chat] Failed to load thread calls; continuing:", {
+            conversationId,
+            error: e,
+          });
+          return undefined;
+        }),
+  ]);
 
   const customerTypingAtIso = conversation.customerTypingAt?.toISOString() ?? null;
   const customerLastReadAtIso = conversation.customerLastReadAt?.toISOString() ?? null;
@@ -251,5 +270,6 @@ export async function loadStaffConversationMessages(
     staffLastReadAt: staffLastReadAtIso,
     customerLastReadAt: customerLastReadAtIso,
     ...(options.limit ? { hasMore } : {}),
+    ...(calls ? { calls } : {}),
   };
 }
